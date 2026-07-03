@@ -1,0 +1,318 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../core/utils/sim_constants.dart';
+import '../../sim/auxiliary/aux_room_models.dart';
+import '../../sim/auxiliary/doubt_input_sheet.dart';
+import '../../sim/ui/sim_design_system.dart';
+import '../../sim/ui/sim_theme.dart';
+
+class DoubtInputSheet extends StatefulWidget {
+  const DoubtInputSheet({
+    required this.controller,
+    required this.busy,
+    required this.onSubmit,
+    required this.onClose,
+    super.key,
+  });
+
+  final TextEditingController controller;
+  final bool busy;
+  final void Function(DoubtInputDraft input) onSubmit;
+  final VoidCallback onClose;
+
+  @override
+  State<DoubtInputSheet> createState() => _DoubtInputSheetState();
+}
+
+class _DoubtInputSheetState extends State<DoubtInputSheet> {
+  final ImagePicker _picker = ImagePicker();
+  DoubtImagePayload? _image;
+  bool _menuOpen = false;
+  String? _error;
+
+  Future<void> _pickImage(ImageSource source) async {
+    setState(() {
+      _error = null;
+      _menuOpen = false;
+    });
+    try {
+      final picked = await _picker.pickImage(source: source);
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      final mime = picked.mimeType ?? 'image/jpeg';
+      final payload = DoubtImagePayload(
+        name: picked.name.isEmpty ? 'foto-da-duvida.jpg' : picked.name,
+        type: mime,
+        size: bytes.length,
+        dataUrl: 'data:$mime;base64,${base64Encode(bytes)}',
+      );
+      final validation = DoubtInputDraft(image: payload).validate();
+      if (validation != null && validation != emptyDoubtMessage) {
+        setState(() => _error = validation);
+        return;
+      }
+      setState(() => _image = payload);
+    } catch (_) {
+      setState(() => _error = imageOnlyMessage);
+    }
+  }
+
+  void _submit() {
+    final draft = DoubtInputDraft(text: widget.controller.text, image: _image);
+    final validation = draft.validate();
+    if (validation != null) {
+      setState(() => _error = validation);
+      return;
+    }
+    widget.onSubmit(draft);
+    setState(() {
+      _image = null;
+      _error = null;
+      _menuOpen = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final textLength = widget.controller.text.length;
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: palette.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Enviar dúvida',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Escreva sua dúvida ou envie uma foto do exercício, resolução, fórmula, gráfico ou tabela.',
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (_image != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: palette.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Foto: ${_image!.name}',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: palette.text, fontSize: 14),
+                          ),
+                        ),
+                        SimTextAction(
+                          label: 'Remover',
+                          semanticLabel: 'Remover foto da dúvida',
+                          onPressed: () => setState(() => _image = null),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                Container(
+                  decoration: BoxDecoration(
+                    color: palette.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: palette.border),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  child: Stack(
+                    children: [
+                      TextField(
+                        controller: widget.controller,
+                        minLines: 5,
+                        maxLines: 5,
+                        maxLength: doubtTextMaxLength,
+                        decoration: const InputDecoration(
+                          hintText: 'Escreva sua dúvida aqui...',
+                          border: InputBorder.none,
+                          counterText: '',
+                          contentPadding: EdgeInsets.only(bottom: 28),
+                        ),
+                        style: TextStyle(
+                          color: palette.text,
+                          fontSize: 16,
+                          height: 1.35,
+                        ),
+                        onChanged: (_) => setState(() => _error = null),
+                      ),
+                      Positioned(
+                        left: 0,
+                        bottom: 0,
+                        child: SimIconAction(
+                          icon: Icons.attach_file,
+                          semanticLabel: 'Adicionar foto à dúvida',
+                          onPressed: widget.busy
+                              ? null
+                              : () => setState(() => _menuOpen = !_menuOpen),
+                          size: 40,
+                          iconSize: 21,
+                        ),
+                      ),
+                      if (_menuOpen)
+                        Positioned(
+                          left: 0,
+                          bottom: 38,
+                          child: Container(
+                            width: 210,
+                            decoration: BoxDecoration(
+                              color: palette.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: palette.border),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x26000000),
+                                  blurRadius: 12,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _DoubtImageMenuLine(
+                                  label: 'Tirar foto',
+                                  onTap: () =>
+                                      unawaited(_pickImage(ImageSource.camera)),
+                                ),
+                                _DoubtImageMenuLine(
+                                  label: 'Escolher imagem',
+                                  onTap: () => unawaited(
+                                    _pickImage(ImageSource.gallery),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Text(
+                          '$textLength/$doubtTextMaxLength',
+                          style: TextStyle(
+                            color: palette.muted,
+                            fontSize: 12,
+                            fontFamily: kMono,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: simDestructive, fontSize: 13),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed: widget.busy ? null : _submit,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: palette.text,
+                      side: BorderSide(color: palette.border),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      widget.busy ? 'Enviando...' : 'Enviar dúvida',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DoubtImageMenuLine extends StatelessWidget {
+  const _DoubtImageMenuLine({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

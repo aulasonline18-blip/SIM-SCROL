@@ -13,6 +13,7 @@ enum ChatLessonMessageKind {
   studentAnswer,
   signals,
   studentSignal,
+  doubtAction,
   processing,
   feedback,
   error,
@@ -59,6 +60,7 @@ class ChatLessonMessage {
     this.actionKey,
     this.imageStatus = 'idle',
     this.hasPaidImageOffer = false,
+    this.progress,
   });
 
   final String id;
@@ -74,6 +76,7 @@ class ChatLessonMessage {
   final String? actionKey;
   final String imageStatus;
   final bool hasPaidImageOffer;
+  final int? progress;
 
   bool get hasInteractiveOptions =>
       kind == ChatLessonMessageKind.options && options.isNotEmpty;

@@ -81,8 +81,17 @@ void main() {
       messages.map((message) => message.kind),
       containsAllInOrder([
         ChatLessonMessageKind.studentSignal,
+        ChatLessonMessageKind.doubtAction,
         ChatLessonMessageKind.feedback,
       ]),
+    );
+    expect(
+      messages
+          .singleWhere(
+            (message) => message.kind == ChatLessonMessageKind.doubtAction,
+          )
+          .actionKey,
+      'open-doubt',
     );
     final feedback = messages.singleWhere(
       (message) => message.kind == ChatLessonMessageKind.feedback,
@@ -169,6 +178,43 @@ void main() {
       expect(image.text, state.$3);
       expect(image.hasPaidImageOffer, state.$4);
     }
+  });
+
+  test('doubt processing response and error are represented in timeline', () {
+    final processing = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(phase: const ClassroomPhase.reading()),
+        doubtProcessing: true,
+        doubtProgress: 45,
+      ),
+    );
+    final processingMessage = processing.singleWhere(
+      (message) => message.id == 'doubt-processing',
+    );
+    expect(processingMessage.kind, ChatLessonMessageKind.loading);
+    expect(processingMessage.progress, 45);
+
+    final response = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(phase: const ClassroomPhase.reading()),
+        doubtResponse: 'Explicacao da duvida.',
+      ),
+    );
+    expect(
+      response.singleWhere((message) => message.id == 'doubt-response').text,
+      'Explicacao da duvida.',
+    );
+
+    final error = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(phase: const ClassroomPhase.reading()),
+        doubtError: 'Dúvida indisponível.',
+      ),
+    );
+    expect(
+      error.singleWhere((message) => message.id == 'doubt-error').text,
+      'Dúvida indisponível.',
+    );
   });
 }
 

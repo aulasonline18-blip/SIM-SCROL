@@ -15,6 +15,7 @@ class ChatLessonTimelineInput {
     this.imageError,
     this.hasPaidImageOffer = false,
     this.doubtProcessing = false,
+    this.doubtProgress = 0,
     this.doubtResponse,
     this.doubtError,
   });
@@ -27,6 +28,7 @@ class ChatLessonTimelineInput {
   final String? imageError;
   final bool hasPaidImageOffer;
   final bool doubtProcessing;
+  final int doubtProgress;
   final String? doubtResponse;
   final String? doubtError;
 }
@@ -84,11 +86,12 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
 
     if (input.doubtProcessing) {
       messages.add(
-        const ChatLessonMessage(
+        ChatLessonMessage(
           id: 'doubt-processing',
           role: ChatLessonMessageRole.system,
           kind: ChatLessonMessageKind.loading,
           text: 'Analisando sua duvida...',
+          progress: input.doubtProgress,
         ),
       );
     } else if ((input.doubtError ?? '').trim().isNotEmpty) {
@@ -201,6 +204,15 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
             kind: ChatLessonMessageKind.studentSignal,
             text: _signalText(phase?.signal),
             selectedSignal: phase?.signal,
+          ),
+        )
+        ..add(
+          const ChatLessonMessage(
+            id: 'doubt-action',
+            role: ChatLessonMessageRole.sim,
+            kind: ChatLessonMessageKind.doubtAction,
+            text: 'Dúvida',
+            actionKey: 'open-doubt',
           ),
         )
         ..add(

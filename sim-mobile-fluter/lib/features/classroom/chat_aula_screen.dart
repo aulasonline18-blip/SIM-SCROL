@@ -13,6 +13,7 @@ import 'aula_widgets.dart';
 import 'aux_room_screens.dart';
 import 'chat_aula_timeline_builder.dart';
 import 'chat_aula_widgets.dart';
+import 'doubt_input_sheet_widget.dart';
 
 class ChatAulaScreen extends StatefulWidget {
   const ChatAulaScreen({required this.session, super.key});
@@ -25,6 +26,9 @@ class ChatAulaScreen extends StatefulWidget {
 
 class _ChatAulaScreenState extends State<ChatAulaScreen>
     with WidgetsBindingObserver {
+  final TextEditingController _doubtController = TextEditingController();
+  bool _doubtSheetOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -33,7 +37,46 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   }
 
   void _onSessionChange() {
+    final open = widget.session.doubtOpen;
+    if (open && !_doubtSheetOpen) {
+      _doubtSheetOpen = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showDoubtSheet());
+    }
     if (mounted) setState(() {});
+  }
+
+  void _openDoubtSheetFromChat() {
+    if (widget.session.doubt.status == DoubtStatus.processing) return;
+    if (!widget.session.doubtOpen) widget.session.toggleDoubt();
+    if (_doubtSheetOpen) return;
+    _doubtSheetOpen = true;
+    _showDoubtSheet();
+  }
+
+  void _showDoubtSheet() {
+    if (!mounted) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DoubtInputSheet(
+        controller: _doubtController,
+        busy: widget.session.doubt.status == DoubtStatus.processing,
+        onSubmit: (draft) {
+          if (widget.session.doubtOpen) widget.session.toggleDoubt();
+          Navigator.of(context).pop();
+          unawaited(widget.session.submitDoubt(draft));
+          _doubtController.clear();
+        },
+        onClose: () {
+          if (widget.session.doubtOpen) widget.session.toggleDoubt();
+          _doubtController.clear();
+        },
+      ),
+    ).whenComplete(() {
+      _doubtSheetOpen = false;
+      if (widget.session.doubtOpen) widget.session.toggleDoubt();
+    });
   }
 
   @override
@@ -41,6 +84,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     WidgetsBinding.instance.removeObserver(this);
     widget.session.removeListener(_onSessionChange);
     widget.session.stopActiveAudio(notify: false);
+    _doubtController.dispose();
     super.dispose();
   }
 
@@ -99,6 +143,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         imageError: session.imageError,
         hasPaidImageOffer: session.hasLessonPaidImageOffer,
         doubtProcessing: session.doubt.status == DoubtStatus.processing,
+        doubtProgress: session.doubt.progress,
         doubtResponse: session.doubt.response?.explanation,
         doubtError: session.doubt.error,
       ),
@@ -124,6 +169,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
                 onSignal: session.submitAulaSignal,
                 onRetry: () => unawaited(session.openAulaRuntime()),
                 onNext: () => unawaited(session.advanceAula()),
+                onOpenDoubt: _openDoubtSheetFromChat,
               ),
             ),
             Positioned(

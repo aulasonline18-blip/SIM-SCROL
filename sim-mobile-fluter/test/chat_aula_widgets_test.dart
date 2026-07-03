@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_screen.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_messages.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_widgets.dart';
+import 'package:sim_mobile/features/classroom/doubt_input_sheet_widget.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
+import 'package:sim_mobile/sim/auxiliary/doubt_input_sheet.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
@@ -57,6 +59,7 @@ void main() {
             onSignal: (_) {},
             onRetry: () {},
             onNext: () {},
+            onOpenDoubt: () {},
           ),
         ),
       ),
@@ -115,6 +118,7 @@ void main() {
             onSignal: (value) => signal = value,
             onRetry: () => retries++,
             onNext: () {},
+            onOpenDoubt: () {},
           ),
         ),
       ),
@@ -148,6 +152,7 @@ void main() {
             onSignal: (_) {},
             onRetry: () {},
             onNext: () => advances++,
+            onOpenDoubt: () {},
           ),
         ),
       ),
@@ -156,6 +161,36 @@ void main() {
     expect(find.text('Exato! Você domina este ponto.'), findsOneWidget);
     await tester.tap(find.text('Próximo tópico'));
     expect(advances, 1);
+  });
+
+  testWidgets('chat timeline renders doubt action callback', (tester) async {
+    var opened = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            messages: const [
+              ChatLessonMessage(
+                id: 'doubt-action',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.doubtAction,
+                text: 'Dúvida',
+                actionKey: 'open-doubt',
+              ),
+            ],
+            onChooseAnswer: (_) {},
+            onSignal: (_) {},
+            onRetry: () {},
+            onNext: () {},
+            onOpenDoubt: () => opened++,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Dúvida'));
+    expect(opened, 1);
   });
 
   testWidgets('chat image bubble renders media states without actions', (
@@ -272,6 +307,41 @@ void main() {
     await tester.tap(bubble);
     await tester.pump();
     expect(session.audioPlaying, isFalse);
+  });
+
+  testWidgets('shared doubt sheet preserves text and photo menu', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    DoubtInputDraft? submitted;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DoubtInputSheet(
+            controller: controller,
+            busy: false,
+            onSubmit: (draft) => submitted = draft,
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Enviar dúvida'), findsWidgets);
+    expect(find.byIcon(Icons.attach_file), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.attach_file));
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(find.text('Tirar foto'), findsOneWidget);
+    expect(find.text('Escolher imagem'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).last, 'Nao entendi.');
+    await tester.tap(find.text('Enviar dúvida').last);
+    await tester.pump();
+
+    expect(submitted?.cleanText, 'Nao entendi.');
+    expect(submitted?.image, isNull);
   });
 
   testWidgets('chat classroom covers normal flow through feedback', (

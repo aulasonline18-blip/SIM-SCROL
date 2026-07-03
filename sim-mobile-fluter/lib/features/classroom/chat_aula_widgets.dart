@@ -6,6 +6,7 @@ import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
 import '../../sim/ui/sim_theme.dart';
+import '../../sim/ui/widgets/doubt_progress_bar.dart';
 import '../onboarding/preparation_and_placement.dart';
 import '../session/lab_session.dart';
 import 'aula_widgets.dart';
@@ -18,6 +19,7 @@ class ChatAulaTimeline extends StatelessWidget {
     required this.onSignal,
     required this.onRetry,
     required this.onNext,
+    required this.onOpenDoubt,
     this.session,
     this.onImageSettled,
     this.padding = const EdgeInsets.fromLTRB(16, 112, 16, 128),
@@ -29,6 +31,7 @@ class ChatAulaTimeline extends StatelessWidget {
   final void Function(int value) onSignal;
   final VoidCallback onRetry;
   final VoidCallback onNext;
+  final VoidCallback onOpenDoubt;
   final LabSession? session;
   final VoidCallback? onImageSettled;
   final EdgeInsets padding;
@@ -48,6 +51,7 @@ class ChatAulaTimeline extends StatelessWidget {
             onSignal: onSignal,
             onRetry: onRetry,
             onNext: onNext,
+            onOpenDoubt: onOpenDoubt,
             onImageSettled: onImageSettled,
           ),
         ],
@@ -63,6 +67,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
     required this.onSignal,
     required this.onRetry,
     required this.onNext,
+    required this.onOpenDoubt,
     this.session,
     this.onImageSettled,
     super.key,
@@ -74,6 +79,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
   final void Function(int value) onSignal;
   final VoidCallback onRetry;
   final VoidCallback onNext;
+  final VoidCallback onOpenDoubt;
   final VoidCallback? onImageSettled;
 
   @override
@@ -122,6 +128,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
             onSignal: onSignal,
             onRetry: onRetry,
             onNext: onNext,
+            onOpenDoubt: onOpenDoubt,
             onImageSettled: onImageSettled,
           ),
         ),
@@ -154,6 +161,7 @@ class _ChatAulaMessageBody extends StatelessWidget {
     required this.onSignal,
     required this.onRetry,
     required this.onNext,
+    required this.onOpenDoubt,
     this.session,
     this.onImageSettled,
   });
@@ -164,6 +172,7 @@ class _ChatAulaMessageBody extends StatelessWidget {
   final void Function(int value) onSignal;
   final VoidCallback onRetry;
   final VoidCallback onNext;
+  final VoidCallback onOpenDoubt;
   final VoidCallback? onImageSettled;
 
   @override
@@ -185,12 +194,17 @@ class _ChatAulaMessageBody extends StatelessWidget {
                 session: session!,
                 onImageSettled: onImageSettled,
               ),
-      ChatLessonMessageKind.loading ||
-      ChatLessonMessageKind.processing => _StatusMessage(
-        text: message.text ?? t('preparing_lesson'),
-        loading: true,
-        onRetry: message.actionKey == 'retry' ? onRetry : null,
-      ),
+      ChatLessonMessageKind.loading || ChatLessonMessageKind.processing =>
+        message.id == 'doubt-processing'
+            ? _DoubtProgressMessage(
+                text: message.text ?? 'Analisando sua dúvida...',
+                progress: message.progress ?? 0,
+              )
+            : _StatusMessage(
+                text: message.text ?? t('preparing_lesson'),
+                loading: true,
+                onRetry: message.actionKey == 'retry' ? onRetry : null,
+              ),
       ChatLessonMessageKind.error => _StatusMessage(
         text: message.text ?? t('aula_gen_fail'),
         loading: false,
@@ -222,6 +236,11 @@ class _ChatAulaMessageBody extends StatelessWidget {
             ),
           ],
         ],
+      ),
+      ChatLessonMessageKind.doubtAction => _ChatActionButton(
+        key: const Key('chat-doubt-action'),
+        label: message.text ?? 'Dúvida',
+        onPressed: onOpenDoubt,
       ),
       ChatLessonMessageKind.studentAnswer ||
       ChatLessonMessageKind.historyAnswer ||
@@ -296,6 +315,18 @@ class ChatImageBubble extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _DoubtProgressMessage extends StatelessWidget {
+  const _DoubtProgressMessage({required this.text, required this.progress});
+
+  final String text;
+  final int progress;
+
+  @override
+  Widget build(BuildContext context) {
+    return DoubtProgressBar(progress: progress.toDouble(), label: text);
   }
 }
 
@@ -511,7 +542,11 @@ class _StatusMessage extends StatelessWidget {
 }
 
 class _ChatActionButton extends StatelessWidget {
-  const _ChatActionButton({required this.label, required this.onPressed});
+  const _ChatActionButton({
+    required this.label,
+    required this.onPressed,
+    super.key,
+  });
 
   final String label;
   final VoidCallback onPressed;
