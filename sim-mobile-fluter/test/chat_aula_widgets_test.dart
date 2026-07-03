@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_screen.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_messages.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_widgets.dart';
@@ -7,11 +8,13 @@ import 'package:sim_mobile/features/classroom/doubt_input_sheet_widget.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
 import 'package:sim_mobile/sim/auxiliary/aux_room_models.dart';
 import 'package:sim_mobile/sim/auxiliary/doubt_input_sheet.dart';
+import 'package:sim_mobile/sim/classroom/classroom_text_scale.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
+import 'package:sim_mobile/sim/ui/sim_theme.dart';
 
 void main() {
   testWidgets('chat timeline renders messages and answer callbacks', (
@@ -309,6 +312,62 @@ void main() {
     await tester.pump();
     expect(session.audioPlaying, isFalse);
   });
+
+  testWidgets(
+    'chat classroom preserves menu credits dark mode and font scale',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({ClassroomTextScale.prefsKey: 4});
+      await tester.binding.setSurfaceSize(const Size(390, 820));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      var darkToggles = 0;
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..route = '/cyber/aula'
+        ..credits = 3
+        ..aulaSnapshot = _chatSnapshot(phase: const ClassroomPhase.reading());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SimThemeScope(
+            darkMode: false,
+            onToggleDarkMode: () => darkToggles++,
+            child: ChatAulaScreen(session: session),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(find.bySemanticsLabel('Abrir menu da aula'), findsOneWidget);
+      expect(find.bySemanticsLabel('Modo escuro'), findsOneWidget);
+      expect(find.byKey(const Key('chat-font-scale-button')), findsOneWidget);
+      expect(find.text('4/5'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('chat-font-scale-button')));
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(find.text('5/5'), findsOneWidget);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getInt(ClassroomTextScale.prefsKey), 5);
+
+      await tester.tap(find.bySemanticsLabel('Modo escuro'));
+      await tester.pump();
+      expect(darkToggles, 1);
+
+      await tester.tap(find.bySemanticsLabel('Abrir menu da aula'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 320));
+      expect(find.text('Recarregar créditos'), findsOneWidget);
+
+      await tester.tap(find.text('Recarregar créditos'), warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(session.route, '/creditos?returnTo=/cyber/aula');
+      expect(session.returnTo, '/cyber/aula');
+      await tester.pump(const Duration(milliseconds: 2300));
+    },
+  );
 
   testWidgets('shared doubt sheet preserves text and photo menu', (
     tester,

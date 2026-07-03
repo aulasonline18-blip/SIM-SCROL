@@ -64,6 +64,8 @@ class AulaTopBar extends StatelessWidget {
     this.progress,
     this.headerLabel,
     this.textScale = 1,
+    this.fontScaleLevel,
+    this.onFontScaleTap,
     super.key,
   });
 
@@ -72,6 +74,8 @@ class AulaTopBar extends StatelessWidget {
   final double? progress;
   final String? headerLabel;
   final double textScale;
+  final int? fontScaleLevel;
+  final VoidCallback? onFontScaleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -207,6 +211,14 @@ class AulaTopBar extends StatelessWidget {
                   ),
                   SizedBox(width: actionGap),
                   _DarkModeToggleBtn(size: iconTouchSize),
+                  if (fontScaleLevel != null && onFontScaleTap != null) ...[
+                    SizedBox(width: actionGap),
+                    _HeaderFontScaleBtn(
+                      level: fontScaleLevel!,
+                      onTap: onFontScaleTap!,
+                      size: iconTouchSize,
+                    ),
+                  ],
                   if (showReviewButton) ...[
                     SizedBox(width: actionGap),
                     Semantics(
@@ -266,6 +278,69 @@ class AulaTopBar extends StatelessWidget {
                     ),
                   ],
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderFontScaleBtn extends StatelessWidget {
+  const _HeaderFontScaleBtn({
+    required this.level,
+    required this.onTap,
+    required this.size,
+  });
+
+  final int level;
+  final VoidCallback onTap;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      excludeSemantics: true,
+      label: 'Tamanho da letra: nível $level de 5',
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(SimRadius.md),
+        child: InkWell(
+          key: const Key('chat-font-scale-button'),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(SimRadius.md),
+          child: Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: palette.surface,
+              borderRadius: BorderRadius.circular(SimRadius.md),
+              border: Border.all(color: palette.border),
+              boxShadow: [
+                BoxShadow(
+                  color: palette.shadow,
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.noScaling),
+              child: Text(
+                '$level/5',
+                key: const Key('chat-font-scale-level'),
+                style: TextStyle(
+                  color: palette.text,
+                  fontFamily: kMono,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ),
@@ -878,7 +953,9 @@ class _DarkModeToggleBtn extends StatelessWidget {
     final scope = SimThemeScope.of(context);
     final palette = SimThemeScope.paletteOf(context);
     return SimIconAction(
-      icon: scope.darkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+      icon: scope.darkMode
+          ? Icons.light_mode_outlined
+          : Icons.dark_mode_outlined,
       semanticLabel: scope.darkMode ? 'Modo claro' : 'Modo escuro',
       onPressed: scope.onToggleDarkMode,
       size: size,
@@ -915,7 +992,10 @@ class StatusLine extends StatelessWidget {
           SizedBox(
             width: 16,
             height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2, color: palette.text),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: palette.text,
+            ),
           )
         else
           Icon(icon, size: 16, color: palette.muted),

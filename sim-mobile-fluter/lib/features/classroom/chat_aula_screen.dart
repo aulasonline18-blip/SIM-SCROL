@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/classroom/classroom_text_scale.dart';
@@ -27,6 +28,7 @@ class ChatAulaScreen extends StatefulWidget {
 class _ChatAulaScreenState extends State<ChatAulaScreen>
     with WidgetsBindingObserver {
   final TextEditingController _doubtController = TextEditingController();
+  int _fontScaleLevel = ClassroomTextScale.defaultLevel;
   bool _doubtSheetOpen = false;
 
   @override
@@ -34,6 +36,25 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.session.addListener(_onSessionChange);
+    unawaited(_loadFontScaleLevel());
+  }
+
+  Future<void> _loadFontScaleLevel() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _fontScaleLevel = ClassroomTextScale.normalize(
+        prefs.getInt(ClassroomTextScale.prefsKey) ??
+            ClassroomTextScale.defaultLevel,
+      );
+    });
+  }
+
+  Future<void> _cycleFontScaleLevel() async {
+    final next = ClassroomTextScale.next(_fontScaleLevel);
+    setState(() => _fontScaleLevel = next);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(ClassroomTextScale.prefsKey, next);
   }
 
   void _onSessionChange() {
@@ -130,7 +151,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     final viewModel = snapshot?.viewModel;
     final palette = SimThemeScope.paletteOf(context);
     final textScale = ClassroomTextScale.scaleForWidth(
-      ClassroomTextScale.defaultLevel,
+      _fontScaleLevel,
       MediaQuery.sizeOf(context).width,
     );
     final messages = buildChatLessonMessages(
@@ -186,6 +207,8 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
                       ? headerLabelText(viewModel.headerLabel)
                       : null,
                   textScale: textScale,
+                  fontScaleLevel: _fontScaleLevel,
+                  onFontScaleTap: () => unawaited(_cycleFontScaleLevel()),
                 ),
               ),
             ),
