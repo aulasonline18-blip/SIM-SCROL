@@ -5,6 +5,7 @@ import 'package:sim_mobile/features/classroom/chat_aula_messages.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_widgets.dart';
 import 'package:sim_mobile/features/classroom/doubt_input_sheet_widget.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
+import 'package:sim_mobile/sim/auxiliary/aux_room_models.dart';
 import 'package:sim_mobile/sim/auxiliary/doubt_input_sheet.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
@@ -415,6 +416,88 @@ void main() {
     );
     expect(find.text('Próximo', skipOffstage: false), findsOneWidget);
   });
+
+  testWidgets(
+    'chat classroom keeps current review room and returns to lesson',
+    (tester) async {
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..route = '/cyber/aula'
+        ..aulaSnapshot = _chatSnapshot(phase: const ClassroomPhase.reading());
+      session.setReviewRoom(
+        const ReviewRoomView(
+          status: ReviewRoomStatus.choose,
+          count: 5,
+          queue: ['M1'],
+          idx: 0,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: session)),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(find.text('Quantas questões de revisão?'), findsOneWidget);
+      expect(find.byKey(const Key('chat-aula-timeline')), findsNothing);
+      expect(session.aulaSnapshot?.itemMarker, 'M1');
+
+      await tester.tap(find.text('Voltar'));
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(session.reviewRoom, isNull);
+      expect(session.aulaSnapshot?.itemMarker, 'M1');
+      expect(find.byKey(const Key('chat-aula-timeline')), findsOneWidget);
+      expect(
+        find.text('Qual alternativa está correta?', skipOffstage: false),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'chat classroom keeps current recovery room and returns to lesson',
+    (tester) async {
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..route = '/cyber/aula'
+        ..aulaSnapshot = _chatSnapshot(phase: const ClassroomPhase.reading());
+      session.setRecoveryRoom(
+        const RecoveryRoomView(
+          status: RecoveryRoomStatus.failed,
+          queue: ['M1'],
+          idx: 0,
+          errMsg: 'Falha controlada da recuperação',
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: session)),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(find.text('Falha controlada da recuperação'), findsOneWidget);
+      expect(find.byKey(const Key('chat-aula-timeline')), findsNothing);
+      expect(session.aulaSnapshot?.itemMarker, 'M1');
+
+      await tester.tap(find.text('Concluir'));
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(session.recoveryRoom, isNull);
+      expect(session.aulaSnapshot?.itemMarker, 'M1');
+      expect(find.byKey(const Key('chat-aula-timeline')), findsOneWidget);
+      expect(
+        find.text('Qual alternativa está correta?', skipOffstage: false),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 LessonRuntimeSnapshot _chatSnapshot({
