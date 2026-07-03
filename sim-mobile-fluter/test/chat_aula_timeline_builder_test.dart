@@ -135,6 +135,41 @@ void main() {
     expect(error.last.text, 'T02 indisponivel');
     expect(error.last.actionKey, 'retry');
   });
+
+  test('image states stay non blocking before question and options', () {
+    for (final state in const [
+      ('ready', 'data:image/svg+xml,%3Csvg%2F%3E', null, false),
+      ('loading', null, null, false),
+      ('error', null, 'Imagem falhou sem bloquear.', false),
+      ('offer', null, null, true),
+    ]) {
+      final messages = buildChatLessonMessages(
+        ChatLessonTimelineInput(
+          snapshot: _snapshot(
+            phase: const ClassroomPhase.reading(),
+            imagem: state.$2,
+          ),
+          showImagePanel: true,
+          imageStatus: state.$1,
+          imageError: state.$3,
+          hasPaidImageOffer: state.$4,
+        ),
+      );
+      final kinds = messages.map((message) => message.kind).toList();
+      final imageIndex = kinds.indexOf(ChatLessonMessageKind.image);
+      final questionIndex = kinds.indexOf(ChatLessonMessageKind.question);
+      final optionsIndex = kinds.indexOf(ChatLessonMessageKind.options);
+      expect(imageIndex, greaterThanOrEqualTo(0));
+      expect(questionIndex, greaterThan(imageIndex));
+      expect(optionsIndex, greaterThan(questionIndex));
+
+      final image = messages[imageIndex];
+      expect(image.imageStatus, state.$1);
+      expect(image.imageData, state.$2);
+      expect(image.text, state.$3);
+      expect(image.hasPaidImageOffer, state.$4);
+    }
+  });
 }
 
 LessonRuntimeSnapshot _snapshot({

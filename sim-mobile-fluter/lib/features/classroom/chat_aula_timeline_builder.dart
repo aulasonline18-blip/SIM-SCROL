@@ -124,6 +124,8 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           kind: ChatLessonMessageKind.image,
           imageData: imageData,
           text: input.imageError,
+          imageStatus: input.imageStatus,
+          hasPaidImageOffer: input.hasPaidImageOffer,
           actionKey: input.hasPaidImageOffer ? 'paid-image-offer' : null,
         ),
       );

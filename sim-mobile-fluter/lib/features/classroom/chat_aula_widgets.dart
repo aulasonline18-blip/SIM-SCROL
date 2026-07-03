@@ -180,7 +180,7 @@ class _ChatAulaMessageBody extends StatelessWidget {
       ),
       ChatLessonMessageKind.image =>
         session == null
-            ? _TextMessage(message.text ?? 'Imagem da aula')
+            ? ChatImageBubble(message: message)
             : LessonImagePanel(
                 session: session!,
                 onImageSettled: onImageSettled,
@@ -230,6 +230,72 @@ class _ChatAulaMessageBody extends StatelessWidget {
       ),
       _ => _TextMessage(message.text ?? ''),
     };
+  }
+}
+
+class ChatImageBubble extends StatelessWidget {
+  const ChatImageBubble({required this.message, super.key});
+
+  final ChatLessonMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageReady =
+        message.imageData != null && message.imageData!.trim().isNotEmpty;
+    final loading = message.imageStatus == 'loading';
+    final hasError = (message.text ?? '').trim().isNotEmpty;
+    final offer = message.hasPaidImageOffer && !loading && !imageReady;
+    final palette = SimThemeScope.paletteOf(context);
+    final icon = imageReady
+        ? Icons.image_outlined
+        : loading
+        ? Icons.hourglass_empty
+        : offer
+        ? Icons.add_photo_alternate_outlined
+        : Icons.broken_image_outlined;
+    final label = imageReady
+        ? 'Imagem da aula pronta'
+        : loading
+        ? 'Gerando imagem da aula...'
+        : offer
+        ? t('aula_img_desc')
+        : hasError
+        ? message.text!
+        : 'Imagem indisponível. A aula continua.';
+    return Container(
+      constraints: const BoxConstraints(minHeight: 72),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: palette.surfaceSoft,
+        borderRadius: BorderRadius.circular(SimRadius.lg),
+        border: Border.all(color: palette.border),
+      ),
+      child: Row(
+        children: [
+          if (loading)
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: palette.primary,
+              ),
+            )
+          else
+            Icon(icon, color: hasError ? simWarn : palette.primary, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: SimTypography.lessonBody.copyWith(
+                color: palette.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

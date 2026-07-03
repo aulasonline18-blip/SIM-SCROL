@@ -158,6 +158,122 @@ void main() {
     expect(advances, 1);
   });
 
+  testWidgets('chat image bubble renders media states without actions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              ChatImageBubble(
+                message: ChatLessonMessage(
+                  id: 'ready',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.image,
+                  imageData: 'data:image/svg+xml,%3Csvg%2F%3E',
+                  imageStatus: 'ready',
+                ),
+              ),
+              ChatImageBubble(
+                message: ChatLessonMessage(
+                  id: 'loading',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.image,
+                  imageStatus: 'loading',
+                ),
+              ),
+              ChatImageBubble(
+                message: ChatLessonMessage(
+                  id: 'error',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.image,
+                  text: 'Imagem falhou sem bloquear.',
+                  imageStatus: 'error',
+                ),
+              ),
+              ChatImageBubble(
+                message: ChatLessonMessage(
+                  id: 'offer',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.image,
+                  imageStatus: 'offer',
+                  hasPaidImageOffer: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Imagem da aula pronta'), findsOneWidget);
+    expect(find.text('Gerando imagem da aula...'), findsOneWidget);
+    expect(find.text('Imagem falhou sem bloquear.'), findsOneWidget);
+    expect(
+      find.text(
+        'Esta parte da aula tem uma imagem criada por inteligência artificial.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('chat classroom keeps question visible while image loads', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 820));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'Portuguese'
+      ..route = '/cyber/aula'
+      ..aulaRuntimeLoading = true
+      ..aulaSnapshot = _chatSnapshot(phase: const ClassroomPhase.reading());
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+      find.text('Gerando imagem da aula...', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Qual alternativa está correta?', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.text('Alternativa A', skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('chat classroom shows audio bubble and stops audio on tap', (
+    tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'Portuguese'
+      ..route = '/cyber/aula'
+      ..audioEnabled = true
+      ..audioPlaying = true
+      ..aulaSnapshot = _chatSnapshot(phase: const ClassroomPhase.reading());
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+
+    final bubble = find.bySemanticsLabel('Áudio tocando');
+    expect(bubble, findsOneWidget);
+    await tester.tap(bubble);
+    await tester.pump();
+    expect(session.audioPlaying, isFalse);
+  });
+
   testWidgets('chat classroom covers normal flow through feedback', (
     tester,
   ) async {

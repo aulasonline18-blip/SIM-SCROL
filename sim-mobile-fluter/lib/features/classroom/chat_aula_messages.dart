@@ -57,6 +57,8 @@ class ChatLessonMessage {
     this.selectedSignal,
     this.isCorrect,
     this.actionKey,
+    this.imageStatus = 'idle',
+    this.hasPaidImageOffer = false,
   });
 
   final String id;
@@ -70,6 +72,8 @@ class ChatLessonMessage {
   final DecisionSignal? selectedSignal;
   final bool? isCorrect;
   final String? actionKey;
+  final String imageStatus;
+  final bool hasPaidImageOffer;
 
   bool get hasInteractiveOptions =>
       kind == ChatLessonMessageKind.options && options.isNotEmpty;
