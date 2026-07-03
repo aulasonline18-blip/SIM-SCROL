@@ -34,9 +34,9 @@ O APK continua usando o mesmo `applicationId` do SIM original local:
 
 `com.example.sim_mobile`
 
-O `versionCode` foi atualizado de `2` para `3` em `pubspec.yaml`:
+O `versionCode` foi atualizado de `3` para `4` em `pubspec.yaml`:
 
-`version: 1.0.0+3`
+`version: 1.0.0+4`
 
 Isso permite que o Android trate o APK como atualizacao da versao anterior instalada, desde que a assinatura seja a mesma.
 
@@ -54,7 +54,31 @@ Comandos esperados para esta fase:
 
 - `flutter analyze`
 - `flutter test`
-- `flutter build apk --release --dart-define=FLUTTER_APP_MODE=production`
+- `scripts/build-sim-scroll-production-apk.sh`
+
+## Correcao de servidor da build
+
+O APK `1.0.0+3` foi gerado sem `SIM_SERVER_URL`, portanto usou o default do codigo:
+
+`https://gemini-aid-pal.lovable.app`
+
+Esse dominio serve tambem a aplicacao Web/Lovable. A rota `/api/bootstrap-t00` desse dominio recusou o Bearer enviado pelo app com:
+
+`HTTP 401 {"error":"Unauthorized","reason":"invalid token"}`
+
+Isso indica token presente, mas nao aceito pela rota publica chamada.
+
+A build correta do Scroll deve apontar explicitamente para o servidor SIM/API:
+
+`http://167.179.109.137:3000`
+
+Como esse servidor ainda esta em HTTP, a build de teste usa tambem:
+
+`SIM_ALLOW_HTTP_IN_PRODUCTION=true`
+
+Script canonico:
+
+`scripts/build-sim-scroll-production-apk.sh`
 
 ## Resultado
 
@@ -62,21 +86,26 @@ Comandos executados:
 
 - `flutter analyze` — PASSOU
 - `flutter test` — PASSOU, 290 testes
-- `flutter build apk --release --dart-define=FLUTTER_APP_MODE=production` — PASSOU
+- `scripts/build-sim-scroll-production-apk.sh` — PASSOU
 
 APK gerado:
 
 - Arquivo local: `build/app/outputs/flutter-apk/app-release.apk`
 - Arquivo publicado: `sim-production-latest.apk`
 - Link publico: `http://167.179.109.137:3000/downloads/sim-production-latest.apk`
-- SHA256: `7d351c195a94576676850db6a2ef4b5e43a68b28b73c5862d813f2009cc461f8`
+- SHA256: `b8a633d7ffe37139a19d229a02b4c84793605cab56d18bc8461b48a197a5f712`
 - Tamanho: `65,653,692 bytes`
 
 Identidade conferida via `aapt`:
 
 - `packageName`: `com.example.sim_mobile`
-- `versionCode`: `3`
+- `versionCode`: `4`
 - `versionName`: `1.0.0`
+
+Servidor conferido no binario do APK:
+
+- `SIM_SERVER_URL`: `http://167.179.109.137:3000`
+- T00: `/api/bootstrap-t00`
 
 Assinatura conferida via `apksigner`:
 
