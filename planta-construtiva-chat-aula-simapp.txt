@@ -1,0 +1,3260 @@
+================================================================================================
+PLANTA CONSTRUTIVA — SIM APP FLUTTER EM AULA-CHAT GUIADA
+================================================================================================
+Documento: docs/planta-construtiva-chat-aula-simapp.txt
+Natureza: documento construtivo para outro engenheiro ou IA executar sem conversa adicional.
+Escopo: transformar a tela de aula do SimApp em uma experiência de chat guiado, mantendo o motor atual.
+Status: PLANTA, NAO IMPLEMENTACAO.
+Proibicao: este documento nao autoriza alteracao em T00, T02, API, SimWeb, credito, sync, backup ou motor pedagogico.
+
+Resumo da decisao tecnica:
+O SimApp pode funcionar como uma conversa rolavel, com mensagens do SIM, mensagens/acoes do aluno, imagem no fluxo, botoes A/B/C, sinais 1/2/3, feedback, duvida, audio, dark mode, menu sanduiche e estados de erro/loading dentro da timeline. A mudanca deve ocorrer na camada de renderizacao da aula. O motor pedagogico, estado, orquestrador, T00/T02, imagem, audio, duvida, revisao, recuperacao, creditos, backup e sync devem continuar vivos e intactos.
+
+Meta de obra:
+Trocar a forma de apresentar a aula, nao trocar a aula. O aluno deve sentir que esta em um chat como uma conversa normal. O codigo deve continuar obedecendo a Planta-Mae: UI renderiza e dispara comandos; estado fica em StudentLearningState; decisao fica no motor; T00/T02 ficam nos adaptadores/API; imagem/audio ficam no pipeline de midia.
+
+Arquivos reais lidos nesta preparacao:
+- lib/features/classroom/aula_screen.dart
+- lib/features/classroom/aula_widgets.dart
+- lib/features/classroom/aux_room_screens.dart
+- lib/features/session/lab_session.dart
+- lib/session/lesson_ui_state.dart
+- lib/sim/classroom/classroom_models.dart
+- lib/sim/classroom/lesson_main_view_model.dart
+- lib/sim/ui/widgets/lesson_audio_controls.dart
+- lib/sim/ui/widgets/fixed_bubble.dart
+- lib/shared/widgets/shared_widgets.dart
+- lib/main.dart
+
+Fontes externas consultadas para criterios de engenharia, acessibilidade e UI:
+- Flutter performance best practices — https://docs.flutter.dev/perf/best-practices — uso: evitar operações caras desnecessárias, limitar rebuilds, usar listas e pintura com cuidado
+- Flutter user input and accessibility — https://docs.flutter.dev/ui/adaptive-responsive/input — uso: ListView suporta rolagem; widgets customizados precisam preservar foco, teclado e acessibilidade
+- Android touch target size — https://support.google.com/accessibility/android/answer/7101858?hl=en — uso: elementos tocáveis devem ter pelo menos 48dp e separação adequada
+- W3C WCAG2Mobile — https://w3c.github.io/matf/ — uso: WCAG 2.2 aplicado a telas de apps móveis, reflow, alvo de toque, foco, status messages, orientação
+- Material Design accessibility — https://m2.material.io/design/usability/accessibility.html — uso: alvos de toque físicos de 7-10mm, contraste, estrutura e legibilidade
+
+
+================================================================================================
+0. DEFINICAO EXECUTIVA DA OBRA
+================================================================================================
+Cidade A:
+A aula atual funciona por blocos e cards. O arquivo aula_screen.dart constroi uma ListView com historico respondido, card de teoria, card de imagem, card de pergunta, botoes A/B/C, sinais 1/2/3, feedback, erro e overlays. Isso funciona, mas parece uma tela modular. O usuario quer uma experiencia de conversa: mensagens rolando desde o inicio da aula ate o ponto atual.
+
+Cidade B:
+A aula continua usando o mesmo motor, mas a tela /cyber/aula renderiza uma timeline de chat guiado. Cada evento visivel vira uma mensagem ou grupo de mensagens. A timeline tem topo fixo, menu sanduiche fixo, progresso, audio, dark mode, controle de fonte, area rolavel de mensagens, imagem como anexo no chat, botoes de resposta dentro da conversa, sinais dentro da conversa, feedback como mensagem, duvida como entrada controlada, erro/loading como mensagens de sistema, e estados auxiliares coerentes.
+
+Principio soberano:
+Nao transformar o SimApp em prompt gigante. Nao voltar ao SIM antigo baseado apenas em memoria de chat. A aparencia vira chat; o cerebro continua sendo o app.
+
+Frase para engenheiro:
+Voce esta trocando a pele da aula. Nao toque nos orgaos.
+
+
+================================================================================================
+1. PROIBICOES ABSOLUTAS
+================================================================================================
+1. Nao alterar contrato de T00.
+2. Nao alterar contrato de T02.
+3. Nao alterar prompt oficial.
+4. Nao alterar API.
+5. Nao alterar SimWeb.
+6. Nao mover decisao pedagogica para widget.
+7. Nao criar estado paralelo para progresso, layer, resposta ou sinal.
+8. Nao criar um novo motor de aula.
+9. Nao criar fallback falso de aula.
+10. Nao criar mock em production.
+11. Nao remover StudentLearningState como fonte de verdade.
+12. Nao remover LabSession como coordenador da UI atual.
+13. Nao quebrar imagem gratis/software.
+14. Nao quebrar imagem paga/oferta/aceite.
+15. Nao quebrar audio, preferencia, stop automatico ou bolha.
+16. Nao quebrar duvida com texto/foto.
+17. Nao quebrar revisao/recuperacao.
+18. Nao quebrar drawer/menu sanduiche.
+19. Nao quebrar dark mode.
+20. Nao quebrar controle de fonte.
+21. Nao quebrar backup/sync/cloud.
+22. Nao quebrar credito infinito/test account.
+23. Nao esconder erro tecnico real com mensagem falsa.
+24. Nao fazer refatoracao ampla.
+25. Nao apagar testes existentes.
+26. Nao trocar pacote de estado.
+27. Nao criar dependencia pesada de chat sem necessidade.
+28. Nao usar WebView para simular chat.
+29. Nao colocar HTML renderizado como base da aula.
+30. Nao fazer pixel-perfect do chat deste assistente; fazer equivalencia funcional mobile.
+
+
+================================================================================================
+2. MAPA DO SISTEMA ATUAL
+================================================================================================
+Orgao de entrada da aula:
+- main.dart roteia /cyber/aula para AulaLabScreen(session: session).
+- AulaLabScreen recebe LabSession e escuta addListener.
+- A tela nao deve decidir pedagogia; ela le aulaSnapshot, aulaPhase, doubt, imageStatus, audioPlaying, viewModel e chama metodos da sessao.
+
+Estado e runtime:
+- LabSession contem aulaSnapshot, aulaRuntimeLoading, aulaRuntimeError, aulaPhase, doubtOpen, imageStatus, audioPlaying, audioEnabled, creditos, auth.
+- LessonRuntimeSnapshot contem conteudo, imagem, history, phase, viewModel, itemMarker, itemText, isDone, hasCurriculum.
+- LessonMainViewModel contem progress, headerLabel, options, locked, nextLabel.
+- ClassroomPhase define carregando, erroEngine, lendo, expandida, processando, concluido, fim.
+
+Renderizacao atual:
+- AulaLabScreen cria Scaffold com Stack.
+- Dentro do Stack ha ListView com padding alto para topbar.
+- Historico usa _QuestionHistoryBlock.
+- Teoria usa SimCard com SimTypewriter.
+- Imagem usa LessonImagePanel dentro de SimCard.
+- Pergunta usa SimCard com SimTypewriter e _StaggeredAnswerList.
+- Alternativas usam AnswerButton.
+- Sinais usam _SinalRow.
+- Feedback usa _FeedbackBox.
+- Drawer usa showAulaMenu.
+- Topo usa AulaTopBar.
+- Audio usa icone no topo e _FixedBubble.
+- Duvida usa showModalBottomSheet com _DoubtInputSheet.
+
+Conclusao do mapa:
+A mudanca deve criar uma alternativa de renderizacao em chat para esses mesmos dados e comandos. Nao precisa mexer em runtime, estado, pipeline ou servidor.
+
+
+================================================================================================
+3. ARQUITETURA ALVO
+================================================================================================
+Camada nova proposta:
+- ChatAulaScreen: substitui visualmente AulaLabScreen quando flag estiver ativa.
+- ChatAulaTimeline: ListView/CustomScrollView com mensagens.
+- ChatAulaComposerBar: barra inferior fixa sem campo livre na aula normal, contendo botoes contextuais.
+- ChatAulaTopBar: pode reaproveitar AulaTopBar ou criar wrapper visualmente mais chat.
+- ChatMessageModel: modelo derivado de LessonRuntimeSnapshot, sem persistir estado novo.
+- ChatMessageBuilder: funcao pura que transforma snapshot + session UI state em lista de mensagens.
+- ChatBubble: bolha base para SIM, aluno e sistema.
+- ChatImageBubble: renderiza LessonImagePanel ou LessonImageStudySurface no fluxo.
+- ChatOptionsBubble: renderiza A/B/C usando as mesmas callbacks.
+- ChatSignalsBubble: renderiza 1/2/3 usando submitAulaSignal.
+- ChatFeedbackBubble: renderiza feedback e proximo.
+- ChatDoubtBubble: renderiza estado de duvida, progresso e resposta.
+- ChatErrorBubble: renderiza erro/retry.
+- ChatLoadingBubble: renderiza progresso de preparacao.
+
+Fluxo de dados:
+StudentLearningState -> LessonRuntimeEngine -> LabSession.aulaSnapshot -> ChatMessageBuilder -> ChatAulaTimeline -> callbacks para LabSession.
+
+Contrato fundamental:
+ChatMessageBuilder nao grava estado. Ele apenas deriva mensagens.
+ChatAulaTimeline nao decide avanco. Ela apenas renderiza e chama callbacks.
+LabSession continua dono dos comandos.
+LessonRuntimeEngine continua dono do snapshot.
+StudentLearningState continua fonte de verdade.
+
+
+================================================================================================
+4. FORMA FINAL DA EXPERIENCIA
+================================================================================================
+Layout final:
+- Topo fixo: menu sanduiche, progresso, titulo compacto, audio, dark mode, revisao quando aplicavel.
+- Meio rolavel: conversa completa da aula atual, com historico, teoria, imagem, pergunta, respostas, sinais, feedback, duvidas, erros e estados.
+- Rodape fixo: barra contextual. Na aula normal pode nao ter campo de texto; deve conter a acao principal do momento quando fizer sentido. Em duvida, pode abrir campo/sheet ou modo inline.
+
+Mensagens:
+- Mensagem do SIM: alinhada a esquerda, largura maxima, texto limpo, sem card pesado.
+- Mensagem do aluno: alinhada a direita, curta, mostrando escolha A/B/C ou sinal.
+- Mensagem de sistema: central ou esquerda discreta, para loading, erro, retry, credito, imagem.
+- Imagem: bloco dentro da conversa, com legenda, ampliar, loading e erro.
+- Botoes: dentro da mensagem atual, mantendo 48dp minimo.
+
+Sequencia normal:
+1. Loading da aula como mensagem do SIM: preparando aula.
+2. Teoria como mensagem do SIM, com typewriter opcional.
+3. Imagem como anexo logo apos a teoria quando existir ou estiver sendo gerada.
+4. Pergunta como mensagem do SIM.
+5. A/B/C como botoes na mesma regiao da pergunta.
+6. Ao escolher alternativa, aparece mensagem do aluno: "Escolhi A".
+7. Sinais aparecem como mensagem do SIM: "Como voce se sente?" + botoes 1/2/3.
+8. Ao escolher sinal, aparece mensagem do aluno: "Sinal 1".
+9. Feedback aparece como mensagem do SIM.
+10. Botao avancar aparece dentro do feedback ou na barra inferior.
+11. Avanco insere proxima teoria/pergunta no fim da timeline.
+
+O aluno deve poder rolar para cima ate o inicio da conversa da aula. Nada deve sumir sem estar registrado visualmente no historico, salvo conteudo muito antigo se houver politica de janela por performance, mas essa politica deve ser documentada e nao pode perder estado.
+
+
+================================================================================================
+5. MAPA COMPONENTE POR COMPONENTE
+================================================================================================
+| Funcao | Hoje | Chat alvo | Regra de preservacao |
+|---|---|---|---|
+| Topo fixo | AulaTopBar | ChatAulaTopBar reaproveitando showAulaMenu, audio, dark mode, progress | Manter callbacks atuais; so alterar visual se necessario |
+| Menu sanduiche | showAulaMenu em shared_widgets.dart | Mesmo showAulaMenu chamado pelo icone do chat | Nao reimplementar drawer |
+| Progresso | viewModel.progress | Barra compacta no topo do chat | Mesmo calculo |
+| Titulo da aula | headerLabelText(viewModel.headerLabel) | Texto compacto no topo | Mesmo i18n |
+| Controle audio | session.toggleAudio | Icone no topo ou acao em bolha de audio | Mesmo controller |
+| Dark mode | _DarkModeToggleBtn | Mesmo botao no topo | Nao alterar tema |
+| Fonte | _FontScaleButton/_AulaStudyRail | Botao no topo/rodape contextual | Mesma SharedPreferences key |
+| Loading | aulaRuntimeLoading + loadingCopy(entryStatus) | ChatLoadingBubble | Retry chama openAulaRuntime |
+| Teoria | content.explanation + SimTypewriter | SimChatBubble(role=sim) | Pode manter SimTypewriter |
+| Imagem pronta | LessonImagePanel/LessonImageStudySurface | ChatImageBubble | Mesmo widget interno |
+| Oferta imagem paga | LessonImagePanel offer | ChatImageOfferBubble ou LessonImagePanel sem card externo | Mesmas callbacks accept/decline/buy |
+| Erro imagem | imageError / LessonImageErrorView | Mensagem discreta no chat | Aula continua |
+| Pergunta | content.question | ChatQuestionBubble | Mesmo texto |
+| A/B/C | AnswerButton -> chooseAulaAnswer | ChatOptionsBubble | Callbacks identicas |
+| Resposta escolhida | phase.letter/localAnswerSel | AlunoBubble: "A" ou "Escolhi A" | Derivado do phase |
+| Sinais 1/2/3 | _SinalRow -> submitAulaSignal | ChatSignalsBubble | Callbacks identicas |
+| Processando | isProcessing | ChatStatusBubble | Nao bloquear scroll |
+| Feedback | _FeedbackBox + feedbackText | ChatFeedbackBubble | Mesmo feedbackText e advanceAula |
+| Duvida botao | session.toggleDoubt | Botao contextual no chat | Mesmo fluxo |
+| Duvida input | _DoubtInputSheet | Fase 1 manter sheet; fase 2 opcional inline | Nao quebrar foto |
+| Duvida resposta | session.doubt.response | ChatDoubtAnswerBubble | Mesmo estado |
+| Erro engine | aulaRuntimeError/phase.message | ChatErrorBubble com retry | Mensagem util e botao |
+| Historico | snapshot.history | Mensagens antigas de pergunta/resposta | Nao duplicar |
+| Conclusao | LessonDoneScreen | Pode manter tela atual na fase 1 ou ChatDoneBubble na fase 2 | Nao mexer motor |
+| Revisao | ReviewRoomScreen overlay | Fase 1 manter; fase 2 renderizar como chat room | Nao bloquear B inicial |
+| Recuperacao | RecoveryRoomScreen overlay | Fase 1 manter; fase 2 renderizar como chat room | Preservar gate |
+
+
+================================================================================================
+6. FASES CONSTRUTIVAS OBRIGATORIAS
+================================================================================================
+Fase 0 — congelamento e prova de base
+Tarefas:
+- git status --short
+- flutter analyze
+- flutter test
+- build release atual se necessario
+- registrar screenshots atuais da aula para comparar
+Aceite: Nenhum codigo alterado. Base verde.
+
+
+Fase 1 — modelos de mensagem sem UI nova
+Tarefas:
+- criar ChatLessonMessageKind
+- criar ChatLessonMessage
+- criar ChatLessonTimelineBuilder
+- adicionar testes puros do builder
+Aceite: Builder transforma snapshot em mensagens sem tocar widget.
+
+
+Fase 2 — componentes visuais de bolha
+Tarefas:
+- criar ChatBubble
+- criar ChatSystemBubble
+- criar ChatActionGroup
+- criar ChatImageBubble reaproveitando LessonImagePanel internamente
+Aceite: Componentes isolados sem rota ainda.
+
+
+Fase 3 — tela paralela por feature flag
+Tarefas:
+- criar ChatAulaScreen
+- ligar por flag local false por padrao
+- manter AulaLabScreen intacta
+- permitir alternancia em teste
+Aceite: A tela antiga continua disponivel.
+
+
+Fase 4 — fluxo normal no chat
+Tarefas:
+- renderizar loading
+- teoria
+- imagem
+- pergunta
+- A/B/C
+- sinais
+- feedback
+- avancar
+Aceite: Fluxo vital passa na UI chat.
+
+
+Fase 5 — midia e estados nao bloqueantes
+Tarefas:
+- imagem pronta
+- loading imagem
+- erro imagem
+- oferta paga
+- audio toggle
+- bolha audio
+Aceite: Midia no chat sem bloquear texto/pergunta.
+
+
+Fase 6 — duvida
+Tarefas:
+- manter sheet inicialmente
+- mostrar estado da duvida na timeline
+- garantir texto/foto
+- opcional: composer inline futuro
+Aceite: Duvida funciona igual ou melhor.
+
+
+Fase 7 — revisao e recuperacao
+Tarefas:
+- fase 7A manter telas atuais
+- fase 7B opcional criar timeline auxiliar
+- testar retorno ao ponto principal
+Aceite: Sem baguncar aula principal.
+
+
+Fase 8 — menu, credito, dark, fonte
+Tarefas:
+- menu sanduiche no topo
+- credito via drawer/tela existente
+- dark mode
+- font scale
+Aceite: Ferramentas existentes preservadas.
+
+
+Fase 9 — scroll e acessibilidade
+Tarefas:
+- auto-scroll fim
+- botao voltar ao atual
+- TalkBack order
+- 48dp touch targets
+- SafeArea teclado
+Aceite: Chat usavel em telefone/tablet.
+
+
+Fase 10 — migracao controlada
+Tarefas:
+- ativar flag em testes
+- rodar suite
+- comparar fluxo vital
+- ativar como default se aprovado
+Aceite: Sem regressao.
+
+
+Fase 11 — limpeza somente depois de B
+Tarefas:
+- remover cards antigos apenas se aprovado
+- manter widgets reutilizaveis
+- documentar rollback
+Aceite: Nao apagar antes da prova.
+
+
+================================================================================================
+7. ESPECIFICACAO DOS NOVOS ARQUIVOS
+================================================================================================
+Arquivos recomendados:
+
+1. lib/features/classroom/chat_aula_screen.dart
+Responsabilidade: tela principal em chat. Recebe LabSession. Escuta addListener. Mantem lifecycle de audio. Reusa topbar/drawer. Nao decide pedagogia.
+
+2. lib/features/classroom/chat_aula_messages.dart
+Responsabilidade: modelos imutaveis de mensagem. Nao importa Flutter widgets pesados se possivel. Deve conter enum ChatLessonMessageKind.
+
+3. lib/features/classroom/chat_aula_timeline_builder.dart
+Responsabilidade: transformar LessonRuntimeSnapshot + LabSession UI fields em List<ChatLessonMessage>. Deve ser testavel sem WidgetTester.
+
+4. lib/features/classroom/chat_aula_widgets.dart
+Responsabilidade: ChatBubble, ChatImageBubble, ChatOptionsBubble, ChatSignalsBubble, ChatFeedbackBubble, ChatLoadingBubble, ChatErrorBubble.
+
+5. test/chat_aula_timeline_builder_test.dart
+Responsabilidade: provar mapeamento de cada fase para mensagens.
+
+6. test/chat_aula_screen_test.dart
+Responsabilidade: widget tests de fluxo normal, botoes, imagem, feedback, scroll e acessibilidade minima.
+
+Regra de importacao:
+chat_aula_screen.dart pode importar aula_widgets.dart para reaproveitar LessonImagePanel, LessonMediaImageView, AulaTopBar e controles existentes. O builder nao deve importar widgets.
+
+
+================================================================================================
+8. MODELO DE MENSAGENS
+================================================================================================
+| Kind | Conteudo | Deve chamar motor? |
+|---|---|---|
+| systemLoading | loading da aula, T00/T02, material pronto | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| simTheory | explicacao da aula | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| simImage | imagem gratis/software ou paga pronta | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| simImageOffer | oferta paga antes de chamada cara | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| simQuestion | pergunta principal | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| studentAnswer | resposta A/B/C escolhida | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| simSignalPrompt | pedido de confianca 1/2/3 | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| studentSignal | sinal escolhido | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| systemProcessing | registrando resposta/sinal | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| simFeedback | feedback e botao proximo | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| simDoubtProgress | duvida processando | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| simDoubtAnswer | resposta da duvida | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| systemError | erro T00/T02/retry | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| systemNoCurriculum | sem curriculo | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| systemDone | conclusao da aula | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| historyQuestion | pergunta antiga no historico | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| historyAnswer | resposta antiga do aluno | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+| historyImage | imagem antiga quando preservada | Nao. Apenas renderiza ou chama callback da sessao quando houver botao. |
+
+Campos minimos de ChatLessonMessage:
+- id: string estavel. Deve mudar quando conteudo muda, mas nao em todo rebuild.
+- kind: enum.
+- role: sim, student, system.
+- text: string opcional.
+- imageData: string opcional.
+- options: lista opcional de A/B/C.
+- selectedOption: opcional.
+- signalOptions: lista opcional 1/2/3.
+- feedback: opcional.
+- action: opcional representado por enum, nao por closure no modelo puro.
+- semanticLabel: string opcional.
+- timestampLabel: opcional, preferencialmente oculto no inicio.
+
+O builder deve produzir dados. O widget resolve action enum para callbacks da LabSession.
+
+
+================================================================================================
+9. ALGORITMO DO CHAT TIMELINE BUILDER
+================================================================================================
+Entrada:
+- LabSession session ou, preferencialmente, objeto puro ChatAulaBuildInput contendo snapshot e campos UI.
+- LessonRuntimeSnapshot? snap.
+- ClassroomPhase? phase.
+- DoubtState doubt.
+- imageStatus, imageError, hasLessonPaidImageOffer, lessonPaidImagePrompt.
+- audioPlaying/audioLoading/audioEnabled.
+
+Saida:
+List<ChatLessonMessage> em ordem cronologica de cima para baixo.
+
+Pseudoalgoritmo:
+1. Se snap == null e aulaRuntimeLoading == true: retorna systemLoading.
+2. Se erro sem curriculo: retorna systemNoCurriculum.
+3. Para cada entry em snap.history:
+   3.1 adicionar historyQuestion com entry.text.
+   3.2 se entry.imageUrl != null e politica permitir: adicionar historyImage.
+   3.3 adicionar historyAnswer com chosenOptionId e correct.
+4. Se snap.conteudo != null:
+   4.1 adicionar simTheory com explanation.
+   4.2 se imagem/oferta/loading/erro existir: adicionar simImage ou simImageOffer ou systemError de imagem.
+   4.3 se teoria pronta: adicionar simQuestion.
+   4.4 se pergunta pronta e phase nao concluido: adicionar ChatOptionsBubble.
+   4.5 se phase.expandida: adicionar studentAnswer e simSignalPrompt.
+   4.6 se phase.processando: adicionar studentAnswer, studentSignal e systemProcessing.
+   4.7 se phase.concluido: adicionar studentAnswer, studentSignal, simFeedback com nextLabel.
+5. Se doubt.processing: adicionar simDoubtProgress.
+6. Se doubt.explaining/error: adicionar simDoubtAnswer.
+7. Se phase.erroEngine: adicionar systemError com retry.
+8. Se snap.isDone: adicionar systemDone.
+
+Regras de ordem:
+- A imagem pertence ao contexto da teoria e deve aparecer antes da pergunta, exceto se chegar atrasada; quando chegar atrasada, ela deve entrar proxima ao ponto ativo e auto-scroll deve levar ate ela se o usuario nao estiver lendo historico.
+- A resposta do aluno deve aparecer depois dos botoes terem sido tocados; os botoes podem permanecer desabilitados ou virar bolha historica.
+- Feedback deve sempre aparecer depois do sinal.
+- Dúvida nao pode apagar pergunta, imagem ou feedback.
+
+
+================================================================================================
+10. REGRAS DE SCROLL DO CHAT
+================================================================================================
+O chat deve ser uma ListView/CustomScrollView vertical normal, nao necessariamente reverse:true. A razao: reverse:true pode complicar ordem semantica e navegacao por leitor de tela; a documentacao de Flutter recomenda cuidar de foco e navegacao quando widgets customizados sao usados, e WCAG2Mobile trata cada tela como unidade de avaliacao. Preferir lista em ordem natural, com auto-scroll para maxScrollExtent quando o usuario esta no fim.
+
+Estados de scroll:
+- autoFollow = true quando usuario esta perto do fim.
+- autoFollow = false quando usuario rolou para cima para reler.
+- Quando autoFollow=false e chega nova mensagem, mostrar botao flutuante "Ir para a aula atual".
+- Quando usuario toca botao, rolar para ultima mensagem relevante.
+- Nao forcar scroll enquanto TalkBack esta focado em elemento antigo.
+- Nao esconder A/B/C atras da barra inferior.
+- Nao esconder feedback atras da barra inferior.
+- Dar padding inferior suficiente para composer/context bar.
+
+Tecnica:
+- manter ScrollController.
+- usar WidgetsBinding.addPostFrameCallback apos mudanca de mensagem.
+- usar item keys para garantir ensureVisible em pergunta, imagem, sinal e feedback.
+- debouncer para typewriter nao disparar scroll a cada caractere se causar jank.
+- se imagem carregar depois, chamar onImageSettled e rolar se autoFollow=true.
+
+Teste obrigatorio:
+- abrir aula -> scroll no fim.
+- teoria longa -> nao quebra layout.
+- imagem aparece -> fica visivel.
+- selecionar A -> sinais visiveis.
+- sinal 1 -> feedback visivel.
+- usuario rola para cima -> nova mensagem nao sequestra scroll; botao aparece.
+
+
+================================================================================================
+11. ACESSIBILIDADE E ENGENHARIA DE INTERACAO
+================================================================================================
+Padroes obrigatorios:
+- Cada alvo tocavel deve ter minimo 48dp por 48dp, seguindo recomendacao Android.
+- Separar botoes proximos por pelo menos 8dp quando possivel.
+- Usar Semantics em botoes A/B/C, sinais, menu, audio, imagem, ampliar imagem, retry, proximo.
+- Ordem semantica deve seguir ordem visual: topo, mensagens, acoes atuais, barra inferior.
+- Nao depender apenas de cor para indicar alternativa selecionada; usar texto ou borda/icone acessivel.
+- Manter contraste suficiente em dark/light.
+- Respeitar MediaQuery.textScaler e o controle de fonte existente.
+- Nao impedir orientacao ou reflow em tablet.
+- Nao exigir gesto complexo; toda acao deve ter toque unico alternativo.
+- Status messages como loading, erro, duvida processando e audio devem ser anunciaveis semanticamente sem repetir infinitamente.
+
+Criterio de chat perfeito para acessibilidade:
+O aluno com TalkBack deve conseguir entender: quem falou, qual e a pergunta, quais sao as opcoes, qual foi a escolha, quais sinais existem, se a imagem existe, se o audio esta tocando, se houve erro e qual e o proximo botao.
+
+
+================================================================================================
+12. REQUISITOS FUNCIONAIS RASTREAVEIS
+================================================================================================
+REQ-001
+Categoria: Preservacao de motor
+Requisito: T00 continua sendo chamado apenas pelos adaptadores atuais.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-002
+Categoria: Preservacao de motor
+Requisito: T02 continua sendo chamado pelo runtime atual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-003
+Categoria: Preservacao de motor
+Requisito: LearningDecisionEngine continua decidindo avanco.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-004
+Categoria: Preservacao de motor
+Requisito: StudentLearningState continua fonte unica.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-005
+Categoria: Preservacao de motor
+Requisito: LabSession continua coordenador da UI.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-006
+Categoria: Preservacao de motor
+Requisito: LessonRuntimeSnapshot continua contrato da tela.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-007
+Categoria: Preservacao de motor
+Requisito: LessonMainViewModel continua calculando progress e header.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-008
+Categoria: Preservacao de motor
+Requisito: ClassroomPhase continua governando fases.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-009
+Categoria: Preservacao de motor
+Requisito: Nao criar estado local para layer.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-010
+Categoria: Preservacao de motor
+Requisito: Nao criar estado local para item atual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-011
+Categoria: Chat visual
+Requisito: mensagem do SIM renderiza teoria.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-012
+Categoria: Chat visual
+Requisito: mensagem do SIM renderiza pergunta.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-013
+Categoria: Chat visual
+Requisito: mensagem do aluno renderiza escolha.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-014
+Categoria: Chat visual
+Requisito: mensagem do aluno renderiza sinal.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-015
+Categoria: Chat visual
+Requisito: mensagem de feedback renderiza celebracao ou correcao.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-016
+Categoria: Chat visual
+Requisito: mensagem de sistema renderiza loading.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-017
+Categoria: Chat visual
+Requisito: mensagem de sistema renderiza erro.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-018
+Categoria: Chat visual
+Requisito: imagem aparece como anexo.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-019
+Categoria: Chat visual
+Requisito: oferta paga aparece como mensagem acionavel.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-020
+Categoria: Chat visual
+Requisito: historico antigo aparece como conversa anterior.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-021
+Categoria: Acoes
+Requisito: A chama chooseAulaAnswer A.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-022
+Categoria: Acoes
+Requisito: B chama chooseAulaAnswer B.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-023
+Categoria: Acoes
+Requisito: C chama chooseAulaAnswer C.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-024
+Categoria: Acoes
+Requisito: sinal 1 chama submitAulaSignal 1.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-025
+Categoria: Acoes
+Requisito: sinal 2 chama submitAulaSignal 2.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-026
+Categoria: Acoes
+Requisito: sinal 3 chama submitAulaSignal 3.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-027
+Categoria: Acoes
+Requisito: proximo chama advanceAula.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-028
+Categoria: Acoes
+Requisito: duvida chama toggleDoubt.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-029
+Categoria: Acoes
+Requisito: retry chama openAulaRuntime.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-030
+Categoria: Acoes
+Requisito: comprar credito chama buyImageCredits.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-031
+Categoria: Midia
+Requisito: imagem pronta renderiza dataUrl SVG.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-032
+Categoria: Midia
+Requisito: imagem pronta renderiza base64.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-033
+Categoria: Midia
+Requisito: imagem pronta renderiza URL remota.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-034
+Categoria: Midia
+Requisito: erro de imagem nao bloqueia pergunta.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-035
+Categoria: Midia
+Requisito: loading de imagem nao bloqueia teoria.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-036
+Categoria: Midia
+Requisito: oferta paga exige aceite.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-037
+Categoria: Midia
+Requisito: recusar oferta nao cobra.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-038
+Categoria: Midia
+Requisito: aceitar oferta usa orquestrador.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-039
+Categoria: Midia
+Requisito: audio toggle respeita preferencia.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-040
+Categoria: Midia
+Requisito: audio para ao mudar de aula.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-041
+Categoria: Dúvida
+Requisito: duvida texto continua funcionando.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-042
+Categoria: Dúvida
+Requisito: duvida foto continua funcionando.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-043
+Categoria: Dúvida
+Requisito: duvida processando aparece no chat.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-044
+Categoria: Dúvida
+Requisito: duvida resposta aparece no chat.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-045
+Categoria: Dúvida
+Requisito: duvida erro aparece no chat.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-046
+Categoria: Dúvida
+Requisito: duvida nao altera progresso principal.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-047
+Categoria: Dúvida
+Requisito: duvida nao remove pergunta.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-048
+Categoria: Dúvida
+Requisito: duvida nao duplica botoes.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-049
+Categoria: Dúvida
+Requisito: duvida pode manter sheet na fase 1.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-050
+Categoria: Dúvida
+Requisito: duvida inline so depois de testes.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-051
+Categoria: Drawer e ferramentas
+Requisito: menu sanduiche abre igual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-052
+Categoria: Drawer e ferramentas
+Requisito: menu sanduiche fecha igual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-053
+Categoria: Drawer e ferramentas
+Requisito: historico local igual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-054
+Categoria: Drawer e ferramentas
+Requisito: historico cloud igual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-055
+Categoria: Drawer e ferramentas
+Requisito: backup export igual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-056
+Categoria: Drawer e ferramentas
+Requisito: backup import igual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-057
+Categoria: Drawer e ferramentas
+Requisito: nova aula igual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-058
+Categoria: Drawer e ferramentas
+Requisito: renomear igual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-059
+Categoria: Drawer e ferramentas
+Requisito: apagar igual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-060
+Categoria: Drawer e ferramentas
+Requisito: logout igual.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-061
+Categoria: Qualidade
+Requisito: sem tela branca.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-062
+Categoria: Qualidade
+Requisito: sem loading infinito.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-063
+Categoria: Qualidade
+Requisito: sem botao morto.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-064
+Categoria: Qualidade
+Requisito: sem overflow de texto.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-065
+Categoria: Qualidade
+Requisito: sem imagem cortada.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-066
+Categoria: Qualidade
+Requisito: sem teclado cobrindo acao.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-067
+Categoria: Qualidade
+Requisito: sem jank no typewriter.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-068
+Categoria: Qualidade
+Requisito: sem setState depois dispose.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-069
+Categoria: Qualidade
+Requisito: sem excecao silenciosa.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+REQ-070
+Categoria: Qualidade
+Requisito: sem regressao em build release.
+Implementacao esperada: satisfazer este requisito na camada de chat sem alterar o orgao de dominio. Se o requisito ja existe em AulaLabScreen, reutilizar o mesmo metodo, widget interno ou contrato. Se exigir novo widget, o widget deve receber dados prontos e callbacks, nunca calcular pedagogia.
+Prova minima: teste unitario do builder quando for dado; widget test quando for renderizacao; teste de fluxo quando for acao; teste release/manual quando envolver Android real.
+Risco se violar: regressao funcional escondida ou app com aparencia de chat mas comportamento pedagogico diferente.
+
+
+================================================================================================
+13. MATRIZ DE TESTES OBRIGATORIOS
+================================================================================================
+| ID | Teste obrigatorio | Tipo | Aceite |
+|---|---|---|---|
+| CHAT-TEST-001 | Builder com snapshot vazio e loading retorna ChatLoadingBubble | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-002 | Builder com conteudo retorna teoria antes da pergunta | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-003 | Imagem pronta entra depois da teoria e antes da pergunta | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-004 | Oferta paga entra como mensagem acionavel sem chamar endpoint | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-005 | A/B/C aparecem quando pergunta pronta | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-006 | Tocar A chama session.chooseAulaAnswer("A") | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-007 | Apos alternativa, sinais 1/2/3 aparecem | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-008 | Tocar sinal 1 chama session.submitAulaSignal(1) | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-009 | Feedback aparece depois do sinal | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-010 | Botao proximo chama session.advanceAula | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-011 | Erro engine mostra mensagem e retry | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-012 | Dúvida abre sem esconder definitivamente a pergunta | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-013 | Dúvida com foto continua preservada | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-014 | Audio toggle funciona no topo | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-015 | FixedBubble aparece quando audioPlaying | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-016 | Dark mode muda cores do chat | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-017 | Font scale aumenta texto sem overflow | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-018 | Menu sanduiche abre no chat | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-019 | ReviewRoom continua acessivel | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-020 | RecoveryRoom continua acessivel | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-021 | Fluxo vital objetivo T00 T02 aula A/B/C 1/2/3 feedback passa | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-022 | Imagem gratis/software aparece no chat | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-023 | Erro de imagem nao bloqueia aula | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-024 | Oferta paga so aceita apos toque | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-025 | Scroll nao esconde sinais | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-026 | Scroll nao esconde feedback | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-027 | Usuario rolando para cima nao e sequestrado | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-028 | Botao ir para atual aparece quando ha nova mensagem | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-029 | TalkBack ve ordem correta | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+| CHAT-TEST-030 | Build release passa | unit/widget/integration conforme camada | Deve passar antes de ativar chat como default. |
+
+
+================================================================================================
+14. PLANO DE ROLLBACK
+================================================================================================
+O chat deve nascer atras de uma flag. A flag inicial deve ficar desligada em production ate os testes passarem.
+
+Recomendacao de flag:
+- SimEnvironment.chatAulaEnabled ou parametro compile-time --dart-define=SIM_CHAT_AULA=true.
+- main.dart decide entre AulaLabScreen e ChatAulaScreen.
+- AulaLabScreen antiga fica intacta durante toda a construcao.
+
+Rollback:
+1. Se chat falhar em APK real, desativar flag.
+2. Se teste widget falhar mas motor passar, manter AulaLabScreen.
+3. Se qualquer teste de motor falhar, a mudanca esta tocando no lugar errado; reverter alteracao de motor.
+4. So remover tela antiga depois de duas versoes release funcionando no celular real.
+
+Criterio de seguranca:
+O aluno nunca deve perder acesso a aula por causa do chat. O antigo layout deve existir ate o chat provar superioridade funcional.
+
+
+================================================================================================
+15. CHECKLIST DE IMPLEMENTACAO POR COMMIT
+================================================================================================
+Commit 1: adicionar modelos e builder puro de mensagens. Sem UI, sem rota.
+Commit 2: testes unitarios do builder.
+Commit 3: adicionar widgets basicos de chat sem ligar rota.
+Commit 4: widget tests de bolhas, botoes e imagem.
+Commit 5: adicionar ChatAulaScreen atras de flag desligada.
+Commit 6: ligar chat em testes com flag.
+Commit 7: fluxo normal A/B/C/1/2/3/feedback no chat.
+Commit 8: midia, imagem, oferta paga e audio no chat.
+Commit 9: duvida e estados auxiliares no chat.
+Commit 10: scroll, acessibilidade, dark mode, font scale.
+Commit 11: suite completa, build release, APK para teste manual.
+Commit 12: ativar flag se aprovado.
+
+Regra:
+Cada commit deve passar flutter analyze e teste focado. Antes de push final: flutter test completo e build release.
+
+
+================================================================================================
+16. DETALHE CONSTRUTIVO DO BUILDER
+================================================================================================
+Criar funcao pura:
+
+List<ChatLessonMessage> buildChatAulaMessages(ChatAulaBuildInput input)
+
+ChatAulaBuildInput deve conter:
+- LessonRuntimeSnapshot? snapshot
+- bool aulaRuntimeLoading
+- String? aulaRuntimeError
+- DoubtState doubt
+- bool doubtOpen
+- bool hasLessonPaidImageOffer
+- String? imageStatus
+- String? imageError
+- bool audioPlaying
+- bool audioLoading
+- bool audioEnabled
+- bool theoryReady
+- bool questionReady
+
+Nao passar LabSession inteiro para o builder puro. Isso permite teste sem Flutter.
+
+IDs estaveis:
+- loading: loading:{entryStatus}
+- history question: hist:q:{entry.id}
+- history answer: hist:a:{entry.id}:{entry.chosenOptionId.name}
+- theory: active:theory:{hash(explanation)}
+- image: active:image:{hash(imageData or status)}
+- question: active:question:{hash(question)}
+- options: active:options:{phase.type}:{selected}
+- signals: active:signals:{phase.letter}
+- feedback: active:feedback:{phase.message}:{phase.signal}
+- doubt: doubt:{status}:{hash(response/error)}
+
+Nao usar DateTime.now para IDs de mensagem de aula. Isso causaria rebuild, perda de estado, animacao repetida e scroll imprevisivel.
+
+
+================================================================================================
+17. DETALHE CONSTRUTIVO DOS WIDGETS
+================================================================================================
+ChatBubble:
+- recebe role sim/student/system.
+- usa Align esquerda/direita/centro.
+- largura maxima: min(screen * 0.86, 680) em telefone/tablet.
+- padding interno 12-16.
+- borda discreta ou sem card pesado.
+- nao usar sombras pesadas.
+- respeitar SimThemeScope.paletteOf(context).
+- texto usa SimTypography e ClassroomTextScale.
+
+ChatOptionsBubble:
+- renderiza tres botoes verticais em telefone.
+- cada botao minimo 48dp.
+- mostra letra A/B/C em bloco pequeno.
+- onTap chama callback resolvido pela tela.
+- se locked, desabilita visualmente e semanticamente.
+- se selected, indicar com borda + texto sem depender so de cor.
+
+ChatSignalsBubble:
+- renderiza tres botoes 1/2/3.
+- em telas estreitas, pode ser vertical para evitar texto esmagado.
+- nao ocultar label.
+- Semantics: "Sinal 1, tenho certeza" etc.
+
+ChatImageBubble:
+- para imagem pronta, pode chamar LessonImageStudySurface diretamente.
+- para loading, mostrar indicador discreto e texto.
+- para erro, mostrar mensagem e continuar.
+- para oferta, renderizar botoes recusar/aceitar/comprar usando callbacks atuais.
+- permitir ampliar imagem com showLessonImageInspector.
+
+ChatFeedbackBubble:
+- reutilizar texto de feedback atual.
+- botao proximo minimo 48dp.
+- se nextReady false, mostrar estado bloqueado por duvida processando.
+
+ChatComposerBar:
+- na aula normal, nao ter TextField livre.
+- mostrar acao contextual: Duvida, Proximo, Ir para atual, ou vazio.
+- para duvida, manter sheet na fase 1.
+- se no futuro for inline, TextField so aparece em modo duvida.
+
+
+================================================================================================
+18. CRITERIOS DE ACEITE MANUAL NO APK REAL
+================================================================================================
+Executar em celular Android real e tablet se disponivel:
+1. instalar APK limpo.
+2. abrir app.
+3. login real.
+4. confirmar credito/test account.
+5. preencher objetivo.
+6. aguardar T00.
+7. aguardar T02.
+8. ver aula como chat.
+9. rolar ate o inicio da conversa.
+10. rolar ate o fim.
+11. ver teoria.
+12. ver imagem gratis/software quando houver.
+13. tocar A.
+14. ver mensagem do aluno com A.
+15. ver sinais.
+16. tocar 1.
+17. ver mensagem do aluno com sinal.
+18. ver feedback.
+19. avancar.
+20. confirmar proxima layer/item.
+21. abrir menu sanduiche.
+22. voltar da tela de creditos.
+23. alternar dark mode.
+24. aumentar fonte.
+25. tocar audio.
+26. parar audio.
+27. abrir duvida.
+28. enviar duvida texto.
+29. enviar duvida foto se possivel.
+30. confirmar que aula nao perdeu estado.
+31. abrir revisao se houver.
+32. abrir recuperacao se houver.
+33. fechar app e abrir de novo.
+34. confirmar retomada no mesmo ponto.
+
+Resultado esperado:
+Se qualquer item falhar, chat nao vira default.
+
+
+================================================================================================
+19. O QUE NAO DEVE SER COPIADO DO CHAT ANTIGO DE PROMPT
+================================================================================================
+Nao copiar:
+- memoria de curriculo dentro do prompt como fonte unica.
+- tags invisiveis no texto como estado real do app.
+- dependencia de texto do chat para saber progresso.
+- certificado como unica persistencia.
+- decisao pedagogica baseada em prompt da interface.
+- imagem dependente de tag textual solta na ultima linha.
+- linguagem interna aparecendo ao aluno.
+- prompts gigantes no Flutter.
+
+Trazer como inspiracao:
+- experiencia de conversa continua.
+- tutor humano e proximo.
+- mensagens limpas.
+- imagem como parte natural da explicacao.
+- respostas por A/B/C e 1/2/3 dentro do fluxo.
+- historico visivel e rolavel.
+- duvida como conversa.
+
+
+================================================================================================
+20. PORTOES DE B=SIM
+================================================================================================
+So declarar a obra pronta se todos forem SIM:
+1. O chat usa motor atual? SIM.
+2. T00 inalterado? SIM.
+3. T02 inalterado? SIM.
+4. StudentLearningState inalterado como fonte? SIM.
+5. A/B/C chama os mesmos metodos? SIM.
+6. 1/2/3 chama os mesmos metodos? SIM.
+7. Feedback igual? SIM.
+8. Imagem aparece no chat? SIM.
+9. Imagem nao bloqueia aula? SIM.
+10. Oferta paga exige aceite? SIM.
+11. Audio funciona? SIM.
+12. Audio para quando deve? SIM.
+13. Duvida texto/foto funciona? SIM.
+14. Revisao/recuperacao nao quebram? SIM.
+15. Drawer funciona? SIM.
+16. Dark mode funciona? SIM.
+17. Font scale funciona? SIM.
+18. Scroll estavel? SIM.
+19. TalkBack minimamente correto? SIM.
+20. Sem botao morto? SIM.
+21. Sem tela branca? SIM.
+22. Sem loading infinito? SIM.
+23. Testes antigos passam? SIM.
+24. Testes novos passam? SIM.
+25. Build release passa? SIM.
+26. APK real prova fluxo vital? SIM.
+
+Se qualquer resposta for NAO, a obra nao esta pronta.
+
+
+================================================================================================
+ANEXO TECNICO 01 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 01
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 01
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 01
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 01
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 01
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 02 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 02
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 02
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 02
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 02
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 02
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 03 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 03
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 03
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 03
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 03
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 03
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 04 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 04
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 04
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 04
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 04
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 04
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 05 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 05
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 05
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 05
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 05
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 05
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 06 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 06
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 06
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 06
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 06
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 06
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 07 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 07
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 07
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 07
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 07
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 07
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 08 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 08
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 08
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 08
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 08
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 08
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 09 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 09
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 09
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 09
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 09
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 09
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 10 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 10
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 10
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 10
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 10
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 10
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 11 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 11
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 11
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 11
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 11
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 11
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 12 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 12
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 12
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 12
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 12
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 12
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 13 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 13
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 13
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 13
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 13
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 13
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 14 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 14
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 14
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 14
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 14
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 14
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 15 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 15
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 15
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 15
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 15
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 15
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 16 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 16
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 16
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 16
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 16
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 16
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 17 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 17
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 17
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 17
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 17
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 17
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 18 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 18
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 18
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 18
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 18
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 18
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 19 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 19
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 19
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 19
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 19
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 19
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 20 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 20
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 20
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 20
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 20
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 20
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 21 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 21
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 21
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 21
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 21
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 21
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 22 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 22
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 22
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 22
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 22
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 22
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 23 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 23
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 23
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 23
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 23
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 23
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 24 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 24
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 24
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 24
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 24
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 24
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 25 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 25
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 25
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 25
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 25
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 25
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 26 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 26
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 26
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 26
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 26
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 26
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 27 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 27
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 27
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 27
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 27
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 27
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 28 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 28
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 28
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 28
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 28
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 28
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 29 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 29
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 29
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 29
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 29
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 29
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+ANEXO TECNICO 30 — CHECKLIST DE EXECUCAO E REVISAO
+================================================================================================
+Este anexo existe para reduzir ambiguidade na execucao. Ele deve ser usado como lista de conferencia antes de cada commit relacionado ao chat.
+
+A. Conferencia de escopo 30
+- Confirmar que a alteracao pertence somente a camada de aula-chat.
+- Confirmar que nenhum arquivo de API foi tocado.
+- Confirmar que nenhum arquivo do SimWeb foi tocado.
+- Confirmar que nenhum contrato T00/T02 foi alterado.
+- Confirmar que nenhuma regra pedagogica migrou para widget.
+- Confirmar que o componente novo recebe dados prontos e callbacks.
+- Confirmar que a nomenclatura deixa claro: chat e renderizacao, nao motor.
+
+B. Conferencia de comportamento 30
+- Se a tela antiga fazia uma acao, a tela chat deve chamar o mesmo metodo.
+- Se a tela antiga mostrava um estado, a tela chat deve mostrar estado equivalente.
+- Se a tela antiga tinha retry, a tela chat deve ter retry.
+- Se a tela antiga tinha semantics, a tela chat deve ter semantics igual ou melhor.
+- Se a tela antiga tinha loading, a tela chat nao pode parecer congelada.
+- Se a tela antiga tinha imagem, a tela chat deve renderizar imagem no fluxo.
+- Se a tela antiga tinha oferta paga, a tela chat deve preservar aceite/recusa/compra.
+- Se a tela antiga tinha audio, a tela chat deve preservar toggle e stop.
+
+C. Conferencia de teste 30
+- Adicionar teste unitario para qualquer regra de builder.
+- Adicionar widget test para qualquer widget novo com acao.
+- Atualizar teste existente somente se a expectativa visual mudou por design.
+- Nunca enfraquecer teste de motor para fazer chat passar.
+- Rodar teste focado antes do commit.
+- Rodar suite completa antes de ativar flag.
+
+D. Conferencia de UX 30
+- A conversa deve ser legivel em 360px de largura.
+- Nenhum texto deve ultrapassar bolha.
+- Nenhum botao deve ficar menor que alvo acessivel.
+- A imagem deve ter altura suficiente para estudo.
+- O aluno deve conseguir voltar ao ponto atual.
+- O aluno deve conseguir reler o inicio.
+- A barra inferior nao pode cobrir feedback.
+- O topo fixo nao pode cobrir a primeira mensagem.
+
+E. Conferencia de rollback 30
+- AulaLabScreen antiga continua compilando.
+- Flag permite voltar ao layout antigo.
+- Commits sao pequenos.
+- Diff revisavel.
+- Sem alteracao destrutiva.
+
+
+================================================================================================
+21. VEREDITO DA PLANTA
+================================================================================================
+E possivel construir a aula-chat com risco controlado desde que a obra siga esta planta. A maior protecao e nao substituir o motor, apenas criar uma nova casca de renderizacao. A interface atual de cards/blocos pode coexistir com a interface de chat ate a validacao final. O caminho correto e incremental, com feature flag, builder puro, widgets isolados, testes focados e APK real.
+
+Resultado esperado apos execucao correta:
+O aluno abrira a aula e vera uma conversa natural com o SIM. Tudo que hoje funciona continuara funcionando. A diferenca sera a apresentacao: mensagens rolaveis, imagem no fluxo, botoes na conversa, feedback como resposta do tutor, duvida integrada e ferramentas fixas. O app parecerá um chat, mas continuara sendo o SIM App robusto, testavel, persistente, sincronizavel e pronto para loja.
+
+Declaracao final:
+Nao existe promessa honesta de erro matematicamente zero. Existe engenharia para aproximar de zero: escopo fechado, orgaos preservados, testes, build, APK real, rollback e criterio de aceite objetivo. Esta planta foi escrita para isso.
+
+
+================================================================================================
+ANEXO TECNICO 31 — MATRIZ ANTI-REGRESSAO PARA ENTREGA A OUTRO ENGENHEIRO
+================================================================================================
+Objetivo deste anexo: impedir que o executor interprete a obra como autorizacao para redesenhar o SIM inteiro. A aula-chat e uma forma nova de apresentar os mesmos estados. O executor deve abrir cada item abaixo antes de tocar codigo.
+
+1. Regra de leitura obrigatoria 31
+- Antes de alterar, leia AulaLabScreen inteiro.
+- Antes de alterar, leia AulaTopBar e LessonImagePanel.
+- Antes de alterar, leia LabSession nos metodos chooseAulaAnswer, submitAulaSignal, advanceAula, toggleDoubt, acceptLessonPaidImage, declineLessonPaidImage, buyImageCredits, openReviewRoom, openRecoveryRoom, stopActiveAudio.
+- Antes de alterar, leia ClassroomPhase e LessonRuntimeSnapshot.
+- Antes de alterar, leia tests atuais da aula.
+
+2. Regra de copia comportamental 31
+- Se o widget antigo chamava um metodo, o chat chama o mesmo metodo.
+- Se o widget antigo recebia um texto de t(), o chat usa o mesmo t() ou uma string ja existente.
+- Se o widget antigo tinha estado desabilitado, o chat tem estado desabilitado.
+- Se o widget antigo tinha Semantics, o chat tem Semantics igual ou melhor.
+- Se o widget antigo respeitava textScale, o chat respeita textScale.
+- Se o widget antigo tinha SafeArea, o chat tem SafeArea equivalente.
+
+3. Regra de imagem 31
+- Nao mover funil visual para o chat.
+- Nao chamar endpoint de imagem pelo widget.
+- Nao criar imagem placeholder fingindo sucesso.
+- Nao esconder oferta paga.
+- Nao chamar imagem paga sem aceite.
+- Nao bloquear pergunta enquanto imagem carrega.
+- Nao destruir dataUrl SVG.
+- Nao remover ampliador de imagem.
+
+4. Regra de audio 31
+- Nao criar novo player.
+- Nao tocar audio automaticamente se preferencia estiver desligada.
+- Nao deixar audio antigo tocando apos avancar item/layer.
+- Nao remover estado visual de audioLoading.
+- Nao remover bolha ou indicador equivalente.
+- Nao transformar erro de audio em erro de aula.
+
+5. Regra de scroll 31
+- Chat deve manter o aluno no fim se ele estiver acompanhando.
+- Chat nao deve roubar scroll se aluno subiu para reler.
+- Chat deve oferecer retorno ao ponto atual.
+- Chat deve considerar imagem carregando tardiamente.
+- Chat deve considerar typewriter.
+- Chat deve considerar teclado da duvida.
+- Chat deve considerar barra inferior fixa.
+
+6. Regra de conclusao 31
+- A conclusao deve continuar vindo do motor, nao da quantidade de mensagens.
+- A timeline nunca decide que aula acabou.
+- A timeline nunca marca item como concluido.
+- A timeline nunca grava tentativa.
+- A timeline nunca agenda revisao.
+- A timeline nunca limpa recuperacao.
+
+7. Regra de aceite 31
+- Nao considerar pronto porque visualmente parece chat.
+- Considerar pronto somente com fluxo vital no APK.
+- Considerar pronto somente com testes antigos e novos passando.
+- Considerar pronto somente com rollback possivel.
+- Considerar pronto somente se o usuario conseguir estudar sem entender que houve troca interna.
+
+
+================================================================================================
+ANEXO TECNICO 32 — MATRIZ ANTI-REGRESSAO PARA ENTREGA A OUTRO ENGENHEIRO
+================================================================================================
+Objetivo deste anexo: impedir que o executor interprete a obra como autorizacao para redesenhar o SIM inteiro. A aula-chat e uma forma nova de apresentar os mesmos estados. O executor deve abrir cada item abaixo antes de tocar codigo.
+
+1. Regra de leitura obrigatoria 32
+- Antes de alterar, leia AulaLabScreen inteiro.
+- Antes de alterar, leia AulaTopBar e LessonImagePanel.
+- Antes de alterar, leia LabSession nos metodos chooseAulaAnswer, submitAulaSignal, advanceAula, toggleDoubt, acceptLessonPaidImage, declineLessonPaidImage, buyImageCredits, openReviewRoom, openRecoveryRoom, stopActiveAudio.
+- Antes de alterar, leia ClassroomPhase e LessonRuntimeSnapshot.
+- Antes de alterar, leia tests atuais da aula.
+
+2. Regra de copia comportamental 32
+- Se o widget antigo chamava um metodo, o chat chama o mesmo metodo.
+- Se o widget antigo recebia um texto de t(), o chat usa o mesmo t() ou uma string ja existente.
+- Se o widget antigo tinha estado desabilitado, o chat tem estado desabilitado.
+- Se o widget antigo tinha Semantics, o chat tem Semantics igual ou melhor.
+- Se o widget antigo respeitava textScale, o chat respeita textScale.
+- Se o widget antigo tinha SafeArea, o chat tem SafeArea equivalente.
+
+3. Regra de imagem 32
+- Nao mover funil visual para o chat.
+- Nao chamar endpoint de imagem pelo widget.
+- Nao criar imagem placeholder fingindo sucesso.
+- Nao esconder oferta paga.
+- Nao chamar imagem paga sem aceite.
+- Nao bloquear pergunta enquanto imagem carrega.
+- Nao destruir dataUrl SVG.
+- Nao remover ampliador de imagem.
+
+4. Regra de audio 32
+- Nao criar novo player.
+- Nao tocar audio automaticamente se preferencia estiver desligada.
+- Nao deixar audio antigo tocando apos avancar item/layer.
+- Nao remover estado visual de audioLoading.
+- Nao remover bolha ou indicador equivalente.
+- Nao transformar erro de audio em erro de aula.
+
+5. Regra de scroll 32
+- Chat deve manter o aluno no fim se ele estiver acompanhando.
+- Chat nao deve roubar scroll se aluno subiu para reler.
+- Chat deve oferecer retorno ao ponto atual.
+- Chat deve considerar imagem carregando tardiamente.
+- Chat deve considerar typewriter.
+- Chat deve considerar teclado da duvida.
+- Chat deve considerar barra inferior fixa.
+
+6. Regra de conclusao 32
+- A conclusao deve continuar vindo do motor, nao da quantidade de mensagens.
+- A timeline nunca decide que aula acabou.
+- A timeline nunca marca item como concluido.
+- A timeline nunca grava tentativa.
+- A timeline nunca agenda revisao.
+- A timeline nunca limpa recuperacao.
+
+7. Regra de aceite 32
+- Nao considerar pronto porque visualmente parece chat.
+- Considerar pronto somente com fluxo vital no APK.
+- Considerar pronto somente com testes antigos e novos passando.
+- Considerar pronto somente com rollback possivel.
+- Considerar pronto somente se o usuario conseguir estudar sem entender que houve troca interna.
+
+
+================================================================================================
+ANEXO TECNICO 33 — MATRIZ ANTI-REGRESSAO PARA ENTREGA A OUTRO ENGENHEIRO
+================================================================================================
+Objetivo deste anexo: impedir que o executor interprete a obra como autorizacao para redesenhar o SIM inteiro. A aula-chat e uma forma nova de apresentar os mesmos estados. O executor deve abrir cada item abaixo antes de tocar codigo.
+
+1. Regra de leitura obrigatoria 33
+- Antes de alterar, leia AulaLabScreen inteiro.
+- Antes de alterar, leia AulaTopBar e LessonImagePanel.
+- Antes de alterar, leia LabSession nos metodos chooseAulaAnswer, submitAulaSignal, advanceAula, toggleDoubt, acceptLessonPaidImage, declineLessonPaidImage, buyImageCredits, openReviewRoom, openRecoveryRoom, stopActiveAudio.
+- Antes de alterar, leia ClassroomPhase e LessonRuntimeSnapshot.
+- Antes de alterar, leia tests atuais da aula.
+
+2. Regra de copia comportamental 33
+- Se o widget antigo chamava um metodo, o chat chama o mesmo metodo.
+- Se o widget antigo recebia um texto de t(), o chat usa o mesmo t() ou uma string ja existente.
+- Se o widget antigo tinha estado desabilitado, o chat tem estado desabilitado.
+- Se o widget antigo tinha Semantics, o chat tem Semantics igual ou melhor.
+- Se o widget antigo respeitava textScale, o chat respeita textScale.
+- Se o widget antigo tinha SafeArea, o chat tem SafeArea equivalente.
+
+3. Regra de imagem 33
+- Nao mover funil visual para o chat.
+- Nao chamar endpoint de imagem pelo widget.
+- Nao criar imagem placeholder fingindo sucesso.
+- Nao esconder oferta paga.
+- Nao chamar imagem paga sem aceite.
+- Nao bloquear pergunta enquanto imagem carrega.
+- Nao destruir dataUrl SVG.
+- Nao remover ampliador de imagem.
+
+4. Regra de audio 33
+- Nao criar novo player.
+- Nao tocar audio automaticamente se preferencia estiver desligada.
+- Nao deixar audio antigo tocando apos avancar item/layer.
+- Nao remover estado visual de audioLoading.
+- Nao remover bolha ou indicador equivalente.
+- Nao transformar erro de audio em erro de aula.
+
+5. Regra de scroll 33
+- Chat deve manter o aluno no fim se ele estiver acompanhando.
+- Chat nao deve roubar scroll se aluno subiu para reler.
+- Chat deve oferecer retorno ao ponto atual.
+- Chat deve considerar imagem carregando tardiamente.
+- Chat deve considerar typewriter.
+- Chat deve considerar teclado da duvida.
+- Chat deve considerar barra inferior fixa.
+
+6. Regra de conclusao 33
+- A conclusao deve continuar vindo do motor, nao da quantidade de mensagens.
+- A timeline nunca decide que aula acabou.
+- A timeline nunca marca item como concluido.
+- A timeline nunca grava tentativa.
+- A timeline nunca agenda revisao.
+- A timeline nunca limpa recuperacao.
+
+7. Regra de aceite 33
+- Nao considerar pronto porque visualmente parece chat.
+- Considerar pronto somente com fluxo vital no APK.
+- Considerar pronto somente com testes antigos e novos passando.
+- Considerar pronto somente com rollback possivel.
+- Considerar pronto somente se o usuario conseguir estudar sem entender que houve troca interna.
+
+
+================================================================================================
+ANEXO TECNICO 34 — MATRIZ ANTI-REGRESSAO PARA ENTREGA A OUTRO ENGENHEIRO
+================================================================================================
+Objetivo deste anexo: impedir que o executor interprete a obra como autorizacao para redesenhar o SIM inteiro. A aula-chat e uma forma nova de apresentar os mesmos estados. O executor deve abrir cada item abaixo antes de tocar codigo.
+
+1. Regra de leitura obrigatoria 34
+- Antes de alterar, leia AulaLabScreen inteiro.
+- Antes de alterar, leia AulaTopBar e LessonImagePanel.
+- Antes de alterar, leia LabSession nos metodos chooseAulaAnswer, submitAulaSignal, advanceAula, toggleDoubt, acceptLessonPaidImage, declineLessonPaidImage, buyImageCredits, openReviewRoom, openRecoveryRoom, stopActiveAudio.
+- Antes de alterar, leia ClassroomPhase e LessonRuntimeSnapshot.
+- Antes de alterar, leia tests atuais da aula.
+
+2. Regra de copia comportamental 34
+- Se o widget antigo chamava um metodo, o chat chama o mesmo metodo.
+- Se o widget antigo recebia um texto de t(), o chat usa o mesmo t() ou uma string ja existente.
+- Se o widget antigo tinha estado desabilitado, o chat tem estado desabilitado.
+- Se o widget antigo tinha Semantics, o chat tem Semantics igual ou melhor.
+- Se o widget antigo respeitava textScale, o chat respeita textScale.
+- Se o widget antigo tinha SafeArea, o chat tem SafeArea equivalente.
+
+3. Regra de imagem 34
+- Nao mover funil visual para o chat.
+- Nao chamar endpoint de imagem pelo widget.
+- Nao criar imagem placeholder fingindo sucesso.
+- Nao esconder oferta paga.
+- Nao chamar imagem paga sem aceite.
+- Nao bloquear pergunta enquanto imagem carrega.
+- Nao destruir dataUrl SVG.
+- Nao remover ampliador de imagem.
+
+4. Regra de audio 34
+- Nao criar novo player.
+- Nao tocar audio automaticamente se preferencia estiver desligada.
+- Nao deixar audio antigo tocando apos avancar item/layer.
+- Nao remover estado visual de audioLoading.
+- Nao remover bolha ou indicador equivalente.
+- Nao transformar erro de audio em erro de aula.
+
+5. Regra de scroll 34
+- Chat deve manter o aluno no fim se ele estiver acompanhando.
+- Chat nao deve roubar scroll se aluno subiu para reler.
+- Chat deve oferecer retorno ao ponto atual.
+- Chat deve considerar imagem carregando tardiamente.
+- Chat deve considerar typewriter.
+- Chat deve considerar teclado da duvida.
+- Chat deve considerar barra inferior fixa.
+
+6. Regra de conclusao 34
+- A conclusao deve continuar vindo do motor, nao da quantidade de mensagens.
+- A timeline nunca decide que aula acabou.
+- A timeline nunca marca item como concluido.
+- A timeline nunca grava tentativa.
+- A timeline nunca agenda revisao.
+- A timeline nunca limpa recuperacao.
+
+7. Regra de aceite 34
+- Nao considerar pronto porque visualmente parece chat.
+- Considerar pronto somente com fluxo vital no APK.
+- Considerar pronto somente com testes antigos e novos passando.
+- Considerar pronto somente com rollback possivel.
+- Considerar pronto somente se o usuario conseguir estudar sem entender que houve troca interna.
+
+
+================================================================================================
+ANEXO TECNICO 35 — MATRIZ ANTI-REGRESSAO PARA ENTREGA A OUTRO ENGENHEIRO
+================================================================================================
+Objetivo deste anexo: impedir que o executor interprete a obra como autorizacao para redesenhar o SIM inteiro. A aula-chat e uma forma nova de apresentar os mesmos estados. O executor deve abrir cada item abaixo antes de tocar codigo.
+
+1. Regra de leitura obrigatoria 35
+- Antes de alterar, leia AulaLabScreen inteiro.
+- Antes de alterar, leia AulaTopBar e LessonImagePanel.
+- Antes de alterar, leia LabSession nos metodos chooseAulaAnswer, submitAulaSignal, advanceAula, toggleDoubt, acceptLessonPaidImage, declineLessonPaidImage, buyImageCredits, openReviewRoom, openRecoveryRoom, stopActiveAudio.
+- Antes de alterar, leia ClassroomPhase e LessonRuntimeSnapshot.
+- Antes de alterar, leia tests atuais da aula.
+
+2. Regra de copia comportamental 35
+- Se o widget antigo chamava um metodo, o chat chama o mesmo metodo.
+- Se o widget antigo recebia um texto de t(), o chat usa o mesmo t() ou uma string ja existente.
+- Se o widget antigo tinha estado desabilitado, o chat tem estado desabilitado.
+- Se o widget antigo tinha Semantics, o chat tem Semantics igual ou melhor.
+- Se o widget antigo respeitava textScale, o chat respeita textScale.
+- Se o widget antigo tinha SafeArea, o chat tem SafeArea equivalente.
+
+3. Regra de imagem 35
+- Nao mover funil visual para o chat.
+- Nao chamar endpoint de imagem pelo widget.
+- Nao criar imagem placeholder fingindo sucesso.
+- Nao esconder oferta paga.
+- Nao chamar imagem paga sem aceite.
+- Nao bloquear pergunta enquanto imagem carrega.
+- Nao destruir dataUrl SVG.
+- Nao remover ampliador de imagem.
+
+4. Regra de audio 35
+- Nao criar novo player.
+- Nao tocar audio automaticamente se preferencia estiver desligada.
+- Nao deixar audio antigo tocando apos avancar item/layer.
+- Nao remover estado visual de audioLoading.
+- Nao remover bolha ou indicador equivalente.
+- Nao transformar erro de audio em erro de aula.
+
+5. Regra de scroll 35
+- Chat deve manter o aluno no fim se ele estiver acompanhando.
+- Chat nao deve roubar scroll se aluno subiu para reler.
+- Chat deve oferecer retorno ao ponto atual.
+- Chat deve considerar imagem carregando tardiamente.
+- Chat deve considerar typewriter.
+- Chat deve considerar teclado da duvida.
+- Chat deve considerar barra inferior fixa.
+
+6. Regra de conclusao 35
+- A conclusao deve continuar vindo do motor, nao da quantidade de mensagens.
+- A timeline nunca decide que aula acabou.
+- A timeline nunca marca item como concluido.
+- A timeline nunca grava tentativa.
+- A timeline nunca agenda revisao.
+- A timeline nunca limpa recuperacao.
+
+7. Regra de aceite 35
+- Nao considerar pronto porque visualmente parece chat.
+- Considerar pronto somente com fluxo vital no APK.
+- Considerar pronto somente com testes antigos e novos passando.
+- Considerar pronto somente com rollback possivel.
+- Considerar pronto somente se o usuario conseguir estudar sem entender que houve troca interna.
+
+
+================================================================================================
+ANEXO TECNICO 36 — MATRIZ ANTI-REGRESSAO PARA ENTREGA A OUTRO ENGENHEIRO
+================================================================================================
+Objetivo deste anexo: impedir que o executor interprete a obra como autorizacao para redesenhar o SIM inteiro. A aula-chat e uma forma nova de apresentar os mesmos estados. O executor deve abrir cada item abaixo antes de tocar codigo.
+
+1. Regra de leitura obrigatoria 36
+- Antes de alterar, leia AulaLabScreen inteiro.
+- Antes de alterar, leia AulaTopBar e LessonImagePanel.
+- Antes de alterar, leia LabSession nos metodos chooseAulaAnswer, submitAulaSignal, advanceAula, toggleDoubt, acceptLessonPaidImage, declineLessonPaidImage, buyImageCredits, openReviewRoom, openRecoveryRoom, stopActiveAudio.
+- Antes de alterar, leia ClassroomPhase e LessonRuntimeSnapshot.
+- Antes de alterar, leia tests atuais da aula.
+
+2. Regra de copia comportamental 36
+- Se o widget antigo chamava um metodo, o chat chama o mesmo metodo.
+- Se o widget antigo recebia um texto de t(), o chat usa o mesmo t() ou uma string ja existente.
+- Se o widget antigo tinha estado desabilitado, o chat tem estado desabilitado.
+- Se o widget antigo tinha Semantics, o chat tem Semantics igual ou melhor.
+- Se o widget antigo respeitava textScale, o chat respeita textScale.
+- Se o widget antigo tinha SafeArea, o chat tem SafeArea equivalente.
+
+3. Regra de imagem 36
+- Nao mover funil visual para o chat.
+- Nao chamar endpoint de imagem pelo widget.
+- Nao criar imagem placeholder fingindo sucesso.
+- Nao esconder oferta paga.
+- Nao chamar imagem paga sem aceite.
+- Nao bloquear pergunta enquanto imagem carrega.
+- Nao destruir dataUrl SVG.
+- Nao remover ampliador de imagem.
+
+4. Regra de audio 36
+- Nao criar novo player.
+- Nao tocar audio automaticamente se preferencia estiver desligada.
+- Nao deixar audio antigo tocando apos avancar item/layer.
+- Nao remover estado visual de audioLoading.
+- Nao remover bolha ou indicador equivalente.
+- Nao transformar erro de audio em erro de aula.
+
+5. Regra de scroll 36
+- Chat deve manter o aluno no fim se ele estiver acompanhando.
+- Chat nao deve roubar scroll se aluno subiu para reler.
+- Chat deve oferecer retorno ao ponto atual.
+- Chat deve considerar imagem carregando tardiamente.
+- Chat deve considerar typewriter.
+- Chat deve considerar teclado da duvida.
+- Chat deve considerar barra inferior fixa.
+
+6. Regra de conclusao 36
+- A conclusao deve continuar vindo do motor, nao da quantidade de mensagens.
+- A timeline nunca decide que aula acabou.
+- A timeline nunca marca item como concluido.
+- A timeline nunca grava tentativa.
+- A timeline nunca agenda revisao.
+- A timeline nunca limpa recuperacao.
+
+7. Regra de aceite 36
+- Nao considerar pronto porque visualmente parece chat.
+- Considerar pronto somente com fluxo vital no APK.
+- Considerar pronto somente com testes antigos e novos passando.
+- Considerar pronto somente com rollback possivel.
+- Considerar pronto somente se o usuario conseguir estudar sem entender que houve troca interna.
+
+
+================================================================================================
+ANEXO TECNICO 37 — MATRIZ ANTI-REGRESSAO PARA ENTREGA A OUTRO ENGENHEIRO
+================================================================================================
+Objetivo deste anexo: impedir que o executor interprete a obra como autorizacao para redesenhar o SIM inteiro. A aula-chat e uma forma nova de apresentar os mesmos estados. O executor deve abrir cada item abaixo antes de tocar codigo.
+
+1. Regra de leitura obrigatoria 37
+- Antes de alterar, leia AulaLabScreen inteiro.
+- Antes de alterar, leia AulaTopBar e LessonImagePanel.
+- Antes de alterar, leia LabSession nos metodos chooseAulaAnswer, submitAulaSignal, advanceAula, toggleDoubt, acceptLessonPaidImage, declineLessonPaidImage, buyImageCredits, openReviewRoom, openRecoveryRoom, stopActiveAudio.
+- Antes de alterar, leia ClassroomPhase e LessonRuntimeSnapshot.
+- Antes de alterar, leia tests atuais da aula.
+
+2. Regra de copia comportamental 37
+- Se o widget antigo chamava um metodo, o chat chama o mesmo metodo.
+- Se o widget antigo recebia um texto de t(), o chat usa o mesmo t() ou uma string ja existente.
+- Se o widget antigo tinha estado desabilitado, o chat tem estado desabilitado.
+- Se o widget antigo tinha Semantics, o chat tem Semantics igual ou melhor.
+- Se o widget antigo respeitava textScale, o chat respeita textScale.
+- Se o widget antigo tinha SafeArea, o chat tem SafeArea equivalente.
+
+3. Regra de imagem 37
+- Nao mover funil visual para o chat.
+- Nao chamar endpoint de imagem pelo widget.
+- Nao criar imagem placeholder fingindo sucesso.
+- Nao esconder oferta paga.
+- Nao chamar imagem paga sem aceite.
+- Nao bloquear pergunta enquanto imagem carrega.
+- Nao destruir dataUrl SVG.
+- Nao remover ampliador de imagem.
+
+4. Regra de audio 37
+- Nao criar novo player.
+- Nao tocar audio automaticamente se preferencia estiver desligada.
+- Nao deixar audio antigo tocando apos avancar item/layer.
+- Nao remover estado visual de audioLoading.
+- Nao remover bolha ou indicador equivalente.
+- Nao transformar erro de audio em erro de aula.
+
+5. Regra de scroll 37
+- Chat deve manter o aluno no fim se ele estiver acompanhando.
+- Chat nao deve roubar scroll se aluno subiu para reler.
+- Chat deve oferecer retorno ao ponto atual.
+- Chat deve considerar imagem carregando tardiamente.
+- Chat deve considerar typewriter.
+- Chat deve considerar teclado da duvida.
+- Chat deve considerar barra inferior fixa.
+
+6. Regra de conclusao 37
+- A conclusao deve continuar vindo do motor, nao da quantidade de mensagens.
+- A timeline nunca decide que aula acabou.
+- A timeline nunca marca item como concluido.
+- A timeline nunca grava tentativa.
+- A timeline nunca agenda revisao.
+- A timeline nunca limpa recuperacao.
+
+7. Regra de aceite 37
+- Nao considerar pronto porque visualmente parece chat.
+- Considerar pronto somente com fluxo vital no APK.
+- Considerar pronto somente com testes antigos e novos passando.
+- Considerar pronto somente com rollback possivel.
+- Considerar pronto somente se o usuario conseguir estudar sem entender que houve troca interna.
+
+
+================================================================================================
+ANEXO TECNICO 38 — MATRIZ ANTI-REGRESSAO PARA ENTREGA A OUTRO ENGENHEIRO
+================================================================================================
+Objetivo deste anexo: impedir que o executor interprete a obra como autorizacao para redesenhar o SIM inteiro. A aula-chat e uma forma nova de apresentar os mesmos estados. O executor deve abrir cada item abaixo antes de tocar codigo.
+
+1. Regra de leitura obrigatoria 38
+- Antes de alterar, leia AulaLabScreen inteiro.
+- Antes de alterar, leia AulaTopBar e LessonImagePanel.
+- Antes de alterar, leia LabSession nos metodos chooseAulaAnswer, submitAulaSignal, advanceAula, toggleDoubt, acceptLessonPaidImage, declineLessonPaidImage, buyImageCredits, openReviewRoom, openRecoveryRoom, stopActiveAudio.
+- Antes de alterar, leia ClassroomPhase e LessonRuntimeSnapshot.
+- Antes de alterar, leia tests atuais da aula.
+
+2. Regra de copia comportamental 38
+- Se o widget antigo chamava um metodo, o chat chama o mesmo metodo.
+- Se o widget antigo recebia um texto de t(), o chat usa o mesmo t() ou uma string ja existente.
+- Se o widget antigo tinha estado desabilitado, o chat tem estado desabilitado.
+- Se o widget antigo tinha Semantics, o chat tem Semantics igual ou melhor.
+- Se o widget antigo respeitava textScale, o chat respeita textScale.
+- Se o widget antigo tinha SafeArea, o chat tem SafeArea equivalente.
+
+3. Regra de imagem 38
+- Nao mover funil visual para o chat.
+- Nao chamar endpoint de imagem pelo widget.
+- Nao criar imagem placeholder fingindo sucesso.
+- Nao esconder oferta paga.
+- Nao chamar imagem paga sem aceite.
+- Nao bloquear pergunta enquanto imagem carrega.
+- Nao destruir dataUrl SVG.
+- Nao remover ampliador de imagem.
+
+4. Regra de audio 38
+- Nao criar novo player.
+- Nao tocar audio automaticamente se preferencia estiver desligada.
+- Nao deixar audio antigo tocando apos avancar item/layer.
+- Nao remover estado visual de audioLoading.
+- Nao remover bolha ou indicador equivalente.
+- Nao transformar erro de audio em erro de aula.
+
+5. Regra de scroll 38
+- Chat deve manter o aluno no fim se ele estiver acompanhando.
+- Chat nao deve roubar scroll se aluno subiu para reler.
+- Chat deve oferecer retorno ao ponto atual.
+- Chat deve considerar imagem carregando tardiamente.
+- Chat deve considerar typewriter.
+- Chat deve considerar teclado da duvida.
+- Chat deve considerar barra inferior fixa.
+
+6. Regra de conclusao 38
+- A conclusao deve continuar vindo do motor, nao da quantidade de mensagens.
+- A timeline nunca decide que aula acabou.
+- A timeline nunca marca item como concluido.
+- A timeline nunca grava tentativa.
+- A timeline nunca agenda revisao.
+- A timeline nunca limpa recuperacao.
+
+7. Regra de aceite 38
+- Nao considerar pronto porque visualmente parece chat.
+- Considerar pronto somente com fluxo vital no APK.
+- Considerar pronto somente com testes antigos e novos passando.
+- Considerar pronto somente com rollback possivel.
+- Considerar pronto somente se o usuario conseguir estudar sem entender que houve troca interna.
