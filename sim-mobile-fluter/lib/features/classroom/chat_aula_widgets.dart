@@ -6,6 +6,7 @@ import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
 import '../../sim/ui/sim_theme.dart';
+import '../onboarding/preparation_and_placement.dart';
 import '../session/lab_session.dart';
 import 'aula_widgets.dart';
 import 'chat_aula_messages.dart';
@@ -19,6 +20,7 @@ class ChatAulaTimeline extends StatelessWidget {
     required this.onNext,
     this.session,
     this.onImageSettled,
+    this.padding = const EdgeInsets.fromLTRB(16, 112, 16, 128),
     super.key,
   });
 
@@ -29,26 +31,27 @@ class ChatAulaTimeline extends StatelessWidget {
   final VoidCallback onNext;
   final LabSession? session;
   final VoidCallback? onImageSettled;
+  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
+    return ListView(
       key: const Key('chat-aula-timeline'),
-      padding: const EdgeInsets.fromLTRB(16, 112, 16, 128),
-      itemCount: messages.length,
-      separatorBuilder: (_, index) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final message = messages[index];
-        return ChatAulaMessageBubble(
-          message: message,
-          session: session,
-          onChooseAnswer: onChooseAnswer,
-          onSignal: onSignal,
-          onRetry: onRetry,
-          onNext: onNext,
-          onImageSettled: onImageSettled,
-        );
-      },
+      padding: padding,
+      children: [
+        for (var index = 0; index < messages.length; index++) ...[
+          if (index > 0) const SizedBox(height: 10),
+          ChatAulaMessageBubble(
+            message: messages[index],
+            session: session,
+            onChooseAnswer: onChooseAnswer,
+            onSignal: onSignal,
+            onRetry: onRetry,
+            onNext: onNext,
+            onImageSettled: onImageSettled,
+          ),
+        ],
+      ],
     );
   }
 }
@@ -213,7 +216,10 @@ class _ChatAulaMessageBody extends StatelessWidget {
           ),
           if ((message.actionKey ?? '').isNotEmpty) ...[
             const SizedBox(height: 12),
-            _ChatActionButton(label: t('aula_next'), onPressed: onNext),
+            _ChatActionButton(
+              label: nextBtnText(message.actionKey ?? ''),
+              onPressed: onNext,
+            ),
           ],
         ],
       ),

@@ -111,11 +111,14 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
           context,
         ).copyWith(textScaler: TextScaler.linear(textScale)),
         child: Stack(
+          fit: StackFit.expand,
           children: [
             Positioned.fill(
+              top: MediaQuery.paddingOf(context).top + 82,
               child: ChatAulaTimeline(
                 messages: messages,
                 session: session,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
                 onChooseAnswer: (letter) =>
                     session.chooseAulaAnswer(letter.name),
                 onSignal: session.submitAulaSignal,
@@ -124,17 +127,20 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
               ),
             ),
             Positioned(
+              top: 0,
               left: 0,
               right: 0,
-              top: 0,
-              child: AulaTopBar(
-                session: session,
-                showReviewButton: true,
-                progress: viewModel?.progress.toDouble(),
-                headerLabel: viewModel != null
-                    ? headerLabelText(viewModel.headerLabel)
-                    : null,
-                textScale: textScale,
+              child: SizedBox(
+                height: MediaQuery.paddingOf(context).top + 82,
+                child: AulaTopBar(
+                  session: session,
+                  showReviewButton: true,
+                  progress: viewModel?.progress.toDouble(),
+                  headerLabel: viewModel != null
+                      ? headerLabelText(viewModel.headerLabel)
+                      : null,
+                  textScale: textScale,
+                ),
               ),
             ),
             FixedBubble(
