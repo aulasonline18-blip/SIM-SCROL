@@ -29,11 +29,32 @@ class _FixedBubbleState extends State<FixedBubble>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
+    );
     _scale = Tween<double>(
       begin: 1.0,
       end: 1.15,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _syncPulse();
+  }
+
+  @override
+  void didUpdateWidget(FixedBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.audioEnabled != widget.audioEnabled ||
+        oldWidget.speaking != widget.speaking) {
+      _syncPulse();
+    }
+  }
+
+  void _syncPulse() {
+    if (widget.audioEnabled && widget.speaking) {
+      if (!_controller.isAnimating) {
+        _controller.repeat(reverse: true);
+      }
+    } else {
+      _controller.stop();
+      _controller.value = 0;
+    }
   }
 
   @override

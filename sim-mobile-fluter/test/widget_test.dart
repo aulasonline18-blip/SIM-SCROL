@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sim_mobile/features/classroom/chat_aula_screen.dart';
 import 'package:sim_mobile/main.dart';
 import 'package:sim_mobile/shared/widgets/shared_widgets.dart';
 import 'package:sim_mobile/sim/cloud/cloud_functions.dart';
@@ -10,6 +11,20 @@ import 'package:sim_mobile/sim/experience/student_experience_types.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
 void main() {
+  testWidgets('A rota de aula usa chat como default controlado', (
+    WidgetTester tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..route = '/cyber/aula';
+
+    await tester.pumpWidget(SimMobileApp(initialSession: session));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatAulaScreen), findsOneWidget);
+  });
+
   testWidgets('Portal shows SIM entry point', (WidgetTester tester) async {
     await tester.pumpWidget(const SimMobileApp());
     expect(find.text('SIM'), findsOneWidget);

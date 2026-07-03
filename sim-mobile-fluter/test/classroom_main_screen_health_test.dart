@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/features/classroom/aula_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/features/classroom/aula_screen.dart';
-import 'package:sim_mobile/main.dart';
+import 'package:sim_mobile/features/session/lab_session.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/classroom_text_scale.dart';
 import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
@@ -26,7 +26,7 @@ LabSession _readyAulaSession() {
 
 Future<LabSession> _pumpAula(WidgetTester tester) async {
   final session = _readyAulaSession();
-  await tester.pumpWidget(SimMobileApp(initialSession: session));
+  await tester.pumpWidget(MaterialApp(home: AulaLabScreen(session: session)));
   await session.openAulaRuntime();
   await tester.pumpAndSettle();
   return session;
@@ -118,8 +118,8 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final session = _readyAulaSession();
-    await tester.pumpWidget(SimMobileApp(initialSession: session));
     await session.openAulaRuntime();
+    await tester.pumpWidget(MaterialApp(home: AulaLabScreen(session: session)));
     await tester.pump();
 
     expect(find.bySemanticsLabel('Alternativa B'), findsNothing);

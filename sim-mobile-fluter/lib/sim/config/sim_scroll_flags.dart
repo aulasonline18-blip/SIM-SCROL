@@ -3,6 +3,6 @@ class SimScrollFlags {
 
   static const aulaChat = bool.fromEnvironment(
     'SIM_SCROLL_AULA_CHAT',
-    defaultValue: false,
+    defaultValue: true,
   );
 }
