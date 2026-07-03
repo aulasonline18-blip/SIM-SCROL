@@ -171,6 +171,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     );
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: palette.background,
       body: MediaQuery(
         data: MediaQuery.of(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../core/utils/sim_constants.dart';
 import '../../shared/widgets/shared_widgets.dart';
@@ -12,7 +13,7 @@ import '../session/lab_session.dart';
 import 'aula_widgets.dart';
 import 'chat_aula_messages.dart';
 
-class ChatAulaTimeline extends StatelessWidget {
+class ChatAulaTimeline extends StatefulWidget {
   const ChatAulaTimeline({
     required this.messages,
     required this.onChooseAnswer,
@@ -22,6 +23,7 @@ class ChatAulaTimeline extends StatelessWidget {
     required this.onOpenDoubt,
     this.session,
     this.onImageSettled,
+    this.scrollController,
     this.padding = const EdgeInsets.fromLTRB(16, 112, 16, 128),
     super.key,
   });
@@ -34,28 +36,220 @@ class ChatAulaTimeline extends StatelessWidget {
   final VoidCallback onOpenDoubt;
   final LabSession? session;
   final VoidCallback? onImageSettled;
+  final ScrollController? scrollController;
   final EdgeInsets padding;
 
   @override
+  State<ChatAulaTimeline> createState() => _ChatAulaTimelineState();
+}
+
+class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
+  late final ScrollController _scrollController =
+      widget.scrollController ?? ScrollController();
+  late final bool _ownsScrollController = widget.scrollController == null;
+  bool _autoFollow = true;
+  bool _showCurrentButton = false;
+  String _messageSignature = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _messageSignature = _signatureOf(widget.messages);
+    _scrollController.addListener(_handleScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
+  }
+
+  @override
+  void didUpdateWidget(ChatAulaTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextSignature = _signatureOf(widget.messages);
+    if (nextSignature == _messageSignature) return;
+    _messageSignature = nextSignature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_autoFollow) {
+        _scrollToCurrent();
+      } else {
+        setState(() => _showCurrentButton = true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_handleScroll);
+    if (_ownsScrollController) _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final nearEnd = position.maxScrollExtent - position.pixels <= 96;
+    if (nearEnd != _autoFollow || _showCurrentButton == nearEnd) {
+      setState(() {
+        _autoFollow = nearEnd;
+        _showCurrentButton = !nearEnd;
+      });
+    }
+  }
+
+  Future<void> _scrollToCurrent() async {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (!position.hasContentDimensions) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
+      return;
+    }
+    final target = position.maxScrollExtent;
+    await _scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+    if (!mounted) return;
+    setState(() {
+      _autoFollow = true;
+      _showCurrentButton = false;
+    });
+  }
+
+  String _signatureOf(List<ChatLessonMessage> messages) {
+    return messages
+        .map(
+          (message) => [
+            message.id,
+            message.kind.name,
+            message.text ?? '',
+            message.imageStatus,
+            message.options
+                .map(
+                  (option) =>
+                      '${option.letter.name}:${option.selected}:${option.enabled}',
+                )
+                .join(','),
+            message.signals
+                .map((signal) => '${signal.value}:${signal.enabled}')
+                .join(','),
+          ].join('|'),
+        )
+        .join('||');
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ListView(
-      key: const Key('chat-aula-timeline'),
-      padding: padding,
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    return Stack(
       children: [
-        for (var index = 0; index < messages.length; index++) ...[
-          if (index > 0) const SizedBox(height: 10),
-          ChatAulaMessageBubble(
-            message: messages[index],
-            session: session,
-            onChooseAnswer: onChooseAnswer,
-            onSignal: onSignal,
-            onRetry: onRetry,
-            onNext: onNext,
-            onOpenDoubt: onOpenDoubt,
-            onImageSettled: onImageSettled,
+        NotificationListener<UserScrollNotification>(
+          onNotification: (notification) {
+            if (notification.direction != ScrollDirection.idle) {
+              final metrics = notification.metrics;
+              final nearEnd = metrics.maxScrollExtent - metrics.pixels <= 96;
+              if (!nearEnd && (_autoFollow || !_showCurrentButton)) {
+                setState(() {
+                  _autoFollow = false;
+                  _showCurrentButton = true;
+                });
+              }
+              return false;
+            }
+            _handleScroll();
+            return false;
+          },
+          child: ListView(
+            key: const Key('chat-aula-timeline'),
+            controller: _scrollController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: widget.padding.copyWith(
+              bottom: widget.padding.bottom + bottomInset,
+            ),
+            children: [
+              for (var index = 0; index < widget.messages.length; index++) ...[
+                if (index > 0) const SizedBox(height: 10),
+                ChatAulaMessageBubble(
+                  message: widget.messages[index],
+                  semanticIndex: index,
+                  session: widget.session,
+                  onChooseAnswer: widget.onChooseAnswer,
+                  onSignal: widget.onSignal,
+                  onRetry: widget.onRetry,
+                  onNext: widget.onNext,
+                  onOpenDoubt: widget.onOpenDoubt,
+                  onImageSettled: () {
+                    widget.onImageSettled?.call();
+                    if (_autoFollow) {
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _scrollToCurrent(),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ],
           ),
-        ],
+        ),
+        if (_showCurrentButton)
+          Positioned(
+            right: 16,
+            bottom: 16 + bottomInset,
+            child: SafeArea(
+              top: false,
+              child: _ChatReturnToCurrentButton(onPressed: _scrollToCurrent),
+            ),
+          ),
       ],
+    );
+  }
+}
+
+class _ChatReturnToCurrentButton extends StatelessWidget {
+  const _ChatReturnToCurrentButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      label: 'Ir para a aula atual',
+      child: Material(
+        color: palette.text,
+        borderRadius: BorderRadius.circular(999),
+        elevation: 8,
+        child: InkWell(
+          key: const Key('chat-return-current-button'),
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            constraints: const BoxConstraints(
+              minWidth: SimTouch.min,
+              minHeight: SimTouch.min,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.arrow_downward_rounded,
+                  color: palette.surface,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Ir para a aula atual',
+                  style: TextStyle(
+                    color: palette.surface,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -63,6 +257,7 @@ class ChatAulaTimeline extends StatelessWidget {
 class ChatAulaMessageBubble extends StatelessWidget {
   const ChatAulaMessageBubble({
     required this.message,
+    required this.semanticIndex,
     required this.onChooseAnswer,
     required this.onSignal,
     required this.onRetry,
@@ -74,6 +269,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
   });
 
   final ChatLessonMessage message;
+  final int semanticIndex;
   final LabSession? session;
   final void Function(AnswerLetter letter) onChooseAnswer;
   final void Function(int value) onSignal;
@@ -138,6 +334,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
     return Semantics(
       container: true,
       label: _semanticLabel(message),
+      sortKey: OrdinalSortKey(semanticIndex.toDouble()),
       child: Align(
         alignment: isStudent ? Alignment.centerRight : Alignment.centerLeft,
         child: bubble,
@@ -146,11 +343,14 @@ class ChatAulaMessageBubble extends StatelessWidget {
   }
 
   String _semanticLabel(ChatLessonMessage message) {
-    return switch (message.role) {
+    final owner = switch (message.role) {
       ChatLessonMessageRole.student => 'Mensagem do aluno',
       ChatLessonMessageRole.system => 'Mensagem do sistema',
       ChatLessonMessageRole.sim => 'Mensagem do SIM',
     };
+    final text = (message.text ?? '').trim();
+    if (text.isEmpty) return owner;
+    return '$owner: $text';
   }
 }
 

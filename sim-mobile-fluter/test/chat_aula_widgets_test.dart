@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -166,6 +168,74 @@ void main() {
     await tester.tap(find.text('Próximo tópico'));
     expect(advances, 1);
   });
+
+  testWidgets(
+    'chat timeline preserves reader scroll and returns to current lesson',
+    (tester) async {
+      final key = GlobalKey<_ChatTimelineHarnessState>();
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 320,
+              child: _ChatTimelineHarness(
+                key: key,
+                scrollController: controller,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      await tester.scrollUntilVisible(
+        find.textContaining('Mensagem 32'),
+        240,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(find.textContaining('Mensagem 32'), findsOneWidget);
+
+      key.currentState!.appendMessage('Mensagem nova');
+      await tester.pump(const Duration(milliseconds: 700));
+
+      expect(find.text('Mensagem nova'), findsOneWidget);
+      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+      expect(controller.position.maxScrollExtent, greaterThan(96));
+
+      unawaited(
+        controller.animateTo(
+          0,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 220));
+
+      key.currentState!.appendMessage('Mensagem mais nova');
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(
+        find.byKey(const Key('chat-return-current-button')),
+        findsOneWidget,
+      );
+      expect(find.text('Mensagem mais nova'), findsNothing);
+
+      final buttonRect = tester.getRect(
+        find.byKey(const Key('chat-return-current-button')),
+      );
+      expect(buttonRect.height, greaterThanOrEqualTo(48));
+
+      await tester.tap(find.byKey(const Key('chat-return-current-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+      expect(find.text('Mensagem mais nova'), findsOneWidget);
+    },
+  );
 
   testWidgets('chat timeline renders doubt action callback', (tester) async {
     var opened = 0;
@@ -602,4 +672,55 @@ String _svgDataUrl() {
     '<circle cx="60" cy="40" r="20" fill="#111827"/></svg>',
   );
   return 'data:image/svg+xml;utf8,$svg';
+}
+
+class _ChatTimelineHarness extends StatefulWidget {
+  const _ChatTimelineHarness({required this.scrollController, super.key});
+
+  final ScrollController scrollController;
+
+  @override
+  State<_ChatTimelineHarness> createState() => _ChatTimelineHarnessState();
+}
+
+class _ChatTimelineHarnessState extends State<_ChatTimelineHarness> {
+  late final List<ChatLessonMessage> _messages = [
+    for (var i = 1; i <= 32; i++)
+      ChatLessonMessage(
+        id: 'msg-$i',
+        role: ChatLessonMessageRole.sim,
+        kind: ChatLessonMessageKind.explanation,
+        text: 'Mensagem $i\nLinha de apoio para simular aula longa.',
+      ),
+  ];
+
+  var _nextId = 33;
+
+  void appendMessage(String text) {
+    setState(() {
+      _messages.add(
+        ChatLessonMessage(
+          id: 'msg-${_nextId++}',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.feedback,
+          text: text,
+          actionKey: 'aula_next',
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ChatAulaTimeline(
+      messages: _messages,
+      scrollController: widget.scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      onChooseAnswer: (_) {},
+      onSignal: (_) {},
+      onRetry: () {},
+      onNext: () {},
+      onOpenDoubt: () {},
+    );
+  }
 }
