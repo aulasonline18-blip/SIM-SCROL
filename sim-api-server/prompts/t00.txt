@@ -1,0 +1,358 @@
+SINGLE INSTRUCTION
+
+Read the input below (may include free text, image, PDF, audio, or mixed material). Execute T04 + T01 in sequence.
+Output MUST have EXACTLY the blocks: <PROFILE>, <CURRICULUM>, <QUALITY_CHECK>, <END>.
+No text outside the blocks.
+No JSON.
+No comments.
+No confirmations.
+Only the blocks.
+
+
+SIM CROSSING LAW — READ BEFORE EXECUTION
+
+SIM is not merely creating a lesson list. SIM is building a crossing path.
+The student must be conducted from their current point toward a real goal:
+school test, book exercise, entrance exam, public exam, proficiency test,
+university task, professional use, or any stated real-world target.
+
+Do not weaken the destination. Do not fake mastery. Do not lower the real
+standard. Adapt the path, not the goal.
+
+The curriculum is a route. Each micro-item is one possible step. The first
+steps must create movement; later steps must build real preparation.
+If the student is weak, start safely. If the student already knows part of the
+path, the route must allow placement/nivelamento to put them closer to the
+correct point. Good placement saves steps; weak placement starts earlier safely.
+
+Do not trap the student in a forest. If perfect mastery is not realistic in the
+first crossing, build a route that can be crossed once, records weak points,
+and supports later cycles: review, recovery, support, simulation, or a new
+stronger crossing. Completion creates energy for return.
+
+TARGET-LOCK EXECUTION
+
+Do not merely "create a curriculum." Hit the target:
+produce a concrete crossing route that a real student can start, continue, and
+complete toward the stated real-world goal.
+
+Acceptance criteria before output:
+1. PROFILE identifies the student/material precisely enough to guide the route.
+2. CURRICULUM is specific, sequenced, original, and traversable.
+3. First items create safe movement without fake ease.
+4. Later items preserve real exam/school/work standard.
+5. Weak points are recorded for future cycles instead of creating endless loops.
+6. Placement/nivelamento can use the route to skip already-mastered steps.
+7. No vague "teach this topic" item survives.
+8. Output contract is exact: only PROFILE, CURRICULUM, QUALITY_CHECK, END.
+
+Internal loop, silent and mandatory:
+Draft -> test against the target -> find misses -> revise -> test again.
+If the route would only hit part of the target, revise before output. If missing
+information makes the target impossible, use REQUEST_MISSING_INFORMATION by the
+allowed contract instead of pretending success.
+
+
+INPUT FROM STUDENT/PARENT/COORDINATOR
+
+[INSERT ANY INPUT HERE — TEXT, IMAGE, PDF, AUDIO, OR MIXED]
+
+
+T04 EXECUTION — MULTIMODAL INTERPRETER
+
+Generate ONLY <PROFILE>. DO NOT generate curriculum. DO NOT solve exercises. DO NOT output JSON. DO NOT write outside <PROFILE>.
+
+STEP 1 — IDENTIFY INPUT
+
+If image/photo/scan/screenshot:
+- Describe: printed/handwritten, diagrams, formulas, tables, corrections, markings, completeness, legibility
+- Transcribe legible text only
+- Mark unclear content as PARTIAL or UNREADABLE
+- NEVER invent unreadable text
+
+If PDF:
+- State: text-based or scanned
+- Use all extracted content
+- If only filename available → mark content MISSING
+
+If audio:
+- Use transcription provided by pipeline
+- If no transcription → mark UNREADABLE and REQUEST_MISSING_INFORMATION for text version
+- Treat transcribed text as FREE_TEXT_OBJECTIVE or part of mixed material
+
+If mixed (text/image/PDF/audio):
+- Priority: 1) Exercises 2) Student solutions 3) Stated objective 4) Theory content 5) Grade/Country/Curriculum 6) Contextual notes
+
+STEP 2 — CLASSIFY INPUT
+
+Primary category (choose exactly one):
+A. FREE_TEXT_OBJECTIVE — Student states what they want to learn
+B. EXERCISE_LIST — Student provides exercises (text/photo/PDF/scan/copy)
+C. EXERCISE_WITH_SOLUTION — Student provides original exercise + attempted solution
+D. SOLUTION_ONLY — Student provides solution/answer attempt without original exercise
+E. MIXED_MATERIAL — Mixture of objective + exercises + solutions + notes + textbook/syllabus content
+F. INSUFFICIENT — Too vague, incomplete, unreadable, or missing to safely build curriculum
+G. THEORY_MATERIAL — Student provides textbook pages, summaries, diagrams, maps, concept explanations, slides, or learning content WITHOUT exercises
+
+Secondary category (optional): [A/B/C/D/E/F/G or NONE]
+
+STEP 3 — BUILD PROFILE
+
+Write inside <PROFILE> using these exact headings:
+
+INPUT CLASSIFICATION: [A/B/C/D/E/F/G]
+SECONDARY CLASSIFICATION: [A/B/C/D/E/F/G or NONE]
+MATERIAL RECEIVED: [Free text / Image / PDF / Audio / Exercise list / Solution / Theory / Notes / Mixed / etc.]
+VISUAL/PDF/READABILITY: [Readable / Partially readable / Unreadable / N/A — specify unclear content]
+STUDENT OBJECTIVE: [Explicit or inferred objective]
+PROBABLE LEVEL: [Grade/level with confidence: High/Medium/Low]
+SUBJECT AND TOPIC: [Subject and topic]
+CURRICULUM CONTEXT: [Country/curriculum if known]
+
+EXERCISE ANALYSIS: [Only if exercises present]
+- Number of exercises: [N or Unknown]
+- Distinct patterns: [List each pattern]
+- Required concepts: [List]
+- Required procedures: [List]
+- Prerequisites: [List]
+- Difficulty progression: [Basic → Advanced]
+- Common traps: [List]
+
+THEORY ANALYSIS: [Only if theory material present]
+- Main concepts: [List]
+- Key terms/definitions: [List]
+- Relationships/connections: [List]
+- Scope/depth: [Describe]
+- What student must understand: [Describe]
+
+STUDENT SOLUTION ANALYSIS: [Only if solutions present]
+- Correct parts: [List]
+- Errors/incompleteness: [List]
+- Probable error pattern: [Describe]
+- Missing concept/procedure: [Describe]
+- Specific doubt to clarify: [Describe]
+- CAN_VERIFY_CORRECTNESS: [Yes/No/Partial — if No, specify why and what is missing]
+
+GAPS: [Specific knowledge/skill gaps]
+
+PEDAGOGICAL INFERENCES: [Only supported inferences. Mark uncertainty.]
+
+TEACHING STYLE: [Direct / Guided / Socratic / Visual / Step-by-step / Practice-first / Diagnostic / Concept-first — include reason]
+PACE: [Slow / Normal / Accelerated — include reason]
+LANGUAGE: [Age-appropriate / Simple / Technical / Bilingual if needed — specify]
+REVIEW STRATEGY: [How to reinforce]
+RECOVERY STRATEGY: [How to repair gaps]
+MOTIVATION: [How to engage this student]
+AVOID: [Specific things to avoid]
+TRAVESSIA / CROSSING STRATEGY: [How to keep the student moving without weakening the real target]
+ADVANCE WITHOUT PRISON RULE: [How to avoid trapping the student in loops; what should be reviewed later if needed]
+
+CURRICULUM DIRECTION FOR T01:
+[Write exact, concrete instructions. This is the most important part.]
+
+Must include:
+- Minimum number of micro-items
+- What each item/skill group should train
+- Which patterns/concepts must be covered
+- Prerequisite items needed before application
+- Difficulty progression
+- Where the student likely enters the crossing path
+- Which points may be skipped by placement if already mastered
+- Which weak points should be recorded for later cycles instead of blocking all progress
+- How practice should vary from originals
+- If applicable: numbers, variables, examples, contexts, scenarios to use
+- How to avoid copying original material
+- How to prepare student to solve original worksheet OR master theory independently
+
+Write as a concrete sequence:
+"Item group 1: [prerequisite concept] — [specific skill to train] — [context/variables]"
+"Item group 2: [first exercise pattern] — [specific skill to train] — [context/variables]"
+"Item group 3: [common trap] — [specific skill to train] — [context/variables]"
+"Item group 4: [mixed application] — [specific skill to train] — [context/variables]"
+"Item group 5: [review/fluency] — [specific skill to train] — [context/variables]"
+
+If theory material:
+"Item group 1: [definition/recall] — [specific concept to test] — [context/examples]"
+"Item group 2: [relationship/connection] — [specific relationship to apply] — [context/examples]"
+"Item group 3: [application/example] — [specific application to create] — [context/examples]"
+"Item group 4: [comparison/contrast] — [specific comparison to make] — [context/examples]"
+"Item group 5: [synthesis/transfer] — [specific synthesis to demonstrate] — [context/examples]"
+
+Never write vague directions like: "teach this topic" / "explain the subject" / "make exercises about this"
+
+MINIMUM CURRICULUM SIZE:
+[State recommended minimum based on N, distinct patterns, or theory depth]
+
+ORIGINALITY RULE FOR T01:
+Generated items must be original. Same concept/reasoning pattern. Changed: numbers, names, objects, examples, context, wording, order, surface details. Do not copy copyrighted exercise text beyond analysis. For theory: generate original applications, examples, analogies, and concept checks.
+
+MISSING INFORMATION: [What is missing, if anything]
+REQUEST_MISSING_INFORMATION: [Only if essential info missing. Otherwise NONE.]
+
+STEP 4 — CASE-SPECIFIC RULES
+
+CASE A — FREE_TEXT_OBJECTIVE:
+Extract grade, subject, topic, country/curriculum if mentioned, objective, reported difficulties, probable gaps. If short, infer carefully and label inferences. Do not invent personal facts. Do not diagnose. Do not label student.
+
+CASE B — EXERCISE_LIST:
+Student intention: "Learn how to solve exercises of this type."
+DO NOT solve originals. DO NOT copy originals. DO NOT give answers. DO NOT build vague curriculum about general topic only.
+Extract: N, patterns, concepts, procedures, formulas/vocabulary/rules, prerequisites, difficulty, traps, what student must understand to solve similar exercises independently.
+
+Anti-laziness rules:
+- If N=1-3: min 3-5 micro-items
+- If N=4-7: min 5-8 micro-items
+- If N=8-15: min 60% of N
+- If N>15: group by distinct pattern — every distinct pattern covered
+- If exercise requires multiple concepts: split prerequisites before full application
+- If multiple patterns: each pattern must have at least one item
+- If same pattern repeated: at least one representative item per variation
+
+Never reduce many exercises to one generic lesson. Never ignore distinct patterns.
+
+CURRICULUM must generate similar-but-not-identical practice: same reasoning, changed numbers/context/wording.
+
+CASE C — EXERCISE_WITH_SOLUTION:
+Student intention: "Understand where reasoning went wrong and how to fix it."
+Analyze: what exercise asks, what student attempted, what is correct, what is incomplete/wrong, exact missing concept/procedure, likely misunderstanding, what explanation would remove doubt, what similar practice would repair gap.
+
+If solution is correct: recommend confirmation, fluency, speed, transfer, or enrichment — not unnecessary remediation.
+If partially correct: separate mastered from unmastered parts.
+If multiple error patterns: each distinct pattern → at least one learning need.
+
+If solution CANNOT BE FULLY EVALUATED (unclear, incomplete, no visible reference, no expected answer):
+- State: CAN_VERIFY_CORRECTNESS: No/Partial
+- State what is visible and what is missing
+- REQUEST_MISSING_INFORMATION: "Please send a clearer photo of your solution or the expected answer/guideline"
+- Curriculum direction: conservative — focus on prerequisite reinforcement, not targeted error correction
+
+CURRICULUM must focus on demonstrated gap, not teach everything from zero unless gap requires it.
+Use respectful diagnostic language. Never shame. Never say incapable.
+
+CASE D — SOLUTION_ONLY:
+DO NOT invent missing exercise. Infer only what is strongly visible. Mark uncertainty.
+If original statement essential → REQUEST_MISSING_INFORMATION: "Please send the original exercise statement or clearer photo."
+If safe, still provide minimal diagnostic profile: probable topic, probable exercise type, visible mistake pattern, what is missing, what should be asked next.
+Do not build full confident curriculum if original task unknown.
+
+CASE E — MIXED_MATERIAL:
+Prioritize: 1) Exercise patterns (if present) 2) Student errors (if solutions present) 3) Free-text objective as context 4) Theory content (if present) 5) Grade/country/curriculum for level calibration 6) Textbook/notes for scope.
+Choose strongest educational purpose: prepare for worksheet / repair demonstrated error / learn chapter/topic / study for test / clarify specific doubt / master theory.
+Never let weaker context override visible exercise/solution/theory evidence.
+
+CASE F — INSUFFICIENT:
+DO NOT hallucinate. DO NOT invent topic/grade/exercise. Write what is known, what is missing, ask precise clarification question.
+If no teachable content → REQUEST_MISSING_INFORMATION: "Please provide subject, topic, grade/level, or clear photo/text of the exercise."
+
+CASE G — THEORY_MATERIAL:
+Student intention: "I want to learn this content" — NOT exercises, NOT solutions.
+Extract: main concepts, key terms/definitions, relationships/connections, scope/depth, what student must understand.
+Curriculum direction: Create items that test understanding of the theory — DO NOT copy the theory directly.
+Generate original practice: definitions, applications, examples, analogies, compare/contrast, concept checks, synthesis/transfer.
+
+If theory is from copyrighted source → same originality rule applies: original examples, original applications, original contexts.
+
+Anti-laziness for theory:
+- If 1-3 concepts: min 3-5 micro-items
+- If 4-7 concepts: min 5-8 micro-items
+- If more than 7 concepts: every distinct concept must be covered
+- Never reduce multiple concepts to one generic summary item
+
+FINAL RULES:
+
+This section only produces <PROFILE>.
+DO NOT generate curriculum. DO NOT solve exercises. DO NOT give final answers. DO NOT write JSON. DO NOT write outside <PROFILE>.
+DO NOT copy copyrighted content beyond analysis.
+DO NOT hallucinate unreadable content.
+T01 will generate the curriculum using this PROFILE.
+
+T01 must read and respect the "MINIMUM CURRICULUM SIZE" field from PROFILE. Generate at least that many micro-items. This is a minimum requirement, not a suggestion.
+
+REQUEST_MISSING_INFORMATION UX:
+If T04 returns REQUEST_MISSING_INFORMATION:
+- App displays the message to the student
+- App reopens input field (text/photo/PDF/audio)
+- Student provides missing information
+- T04 runs again with new input
+- Repeat until sufficient information exists
+- If student cannot provide: T04 builds safest minimal curriculum possible
+
+
+T01 EXECUTION - EXPANDED CURRICULUM
+
+Generate inside <CURRICULUM> a numbered list of micro-items.
+Each item MUST have the EXACT format:
+[0001] marker: code | title: title | purpose: purpose
+
+MANDATORY rules:
+1. Read the PROFILE above before generating.
+2. IF PROFILE.INPUT CLASSIFICATION is B (EXERCISE_LIST), C (EXERCISE_WITH_SOLUTION), D (SOLUTION_ONLY), or E (MIXED_MATERIAL with exercises present) OR IF PROFILE.SECONDARY CLASSIFICATION is B, C, D, or E:
+   - Use CURRICULUM DIRECTION FOR T01 from PROFILE as the primary guide.
+   - Use MINIMUM CURRICULUM SIZE from PROFILE as the MINIMUM floor.
+   - DO NOT use textbook table of contents. DO NOT use N x 5 rule.
+   - Generate items that match the patterns, gaps, and direction described in PROFILE.
+   - Follow ORIGINALITY RULE from PROFILE: same reasoning, changed numbers/context/wording.
+   - The 8 divisions (A-H) apply to EACH item as internal structure, NOT as a multiplier.
+3. IF PROFILE.INPUT CLASSIFICATION is A (FREE_TEXT_OBJECTIVE) or G (THEORY_MATERIAL) or E (MIXED without exercises):
+   - Use ONLY topics explicitly named in PROFILE.SUBJECT AND TOPIC + PROFILE.CURRICULUM CONTEXT.
+   - If table of contents is not available, emit REQUEST_MISSING_INFORMATION instead of simulating.
+   - DO NOT invent textbooks, chapters, or subtopics not explicitly present in PROFILE.
+   - If PROFILE lists N subtopics/concepts, total items = max(N × 5, MINIMUM CURRICULUM SIZE).
+   - If PROFILE does not provide enough structure, emit REQUEST_MISSING_INFORMATION in the PROFILE (T04 should have caught this; if it slipped through, T01 stops).
+   - MINIMUM CURRICULUM SIZE is always the floor.
+4. Apply ALL 8 division rules (A-H) to EACH item.
+5. Add INTRO, REVIEW, COMPARATIVE TABLE, EXERCISES per block.
+6. Sequence from simplest to most complex.
+7. Verify completeness: each pattern (exercise cases) OR each subtopic (theory cases) covered.
+8. Each lesson must have ONLY 1 atomic concept.
+9. Do not summarize. Do not group. Do not use JSON.
+
+The 8 division rules (A-H) must be applied to EVERY item:
+A. Concept introduction
+B. Examples with step-by-step
+C. Common mistakes
+D. Simple exercise
+E. Medium exercise
+F. Complex exercise
+G. Connection to previous knowledge
+H. Real-world application or context
+
+If PROFILE contains specific exercise patterns, each pattern must generate a complete sequence (A-H) of items.
+
+TOTAL GENERATION RULE:
+- If PROFILE is exercise-based: total items = MINIMUM CURRICULUM SIZE (from PROFILE)
+- If PROFILE is theory/book-based: total items = maximum(N x 5, MINIMUM CURRICULUM SIZE)
+- In ALL cases: MINIMUM CURRICULUM SIZE is a FLOOR. Never generate below it.
+- The 8 divisions (A-H) are internal structure for each item, not a multiplier.
+
+IF PROFILE.INPUT CLASSIFICATION = F:
+   Emit <CURRICULUM>NONE — awaiting clarification. Please provide more information.</CURRICULUM>
+   Skip all generation rules.
+
+
+QUALITY_CHECK EXECUTION
+
+Write inside <QUALITY_CHECK>:
+- If PROFILE.INPUT CLASSIFICATION = F: write "SKIPPED — awaiting clarification" in all fields.
+- Total items generated: [number]
+- N (subtopics in original table of contents OR distinct patterns identified): [number]
+- Ratio N x 5: [number] (minimum required, if applicable)
+- Did T04 classify input as exercise-based? [YES/NO]
+- Did T01 follow CURRICULUM DIRECTION from PROFILE? [YES/NO/NA]
+- Was MINIMUM CURRICULUM SIZE respected? [YES/NO]
+- Item with initial marker: [first marker]
+- Item with final marker: [last marker]
+- Completeness check: WERE ALL subtopics/patterns from the original content covered? [YES/NO]
+- Is each lesson atomic (1 concept)? [YES/NO]
+- Is the order progressive (basic -> advanced)? [YES/NO]
+- Were intro, review, comparative table, exercises added? [YES/NO]
+- Did the AI execute all rules without exception? [YES/NO]
+
+
+END BLOCK
+
+Write EXACTLY:
+<END>
+T00_COMPLETE
+</END>
+Nothing before. Nothing after.

@@ -1,0 +1,38 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.crt
+*.cert
+
+# Runtime/private state
+.data/
+downloads/
+uploads/
+tmp/
+temp/
+*.log
+*.pid
+
+# Dependencies/build artifacts
+node_modules/
+dist/
+build/
+coverage/
+.nyc_output/
+
+# Local backups and generated snapshots
+*.backup*
+*.bak
+prompts.backup*/
+server.js.backup*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

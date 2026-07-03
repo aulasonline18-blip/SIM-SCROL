@@ -1,0 +1,235 @@
+// MIRROR OF: src/sim/state/learningDecisionEngine.ts (Web, source of truth)
+import 'student_learning_state.dart';
+import 'student_learning_state_service.dart';
+
+enum DecisionActionType {
+  showCurrentLesson,
+  advanceLayer,
+  advanceItem,
+  waitForLessonText,
+  showCompletion,
+  needsReinforcement,
+  noSafeDecision,
+}
+
+enum DecisionConfidence { low, medium, high }
+
+class DecisionResult {
+  const DecisionResult({
+    required this.actionType,
+    required this.reason,
+    required this.confidence,
+    this.proposedItemIdx,
+    this.proposedLayer,
+    this.proposedMarker,
+  });
+
+  final DecisionActionType actionType;
+  final String reason;
+  final DecisionConfidence confidence;
+  final int? proposedItemIdx;
+  final LessonLayer? proposedLayer;
+  final String? proposedMarker;
+}
+
+DecisionResult _noDecision(String reason) => DecisionResult(
+  actionType: DecisionActionType.noSafeDecision,
+  reason: reason,
+  confidence: DecisionConfidence.low,
+);
+
+DecisionResult decideNextActionFromState(StudentLearningState? state) {
+  try {
+    if (state == null) return _noDecision('estado ausente');
+    final curriculum = state.curriculum;
+    if (curriculum == null || curriculum.items.isEmpty) {
+      return _noDecision('sem curriculo valido');
+    }
+    final total = curriculum.items.length;
+    final progress = state.progress;
+    final current = state.current;
+    final itemIdx = progress?.itemIdx ?? current?.itemIdx ?? 0;
+    final layer = progress?.layer ?? current?.layer ?? LessonLayer.l1;
+    if (itemIdx < 0) return _noDecision('itemIdx invalido');
+    if (itemIdx >= total) {
+      return const DecisionResult(
+        actionType: DecisionActionType.showCompletion,
+        reason: 'todos os itens do curriculo cobertos',
+        confidence: DecisionConfidence.high,
+      );
+    }
+    final completed = progress?.concluidos.toSet() ?? <String>{};
+    final currentMarker = curriculum.items[itemIdx].marker.isNotEmpty
+        ? curriculum.items[itemIdx].marker
+        : current?.marker;
+    if (currentMarker != null && completed.contains(currentMarker)) {
+      final nextIdx = itemIdx + 1;
+      if (nextIdx >= total) {
+        return const DecisionResult(
+          actionType: DecisionActionType.showCompletion,
+          reason: 'ultimo item concluido',
+          confidence: DecisionConfidence.high,
+        );
+      }
+      return DecisionResult(
+        actionType: DecisionActionType.advanceItem,
+        reason: 'item atual ja em concluidos',
+        confidence: DecisionConfidence.high,
+        proposedItemIdx: nextIdx,
+        proposedLayer: LessonLayer.l1,
+        proposedMarker: curriculum.items[nextIdx].marker,
+      );
+    }
+    final lastForItem = state.attempts.reversed
+        .cast<LessonAttempt?>()
+        .firstWhere(
+          (attempt) =>
+              attempt?.marker == currentMarker && attempt?.layer == layer,
+          orElse: () => null,
+        );
+    if (lastForItem != null) {
+      if (layer == LessonLayer.l3) {
+        if (!lastForItem.correct || lastForItem.sinal == DecisionSignal.three) {
+          return DecisionResult(
+            actionType: DecisionActionType.needsReinforcement,
+            reason: 'L3 ainda nao consolidada -> refazer L3',
+            confidence: DecisionConfidence.high,
+            proposedItemIdx: itemIdx,
+            proposedLayer: LessonLayer.l3,
+            proposedMarker: currentMarker,
+          );
+        }
+        final nextIdx = itemIdx + 1;
+        if (nextIdx >= total) {
+          return const DecisionResult(
+            actionType: DecisionActionType.showCompletion,
+            reason: 'L3 consolidada no ultimo item',
+            confidence: DecisionConfidence.high,
+          );
+        }
+        return DecisionResult(
+          actionType: DecisionActionType.advanceItem,
+          reason: 'L3 consolidada -> proximo item',
+          confidence: DecisionConfidence.high,
+          proposedItemIdx: nextIdx,
+          proposedLayer: LessonLayer.l1,
+          proposedMarker: curriculum.items[nextIdx].marker,
+        );
+      }
+      if (layer == LessonLayer.l2) {
+        if (!lastForItem.correct || lastForItem.sinal == DecisionSignal.three) {
+          return DecisionResult(
+            actionType: DecisionActionType.needsReinforcement,
+            reason: 'L2 ainda fragil -> refazer L2',
+            confidence: DecisionConfidence.high,
+            proposedItemIdx: itemIdx,
+            proposedLayer: LessonLayer.l2,
+            proposedMarker: currentMarker,
+          );
+        }
+        return DecisionResult(
+          actionType: DecisionActionType.advanceLayer,
+          reason: 'L2 consolidada -> propor L3',
+          confidence: DecisionConfidence.high,
+          proposedItemIdx: itemIdx,
+          proposedLayer: LessonLayer.l3,
+          proposedMarker: currentMarker,
+        );
+      }
+      if (lastForItem.correct && lastForItem.sinal == DecisionSignal.one) {
+        return DecisionResult(
+          actionType: DecisionActionType.advanceLayer,
+          reason: 'L1 dominada com certeza -> propor L3',
+          confidence: DecisionConfidence.high,
+          proposedItemIdx: itemIdx,
+          proposedLayer: LessonLayer.l3,
+          proposedMarker: currentMarker,
+        );
+      }
+      return DecisionResult(
+        actionType: DecisionActionType.advanceLayer,
+        reason: 'L1 precisa de intermediacao -> propor L2',
+        confidence: DecisionConfidence.high,
+        proposedItemIdx: itemIdx,
+        proposedLayer: LessonLayer.l2,
+        proposedMarker: currentMarker,
+      );
+    }
+    return DecisionResult(
+      actionType: DecisionActionType.showCurrentLesson,
+      reason: 'manter posicao corrente (sem evidencia para avancar)',
+      confidence: DecisionConfidence.medium,
+      proposedItemIdx: itemIdx,
+      proposedLayer: layer,
+      proposedMarker: currentMarker,
+    );
+  } catch (_) {
+    return _noDecision('erro interno');
+  }
+}
+
+// F2.1: motor sombra — audita se UI/runtime tomou a decisao certa.
+void runShadowDecision(
+  String lessonLocalId,
+  StudentLearningStateService service,
+) {
+  final state = service.read(lessonLocalId);
+  if (state == null) return;
+  final decision = decideNextActionFromState(state);
+  final tsNow = DateTime.now().millisecondsSinceEpoch;
+  final progress = state.progress;
+  final current = state.current;
+  final suggested = StudentLearningEvent(
+    type: 'DECISION_ENGINE_SUGGESTED',
+    ts: tsNow,
+    payload: {
+      'action': decision.actionType.name,
+      'reason': decision.reason,
+      'confidence': decision.confidence.name,
+      'proposedItemIdx': decision.proposedItemIdx,
+      'proposedLayer': decision.proposedLayer?.value,
+      'proposedMarker': decision.proposedMarker,
+      'currentItemIdx': progress?.itemIdx ?? current?.itemIdx ?? 0,
+      'currentLayer': progress?.layer.value ?? current?.layer.value ?? 1,
+    },
+  );
+  final currentAction = _inferCurrentAction(state);
+  final compared = StudentLearningEvent(
+    type: 'DECISION_ENGINE_COMPARED',
+    ts: tsNow,
+    payload: {
+      'suggestedAction': decision.actionType.name,
+      'currentAction': currentAction,
+      'match': decision.actionType.name == currentAction,
+      'confidence': decision.confidence.name,
+    },
+  );
+  service.appendEvents(
+    lessonLocalId,
+    [suggested, compared],
+    scheduleShadow: false,
+  );
+}
+
+String _inferCurrentAction(StudentLearningState state) {
+  for (final event in state.events.reversed) {
+    if (event.type == 'STUDENT_DECISION_APPLIED' ||
+        event.type == 'STUDENT_DECISION_REJECTED' ||
+        event.type == 'STUDENT_EXECUTOR_APPLIED' ||
+        event.type == 'STUDENT_EXECUTOR_REJECTED') {
+      final raw = event.payload['decision'];
+      if (raw is String && raw.isNotEmpty) return raw;
+    }
+    if (event.type == 'NEXT_ACTION_DECIDED') {
+      final raw = event.payload['action'];
+      if (raw is String && raw.isNotEmpty) return raw;
+    }
+  }
+  final progress = state.progress;
+  if (progress == null) return 'unknown';
+  final total = state.curriculum?.items.length ?? 0;
+  if (total > 0 && progress.itemIdx >= total) {
+    return DecisionActionType.showCompletion.name;
+  }
+  return DecisionActionType.showCurrentLesson.name;
+}

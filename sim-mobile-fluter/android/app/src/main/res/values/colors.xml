@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sim_icon_background">#111827</color>
+    <color name="sim_icon_foreground">#FFFFFF</color>
+    <color name="sim_splash_background">#F9FAFB</color>
+    <color name="sim_splash_background_dark">#111827</color>
+</resources>

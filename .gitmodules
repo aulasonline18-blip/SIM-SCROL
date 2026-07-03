@@ -1,6 +1,0 @@
-[submodule "sim-api-server"]
-	path = sim-api-server
-	url = https://github.com/aulasonline18-blip/sim-api-server.git
-[submodule "sim-mobile-fluter"]
-	path = sim-mobile-fluter
-	url = https://github.com/aulasonline18-blip/sim-mobile-fluter.git

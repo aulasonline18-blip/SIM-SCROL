@@ -1,0 +1,717 @@
+AUDITORIA TOTAL DO SIM APP + SIM API PARA CHEGAR A FUNCIONAMENTO 100%
+Data: 2026-07-02
+Escopo: /root/sim-mobile-fluter e /root/sim-work/sim-api
+
+Resumo executivo
+================
+
+B final ainda e NAO.
+
+O app Flutter esta muito melhor do que uma casca: o nucleo pedagogico, T00/T02 com fakes, aula normal, imagem, audio remoto, drawer, backup por arquivo, estado local/cloud e varios contratos ja tem implementacao e testes automatizados passando.
+
+Mas o app ainda nao pode ser considerado 100% pronto para Google Play, venda e operacao real porque existem bloqueios tecnicos confirmados no codigo atual:
+
+1. A tela real de creditos do Flutter nao chama o checkout real; ela apenas espera 120 ms e abre a tela de retorno.
+2. A API atual nao registra as rotas /api/payments/... que o cliente de pagamento espera.
+3. O ledger de creditos do servidor esta em memoria, entao dinheiro/creditos podem se perder em restart.
+4. O app usa HTTP por padrao para o servidor de producao.
+5. O build/teste automatizado passa, mas nao houve prova em Android real nesta sessao.
+6. Flutter e API estavam com working tree sujo antes desta auditoria; isso impede certificar uma versao de Play Store sem congelar o codigo.
+7. Existem caminhos de desenvolvimento no fluxo vivo quando prefs == null.
+8. O fallback local de audio no adaptador Android nao fala nada; ele retorna false.
+9. O nivelamento/placement esta desligado na construcao de producao.
+10. Anexos/PDF/imagem ainda nao entregam OCR/vision real no servidor atual; para tipos nao texto, a API devolve metadata.
+
+Comandos executados nesta auditoria
+===================================
+
+Flutter:
+- git status --short
+- git branch --show-current
+- git log --oneline --decorate -5
+- find lib test docs -type f | wc -l
+- flutter devices
+- flutter analyze
+- flutter test
+- flutter build apk --release --dart-define=FLUTTER_APP_MODE=production
+- sha256sum downloads/sim-production-latest.apk
+
+API:
+- git status --short
+- git branch --show-current
+- git log --oneline --decorate -5
+- find src test -type f | wc -l
+- npm test
+
+Resultado dos comandos
+======================
+
+Flutter:
+- Branch: main
+- HEAD no inicio da auditoria: 42e93f5 feat: add dark mode and responsive classroom text
+- origin/main: 42e93f5
+- Arquivos em lib/test/docs mapeados: 303
+- flutter devices: somente Linux desktop conectado; nenhum Android real conectado.
+- flutter analyze: PASSOU.
+- flutter test: PASSOU, 246 testes.
+- flutter build apk --release --dart-define=FLUTTER_APP_MODE=production: PASSOU.
+- APK gerado pelo build: build/app/outputs/flutter-apk/app-release.apk, 61.2 MB.
+- APK publicado existente em downloads/sim-production-latest.apk: 59 MB, SHA256 c5945abe8f29f3771193d48d967ffcdd01e786ff1b45ca49789c35c1a062bfe6.
+
+API:
+- Branch: main
+- HEAD no inicio da auditoria: daf5c42 prompt: enforce T02 math template shape
+- origin/main: daf5c42
+- Arquivos em src/test mapeados: 26
+- npm test: PASSOU, server contract tests passed.
+
+Estado Git observado
+====================
+
+Flutter estava sujo antes desta auditoria. Arquivos modificados observados:
+- downloads/sim-production-latest.apk
+- lib/features/classroom/aula_widgets.dart
+- lib/features/session/lab_session.dart
+- lib/shared/widgets/shared_widgets.dart
+- lib/sim/external_ai/sim_server_ai_clients.dart
+- lib/sim/lesson/lesson_orchestrator.dart
+- lib/sim/media/lesson_paid_image_offer.dart
+- lib/sim/media/lesson_visual_pipeline.dart
+- lib/sim/media/local_visual_fallback.dart
+- lib/sim/media/paid_image_service.dart
+- lib/sim/media/visual_router_n2.dart
+- lib/sim/media/visual_router_n3.dart
+- lib/sim/organism/sim_organism.dart
+- lib/sim/ui/widgets/sim_typewriter.dart
+- varios testes.
+
+Flutter tambem tinha arquivos novos nao rastreados em docs/ e lib/sim/media/lib/sim/analytics.
+
+API estava suja antes desta auditoria:
+- src/media/visual-route-controller.js
+- test/server-contract.test.js
+- downloads-archive-20260630/
+
+Este relatorio nao reverteu nada e nao incluiu essas alteracoes como minhas.
+
+Cobertura de fluxos obrigatorios
+================================
+
+1. boot do app: analisado em lib/main.dart.
+2. main.dart: analisado.
+3. roteamento: analisado em SimApp switch de rotas.
+4. login: analisado por rota e AuthSession; cobertura automatizada parcial.
+5. auth: analisado no Flutter e API jwt-verifier.js.
+6. sessao do aluno: analisado em LabSession.
+7. onboarding: analisado em EntryFormState/LabSession.
+8. objetivo do aluno: analisado em saveObjectiveEntry e launchExperience.
+9. anexos: analisado em EntryFormState, SimServerAttachmentClient e API attachment-processor.
+10. nivelamento/placement: analisado; desligado em producao.
+11. T00/curriculo: analisado em SimServerT00Client e StudentExperienceEngine.
+12. streaming: analisado em postEventStream.
+13. First Item Fast Path: testado em first_lesson_ready_window_test.
+14. StudentLearningState: analisado em store/service e testes.
+15. persistencia local: analisada em SharedPrefsStudentStateLocalStorage.
+16. sync remoto: analisado em StudentStateStore/cloud/API student-state.
+17. LessonOrchestrator: analisado via wiring e testes.
+18. DopamineReadyWindow: analisado via testes.
+19. aula: analisada em LabSession, LessonRuntimeEngine e teste normal_lesson_full_completion_flow_test.
+20. renderizacao da aula: analisada em aula_screen/aula_widgets por busca e testes widget.
+21. resposta A/B/C: analisada em LabSession e testes.
+22. sinal 1/2/3: analisado em LabSession e testes.
+23. feedback: analisado em runtime/tests.
+24. decisao pedagogica: analisada em LearningDecisionEngine/tests.
+25. avanco de layer: analisado/testado.
+26. avanco de item: analisado/testado.
+27. conclusao de aula: analisada/testada.
+28. historico: analisado em drawer/store/tests.
+29. mastery: analisado em MasteryTruthEngine/tests.
+30. revisao: analisada/testada.
+31. recuperacao: analisada/testada.
+32. duvida por texto: analisada/testada.
+33. duvida por foto: analisada no caller/API/testes.
+34. duvida por audio: analisada em DoubtAudio/AudioCore.
+35. imagem software/template/SVG: analisada/testada.
+36. imagem paga por IA: analisada/testada.
+37. aceite de imagem: analisado/testado.
+38. credito de imagem: analisado no Flutter/API.
+39. audio/TTS: analisado no Flutter/API.
+40. preferencia de audio: analisada.
+41. player real: analisado; fallback local nao fala.
+42. parada de audio: analisada/testada.
+43. cache de aula: analisado/testado.
+44. cache de imagem: analisado/testado.
+45. cache de audio: analisado.
+46. creditos: analisado; P0 por ledger em memoria e checkout falso.
+47. cobranca: analisada; P0 por rotas de pagamento ausentes.
+48. refund: analisado para midia, nao para compra Stripe.
+49. idempotencia: analisada para imagem/audio/creditos; checkout ausente.
+50. erros de rede: analisado; ha logs e erros, mas falta APK real.
+51. retry: analisado em T02 e media.
+52. timeout: analisado.
+53. offline: cobertura parcial por persistencia/cache; sem prova real offline.
+54. backup: analisado; export/import por arquivo existe.
+55. import: analisado; arquivo .txt e colagem existem.
+56. export: analisado; grava em temp e copia clipboard.
+57. acessibilidade: Semantics e testes parciais existem; falta auditoria TalkBack real.
+58. responsividade mobile: testes de text scale e layout existem; falta APK real.
+59. performance: riscos em storage JSON/SharedPrefs e logs.
+60. logs: analisado; requestId ausente quando cliente nao envia.
+61. telemetria: existe para visual; falta telemetria geral de funil real.
+62. testes unitarios: 246 testes Flutter, npm test API.
+63. testes widget: existem.
+64. testes de integracao: existem por fake/harness; falta E2E real APK+servidor+Gemini+Stripe.
+65. build release: passou.
+66. APK real: NAO provado; nenhum Android conectado.
+
+Lista completa de achados
+=========================
+
+ID: AUD-P0-001
+Prioridade: P0
+Categoria: FALSO POSITIVO
+Area do app: Creditos / compra / monetizacao
+Arquivo(s): /root/sim-mobile-fluter/lib/features/billing/billing_and_simple_pages.dart
+Funcao/classe: _CreditsLabScreenState._openPack
+Evidencia no codigo: linhas 68-74: _openPack seta loadingPack, aguarda 120 ms e chama widget.session.openCheckoutReturn(); nao chama CreditsRouteController nem SimServerPaymentsClient.
+Problema: O botao de comprar creditos parece existir, mas nao abre checkout real.
+Impacto: O app nao vende creditos. Usuario pode tocar em pacote e cair em uma tela de retorno sem ter pago.
+Correcao minima necessaria: Substituir _openPack por chamada real a CreditsRouteController.handlePackClick, abrir URL Stripe segura ou fluxo mobile aprovado, tratar erro e voltar corretamente.
+Correcao ideal: Fluxo de compra mobile completo com backend Stripe, status real, webhook, atualizacao de saldo e teste E2E com Stripe test mode.
+Teste obrigatorio: widget/integracao: tocar pacote chama endpoint de checkout, recebe URL Stripe valida, nao navega para retorno sem sessionId real.
+Risco se nao corrigir: Sem receita e risco de falsa compra.
+Pode ferir arquitetura? SIM
+Como corrigir sem ferir arquitetura: Manter UI como renderizacao e delegar compra ao CreditsRouteController + PaymentsFunctions; backend cria sessao Stripe.
+Status: CONFIRMADO
+
+ID: AUD-P0-002
+Prioridade: P0
+Categoria: FALTA
+Area do app: API / pagamentos
+Arquivo(s): /root/sim-work/sim-api/src/app/router.js; /root/sim-mobile-fluter/lib/sim/billing/sim_server_billing_clients.dart
+Funcao/classe: router; SimServerPaymentsClient
+Evidencia no codigo: Flutter espera /api/payments/create-credits-checkout-hosted, /api/payments/create-credits-checkout e /api/payments/checkout-status em sim_server_billing_clients.dart linhas 14-16. O router.js linhas 71-89 registra T00, creditos, student-state, attachment, T02, media, mas nenhuma rota /api/payments.
+Problema: Cliente de pagamento aponta para endpoints inexistentes na API atual.
+Impacto: Mesmo se a UI chamasse o cliente correto, o servidor retornaria 404.
+Correcao minima necessaria: Implementar rotas de checkout/status na API com autenticacao obrigatoria, packId validado no servidor, Stripe secret no servidor, requestId, logs seguros e respostas claras.
+Correcao ideal: Implementar tambem webhook Stripe idempotente, reconciliacao de checkout e ledger persistente.
+Teste obrigatorio: npm test para criar checkout hosted, recusar pack invalido, consultar status, validar auth e requestId.
+Risco se nao corrigir: Venda impossivel.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Pagamento fica no servidor/API; Flutter so envia packId e abre URL recebida.
+Status: CONFIRMADO
+
+ID: AUD-P0-003
+Prioridade: P0
+Categoria: SEGURANCA
+Area do app: Creditos / dinheiro
+Arquivo(s): /root/sim-work/sim-api/src/credits/credits-store.js
+Funcao/classe: createCreditsStore
+Evidencia no codigo: linhas 1-18 usam const creditLedger = new Map(); getCreditAccount cria saldo em memoria; nao ha banco nem escrita em arquivo.
+Problema: O saldo de creditos e transacoes vive apenas em memoria do processo Node.
+Impacto: Restart do servidor pode apagar saldo, reservas, transacoes e compras. Para venda real isso e bloqueador.
+Correcao minima necessaria: Persistir ledger em banco transacional por userId, operationId, reservationId e Stripe sessionId.
+Correcao ideal: Ledger financeiro imutavel, idempotente, auditavel, com migracao e reconciliacao Stripe.
+Teste obrigatorio: npm test/integracao: compra creditos, reinicia store/processo, saldo permanece; replay de webhook nao duplica credito.
+Risco se nao corrigir: Perda de dinheiro, suporte impossivel, risco juridico.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Criar CreditsRepository/Store persistente dentro API; Flutter continua usando endpoints.
+Status: CONFIRMADO
+
+ID: AUD-P0-004
+Prioridade: P0
+Categoria: SEGURANCA
+Area do app: Rede / producao
+Arquivo(s): /root/sim-mobile-fluter/lib/sim/config/sim_environment.dart
+Funcao/classe: SimEnvironment.apiBaseUrl
+Evidencia no codigo: linhas 4-7: defaultValue: 'http://167.179.109.137:3000'.
+Problema: O app release usa HTTP por padrao se SIM_SERVER_URL nao for definido.
+Impacto: Token bearer, dados de aluno e chamadas de IA trafegam sem TLS se build for publicado sem override.
+Correcao minima necessaria: Exigir HTTPS em production e falhar build se SIM_SERVER_URL nao for https.
+Correcao ideal: Dominio proprio HTTPS, certificate pinning avaliado, backend atras de proxy TLS, HSTS no web.
+Teste obrigatorio: teste de config: FLUTTER_APP_MODE=production com URL http falha; URL https passa.
+Risco se nao corrigir: Exposicao de token e dados de aluno; reprovacao de seguranca.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Configuracao de ambiente e guard de build, sem mudar UI ou pedagogia.
+Status: CONFIRMADO
+
+ID: AUD-P0-005
+Prioridade: P0
+Categoria: FALTA
+Area do app: Prova real / Google Play
+Arquivo(s): ambiente de execucao; /root/sim-mobile-fluter/build/app/outputs/flutter-apk/app-release.apk
+Funcao/classe: APK real
+Evidencia no codigo: flutter devices retornou apenas Linux desktop; nenhum Android real conectado. Build release passou, mas nao foi instalado ou exercitado em celular.
+Problema: Nao ha prova de login, credito, objetivo, T00, T02, aula, resposta, sinal e feedback no APK real.
+Impacto: B funcional nao pode ser declarado para Play Store.
+Correcao minima necessaria: Instalar APK em Android real, testar fluxo vital com servidor real e conta real/teste, registrar logs e screenshots.
+Correcao ideal: Pipeline E2E com Firebase Test Lab/Patrol/Maestro + teste manual final.
+Teste obrigatorio: E2E APK: app abre, login, credito correto, objetivo, T00->Gemini, T02->Gemini, aula abre, resposta, sinal, feedback.
+Risco se nao corrigir: Publicar APK que passa teste local mas quebra no celular.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: So adicionar prova/teste E2E; nao alterar orgaos.
+Status: CONFIRMADO
+
+ID: AUD-P0-006
+Prioridade: P0
+Categoria: REGRESSAO
+Area do app: Processo de release
+Arquivo(s): Flutter e API working tree
+Funcao/classe: Git/release hygiene
+Evidencia no codigo: git status --short mostrou Flutter com arquivos modificados em lib/test/downloads e API com src/media/visual-route-controller.js e test/server-contract.test.js modificados.
+Problema: A versao auditada nao esta congelada em commit limpo.
+Impacto: Nao e possivel garantir que APK, servidor e codigo em main representam exatamente a mesma versao.
+Correcao minima necessaria: Separar alteracoes por autor/tarefa, revisar diff, commitar/pushar ou descartar com decisao explicita.
+Correcao ideal: Release branch/tag, CI, changelog, artefato assinado, checksum e rollback.
+Teste obrigatorio: script de release falha se git status nao estiver limpo antes de build.
+Risco se nao corrigir: APK publicado com mudancas invisiveis ou nao rastreaveis.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Processo Git/CI, sem mudar codigo funcional.
+Status: CONFIRMADO
+
+ID: AUD-P1-007
+Prioridade: P1
+Categoria: RISCO ARQUITETURAL
+Area do app: Aula / fluxo vivo
+Arquivo(s): /root/sim-mobile-fluter/lib/features/session/lab_session.dart
+Funcao/classe: openAulaRuntime, chooseAulaAnswer, submitAulaSignal, submitDoubt
+Evidencia no codigo: linhas 1314-1316 criam _devAulaSnapshot quando prefs == null; linhas 1362-1365 simulam selecao; linhas 1382-1391 simulam feedback; linhas 1490-1503 simulam resposta de duvida.
+Problema: Caminho de desenvolvimento ainda existe dentro da classe de sessao viva.
+Impacto: Se a sessao for criada sem prefs fora de teste, aula falsa pode aparecer sem T00/T02 real.
+Correcao minima necessaria: Trocar prefs == null por injeção explicita de modo teste/lab e bloquear esse caminho em production.
+Correcao ideal: Harness de teste separado do LabSession de producao.
+Teste obrigatorio: production mode com prefs null deve falhar honestamente, nao criar aula fake.
+Risco se nao corrigir: B documental, aula falsa e diagnostico enganoso.
+Pode ferir arquitetura? SIM
+Como corrigir sem ferir arquitetura: Isolar fake em factory de teste; manter LabSession real usando orgaos StudentLearningState/LessonRuntime.
+Status: CONFIRMADO
+
+ID: AUD-P1-008
+Prioridade: P1
+Categoria: PARCIAL
+Area do app: Audio / fallback local
+Arquivo(s): /root/sim-mobile-fluter/lib/sim/media/audio_core.dart; /root/sim-mobile-fluter/lib/sim/media/platform_audio_adapter.dart
+Funcao/classe: AudioCore.speak; PlatformAudioAdapter.speakWithPlatformTts
+Evidencia no codigo: AudioCore.speak linhas 120-128 tenta fallback; PlatformAudioAdapter linhas 44-48 diz "Platform TTS not available" e retorna false.
+Problema: O fallback local quando audio remoto falha nao fala no Android atual.
+Impacto: Aula continua, mas requisito de fallback TTS local real nao esta cumprido.
+Correcao minima necessaria: Integrar plugin TTS real ou registrar decisao formal de produto: sem fallback falado, apenas erro visual.
+Correcao ideal: flutter_tts ou adapter nativo com idioma, parada e testes em Android.
+Teste obrigatorio: cliente remoto falha; TTS local fala ou pelo menos mock de adapter real e teste Android confirmam chamada.
+Risco se nao corrigir: Audio B2 fica parcial no comportamento real.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Implementar no adapter de media, nao no widget.
+Status: CONFIRMADO
+
+ID: AUD-P1-009
+Prioridade: P1
+Categoria: PARCIAL
+Area do app: Nivelamento / placement
+Arquivo(s): /root/sim-mobile-fluter/lib/sim/organism/sim_organism.dart; /root/sim-mobile-fluter/lib/sim/placement/placement_t02_caller.dart
+Funcao/classe: SimOrganism.production; PlacementT02Caller
+Evidencia no codigo: sim_organism.dart linhas 213-219 instancia PlacementT02Caller(enabled: false) e PlacementRouteController(enabled: false). placement_t02_caller.dart linhas 25-27 retorna null se !enabled.
+Problema: O placement real via T02 esta desligado em producao e cai para redirect/fallback limitado.
+Impacto: Nivelamento pode parecer existir mas nao entrega diagnostico adaptativo real.
+Correcao minima necessaria: Decidir produto: habilitar placement real ou remover/rotular como fora de escopo.
+Correcao ideal: Habilitar com contrato T02, teste de payload, armazenamento e retomada.
+Teste obrigatorio: fluxo objetivo -> placement -> T02 placement -> resultado -> aula no marker correto.
+Risco se nao corrigir: Produto promete adaptacao inicial que nao existe.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Usar PlacementRouteController/PlacementT02Caller existentes, sem UI decidir pedagogia.
+Status: CONFIRMADO
+
+ID: AUD-P1-010
+Prioridade: P1
+Categoria: CONTRATO QUEBRADO
+Area do app: Creditos / API
+Arquivo(s): /root/sim-work/sim-api/src/credits/credits-controller.js; /root/sim-work/sim-api/src/credits/credits-store.js
+Funcao/classe: reserve, capture, refund, reserveCredit
+Evidencia no codigo: credits-controller.js linhas 3-5 converte Number(data.cost || 0) e aceita reservationId sem validacao forte. credits-store.js linha 27 retorna sucesso idempotente para cost <= 0; linhas 52-67 ignoram reservationId ausente/inexistente.
+Problema: Endpoints financeiros aceitam payload fraco e podem responder ok para operacao invalida.
+Impacto: Bugs de cliente ou abuso ficam mascarados como sucesso.
+Correcao minima necessaria: Schema validation, cost inteiro positivo, reason permitido, operationId obrigatorio, reservationId obrigatorio para capture/refund.
+Correcao ideal: Ledger transacional com status machine e auditoria.
+Teste obrigatorio: reserve cost 0/NaN/negativo -> 400; capture reservationId ausente -> 400; refund inexistente -> 404/409 controlado.
+Risco se nao corrigir: Inconsistencia financeira.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Validar na API antes do CreditsStore.
+Status: CONFIRMADO
+
+ID: AUD-P1-011
+Prioridade: P1
+Categoria: TESTE FALTANTE
+Area do app: Observabilidade / erros
+Arquivo(s): /root/sim-work/sim-api/src/app/router.js; /root/sim-work/sim-api/src/http/http-utils.js
+Funcao/classe: router; sendJson
+Evidencia no codigo: router.js linhas 60-62 usa requestId = header ou string vazia; http-utils.js linha 8 so injeta requestId em erro se res._requestId existir.
+Problema: Se o cliente nao mandar X-Request-Id, logs e erros podem sair sem requestId.
+Impacto: Suporte fica pior exatamente nos erros de producao.
+Correcao minima necessaria: Gerar requestId server-side quando header ausente e devolver em todos os erros.
+Correcao ideal: Middleware unico com requestId, traceId, correlationId e log estruturado.
+Teste obrigatorio: chamada sem x-request-id retorna erro com requestId gerado e log contem mesmo id.
+Risco se nao corrigir: Erro real sem rastreio.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Middleware no router/http-utils.
+Status: CONFIRMADO
+
+ID: AUD-P1-012
+Prioridade: P1
+Categoria: SEGURANCA
+Area do app: Auth API
+Arquivo(s): /root/sim-work/sim-api/src/auth/jwt-verifier.js; /root/sim-work/sim-api/src/config/env.js
+Funcao/classe: requireAuth; readConfig
+Evidencia no codigo: env.js linha 29 define LAB_TRUST_SUPABASE_JWT_CLAIMS como true por padrao. jwt-verifier.js linha 46 confia nos claims se LAB_TRUST_SUPABASE_JWT_CLAIMS e nao houver SUPABASE_URL nem SUPABASE_JWT_SECRET.
+Problema: Um ambiente de producao mal configurado pode aceitar JWT sem verificacao criptografica contra Supabase.
+Impacto: Risco de auth falso em servidor real.
+Correcao minima necessaria: Em NODE_ENV/APP_MODE production, exigir SUPABASE_URL/JWKS ou JWT_SECRET e forcar LAB_TRUST_SUPABASE_JWT_CLAIMS=false.
+Correcao ideal: startup guard que aborta se auth forte nao estiver configurada.
+Teste obrigatorio: production sem Supabase/JWT secret falha no boot; token forjado nao autentica.
+Risco se nao corrigir: Acesso indevido a dados, creditos e geracao IA.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Guard de configuracao no servidor.
+Status: CONFIRMADO
+
+ID: AUD-P1-013
+Prioridade: P1
+Categoria: PARCIAL
+Area do app: Anexos / PDF / OCR / vision
+Arquivo(s): /root/sim-work/sim-api/src/attachments/attachment-processor.js; /root/sim-mobile-fluter/lib/sim/external_ai/sim_server_attachment_client.dart
+Funcao/classe: createAttachmentProcessor; SimServerAttachmentClient.processAttachment
+Evidencia no codigo: attachment-processor.js linha 2 so extrai texto para text/plain ou text/csv; outros tipos retornam extractedText vazio e method metadata. Cliente Flutter aceita PDF/imagem e espera processAttachment.
+Problema: PDF/imagem nao sao realmente lidos por OCR/vision no servidor atual.
+Impacto: Objetivo com anexo pode chegar ao T00 sem conteudo do anexo.
+Correcao minima necessaria: Implementar processamento real de PDF e imagem ou deixar claro na UI que so metadados serao usados.
+Correcao ideal: PDF parser, OCR/vision, limite/tamanho, antivirus basico, logs requestId e testes de fixture.
+Teste obrigatorio: PDF com texto retorna texto; imagem com texto retorna OCR; imagem sem texto retorna descricao vision.
+Risco se nao corrigir: Aluno envia material e o app ignora o conteudo.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Fazer no endpoint de anexos/API, nao no widget.
+Status: CONFIRMADO
+
+ID: AUD-P1-014
+Prioridade: P1
+Categoria: PERFORMANCE
+Area do app: Sync remoto / estado
+Arquivo(s): /root/sim-work/sim-api/src/student-state/student-state-controller.js
+Funcao/classe: load, save, persist
+Evidencia no codigo: linhas 5-22 salvam todos os estados em um unico JSON .data/student-states.json por fs.readFileSync/writeFileSync/renameSync.
+Problema: Persistencia cloud usa arquivo JSON local e escrita sincronizada.
+Impacto: Risco de concorrencia, corrupcao por deploy, gargalo e perda em ambiente multi-instancia.
+Correcao minima necessaria: Migrar para banco persistente transacional por userId+lessonLocalId.
+Correcao ideal: Supabase/Postgres com versionamento, indices, backup, conflito e tombstone.
+Teste obrigatorio: dois writes concorrentes nao perdem estado; restart preserva; multi-device converge.
+Risco se nao corrigir: Perda de vida escolar em producao.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Trocar storage da API mantendo contrato student-state.
+Status: CONFIRMADO
+
+ID: AUD-P1-015
+Prioridade: P1
+Categoria: SEGURANCA
+Area do app: Privacidade local
+Arquivo(s): /root/sim-mobile-fluter/lib/sim/state/shared_prefs_state_storage.dart
+Funcao/classe: SharedPrefsStudentStateLocalStorage
+Evidencia no codigo: linhas 36-49 salvam estado/eventos em SharedPreferences como string JSON.
+Problema: Vida escolar, objetivo, historico e possiveis dados pessoais ficam em storage local simples.
+Impacto: Risco de privacidade se o dispositivo for comprometido ou backup do app expor dados.
+Correcao minima necessaria: Classificar dados sensiveis e decidir se exige encrypted storage para perfil/anexos/historico.
+Correcao ideal: Criptografia local por plataforma para dados sensiveis, minimizacao e politica de retencao.
+Teste obrigatorio: estado sensivel nao aparece em SharedPreferences plaintext quando modo seguro estiver ligado.
+Risco se nao corrigir: Exposicao de dados de aluno.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Trocar implementacao StudentStateLocalStorage, mantendo Store/State.
+Status: DESCOBERTO
+
+ID: AUD-P1-016
+Prioridade: P1
+Categoria: SEGURANCA
+Area do app: Healthcheck / informacao operacional
+Arquivo(s): /root/sim-work/sim-api/src/health/health-controller.js
+Funcao/classe: createHealthController
+Evidencia no codigo: linha 2 retorna prompts presentes, auth.jwt/jwks/hs256/labTrustClaims e corsAllowedOrigins.
+Problema: Health publico revela configuracao operacional do servidor.
+Impacto: Facilita diagnostico para atacante e expõe se auth forte esta ativo.
+Correcao minima necessaria: Separar /health publico minimo de /admin/health protegido.
+Correcao ideal: Health publico so status/version; detalhes internos atras de auth admin.
+Teste obrigatorio: GET /health nao retorna corsAllowedOrigins, prompt flags ou auth internals em production.
+Risco se nao corrigir: Exposicao desnecessaria.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Ajuste no controller de health.
+Status: CONFIRMADO
+
+ID: AUD-P1-017
+Prioridade: P1
+Categoria: SEGURANCA
+Area do app: Logs Flutter / dados pessoais
+Arquivo(s): /root/sim-mobile-fluter/lib/sim/external_ai/sim_http_transport.dart
+Funcao/classe: DartIoSimHttpTransport.postJson/postEventStream
+Evidencia no codigo: linhas 68-84 e 109-130 logam URI, status, tamanho de body e ate 500 chars de corpo de erro.
+Problema: Respostas de erro do servidor podem conter texto educacional ou dados do aluno e aparecer em logs de app.
+Impacto: Vazamento em logs locais/crash reports.
+Correcao minima necessaria: Em production, redigir corpo de erro e logar so status, requestId e code.
+Correcao ideal: Logger por ambiente com privacy budget e allowlist de campos.
+Teste obrigatorio: production logger nao imprime corpo de erro com texto do aluno.
+Risco se nao corrigir: Vazamento de dados pessoais.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Ajustar transporte/logging, nao os fluxos pedagogicos.
+Status: CONFIRMADO
+
+ID: AUD-P1-018
+Prioridade: P1
+Categoria: TESTE FALTANTE
+Area do app: E2E real
+Arquivo(s): /root/sim-mobile-fluter/test/normal_lesson_full_completion_flow_test.dart
+Funcao/classe: FullFlowT00Client; FullFlowT02Client
+Evidencia no codigo: linhas 25-88 definem clientes fake de T00/T02; linhas 181-315 provam 3 itens x 3 layers com fakes.
+Problema: O teste principal prova motor interno, mas nao prova servidor real, Gemini real, Supabase real ou APK real.
+Impacto: Pode passar 246 testes e falhar no celular/servidor.
+Correcao minima necessaria: Criar suite E2E separada contra servidor real de staging.
+Correcao ideal: CI com ambiente staging, fixtures controladas e um teste manual final no APK.
+Teste obrigatorio: login real -> objetivo -> T00 real -> T02 real -> aula -> resposta -> sinal -> feedback.
+Risco se nao corrigir: B documental.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Teste externo; sem alterar orgaos.
+Status: CONFIRMADO
+
+ID: AUD-P1-019
+Prioridade: P1
+Categoria: FALTA
+Area do app: Checkout return
+Arquivo(s): /root/sim-mobile-fluter/lib/features/billing/billing_and_simple_pages.dart
+Funcao/classe: CheckoutReturnScreen
+Evidencia no codigo: linhas 337-353 renderizam texto fixo e botoes; nao le session_id, nao chama CheckoutReturnController.
+Problema: A tela de retorno de pagamento e decorativa no caminho visual atual.
+Impacto: Mesmo com checkout real, saldo pode nao ser validado nessa tela.
+Correcao minima necessaria: Conectar CheckoutReturnController ao screen e consultar /api/payments/checkout-status.
+Correcao ideal: Deep link/returnUrl robusto, polling controlado, reconciliacao com webhook e retorno para aula.
+Teste obrigatorio: abrir /checkout/return?session_id=... consulta status e atualiza creditos.
+Risco se nao corrigir: Usuario paga e app nao reconhece corretamente.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: UI chama controller de billing; API valida Stripe.
+Status: CONFIRMADO
+
+ID: AUD-P1-020
+Prioridade: P1
+Categoria: TESTE FALTANTE
+Area do app: Offline
+Arquivo(s): /root/sim-mobile-fluter/lib/sim/state/shared_prefs_state_storage.dart; /root/sim-mobile-fluter/lib/sim/cloud/cloud_queue.dart; testes
+Funcao/classe: persistencia local/cloud queue
+Evidencia no codigo: ha storage local e cloud queue, mas a auditoria nao encontrou teste E2E APK que desliga rede e prova retomada/queue/drain real.
+Problema: Offline existe por orgaos, mas nao tem prova real de usuario.
+Impacto: Usuario pode perder acao ou ficar preso sem rede.
+Correcao minima necessaria: Criar teste de integracao simulando offline/online com estado local, fila e retomada.
+Correcao ideal: UX offline clara, fila observavel e retry exponencial.
+Teste obrigatorio: estudar offline, responder, fechar app, abrir, reconectar, sync envia sem duplicar.
+Risco se nao corrigir: Perda ou duplicacao de progresso.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Testar/ajustar CloudQueue/StudentStateStore.
+Status: BLOQUEADO POR FALTA DE PROVA
+
+ID: AUD-P1-021
+Prioridade: P1
+Categoria: FALTA
+Area do app: Acessibilidade real
+Arquivo(s): /root/sim-mobile-fluter/lib/features/classroom/aula_screen.dart; /root/sim-mobile-fluter/lib/shared/widgets/shared_widgets.dart; testes
+Funcao/classe: Semantics/widgets
+Evidencia no codigo: ha varios Semantics e testes como classroom_main_screen_health_test; flutter devices nao trouxe Android, entao TalkBack real nao foi testado.
+Problema: Acessibilidade basica tem codigo, mas nao ha prova com leitor de tela real.
+Impacto: Risco de app dificil para aluno com deficiencia visual/motora.
+Correcao minima necessaria: Rodar checklist TalkBack em Android real nas telas vitais.
+Correcao ideal: Testes automatizados de semantics + auditoria manual WCAG/mobile.
+Teste obrigatorio: TalkBack anuncia menu, pergunta, alternativas, sinais, feedback, drawer e creditos em ordem correta.
+Risco se nao corrigir: Inclusao ruim e risco de rejeicao/avaliacao negativa.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Ajustar semantics nos widgets, nao a pedagogia.
+Status: BLOQUEADO POR FALTA DE PROVA
+
+ID: AUD-P2-022
+Prioridade: P2
+Categoria: PERFORMANCE
+Area do app: Build/release hygiene
+Arquivo(s): /root/sim-mobile-fluter/downloads/sim-production-latest.apk
+Funcao/classe: Artefato versionado
+Evidencia no codigo: git status mostrou downloads/sim-production-latest.apk modificado; du -sh indicou 59M.
+Problema: APK pesado aparece como arquivo de trabalho dentro do repo.
+Impacto: Diffs grandes, risco de commit acidental, confusao entre codigo e artefato.
+Correcao minima necessaria: Definir politica: artefato fora do repo ou commit separado controlado.
+Correcao ideal: Publicacao por CI em storage/downloads versionado, com SHA e tag.
+Teste obrigatorio: release script gera APK e publica sem sujar working tree.
+Risco se nao corrigir: Processo de release instavel.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Ajuste de CI/.gitignore/publicacao.
+Status: CONFIRMADO
+
+ID: AUD-P2-023
+Prioridade: P2
+Categoria: REGRESSAO
+Area do app: Build futuro
+Arquivo(s): pubspec.yaml / plugins Android
+Funcao/classe: Gradle release
+Evidencia no codigo: flutter build release passou, mas alertou que device_info_plus, file_picker, package_info_plus, passkeys_android e ua_client_hints aplicam Kotlin Gradle Plugin e futuras versoes do Flutter vao falhar sem migracao.
+Problema: Risco futuro de build quebrar apos upgrade do Flutter.
+Impacto: Bloqueio de manutencao/Play Store no futuro.
+Correcao minima necessaria: Atualizar plugins quando versoes com Built-in Kotlin estiverem disponiveis.
+Correcao ideal: Dependabot/renovate + CI de build release.
+Teste obrigatorio: build release em canal Flutter alvo passa sem warning critico.
+Risco se nao corrigir: Build futuro quebrado.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Manutencao de dependencias.
+Status: CONFIRMADO
+
+ID: AUD-P2-024
+Prioridade: P2
+Categoria: TESTE FALTANTE
+Area do app: APK publicado / checksum
+Arquivo(s): /root/sim-mobile-fluter/downloads/sim-production-latest.apk; /root/sim-mobile-fluter/build/app/outputs/flutter-apk/app-release.apk
+Funcao/classe: Artefatos APK
+Evidencia no codigo: downloads/sim-production-latest.apk tem SHA256 c5945abe...; build release gerou build/app/outputs/flutter-apk/app-release.apk 61.2MB, mas nao foi publicado nesta auditoria.
+Problema: O APK publico e o APK recem-buildado podem nao ser o mesmo artefato.
+Impacto: Usuario pode testar um APK diferente do codigo auditado.
+Correcao minima necessaria: Apos congelar git, copiar o APK buildado para publicacao, gerar SHA e link, e registrar commit/tag.
+Correcao ideal: CI gera artefato unico e publica automaticamente.
+Teste obrigatorio: SHA do APK testado no celular igual ao SHA publicado no relatorio.
+Risco se nao corrigir: Prova manual aponta para binario errado.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Processo de release.
+Status: CONFIRMADO
+
+ID: AUD-P2-025
+Prioridade: P2
+Categoria: UX CRITICO
+Area do app: Legal / conta / painel pai
+Arquivo(s): /root/sim-mobile-fluter/lib/features/billing/billing_and_simple_pages.dart
+Funcao/classe: FatherLabScreen; LegalLabScreen
+Evidencia no codigo: linhas 357-389 mostram painel pai simples e paginas legais com textos compactos/fixos.
+Problema: Para Play Store/venda, termos, privacidade, exclusao e painel pai precisam conteudo final juridico/produto, nao apenas placeholder compacto.
+Impacto: Risco de rejeicao, baixa confianca e suporte ruim.
+Correcao minima necessaria: Conteudo juridico real, politica de dados, contato, exclusao de conta e suporte.
+Correcao ideal: Revisao juridica, versionamento de termos, aceite e exportacao/exclusao completa.
+Teste obrigatorio: telas legais abrem offline, textos completos existem, exclusao exige confirmacao e gera solicitacao real.
+Risco se nao corrigir: Problema comercial/legal.
+Pode ferir arquitetura? NAO
+Como corrigir sem ferir arquitetura: Ajustar telas de suporte e endpoint de conta, sem mexer em aula.
+Status: DESCOBERTO
+
+Fluxos que parecem saudaveis com prova automatizada
+===================================================
+
+1. T02 invalido nao vira aula falsa: API normalizeLessonJson rejeita explanation/question/options vazios e correct_answer invalido; testes API passaram.
+2. Retry T02 por contrato invalido: complete-lesson-controller.js faz ate 3 tentativas; npm test exibiu retry tentativa 1/2.
+3. Aula normal 3 itens x 3 layers: normal_lesson_full_completion_flow_test passou, com 9 tentativas e conclusao.
+4. Imagem paga exige acceptedOfferId: API image-controller rejeita sem offer; npm test exibiu req-image-no-offer 409.
+5. Imagem falha com refund: API image-controller libera credito quando falha antes de capture; teste passou.
+6. Drawer importa backup por arquivo .txt e colagem: LabSession linhas 411-425 usa FilePicker; SharedWidgets linhas 486-521 oferece arquivo e colagem; flutter test passou.
+7. Semantics basica da aula: classroom_main_screen_health_test passou.
+8. Build release: passou.
+9. API server contract: passou.
+
+Fluxos que existem mas nao tem prova suficiente
+===============================================
+
+1. Compra real de creditos com Stripe: existe contrato Flutter, mas UI atual nao chama e API nao tem rota.
+2. Checkout return real: tela existe, mas nao valida sessionId no screen atual.
+3. APK Android real: nao testado nesta sessao.
+4. Offline real: storage/queue existem, mas sem prova em device.
+5. TalkBack/acessibilidade real: Semantics existem, mas sem teste em Android.
+6. OCR/vision/PDF real: endpoint atual retorna texto so para text/plain/csv.
+7. Sync multi-instancia real: API usa arquivo JSON local.
+8. Auth forte em production mal configurado: existe risco se env vier incompleto.
+9. Audio fallback local falado: adapter atual retorna false.
+10. Placement T02 vivo: desligado em production.
+
+Testes que precisam ser criados
+===============================
+
+P0:
+1. credits_checkout_real_flow_test: tocar pacote -> endpoint checkout -> URL Stripe -> retorno com sessionId -> saldo atualizado.
+2. api_payments_contract_test: rotas /api/payments/create-credits-checkout-hosted, /api/payments/checkout-status e webhook.
+3. credit_ledger_persistence_test: saldo sobrevive restart e webhook idempotente nao duplica.
+4. production_https_guard_test: build production nao aceita HTTP.
+5. apk_vital_flow_e2e_test/manual: instalar APK real e executar fluxo login -> aula -> feedback.
+
+P1:
+6. production_no_dev_lesson_test: prefs null em production nao cria aula fake.
+7. android_tts_fallback_test: audio remoto falha e fallback local fala.
+8. placement_live_t02_test: placement habilitado chama T02 ou decisao formal remove fluxo.
+9. attachment_pdf_image_processing_test: PDF/imagem geram texto/descricao real.
+10. request_id_generated_test: API gera requestId sem header.
+11. auth_config_guard_test: production exige auth verificavel.
+12. offline_queue_resume_test: responder offline, reabrir, reconectar e sincronizar.
+13. talkback_manual_checklist: ordem de leitura e labels em Android.
+
+Riscos arquiteturais
+====================
+
+1. Caminhos prefs == null dentro de LabSession podem misturar harness de teste com fluxo real.
+2. Corrigir checkout dentro da UI seria erro; deve ser controller + API.
+3. Corrigir creditos no Flutter seria erro; saldo e compra devem ficar no servidor.
+4. Corrigir anexos processando PDF pesado no widget seria erro; deve ficar na API.
+5. Corrigir offline criando store paralelo seria erro; deve usar StudentLearningState/CloudQueue.
+6. Corrigir audio colocando logica em widget seria erro; deve ser AudioCore/adapter.
+
+O que NAO deve ser copiado do SimWeb
+====================================
+
+1. Dev auth bypass.
+2. Service role ou segredo no Flutter.
+3. Stripe webhook dentro do app.
+4. Dependencia de localStorage/browser APIs no app nativo.
+5. CSS/React literal.
+6. Query cache do React como arquitetura do Flutter.
+7. Rotas web/SEO/PWA como requisito nativo.
+8. Qualquer fallback que finja aula, pagamento, audio, imagem ou sync real.
+
+Ordem recomendada de correcao
+=============================
+
+1. Congelar repositorios: resolver working tree sujo, separar commits e tag de release.
+2. Corrigir monetizacao P0: implementar rotas API de Stripe, conectar tela de creditos ao CreditsRouteController, conectar checkout return real.
+3. Persistir creditos em banco transacional e criar webhook idempotente.
+4. Forcar HTTPS em production e guard de auth forte na API.
+5. Remover/isolar caminhos fake prefs == null do fluxo de producao.
+6. Implementar OCR/PDF/vision real ou ajustar produto para nao prometer anexo lido.
+7. Decidir/habilitar placement real.
+8. Implementar fallback TTS local real ou registrar decisao de produto.
+9. Migrar student-state API de arquivo JSON para storage persistente robusto.
+10. Criar suite E2E de APK real: vital, compra, backup, audio, imagem, sync/offline.
+11. Revisar privacidade/local storage/logs.
+12. Finalizar legal/painel pai/deletar conta.
+13. Rodar release: analyze, test, npm test, build, publicar APK unico, SHA, teste Android real.
+
+Portoes de prova para declarar B=SIM
+====================================
+
+1. git status limpo no Flutter e API antes do build.
+2. Flutter HEAD e API HEAD documentados e em origin/main ou tag de release.
+3. flutter analyze passa.
+4. flutter test passa.
+5. flutter build apk release passa.
+6. npm test passa.
+7. APK publicado tem SHA igual ao APK testado.
+8. Android real instala o APK.
+9. Login real funciona.
+10. Conta teste mostra credito infinito e conta normal mostra saldo real.
+11. Compra real de creditos em modo teste Stripe funciona e atualiza saldo.
+12. Objetivo chama T00 real.
+13. T00 chama Gemini real.
+14. T02 chama Gemini real.
+15. Aula abre.
+16. A/B/C funciona.
+17. Sinal 1/2/3 funciona.
+18. Feedback aparece.
+19. Avanco layer/item/conclusao funciona.
+20. Duvida texto/foto funciona.
+21. Imagem gratuita e oferta paga funcionam.
+22. Audio remoto e fallback/erro visual funcionam.
+23. Backup export/import arquivo funciona.
+24. Sync multi-device funciona.
+25. Offline basico funciona.
+26. TalkBack basico funciona.
+27. Erros mostram requestId e mensagem util.
+28. Nenhum mock/fallback falso em production.
+
+Declaracao final
+================
+
+B final ainda e NAO ate estes itens serem corrigidos, testados, buildados e provados no APK real.
+
