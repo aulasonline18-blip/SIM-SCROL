@@ -126,6 +126,40 @@ void main() {
     expect(messages[1].isCorrect, isFalse);
   });
 
+  test('active messages use distinct ids across layers in the same item', () {
+    final firstLayer = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.reading(),
+          headerLabel: 'aula_item_of:1/5:aula_layer_1',
+          explanation: 'Explicacao da primeira camada.',
+          question: 'Pergunta da primeira camada?',
+        ),
+      ),
+    );
+    final secondLayer = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.reading(),
+          headerLabel: 'aula_item_of:1/5:aula_layer_2',
+          explanation: 'Explicacao da segunda camada.',
+          question: 'Pergunta da segunda camada?',
+        ),
+      ),
+    );
+
+    final firstQuestion = firstLayer.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.question,
+    );
+    final secondQuestion = secondLayer.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.question,
+    );
+
+    expect(firstQuestion.id, isNot(secondQuestion.id));
+    expect(firstQuestion.id, contains('aula-layer-1'));
+    expect(secondQuestion.id, contains('aula-layer-2'));
+  });
+
   test('loading and engine errors stay system messages with retry action', () {
     final loading = buildChatLessonMessages(
       const ChatLessonTimelineInput(snapshot: null, runtimeLoading: true),
@@ -222,6 +256,9 @@ LessonRuntimeSnapshot _snapshot({
   required ClassroomPhase phase,
   String? imagem,
   List<QuestionHistoryEntry> history = const [],
+  String headerLabel = 'aula_item_of:1/5:aula_layer_1',
+  String explanation = 'Explicacao curta.',
+  String question = 'Qual alternativa representa o conceito?',
 }) {
   return LessonRuntimeSnapshot(
     authReady: true,
@@ -230,7 +267,7 @@ LessonRuntimeSnapshot _snapshot({
     isDone: false,
     viewModel: LessonMainViewModel(
       progress: 20,
-      headerLabel: 'aula_item_of:1/5:aula_layer_1',
+      headerLabel: headerLabel,
       options: const [],
       locked:
           phase.type == ClassroomPhaseType.processando ||
@@ -240,10 +277,10 @@ LessonRuntimeSnapshot _snapshot({
     ),
     phase: phase,
     history: history,
-    conteudo: const LessonContent(
-      explanation: 'Explicacao curta.',
-      question: 'Qual alternativa representa o conceito?',
-      options: {
+    conteudo: LessonContent(
+      explanation: explanation,
+      question: question,
+      options: const {
         AnswerLetter.A: 'Primeira alternativa',
         AnswerLetter.B: 'Segunda alternativa',
         AnswerLetter.C: 'Terceira alternativa',

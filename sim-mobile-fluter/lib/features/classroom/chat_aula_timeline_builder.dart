@@ -75,9 +75,10 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
   }
 
   if (content != null) {
+    final activeId = _activeMessageId(snapshot, content);
     messages.add(
       ChatLessonMessage(
-        id: 'explanation-${snapshot?.itemMarker ?? 'active'}',
+        id: 'explanation-$activeId',
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.explanation,
         text: content.explanation,
@@ -122,7 +123,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         input.imageStatus == 'loading') {
       messages.add(
         ChatLessonMessage(
-          id: 'image-${snapshot?.itemMarker ?? 'active'}',
+          id: 'image-$activeId',
           role: ChatLessonMessageRole.sim,
           kind: ChatLessonMessageKind.image,
           imageData: imageData,
@@ -136,7 +137,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
 
     messages.add(
       ChatLessonMessage(
-        id: 'question-${snapshot?.itemMarker ?? 'active'}',
+        id: 'question-$activeId',
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.question,
         text: content.question,
@@ -147,7 +148,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     final locked = snapshot?.viewModel?.locked ?? false;
     messages.add(
       ChatLessonMessage(
-        id: 'options-${snapshot?.itemMarker ?? 'active'}',
+        id: 'options-$activeId',
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.options,
         selectedAnswer: selected,
@@ -158,7 +159,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     if (selected != null) {
       messages.add(
         ChatLessonMessage(
-          id: 'student-answer-${snapshot?.itemMarker ?? 'active'}',
+          id: 'student-answer-$activeId',
           role: ChatLessonMessageRole.student,
           kind: ChatLessonMessageKind.studentAnswer,
           text: selected.name,
@@ -170,7 +171,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     if (phase?.type == ClassroomPhaseType.expandida) {
       messages.add(
         ChatLessonMessage(
-          id: 'signals-${snapshot?.itemMarker ?? 'active'}',
+          id: 'signals-$activeId',
           role: ChatLessonMessageRole.sim,
           kind: ChatLessonMessageKind.signals,
           signals: _signals(enabled: true),
@@ -180,7 +181,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
       messages
         ..add(
           ChatLessonMessage(
-            id: 'student-signal-${snapshot?.itemMarker ?? 'active'}',
+            id: 'student-signal-$activeId',
             role: ChatLessonMessageRole.student,
             kind: ChatLessonMessageKind.studentSignal,
             text: _signalText(phase?.signal),
@@ -199,7 +200,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
       messages
         ..add(
           ChatLessonMessage(
-            id: 'student-signal-${snapshot?.itemMarker ?? 'active'}',
+            id: 'student-signal-$activeId',
             role: ChatLessonMessageRole.student,
             kind: ChatLessonMessageKind.studentSignal,
             text: _signalText(phase?.signal),
@@ -217,7 +218,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         )
         ..add(
           ChatLessonMessage(
-            id: 'feedback-${snapshot?.itemMarker ?? 'active'}',
+            id: 'feedback-$activeId',
             role: ChatLessonMessageRole.sim,
             kind: ChatLessonMessageKind.feedback,
             text: feedbackText(phase?.message ?? ''),
@@ -242,6 +243,29 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
   }
 
   return messages;
+}
+
+String _activeMessageId(
+  LessonRuntimeSnapshot? snapshot,
+  LessonContent content,
+) {
+  final parts = [
+    snapshot?.itemMarker ?? 'active',
+    snapshot?.viewModel?.headerLabel ?? '',
+    content.question,
+    content.explanation,
+  ].map(_safeIdPart).where((part) => part.isNotEmpty).toList(growable: false);
+  return parts.isEmpty ? 'active' : parts.join('-');
+}
+
+String _safeIdPart(String value) {
+  final normalized = value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  if (normalized.length <= 48) return normalized;
+  return normalized.substring(0, 48).replaceAll(RegExp(r'-+$'), '');
 }
 
 List<ChatLessonOption> _options(

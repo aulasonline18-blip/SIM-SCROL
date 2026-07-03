@@ -11,6 +11,7 @@ import '../onboarding/preparation_and_placement.dart';
 import '../session/lab_session.dart';
 import 'aula_screen.dart';
 import 'aula_widgets.dart';
+import 'chat_aula_messages.dart';
 import 'aux_room_screens.dart';
 import 'chat_aula_timeline_builder.dart';
 import 'chat_aula_widgets.dart';
@@ -28,6 +29,8 @@ class ChatAulaScreen extends StatefulWidget {
 class _ChatAulaScreenState extends State<ChatAulaScreen>
     with WidgetsBindingObserver {
   final TextEditingController _doubtController = TextEditingController();
+  final List<ChatLessonMessage> _conversationMessages = <ChatLessonMessage>[];
+  String? _conversationLessonKey;
   int _fontScaleLevel = ClassroomTextScale.defaultLevel;
   bool _doubtSheetOpen = false;
 
@@ -154,19 +157,22 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       _fontScaleLevel,
       MediaQuery.sizeOf(context).width,
     );
-    final messages = buildChatLessonMessages(
-      ChatLessonTimelineInput(
-        snapshot: snapshot,
-        runtimeLoading: session.aulaRuntimeLoading,
-        runtimeError: session.aulaRuntimeError,
-        showImagePanel: _hasLessonImagePanel(),
-        imageStatus: session.imageStatus,
-        imageError: session.imageError,
-        hasPaidImageOffer: session.hasLessonPaidImageOffer,
-        doubtProcessing: session.doubt.status == DoubtStatus.processing,
-        doubtProgress: session.doubt.progress,
-        doubtResponse: session.doubt.response?.explanation,
-        doubtError: session.doubt.error,
+    final messages = _mergeConversationMessages(
+      session,
+      buildChatLessonMessages(
+        ChatLessonTimelineInput(
+          snapshot: snapshot,
+          runtimeLoading: session.aulaRuntimeLoading,
+          runtimeError: session.aulaRuntimeError,
+          showImagePanel: _hasLessonImagePanel(),
+          imageStatus: session.imageStatus,
+          imageError: session.imageError,
+          hasPaidImageOffer: session.hasLessonPaidImageOffer,
+          doubtProcessing: session.doubt.status == DoubtStatus.processing,
+          doubtProgress: session.doubt.progress,
+          doubtResponse: session.doubt.response?.explanation,
+          doubtError: session.doubt.error,
+        ),
       ),
     );
 
@@ -223,4 +229,78 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       ),
     );
   }
+
+  List<ChatLessonMessage> _mergeConversationMessages(
+    LabSession session,
+    List<ChatLessonMessage> incoming,
+  ) {
+    final lessonKey = _conversationKeyFor(session);
+    if (_conversationLessonKey != lessonKey) {
+      _conversationLessonKey = lessonKey;
+      _conversationMessages.clear();
+    }
+
+    final incomingIds = incoming.map((message) => message.id).toSet();
+    _conversationMessages.removeWhere(
+      (message) =>
+          _transientMessageIds.contains(message.id) &&
+          !incomingIds.contains(message.id),
+    );
+
+    for (final message in incoming) {
+      final index = _conversationMessages.indexWhere(
+        (current) => current.id == message.id,
+      );
+      if (index >= 0) {
+        _conversationMessages[index] = message;
+        continue;
+      }
+      if (_isDuplicateHistoryMessage(message)) continue;
+      _conversationMessages.add(message);
+    }
+
+    return List.unmodifiable(_conversationMessages);
+  }
+
+  String _conversationKeyFor(LabSession session) {
+    final snapshot = session.aulaSnapshot;
+    final localId = session.lessonLocalId;
+    if (localId != null && localId.trim().isNotEmpty) return localId.trim();
+    final marker = snapshot?.itemMarker;
+    if (marker != null && marker.trim().isNotEmpty) return 'marker:$marker';
+    return 'route:${session.route}';
+  }
+
+  bool _isDuplicateHistoryMessage(ChatLessonMessage message) {
+    if (_conversationMessages.isEmpty) return false;
+    final text = message.text?.trim();
+    return switch (message.kind) {
+      ChatLessonMessageKind.historyQuestion =>
+        text != null &&
+            text.isNotEmpty &&
+            _conversationMessages.any(
+              (current) =>
+                  current.role == ChatLessonMessageRole.sim &&
+                  (current.kind == ChatLessonMessageKind.question ||
+                      current.kind == ChatLessonMessageKind.historyQuestion) &&
+                  current.text?.trim() == text,
+            ),
+      ChatLessonMessageKind.historyAnswer => _conversationMessages.any(
+        (current) =>
+            current.role == ChatLessonMessageRole.student &&
+            (current.kind == ChatLessonMessageKind.studentAnswer ||
+                current.kind == ChatLessonMessageKind.historyAnswer) &&
+            current.selectedAnswer == message.selectedAnswer &&
+            current.text?.trim() == text,
+      ),
+      _ => false,
+    };
+  }
+
+  static const Set<String> _transientMessageIds = {
+    'runtime-loading',
+    'doubt-processing',
+    'processing-signal',
+    'engine-error',
+  };
 }

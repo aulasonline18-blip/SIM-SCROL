@@ -358,6 +358,106 @@ void main() {
     expect(find.text('Alternativa A', skipOffstage: false), findsOneWidget);
   });
 
+  testWidgets(
+    'chat classroom preserves previous lesson messages as transcript',
+    (tester) async {
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..lessonLocalId = 'lesson-chat-transcript'
+        ..route = '/cyber/aula'
+        ..aulaSnapshot = _chatSnapshot(
+          phase: const ClassroomPhase.reading(),
+          headerLabel: 'aula_item_of:1/4:aula_layer_1',
+          explanation: 'Primeira explicacao preservada.',
+          question: 'Primeira pergunta preservada?',
+        );
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: session)),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+
+      var timeline = tester.widget<ChatAulaTimeline>(
+        find.byType(ChatAulaTimeline),
+      );
+      expect(
+        timeline.messages.map((message) => message.text),
+        containsAll([
+          'Primeira explicacao preservada.',
+          'Primeira pergunta preservada?',
+        ]),
+      );
+
+      session.aulaSnapshot = _chatSnapshot(
+        phase: const ClassroomPhase.reading(),
+        headerLabel: 'aula_item_of:1/4:aula_layer_2',
+        explanation: 'Segunda explicacao nova.',
+        question: 'Segunda pergunta nova?',
+      );
+      session.notifyListeners();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      timeline = tester.widget<ChatAulaTimeline>(find.byType(ChatAulaTimeline));
+      final texts = timeline.messages.map((message) => message.text).toList();
+      expect(texts, contains('Primeira explicacao preservada.'));
+      expect(texts, contains('Primeira pergunta preservada?'));
+      expect(texts, contains('Segunda explicacao nova.'));
+      expect(texts, contains('Segunda pergunta nova?'));
+      expect(
+        timeline.messages
+            .where((message) => message.text == 'Primeira pergunta preservada?')
+            .length,
+        1,
+      );
+    },
+  );
+
+  testWidgets(
+    'chat classroom removes transient loading after content arrives',
+    (tester) async {
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..lessonLocalId = 'lesson-chat-loading'
+        ..route = '/cyber/aula'
+        ..aulaRuntimeLoading = true;
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: session)),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+
+      var timeline = tester.widget<ChatAulaTimeline>(
+        find.byType(ChatAulaTimeline),
+      );
+      expect(
+        timeline.messages.map((message) => message.id),
+        contains('runtime-loading'),
+      );
+
+      session
+        ..aulaRuntimeLoading = false
+        ..aulaSnapshot = _chatSnapshot(phase: const ClassroomPhase.reading());
+      session.notifyListeners();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      timeline = tester.widget<ChatAulaTimeline>(find.byType(ChatAulaTimeline));
+      expect(
+        timeline.messages.map((message) => message.id),
+        isNot(contains('runtime-loading')),
+      );
+      expect(
+        timeline.messages.map((message) => message.text),
+        contains('Explicacao da aula em chat.'),
+      );
+    },
+  );
+
   testWidgets('chat classroom shows audio bubble and stops audio on tap', (
     tester,
   ) async {
@@ -632,6 +732,9 @@ void main() {
 LessonRuntimeSnapshot _chatSnapshot({
   required ClassroomPhase phase,
   String? imagem,
+  String headerLabel = 'aula_item_of:1/4:aula_layer_1',
+  String explanation = 'Explicacao da aula em chat.',
+  String question = 'Qual alternativa está correta?',
 }) {
   return LessonRuntimeSnapshot(
     authReady: true,
@@ -640,7 +743,7 @@ LessonRuntimeSnapshot _chatSnapshot({
     isDone: false,
     viewModel: LessonMainViewModel(
       progress: 25,
-      headerLabel: 'aula_item_of:1/4:aula_layer_1',
+      headerLabel: headerLabel,
       options: const [],
       locked:
           phase.type == ClassroomPhaseType.processando ||
@@ -650,10 +753,10 @@ LessonRuntimeSnapshot _chatSnapshot({
     ),
     phase: phase,
     history: const [],
-    conteudo: const LessonContent(
-      explanation: 'Explicacao da aula em chat.',
-      question: 'Qual alternativa está correta?',
-      options: {
+    conteudo: LessonContent(
+      explanation: explanation,
+      question: question,
+      options: const {
         AnswerLetter.A: 'Alternativa A',
         AnswerLetter.B: 'Alternativa B',
         AnswerLetter.C: 'Alternativa C',
