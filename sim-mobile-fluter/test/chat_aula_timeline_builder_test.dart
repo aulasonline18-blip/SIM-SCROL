@@ -1,0 +1,176 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:sim_mobile/features/classroom/chat_aula_messages.dart';
+import 'package:sim_mobile/features/classroom/chat_aula_timeline_builder.dart';
+import 'package:sim_mobile/sim/classroom/classroom_models.dart';
+import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
+import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
+import 'package:sim_mobile/sim/lesson/lesson_models.dart';
+import 'package:sim_mobile/sim/state/student_learning_state.dart';
+
+void main() {
+  test('builds chat messages for explanation, image, question and options', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.reading(),
+          imagem: 'data:image/svg+xml,%3Csvg%2F%3E',
+        ),
+        showImagePanel: true,
+      ),
+    );
+
+    expect(
+      messages.map((message) => message.kind),
+      containsAllInOrder([
+        ChatLessonMessageKind.explanation,
+        ChatLessonMessageKind.image,
+        ChatLessonMessageKind.question,
+        ChatLessonMessageKind.options,
+      ]),
+    );
+    final options = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.options,
+    );
+    expect(options.options.map((option) => option.letter), [
+      AnswerLetter.A,
+      AnswerLetter.B,
+      AnswerLetter.C,
+    ]);
+    expect(options.options.every((option) => option.enabled), isTrue);
+  });
+
+  test('expanded phase adds student answer and signal choices', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(phase: ClassroomPhase.expanded(AnswerLetter.B)),
+      ),
+    );
+
+    expect(
+      messages.map((message) => message.kind),
+      containsAllInOrder([
+        ChatLessonMessageKind.options,
+        ChatLessonMessageKind.studentAnswer,
+        ChatLessonMessageKind.signals,
+      ]),
+    );
+    final answer = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.studentAnswer,
+    );
+    expect(answer.selectedAnswer, AnswerLetter.B);
+    final signals = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.signals,
+    );
+    expect(signals.signals.map((signal) => signal.value), [1, 2, 3]);
+  });
+
+  test('completed phase adds signal and feedback without changing state', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.completed(
+            message: 'aula_fb_correct',
+            wasCorrect: true,
+            signal: DecisionSignal.one,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      messages.map((message) => message.kind),
+      containsAllInOrder([
+        ChatLessonMessageKind.studentSignal,
+        ChatLessonMessageKind.feedback,
+      ]),
+    );
+    final feedback = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.feedback,
+    );
+    expect(feedback.isCorrect, isTrue);
+    expect(feedback.actionKey, 'aula_next');
+  });
+
+  test('history is represented as old sim and student messages', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.reading(),
+          history: const [
+            QuestionHistoryEntry(
+              id: 'h1',
+              text: 'Pergunta antiga?',
+              options: [],
+              chosenOptionId: AnswerLetter.C,
+              correct: false,
+              imageUrl: 'data:image/png;base64,AAAA',
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(messages.first.kind, ChatLessonMessageKind.historyQuestion);
+    expect(messages.first.imageData, isNotNull);
+    expect(messages[1].kind, ChatLessonMessageKind.historyAnswer);
+    expect(messages[1].selectedAnswer, AnswerLetter.C);
+    expect(messages[1].isCorrect, isFalse);
+  });
+
+  test('loading and engine errors stay system messages with retry action', () {
+    final loading = buildChatLessonMessages(
+      const ChatLessonTimelineInput(snapshot: null, runtimeLoading: true),
+    );
+    expect(loading.single.kind, ChatLessonMessageKind.loading);
+    expect(loading.single.actionKey, 'retry');
+
+    final error = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.engineError('T02 indisponivel'),
+        ),
+      ),
+    );
+    expect(error.last.kind, ChatLessonMessageKind.error);
+    expect(error.last.text, 'T02 indisponivel');
+    expect(error.last.actionKey, 'retry');
+  });
+}
+
+LessonRuntimeSnapshot _snapshot({
+  required ClassroomPhase phase,
+  String? imagem,
+  List<QuestionHistoryEntry> history = const [],
+}) {
+  return LessonRuntimeSnapshot(
+    authReady: true,
+    authed: true,
+    hasCurriculum: true,
+    isDone: false,
+    viewModel: LessonMainViewModel(
+      progress: 20,
+      headerLabel: 'aula_item_of:1/5:aula_layer_1',
+      options: const [],
+      locked:
+          phase.type == ClassroomPhaseType.processando ||
+          phase.type == ClassroomPhaseType.concluido ||
+          phase.type == ClassroomPhaseType.carregando,
+      nextLabel: phase.type == ClassroomPhaseType.concluido ? 'aula_next' : '',
+    ),
+    phase: phase,
+    history: history,
+    conteudo: const LessonContent(
+      explanation: 'Explicacao curta.',
+      question: 'Qual alternativa representa o conceito?',
+      options: {
+        AnswerLetter.A: 'Primeira alternativa',
+        AnswerLetter.B: 'Segunda alternativa',
+        AnswerLetter.C: 'Terceira alternativa',
+      },
+      correctAnswer: AnswerLetter.A,
+    ),
+    imagem: imagem,
+    itemMarker: 'M1',
+    itemText: 'Item 1',
+  );
+}
