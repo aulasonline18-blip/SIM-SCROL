@@ -62,7 +62,16 @@ Contrato minimo do endpoint:
 
 ### 4. Google Play Billing
 
-O app ainda contem fluxo Stripe. Para bens digitais consumidos dentro do Android, a fase Google Play Billing precisa substituir o checkout Stripe no build de loja ou receber decisao juridica/politica documentada.
+O app agora possui fluxo Google Play Billing para o build Android production.
+
+O fluxo de loja:
+
+1. consulta produtos consumiveis no Google Play;
+2. inicia compra com `autoConsume: false`;
+3. envia `purchaseToken` e metadados para a API;
+4. so consome/finaliza a compra depois da API conceder creditos.
+
+Stripe permanece como legado tecnico, mas `SimEnvironment.assertProductionSafe()` bloqueia production quando `SIM_BILLING_PROVIDER` nao e `google_play`.
 
 ### 5. Keystore real
 
@@ -84,6 +93,7 @@ flutter analyze
 flutter test
 flutter build appbundle --release \
   --dart-define=FLUTTER_APP_MODE=production \
+  --dart-define=SIM_BILLING_PROVIDER=google_play \
   --dart-define=SIM_SERVER_URL=https://SEU-DOMINIO-API \
   --dart-define=SIM_CHECKOUT_RETURN_ORIGIN=https://SEU-DOMINIO-APP \
   -PSIM_ANDROID_APPLICATION_ID=com.aulasonline.sim \
@@ -96,6 +106,7 @@ O app esta mais perto de Play readiness, mas Google Play 100% = NAO ate:
 
 1. Servidor executar exclusao real.
 2. URLs publicas finais existirem.
-3. Google Play Billing ser implementado ou decisao formal ser registrada.
-4. Build AAB assinado com upload key real ser gerado.
-5. API de producao usar HTTPS.
+3. Produtos Play Console existirem.
+4. API validar `purchaseToken` e conceder creditos em `/api/play-billing/consume-credit-pack`.
+5. Build AAB assinado com upload key real ser gerado.
+6. API de producao usar HTTPS.

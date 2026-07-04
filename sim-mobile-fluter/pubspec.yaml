@@ -44,6 +44,8 @@ dependencies:
   flutter_svg: ^2.3.0
   image: ^4.9.1
   flutter_tts: ^4.2.5
+  in_app_purchase: ^3.3.0
+  in_app_purchase_android: ^0.5.1
 
 dev_dependencies:
   flutter_test:

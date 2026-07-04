@@ -6,6 +6,7 @@ import '../state/student_learning_state.dart';
 import 'account_deletion.dart';
 import 'credits_functions.dart';
 import 'payments_functions.dart';
+import 'play_billing_functions.dart';
 
 class SimServerPaymentsClient implements PaymentsFunctions {
   SimServerPaymentsClient({
@@ -159,6 +160,55 @@ class SimServerCreditsClient implements CreditsFunctions {
   }
 }
 
+class SimServerPlayBillingGrantClient implements PlayBillingGrantGateway {
+  SimServerPlayBillingGrantClient({
+    required this.config,
+    SimHttpTransport? transport,
+    this.grantPath = '/api/play-billing/consume-credit-pack',
+    this.timeout = const Duration(seconds: 45),
+  }) : transport = transport ?? DartIoSimHttpTransport();
+
+  final SimAiServerConfig config;
+  final SimHttpTransport transport;
+  final String grantPath;
+  final Duration timeout;
+
+  @override
+  Future<PlayBillingGrantResult> grantCreditPack(
+    PlayBillingGrantRequest request,
+  ) async {
+    final response = await transport.postJson(
+      config.uri(grantPath),
+      headers: await config.jsonHeaders(),
+      body: {
+        'packId': request.packId,
+        'productId': request.productId,
+        'purchaseToken': request.purchaseToken,
+        'verificationSource': request.verificationSource,
+        'localVerificationData': request.localVerificationData,
+        if ((request.purchaseId ?? '').isNotEmpty)
+          'purchaseId': request.purchaseId,
+      },
+      timeout: timeout,
+    );
+    if (!response.ok) {
+      throw SimExternalAiException(
+        response.body,
+        statusCode: response.statusCode,
+      );
+    }
+    final decoded = jsonDecode(response.body);
+    final data = decoded is Map ? JsonMap.from(decoded) : <String, dynamic>{};
+    if (data['error'] != null) {
+      throw SimExternalAiException(data['error'].toString());
+    }
+    return PlayBillingGrantResult(
+      credits: (data['credits'] as num?)?.toInt() ?? 0,
+      balance: (data['balance'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class SimServerAccountDeletionGateway implements AccountDeletionGateway {
   SimServerAccountDeletionGateway({
     required this.config,
@@ -186,7 +236,10 @@ class SimServerAccountDeletionGateway implements AccountDeletionGateway {
       timeout: timeout,
     );
     if (!response.ok) {
-      throw SimExternalAiException(response.body, statusCode: response.statusCode);
+      throw SimExternalAiException(
+        response.body,
+        statusCode: response.statusCode,
+      );
     }
   }
 }

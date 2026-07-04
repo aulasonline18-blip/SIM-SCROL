@@ -39,5 +39,5 @@ O app tem caminho in-app para solicitar exclusao e documento publico em `docs/go
 
 1. Publicar `privacy-policy.md` em URL publica.
 2. Publicar `account-deletion.md` em URL publica.
-3. Confirmar se Google Play Billing substituiu Stripe no build Android de loja.
+3. Criar produtos consumiveis no Play Console e configurar endpoint de validacao de compra no servidor.
 4. Confirmar ferramenta real de observabilidade e politica de retencao.

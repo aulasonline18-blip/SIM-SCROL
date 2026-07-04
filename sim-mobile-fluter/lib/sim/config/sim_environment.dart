@@ -36,6 +36,13 @@ class SimEnvironment {
     defaultValue: 'sandbox',
   );
 
+  static const billingProvider = String.fromEnvironment(
+    'SIM_BILLING_PROVIDER',
+    defaultValue: 'google_play',
+  );
+
+  static bool get useGooglePlayBilling => billingProvider == 'google_play';
+
   static const allowHttpInProduction = bool.fromEnvironment(
     'SIM_ALLOW_HTTP_IN_PRODUCTION',
     defaultValue: false,
@@ -47,6 +54,11 @@ class SimEnvironment {
     final url = apiBaseUrl;
     if (isProduction && !url.startsWith('https://') && !allowHttpInProduction) {
       throw StateError('SIM_SERVER_URL precisa usar HTTPS em production.');
+    }
+    if (isProduction && !useGooglePlayBilling) {
+      throw StateError(
+        'Build Google Play production deve usar SIM_BILLING_PROVIDER=google_play.',
+      );
     }
   }
 

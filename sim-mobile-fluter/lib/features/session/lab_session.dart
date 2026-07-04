@@ -15,6 +15,8 @@ import '../../sim/billing/checkout_return_controller.dart';
 import '../../sim/billing/account_deletion.dart';
 import '../../sim/billing/payment_return_store.dart';
 import '../../sim/billing/payments_functions.dart';
+import '../../sim/billing/play_billing_functions.dart';
+import '../../sim/billing/sim_pricing.dart';
 import '../../sim/analytics/visual_learning_feedback.dart';
 import '../../sim/cloud/cloud_functions.dart';
 import '../../sim/cloud/sim_server_cloud_functions.dart';
@@ -81,6 +83,7 @@ class LabSession extends ChangeNotifier {
     StudentStateCloudFunctions? drawerCloudFunctions,
     SupabaseSessionProvider? drawerSessionProvider,
     Future<String?> Function()? drawerBackupFileTextPicker,
+    PlayBillingFunctions? playBillingFunctions,
     this.experiencePreparerOverride,
     this.prefs,
   }) : canonicalStore =
@@ -91,6 +94,7 @@ class LabSession extends ChangeNotifier {
     _drawerBackupFileTextPicker = drawerBackupFileTextPicker;
     _attachmentFilePicker = attachmentFilePicker;
     _accountDeletionGateway = accountDeletionGateway;
+    _playBillingFunctions = playBillingFunctions;
     entryForm.addListener(_notifyFromChild);
     authSession.addListener(_notifyFromChild);
     navigationState.addListener(_notifyFromChild);
@@ -107,6 +111,7 @@ class LabSession extends ChangeNotifier {
   SupabaseSessionProvider? _drawerSessionProvider;
   Future<String?> Function()? _drawerBackupFileTextPicker;
   Future<SimAttachmentFile?> Function(String source)? _attachmentFilePicker;
+  PlayBillingFunctions? _playBillingFunctions;
 
   late final EntryFormState entryForm = EntryFormState(
     attachmentClient: _attachmentClient,
@@ -1044,6 +1049,29 @@ class LabSession extends ChangeNotifier {
     _paymentReturnStore.saveReturnTo(
       route == '/creditos' ? '/cyber/aula' : route,
     );
+    if (SimEnvironment.useGooglePlayBilling) {
+      try {
+        final outcome = await _playBilling().purchaseCreditPack(
+          CreditPackIdWire.fromWire(packId),
+        );
+        switch (outcome.status) {
+          case PlayBillingPurchaseStatus.completed:
+            credits = outcome.balance;
+            authSession.isUnlimited = false;
+            _loadCreditsFromServer(keepCurrent: true);
+            notifyListeners();
+            return null;
+          case PlayBillingPurchaseStatus.pending:
+            return 'Compra pendente no Google Play.';
+          case PlayBillingPurchaseStatus.canceled:
+            return 'Compra cancelada.';
+          case PlayBillingPurchaseStatus.failed:
+            return outcome.error ?? 'google_play_billing_failed';
+        }
+      } catch (error) {
+        return error.toString();
+      }
+    }
     final client = SimServerPaymentsClient(config: _serverConfig());
     try {
       final result = await client.createCreditsCheckoutHosted(
@@ -1064,6 +1092,12 @@ class LabSession extends ChangeNotifier {
     } catch (error) {
       return error.toString();
     }
+  }
+
+  PlayBillingFunctions _playBilling() {
+    return _playBillingFunctions ??= GooglePlayBillingFunctions(
+      grantGateway: SimServerPlayBillingGrantClient(config: _serverConfig()),
+    );
   }
 
   Future<CheckoutReturnState> confirmCheckoutReturn(String? sessionId) async {
@@ -1095,9 +1129,11 @@ class LabSession extends ChangeNotifier {
     }
   }
 
-  void _loadCreditsFromServer() {
-    authSession.credits = 1;
-    authSession.isUnlimited = false;
+  void _loadCreditsFromServer({bool keepCurrent = false}) {
+    if (!keepCurrent) {
+      authSession.credits = 1;
+      authSession.isUnlimited = false;
+    }
     _creditsLoaded = false;
     unawaited(
       SimServerCreditsClient(config: _serverConfig())
@@ -2109,6 +2145,7 @@ class LabSession extends ChangeNotifier {
     lessonUiState.removeListener(_notifyFromChild);
     _lessonImageUnsubscribe?.call();
     _lessonImageOfferUnsubscribe?.call();
+    unawaited(_playBillingFunctions?.dispose());
     authSession.dispose();
     _lessonAudioController?.pararAudio();
     _doubtAudio?.stopDoubtAudio();
