@@ -33,7 +33,21 @@ class AuthSession extends ChangeNotifier {
     _authSub ??= client.auth.onAuthStateChange.listen((data) {
       applySupabaseSession(data.session);
     });
-    applySupabaseSession(client.auth.currentSession);
+    final current = client.auth.currentSession;
+    if (current?.isExpired ?? false) {
+      unawaited(_refreshExpiredSession(client));
+      return;
+    }
+    applySupabaseSession(current);
+  }
+
+  Future<void> _refreshExpiredSession(SupabaseClient client) async {
+    try {
+      final refreshed = await client.auth.refreshSession();
+      applySupabaseSession(refreshed.session ?? client.auth.currentSession);
+    } catch (_) {
+      applySupabaseSession(null);
+    }
   }
 
   SupabaseClient? _supabaseClientOrNull() {

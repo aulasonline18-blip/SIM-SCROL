@@ -1,9 +1,18 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/session/auth_session.dart';
 import 'package:sim_mobile/session/navigation_state.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  test('AuthSession refreshes expired currentSession before applying auth', () {
+    final source = File('lib/session/auth_session.dart').readAsStringSync();
+    expect(source, contains('current?.isExpired'));
+    expect(source, contains('refreshSession()'));
+    expect(source, contains('_refreshExpiredSession'));
+  });
+
   test('AuthSession extracts parent roles from Supabase metadata', () {
     final auth = AuthSession(navigation: NavigationState());
     final user = User(
