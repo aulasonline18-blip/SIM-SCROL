@@ -473,53 +473,58 @@ void main() {
   );
 
   // -------------------------------------------------------------------------
-  // T15 – histórico 5 questões: só últimas 4 têm imagem
+  // T15 – histórico 5 questões: imagens antigas continuam disponíveis no chat
   // -------------------------------------------------------------------------
-  test('T15: history 5 entries → últimas 4 com imageUrl, 1ª sem', () {
-    final svc = StudentLearningStateService(seed: {'L1': _state0()});
-    final ctrl = _controller(svc);
-    final pos = LessonPositionState(
-      items: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
-      itemIdx: 0,
-      layer: LessonLayer.l1,
-      erros: 0,
-      historia: const [],
-      history: const [],
-      mainAdvances: 0,
-      loadingLayer: LessonLayer.l1,
-      conteudo: null,
-      phase: const ClassroomPhase.reading(),
-      imagem: null,
-      teoriaPronta: false,
-    );
-
-    for (var i = 0; i < 5; i++) {
-      pos.conteudo = LessonContent(
-        explanation: 'E$i',
-        question: 'Q$i',
-        options: const {
-          AnswerLetter.A: 'A',
-          AnswerLetter.B: 'B',
-          AnswerLetter.C: 'C',
-        },
-        correctAnswer: AnswerLetter.A,
+  test(
+    'T15: history 5 entries preserves all imageUrl values for chat scroll',
+    () {
+      final svc = StudentLearningStateService(seed: {'L1': _state0()});
+      final ctrl = _controller(svc);
+      final pos = LessonPositionState(
+        items: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        erros: 0,
+        historia: const [],
+        history: const [],
+        mainAdvances: 0,
+        loadingLayer: LessonLayer.l1,
+        conteudo: null,
+        phase: const ClassroomPhase.reading(),
+        imagem: null,
+        teoriaPronta: false,
       );
-      pos.imagem = 'http://img/$i.png';
-      pos.phase = ClassroomPhase.expanded(AnswerLetter.A);
-      ctrl.enviarSinal(
-        lessonLocalId: 'L1',
-        topic: 'Cinemática',
-        position: pos,
-        signal: DecisionSignal.one,
-        baseItems: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
-      );
-    }
 
-    expect(pos.history, hasLength(5));
-    final withImage = pos.history.where((e) => e.imageUrl != null).length;
-    expect(withImage, 4);
-    expect(pos.history.first.imageUrl, isNull);
-  });
+      for (var i = 0; i < 5; i++) {
+        pos.conteudo = LessonContent(
+          explanation: 'E$i',
+          question: 'Q$i',
+          options: const {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+        );
+        pos.imagem = 'http://img/$i.png';
+        pos.phase = ClassroomPhase.expanded(AnswerLetter.A);
+        ctrl.enviarSinal(
+          lessonLocalId: 'L1',
+          topic: 'Cinemática',
+          position: pos,
+          signal: DecisionSignal.one,
+          baseItems: const [
+            PlannedItem(marker: 'M-1', text: 'Velocidade média'),
+          ],
+        );
+      }
+
+      expect(pos.history, hasLength(5));
+      final withImage = pos.history.where((e) => e.imageUrl != null).length;
+      expect(withImage, 5);
+      expect(pos.history.first.imageUrl, isNotNull);
+    },
+  );
 
   // -------------------------------------------------------------------------
   // T16 – 5 enqueues em 500ms: drena 1 vez após debounce
@@ -874,6 +879,52 @@ void main() {
     expect(pos.phase.type, ClassroomPhaseType.carregando);
     expect(svc.read('L1')?.attempts, isEmpty);
   });
+
+  test(
+    'T25b: delayed signal is ignored if phase changed before engine runs',
+    () async {
+      final svc = StudentLearningStateService(seed: {'L1': _state0()});
+      final ctrl = _controller(svc);
+      final pos = LessonPositionState(
+        items: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        erros: 0,
+        historia: const [],
+        history: const [],
+        mainAdvances: 0,
+        loadingLayer: LessonLayer.l1,
+        conteudo: LessonContent(
+          explanation: 'E',
+          question: 'Q',
+          options: const {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+        phase: ClassroomPhase.expanded(AnswerLetter.A),
+        imagem: null,
+        teoriaPronta: true,
+      );
+
+      final future = ctrl.enviarSinal(
+        lessonLocalId: 'L1',
+        topic: 'Cinemática',
+        position: pos,
+        signal: DecisionSignal.one,
+        baseItems: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
+      );
+      expect(pos.phase.type, ClassroomPhaseType.processando);
+
+      pos.phase = const ClassroomPhase.reading();
+      await future;
+
+      expect(pos.phase.type, ClassroomPhaseType.lendo);
+      expect(svc.read('L1')?.attempts, isEmpty);
+    },
+  );
 
   // -------------------------------------------------------------------------
   // T26 – sinal omitido → botão avançar não deve existir em phase!=concluido

@@ -96,27 +96,18 @@ class LessonAnswerProgressController {
     if (lastEntry == null ||
         lastEntry.id != entry.id ||
         lastEntry.chosenOptionId != entry.chosenOptionId) {
-      final next = [...position.history, entry];
-      final firstImageToKeep = (next.length - 4).clamp(0, next.length);
-      position.history = next.asMap().entries.map((mapEntry) {
-        if (mapEntry.key < firstImageToKeep) {
-          final old = mapEntry.value;
-          return QuestionHistoryEntry(
-            id: old.id,
-            text: old.text,
-            options: old.options,
-            chosenOptionId: old.chosenOptionId,
-            correct: old.correct,
-            imageUrl: null,
-          );
-        }
-        return mapEntry.value;
-      }).toList();
+      position.history = [...position.history, entry];
     }
 
     position.phase = ClassroomPhase.processing(letter, signal);
     // VIII.3: 350ms delay before engine runs so the UI can show "processando" state
     await Future.delayed(const Duration(milliseconds: 350));
+    final delayedPhase = position.phase;
+    if (delayedPhase.type != ClassroomPhaseType.processando ||
+        delayedPhase.letter != letter ||
+        delayedPhase.signal != signal) {
+      return;
+    }
     final currentState = stateService.read(lessonLocalId);
     if (currentState != null && !position.isReviewAtivo) {
       final nextState = processAnswerWithEngine(

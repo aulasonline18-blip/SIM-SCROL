@@ -656,6 +656,28 @@ void main() {
     expect(cloud.persistCalls, 1);
   });
 
+  test('drawer backup export uses file saver when available', () async {
+    String? savedName;
+    String? savedText;
+    final session = LabSession(
+      drawerBackupFileSaver: (fileName, text) async {
+        savedName = fileName;
+        savedText = text;
+        return '/picked/$fileName';
+      },
+    );
+    final store = session.canonicalStore!;
+    store.writeState(_drawerState('lesson-export', 'Aula exportada', 1));
+
+    final backup = session.buildDrawerBackupText();
+    final file = await session.writeDrawerBackupFile(backup);
+
+    expect(savedName, startsWith('sim-backup-'));
+    expect(savedName, endsWith('.txt'));
+    expect(savedText, backup);
+    expect(file.path, '/picked/$savedName');
+  });
+
   testWidgets('drawer imports backup from txt file and keeps paste fallback', (
     WidgetTester tester,
   ) async {

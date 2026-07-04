@@ -741,7 +741,7 @@ void main() {
       find.text('Exato! Você domina este ponto.', skipOffstage: false),
       findsOneWidget,
     );
-    expect(find.text('Próximo', skipOffstage: false), findsOneWidget);
+    expect(find.text(t('aula_next'), skipOffstage: false), findsOneWidget);
   });
 
   testWidgets(

@@ -28,6 +28,7 @@ import 'package:sim_mobile/sim/media/lesson_visual_models.dart';
 import 'package:sim_mobile/sim/media/lesson_visual_pipeline.dart';
 import 'package:sim_mobile/sim/media/math_templates/math_templates.dart';
 import 'package:sim_mobile/sim/media/paid_image_service.dart' as paid;
+import 'package:sim_mobile/sim/media/platform_audio_adapter.dart';
 import 'package:sim_mobile/sim/media/student_lesson_media_service.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
@@ -304,6 +305,19 @@ void main() {
       expect(organism, contains('playback ?? PlatformAudioAdapter()'));
     },
   );
+
+  test('platform TTS maps broad stable language names to native locales', () {
+    expect(simTtsLanguageForStableLang('Portuguese'), 'pt-BR');
+    expect(simTtsLanguageForStableLang('French'), 'fr-FR');
+    expect(simTtsLanguageForStableLang('German'), 'de-DE');
+    expect(simTtsLanguageForStableLang('Italian'), 'it-IT');
+    expect(simTtsLanguageForStableLang('Arabic'), 'ar');
+    expect(simTtsLanguageForStableLang('Hindi'), 'hi-IN');
+    expect(simTtsLanguageForStableLang('Chinese'), 'zh-CN');
+    expect(simTtsLanguageForStableLang('Korean'), 'ko-KR');
+    expect(simTtsLanguageForStableLang('Russian'), 'ru-RU');
+    expect(simTtsLanguageForStableLang('Kiribati'), 'en-US');
+  });
 
   test('audio core maps stable language and caches generated audio', () async {
     final preference = AudioPreference();

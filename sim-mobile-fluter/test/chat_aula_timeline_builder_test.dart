@@ -6,6 +6,7 @@ import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
+import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
 void main() {
   test('builds chat messages for explanation, image, question and options', () {
@@ -248,6 +249,41 @@ void main() {
     expect(
       error.singleWhere((message) => message.id == 'doubt-error').text,
       'Dúvida indisponível.',
+    );
+  });
+
+  test('system chat messages follow the active app language', () {
+    addTearDown(() => setSimActiveLanguage('en'));
+    setSimActiveLanguage('fr');
+
+    final processing = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(phase: const ClassroomPhase.reading()),
+        doubtProcessing: true,
+        doubtProgress: 45,
+      ),
+    );
+    expect(
+      processing
+          .singleWhere((message) => message.id == 'doubt-processing')
+          .text,
+      'Analyse de votre question...',
+    );
+
+    final completed = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.completed(
+            message: 'aula_fb_correct',
+            wasCorrect: true,
+            signal: DecisionSignal.one,
+          ),
+        ),
+      ),
+    );
+    expect(
+      completed.singleWhere((message) => message.id == 'doubt-action').text,
+      'Question',
     );
   });
 }

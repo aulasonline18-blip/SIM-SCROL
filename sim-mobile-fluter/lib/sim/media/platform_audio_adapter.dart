@@ -53,7 +53,7 @@ class PlatformAudioAdapter implements AudioPlaybackAdapter {
     _onEnd = opts.onEnd;
     try {
       final tts = _activeTts;
-      await tts.setLanguage(_ttsLanguage(opts.lang));
+      await tts.setLanguage(simTtsLanguageForStableLang(opts.lang));
       await tts.setSpeechRate(0.48);
       await tts.setPitch(1.0);
       await tts.awaitSpeakCompletion(true);
@@ -92,15 +92,6 @@ class PlatformAudioAdapter implements AudioPlaybackAdapter {
     return created;
   }
 
-  String _ttsLanguage(String? lang) {
-    final stable = (lang ?? '').toLowerCase();
-    if (stable.startsWith('pt')) return 'pt-BR';
-    if (stable.startsWith('es')) return 'es-ES';
-    if (stable.startsWith('fr')) return 'fr-FR';
-    if (stable.startsWith('ja')) return 'ja-JP';
-    return 'en-US';
-  }
-
   @override
   void stop() => _stop();
 
@@ -137,4 +128,42 @@ class PlatformAudioAdapter implements AudioPlaybackAdapter {
     _player?.dispose();
     unawaited(_tts?.stop());
   }
+}
+
+String simTtsLanguageForStableLang(String? lang) {
+  final stable = (lang ?? '').trim().toLowerCase();
+  if (stable.isEmpty) return 'en-US';
+  if (stable.startsWith('pt') ||
+      stable.contains('portugu') ||
+      stable.contains('brasil')) {
+    return 'pt-BR';
+  }
+  if (stable.startsWith('es') ||
+      stable.contains('spanish') ||
+      stable.contains('español')) {
+    return 'es-ES';
+  }
+  if (stable.startsWith('fr') ||
+      stable.contains('french') ||
+      stable.contains('français')) {
+    return 'fr-FR';
+  }
+  if (stable.startsWith('ja') ||
+      stable.contains('japanese') ||
+      stable.contains('日本')) {
+    return 'ja-JP';
+  }
+  if (stable.startsWith('de') || stable.contains('german')) return 'de-DE';
+  if (stable.startsWith('it') || stable.contains('italian')) return 'it-IT';
+  if (stable.startsWith('ar') || stable.contains('arabic')) return 'ar';
+  if (stable.startsWith('hi') || stable.contains('hindi')) return 'hi-IN';
+  if (stable.startsWith('zh') ||
+      stable.contains('chinese') ||
+      stable.contains('中文')) {
+    return 'zh-CN';
+  }
+  if (stable.startsWith('ko') || stable.contains('korean')) return 'ko-KR';
+  if (stable.startsWith('ru') || stable.contains('russian')) return 'ru-RU';
+  if (stable.startsWith('en') || stable.contains('english')) return 'en-US';
+  return 'en-US';
 }

@@ -2,6 +2,7 @@ import '../../sim/classroom/classroom_models.dart';
 import '../../sim/classroom/lesson_runtime_engine.dart';
 import '../../sim/lesson/lesson_models.dart';
 import '../../sim/state/student_learning_state.dart';
+import '../../sim/ui/sim_i18n.dart';
 import '../onboarding/preparation_and_placement.dart';
 import 'chat_aula_messages.dart';
 
@@ -91,7 +92,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           id: 'doubt-processing',
           role: ChatLessonMessageRole.system,
           kind: ChatLessonMessageKind.loading,
-          text: 'Analisando sua duvida...',
+          text: t('aula_doubt_processing'),
           progress: input.doubtProgress,
         ),
       );
@@ -189,11 +190,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           ),
         )
         ..add(
-          const ChatLessonMessage(
+          ChatLessonMessage(
             id: 'processing-signal',
             role: ChatLessonMessageRole.system,
             kind: ChatLessonMessageKind.processing,
-            text: 'Registrando...',
+            text: t('aula_registering'),
           ),
         );
     } else if (phase?.type == ClassroomPhaseType.concluido) {
@@ -208,11 +209,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           ),
         )
         ..add(
-          const ChatLessonMessage(
+          ChatLessonMessage(
             id: 'doubt-action',
             role: ChatLessonMessageRole.sim,
             kind: ChatLessonMessageKind.doubtAction,
-            text: 'Dúvida',
+            text: t('aula_doubt'),
             actionKey: 'open-doubt',
           ),
         )

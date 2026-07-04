@@ -143,8 +143,8 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'Não consegui preparar agora.',
+                        Text(
+                          t('preparing_failed_title'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 18,
@@ -172,7 +172,7 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                           )
                         else
                           PrimaryWideButton(
-                            label: 'Tentar novamente',
+                            label: t('aula_try_again_2'),
                             onTap: () {
                               _started = false;
                               _launch();
@@ -180,7 +180,7 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                           ),
                         const SizedBox(height: 12),
                         SimTextAction(
-                          label: 'Trocar objetivo',
+                          label: t('preparing_change_goal'),
                           onPressed: () =>
                               widget.session.openSupport('/cyber/objeto'),
                         ),
@@ -540,12 +540,12 @@ String feedbackText(String key) => switch (key) {
 };
 
 String nextBtnText(String key) => switch (key) {
-  'aula_next' => 'Próximo',
-  'aula_next_item' => 'Próximo tópico',
-  'aula_consolidate' => 'Consolidar',
-  'aula_layer_label_2' => 'Próxima camada',
-  'aula_layer_label_3' => 'Camada final',
-  _ => 'Avançar',
+  'aula_next' => t('aula_next'),
+  'aula_next_item' => t('aula_next_item'),
+  'aula_consolidate' => t('aula_consolidate'),
+  'aula_layer_label_2' => t('aula_next_layer'),
+  'aula_layer_label_3' => t('aula_final_layer'),
+  _ => t('aula_advance'),
 };
 
 String headerLabelText(String key) {

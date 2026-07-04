@@ -48,6 +48,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   late final ScrollController _scrollController =
       widget.scrollController ?? ScrollController();
   late final bool _ownsScrollController = widget.scrollController == null;
+  final Map<String, GlobalKey> _messageKeys = <String, GlobalKey>{};
   bool _autoFollow = true;
   bool _showCurrentButton = false;
   String _messageSignature = '';
@@ -66,6 +67,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     final nextSignature = _signatureOf(widget.messages);
     if (nextSignature == _messageSignature) return;
     _messageSignature = nextSignature;
+    _retainMessageKeys(widget.messages);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (_autoFollow) {
@@ -102,12 +104,23 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
       return;
     }
-    final target = position.maxScrollExtent;
-    await _scrollController.animateTo(
-      target,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-    );
+    final targetKey = _targetMessageKey();
+    final targetContext = targetKey?.currentContext;
+    if (targetContext != null) {
+      await Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        alignment: 1,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    } else {
+      await _scrollController.animateTo(
+        position.maxScrollExtent,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    }
     if (!mounted) return;
     setState(() {
       _autoFollow = true;
@@ -122,7 +135,9 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
             message.id,
             message.kind.name,
             message.text ?? '',
+            message.imageData ?? '',
             message.imageStatus,
+            message.progress?.toString() ?? '',
             message.options
                 .map(
                   (option) =>
@@ -137,57 +152,99 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         .join('||');
   }
 
+  void _retainMessageKeys(List<ChatLessonMessage> messages) {
+    final ids = messages.map((message) => message.id).toSet();
+    _messageKeys.removeWhere((id, _) => !ids.contains(id));
+  }
+
+  GlobalKey _keyForMessage(ChatLessonMessage message) {
+    return _messageKeys.putIfAbsent(
+      message.id,
+      () => GlobalKey(debugLabel: 'chat-message-${message.id}'),
+    );
+  }
+
+  GlobalKey? _targetMessageKey() {
+    if (widget.messages.isEmpty) return null;
+    final preferred = widget.messages.lastWhere(
+      (message) =>
+          message.kind == ChatLessonMessageKind.signals ||
+          message.kind == ChatLessonMessageKind.feedback ||
+          message.kind == ChatLessonMessageKind.error ||
+          message.kind == ChatLessonMessageKind.image,
+      orElse: () => widget.messages.last,
+    );
+    return _messageKeys[preferred.id];
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Stack(
       children: [
-        NotificationListener<UserScrollNotification>(
-          onNotification: (notification) {
-            if (notification.direction != ScrollDirection.idle) {
-              final metrics = notification.metrics;
-              final nearEnd = metrics.maxScrollExtent - metrics.pixels <= 96;
-              if (!nearEnd && (_autoFollow || !_showCurrentButton)) {
-                setState(() {
-                  _autoFollow = false;
-                  _showCurrentButton = true;
-                });
-              }
-              return false;
+        NotificationListener<SizeChangedLayoutNotification>(
+          onNotification: (_) {
+            if (_autoFollow) {
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => _scrollToCurrent(),
+              );
             }
-            _handleScroll();
             return false;
           },
-          child: ListView(
-            key: const Key('chat-aula-timeline'),
-            controller: _scrollController,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: widget.padding.copyWith(
-              bottom: widget.padding.bottom + bottomInset,
-            ),
-            children: [
-              for (var index = 0; index < widget.messages.length; index++) ...[
-                if (index > 0) const SizedBox(height: 10),
-                ChatAulaMessageBubble(
-                  message: widget.messages[index],
-                  semanticIndex: index,
-                  session: widget.session,
-                  onChooseAnswer: widget.onChooseAnswer,
-                  onSignal: widget.onSignal,
-                  onRetry: widget.onRetry,
-                  onNext: widget.onNext,
-                  onOpenDoubt: widget.onOpenDoubt,
-                  onImageSettled: () {
-                    widget.onImageSettled?.call();
-                    if (_autoFollow) {
-                      WidgetsBinding.instance.addPostFrameCallback(
-                        (_) => _scrollToCurrent(),
-                      );
-                    }
-                  },
-                ),
+          child: NotificationListener<UserScrollNotification>(
+            onNotification: (notification) {
+              if (notification.direction != ScrollDirection.idle) {
+                final metrics = notification.metrics;
+                final nearEnd = metrics.maxScrollExtent - metrics.pixels <= 96;
+                if (!nearEnd && (_autoFollow || !_showCurrentButton)) {
+                  setState(() {
+                    _autoFollow = false;
+                    _showCurrentButton = true;
+                  });
+                }
+                return false;
+              }
+              _handleScroll();
+              return false;
+            },
+            child: ListView(
+              key: const Key('chat-aula-timeline'),
+              controller: _scrollController,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: widget.padding.copyWith(
+                bottom: widget.padding.bottom + bottomInset,
+              ),
+              children: [
+                for (
+                  var index = 0;
+                  index < widget.messages.length;
+                  index++
+                ) ...[
+                  if (index > 0) const SizedBox(height: 10),
+                  SizeChangedLayoutNotifier(
+                    child: ChatAulaMessageBubble(
+                      key: _keyForMessage(widget.messages[index]),
+                      message: widget.messages[index],
+                      semanticIndex: index,
+                      session: widget.session,
+                      onChooseAnswer: widget.onChooseAnswer,
+                      onSignal: widget.onSignal,
+                      onRetry: widget.onRetry,
+                      onNext: widget.onNext,
+                      onOpenDoubt: widget.onOpenDoubt,
+                      onImageSettled: () {
+                        widget.onImageSettled?.call();
+                        if (_autoFollow) {
+                          WidgetsBinding.instance.addPostFrameCallback(
+                            (_) => _scrollToCurrent(),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
         if (_showCurrentButton)
@@ -214,7 +271,7 @@ class _ChatReturnToCurrentButton extends StatelessWidget {
     final palette = SimThemeScope.paletteOf(context);
     return Semantics(
       button: true,
-      label: 'Ir para a aula atual',
+      label: t('aula_return_current'),
       child: Material(
         color: palette.text,
         borderRadius: BorderRadius.circular(999),
@@ -239,7 +296,7 @@ class _ChatReturnToCurrentButton extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Ir para a aula atual',
+                  t('aula_return_current'),
                   style: TextStyle(
                     color: palette.surface,
                     fontSize: 13,
@@ -398,7 +455,7 @@ class _ChatAulaMessageBody extends StatelessWidget {
       ChatLessonMessageKind.loading || ChatLessonMessageKind.processing =>
         message.id == 'doubt-processing'
             ? _DoubtProgressMessage(
-                text: message.text ?? 'Analisando sua dúvida...',
+                text: message.text ?? t('aula_doubt_processing'),
                 progress: message.progress ?? 0,
               )
             : _StatusMessage(
@@ -441,7 +498,7 @@ class _ChatAulaMessageBody extends StatelessWidget {
       ),
       ChatLessonMessageKind.doubtAction => _ChatActionButton(
         key: const Key('chat-doubt-action'),
-        label: message.text ?? 'Dúvida',
+        label: message.text ?? t('aula_doubt'),
         onPressed: onOpenDoubt,
       ),
       ChatLessonMessageKind.studentAnswer ||

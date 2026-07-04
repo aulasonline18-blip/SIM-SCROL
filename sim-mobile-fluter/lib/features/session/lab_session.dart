@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -83,6 +84,8 @@ class LabSession extends ChangeNotifier {
     StudentStateCloudFunctions? drawerCloudFunctions,
     SupabaseSessionProvider? drawerSessionProvider,
     Future<String?> Function()? drawerBackupFileTextPicker,
+    Future<String?> Function(String fileName, String text)?
+    drawerBackupFileSaver,
     PlayBillingFunctions? playBillingFunctions,
     this.experiencePreparerOverride,
     this.prefs,
@@ -92,6 +95,7 @@ class LabSession extends ChangeNotifier {
     _drawerCloudFunctions = drawerCloudFunctions;
     _drawerSessionProvider = drawerSessionProvider;
     _drawerBackupFileTextPicker = drawerBackupFileTextPicker;
+    _drawerBackupFileSaver = drawerBackupFileSaver;
     _attachmentFilePicker = attachmentFilePicker;
     _accountDeletionGateway = accountDeletionGateway;
     _playBillingFunctions = playBillingFunctions;
@@ -110,6 +114,8 @@ class LabSession extends ChangeNotifier {
   StudentStateCloudFunctions? _drawerCloudFunctions;
   SupabaseSessionProvider? _drawerSessionProvider;
   Future<String?> Function()? _drawerBackupFileTextPicker;
+  Future<String?> Function(String fileName, String text)?
+  _drawerBackupFileSaver;
   Future<SimAttachmentFile?> Function(String source)? _attachmentFilePicker;
   PlayBillingFunctions? _playBillingFunctions;
 
@@ -429,7 +435,12 @@ class LabSession extends ChangeNotifier {
 
   Future<File> writeDrawerBackupFile(String text) async {
     final stamp = DateTime.now().toIso8601String().substring(0, 10);
-    final file = File('${Directory.systemTemp.path}/sim-backup-$stamp.txt');
+    final fileName = 'sim-backup-$stamp.txt';
+    final savedPath = await _saveTextFile(fileName: fileName, text: text);
+    if (savedPath != null && savedPath.trim().isNotEmpty) {
+      return File(savedPath);
+    }
+    final file = File('${Directory.systemTemp.path}/$fileName');
     return file.writeAsString(text);
   }
 
@@ -472,8 +483,31 @@ class LabSession extends ChangeNotifier {
 
   Future<File> writeDrawerStatusFile(String text) async {
     final stamp = DateTime.now().toIso8601String().substring(0, 10);
-    final file = File('${Directory.systemTemp.path}/sim-status-$stamp.txt');
+    final fileName = 'sim-status-$stamp.txt';
+    final savedPath = await _saveTextFile(fileName: fileName, text: text);
+    if (savedPath != null && savedPath.trim().isNotEmpty) {
+      return File(savedPath);
+    }
+    final file = File('${Directory.systemTemp.path}/$fileName');
     return file.writeAsString(text);
+  }
+
+  Future<String?> _saveTextFile({
+    required String fileName,
+    required String text,
+  }) async {
+    final injected = _drawerBackupFileSaver;
+    if (injected != null) return injected(fileName, text);
+    try {
+      return await FilePicker.platform.saveFile(
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const ['txt'],
+        bytes: Uint8List.fromList(utf8.encode(text)),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<StudentLearningState> importDrawerBackup(String raw) async {
