@@ -180,10 +180,16 @@ void main() {
 
     session.openSupport('/privacidade');
     await tester.pumpAndSettle();
-    expect(find.text('Privacidade'), findsOneWidget);
+    expect(find.text('Politica de Privacidade'), findsOneWidget);
+    expect(find.text('Dados coletados'), findsOneWidget);
     session.openSupport('/termos');
     await tester.pumpAndSettle();
-    expect(find.text('Termos'), findsOneWidget);
+    expect(find.text('Termos de Uso'), findsOneWidget);
+    expect(find.text('Creditos'), findsOneWidget);
+    session.openSupport('/pai');
+    await tester.pumpAndSettle();
+    expect(find.text('Acesso restrito'), findsOneWidget);
+    session.authSession.roles = const {'parent'};
     session.openSupport('/pai');
     await tester.pumpAndSettle();
     expect(find.text('Painel do Pai'), findsOneWidget);
@@ -197,6 +203,31 @@ void main() {
     expect(find.textContaining('Solicita'), findsWidgets);
 
     await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('rotas sensiveis exigem login pelo roteador central', (
+    WidgetTester tester,
+  ) async {
+    final session = LabSession()
+      ..authReady = true
+      ..authed = false
+      ..route = '/creditos';
+
+    await tester.pumpWidget(SimMobileApp(initialSession: session));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Entre para continuar'), findsOneWidget);
+    await tester.tap(find.text('Entrar'));
+    await tester.pumpAndSettle();
+    expect(session.route, '/login');
+    expect(session.returnTo, '/creditos');
+
+    session
+      ..route = '/conta/deletar'
+      ..returnTo = '/';
+    session.notifyListeners();
+    await tester.pumpAndSettle();
+    expect(find.text('Entre para continuar'), findsOneWidget);
   });
 
   testWidgets('Preenchimento shows doubt and qualifier flow in aula', (

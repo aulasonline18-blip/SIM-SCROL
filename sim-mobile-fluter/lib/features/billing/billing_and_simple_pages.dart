@@ -35,6 +35,7 @@ import '../../sim/media/student_lesson_media_service.dart';
 import '../../sim/state/shared_prefs_state_storage.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/state/student_state_store.dart';
+import '../../sim/support/legal_pages.dart';
 import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
 import '../../sim/ui/widgets/cyber_step_shell.dart';
@@ -444,14 +445,66 @@ class LegalLabScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SimpleLabPage(
-      title: title,
-      body: title == 'Privacidade'
-          ? 'P\u00e1gina de privacidade preservada como ambiente de apoio do SIM.'
-          : 'P\u00e1gina de termos preservada como ambiente de apoio do SIM.',
-      primary: 'Voltar',
-      onPrimary: () => session.openSupport('/cyber/aula'),
-      session: session,
+    final content = title == 'Privacidade'
+        ? privacyPageContent
+        : termsPageContent;
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: SimCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  content.title,
+                  style: const TextStyle(
+                    color: simDark,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                for (final line in content.headerLines) ...[
+                  Text(
+                    line,
+                    style: const TextStyle(
+                      color: simMuted,
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                for (final section in content.sections) ...[
+                  Text(
+                    section.title,
+                    style: const TextStyle(
+                      color: simDark,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    section.body,
+                    style: const TextStyle(
+                      color: simMuted,
+                      fontSize: 14,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                PrimaryWideButton(
+                  label: 'Voltar',
+                  onTap: () => session.openSupport('/cyber/aula'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

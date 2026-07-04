@@ -193,14 +193,27 @@ void main() {
       'android/app/src/debug/AndroidManifest.xml',
     ).readAsStringSync();
     final buildGradle = File('android/app/build.gradle.kts').readAsStringSync();
+    final networkSecurity = File(
+      'android/app/src/main/res/xml/network_security_config.xml',
+    ).readAsStringSync();
 
     expect(manifest, contains('android.permission.INTERNET'));
     expect(manifest, contains('android.permission.CAMERA'));
     expect(manifest, contains('android.permission.READ_MEDIA_IMAGES'));
     expect(manifest, contains('android.permission.READ_EXTERNAL_STORAGE'));
     expect(manifest, isNot(contains('android:usesCleartextTraffic="true"')));
+    expect(networkSecurity, contains('cleartextTrafficPermitted="false"'));
+    expect(networkSecurity, isNot(contains('167.179.109.137')));
     expect(debugManifest, contains('android:usesCleartextTraffic="true"'));
-    expect(buildGradle, contains('applicationId = "com.example.sim_mobile"'));
+    expect(buildGradle, contains('val simApplicationId'));
+    expect(
+      buildGradle,
+      contains(
+        'stringProperty("SIM_ANDROID_APPLICATION_ID", "com.example.sim_mobile")',
+      ),
+    );
+    expect(buildGradle, contains('applicationId = simApplicationId'));
+    expect(buildGradle, contains('SIM_REQUIRE_RELEASE_SIGNING'));
   });
 
   test('dependencias reais de midia existem no pubspec', () {
@@ -213,27 +226,30 @@ void main() {
     expect(pubspec, contains('image:'));
   });
 
-  test('exclusao de conta chama endpoint autenticado com confirmacao', () async {
-    final transport = RecordingTransport()..jsonBody = '{"ok":true}';
-    final gateway = SimServerAccountDeletionGateway(
-      config: config(),
-      transport: transport,
-    );
+  test(
+    'exclusao de conta chama endpoint autenticado com confirmacao',
+    () async {
+      final transport = RecordingTransport()..jsonBody = '{"ok":true}';
+      final gateway = SimServerAccountDeletionGateway(
+        config: config(),
+        transport: transport,
+      );
 
-    await gateway.requestAccountDeletion(
-      const AccountDeletionRequest(
-        userId: 'u1',
-        confirmation: 'DELETAR',
-        emailSnapshot: 'a@test.com',
-      ),
-    );
+      await gateway.requestAccountDeletion(
+        const AccountDeletionRequest(
+          userId: 'u1',
+          confirmation: 'DELETAR',
+          emailSnapshot: 'a@test.com',
+        ),
+      );
 
-    expect(
-      transport.lastUri.toString(),
-      endsWith('/api/account/request-deletion'),
-    );
-    expect(transport.lastHeaders?['authorization'], 'Bearer user-token');
-    expect((transport.lastBody as Map)['confirmation'], 'DELETAR');
-    expect((transport.lastBody as Map)['userId'], 'u1');
-  });
+      expect(
+        transport.lastUri.toString(),
+        endsWith('/api/account/request-deletion'),
+      );
+      expect(transport.lastHeaders?['authorization'], 'Bearer user-token');
+      expect((transport.lastBody as Map)['confirmation'], 'DELETAR');
+      expect((transport.lastBody as Map)['userId'], 'u1');
+    },
+  );
 }

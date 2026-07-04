@@ -273,17 +273,32 @@ class _SimAppState extends State<SimApp> {
             ? ChatAulaScreen(session: session)
             : AulaLabScreen(session: session);
       case '/creditos':
-        screen = CreditsLabScreen(session: session);
+        screen = _guardAuthenticated(
+          session,
+          target: '/creditos',
+          child: CreditsLabScreen(session: session),
+        );
       case '/checkout/return':
-        screen = CheckoutReturnScreen(session: session);
+        screen = _guardAuthenticated(
+          session,
+          target: '/checkout/return',
+          child: CheckoutReturnScreen(session: session),
+        );
       case '/pai':
-        screen = FatherLabScreen(session: session);
+        screen = _guardParentPanel(
+          session,
+          child: FatherLabScreen(session: session),
+        );
       case '/privacidade':
         screen = LegalLabScreen(session: session, title: 'Privacidade');
       case '/termos':
         screen = LegalLabScreen(session: session, title: 'Termos');
       case '/conta/deletar':
-        screen = DeleteAccountLabScreen(session: session);
+        screen = _guardAuthenticated(
+          session,
+          target: '/conta/deletar',
+          child: DeleteAccountLabScreen(session: session),
+        );
       default:
         screen = PortalScreen(session: session);
     }
@@ -300,6 +315,117 @@ class _SimAppState extends State<SimApp> {
         theme: lightTheme,
         darkTheme: darkTheme,
         home: SimFrame(child: screen),
+      ),
+    );
+  }
+}
+
+Widget _guardAuthenticated(
+  LabSession session, {
+  required String target,
+  required Widget child,
+}) {
+  if (!session.authReady) {
+    return const _RouteGuardScreen(
+      title: 'Verificando conta',
+      body: 'Estamos conferindo sua sessão antes de abrir esta área.',
+    );
+  }
+  if (!session.authed) {
+    return _RouteGuardScreen(
+      title: 'Entre para continuar',
+      body: 'Esta área usa dados da sua conta e precisa de login.',
+      primary: 'Entrar',
+      onPrimary: () => session.goLogin(target: target),
+      secondary: 'Voltar',
+      onSecondary: session.goPortal,
+    );
+  }
+  return child;
+}
+
+Widget _guardParentPanel(LabSession session, {required Widget child}) {
+  final guarded = _guardAuthenticated(session, target: '/pai', child: child);
+  if (guarded != child) return guarded;
+  final allowed = session.authSession.hasAnyRole(const [
+    'parent',
+    'guardian',
+    'pai',
+    'responsavel',
+    'admin',
+  ]);
+  if (!allowed) {
+    return _RouteGuardScreen(
+      title: 'Acesso restrito',
+      body:
+          'O painel do responsável exige uma função autorizada na conta. Solicite liberação ao suporte.',
+      primary: 'Voltar',
+      onPrimary: session.goPortal,
+    );
+  }
+  return child;
+}
+
+class _RouteGuardScreen extends StatelessWidget {
+  const _RouteGuardScreen({
+    required this.title,
+    required this.body,
+    this.primary,
+    this.onPrimary,
+    this.secondary,
+    this.onSecondary,
+  });
+
+  final String title;
+  final String body;
+  final String? primary;
+  final VoidCallback? onPrimary;
+  final String? secondary;
+  final VoidCallback? onSecondary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF111827),
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    body,
+                    style: const TextStyle(
+                      color: Color(0xFF374151),
+                      fontSize: 15,
+                      height: 1.45,
+                    ),
+                  ),
+                  if (primary != null && onPrimary != null) ...[
+                    const SizedBox(height: 18),
+                    FilledButton(onPressed: onPrimary, child: Text(primary!)),
+                  ],
+                  if (secondary != null && onSecondary != null) ...[
+                    const SizedBox(height: 8),
+                    TextButton(onPressed: onSecondary, child: Text(secondary!)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

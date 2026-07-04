@@ -18,6 +18,7 @@ class AuthSession extends ChangeNotifier {
   String? userId;
   String? userEmail;
   String? userName;
+  Set<String> roles = const {};
   String? authError;
   StreamSubscription<AuthState>? _authSub;
 
@@ -53,6 +54,7 @@ class AuthSession extends ChangeNotifier {
     userName =
         user?.userMetadata?['full_name']?.toString() ??
         user?.userMetadata?['name']?.toString();
+    roles = _extractRoles(user);
     if (authed) {
       if (navigation.route == '/login') {
         navigation.route = safeNavigationReturnTo(navigation.returnTo);
@@ -61,9 +63,40 @@ class AuthSession extends ChangeNotifier {
     } else {
       credits = 0;
       isUnlimited = false;
+      roles = const {};
     }
     notifyListeners();
     navigation.notifyListeners();
+  }
+
+  bool hasAnyRole(Iterable<String> allowedRoles) {
+    final normalized = allowedRoles.map((role) => role.toLowerCase()).toSet();
+    return roles.any(normalized.contains);
+  }
+
+  Set<String> _extractRoles(User? user) {
+    final collected = <String>{};
+    void addRole(Object? value) {
+      if (value == null) return;
+      if (value is Iterable) {
+        for (final item in value) {
+          addRole(item);
+        }
+        return;
+      }
+      final text = value.toString().trim().toLowerCase();
+      if (text.isNotEmpty) collected.add(text);
+    }
+
+    final appMetadata = user?.appMetadata ?? const <String, dynamic>{};
+    final userMetadata = user?.userMetadata ?? const <String, dynamic>{};
+    for (final metadata in [appMetadata, userMetadata]) {
+      addRole(metadata['role']);
+      addRole(metadata['roles']);
+      addRole(metadata['app_role']);
+      addRole(metadata['user_role']);
+    }
+    return collected;
   }
 
   Future<void> signInWithGoogle() async {

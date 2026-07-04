@@ -17,6 +17,25 @@ fun signingValue(name: String): String? =
     keystoreProperties.getProperty(name)
         ?: System.getenv("SIM_ANDROID_${name.uppercase()}")
 
+fun stringProperty(name: String, fallback: String): String =
+    (project.findProperty(name) as String?)
+        ?: System.getenv(name)
+        ?: fallback
+
+fun boolProperty(name: String, fallback: Boolean = false): Boolean =
+    ((project.findProperty(name) as String?) ?: System.getenv(name))
+        ?.lowercase()
+        ?.let { it == "1" || it == "true" || it == "yes" }
+        ?: fallback
+
+val simApplicationId = stringProperty("SIM_ANDROID_APPLICATION_ID", "com.example.sim_mobile")
+val simReleaseSigningReady =
+    !signingValue("storeFile").isNullOrBlank() &&
+        !signingValue("storePassword").isNullOrBlank() &&
+        !signingValue("keyAlias").isNullOrBlank() &&
+        !signingValue("keyPassword").isNullOrBlank()
+val simRequireReleaseSigning = boolProperty("SIM_REQUIRE_RELEASE_SIGNING")
+
 android {
     namespace = "com.example.sim_mobile"
     compileSdk = flutter.compileSdkVersion
@@ -28,7 +47,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.sim_mobile"
+        applicationId = simApplicationId
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -51,7 +70,14 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            if (simRequireReleaseSigning && !simReleaseSigningReady) {
+                throw GradleException(
+                    "Release signing is required. Configure android/key.properties or SIM_ANDROID_* environment variables."
+                )
+            }
+            signingConfig = signingConfigs.getByName(
+                if (simReleaseSigningReady) "release" else "debug"
+            )
             isMinifyEnabled = false
             isShrinkResources = false
         }
