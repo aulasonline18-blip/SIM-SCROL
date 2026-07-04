@@ -13,6 +13,7 @@ import 'package:sim_mobile/sim/config/sim_environment.dart';
 import 'package:sim_mobile/sim/experience/student_experience_types.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
+import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
 void main() {
   test(
@@ -89,9 +90,11 @@ void main() {
   test(
     'erro de auth vindo do preparo fica no curriculo com retry como SimWeb',
     () async {
+      var attempts = 0;
       final session =
           LabSession(
               experiencePreparerOverride: (_) async {
+                attempts += 1;
                 throw const StudentExperienceEngineException(
                   StudentExperienceErrorInfo(
                     kind: StudentExperienceErrorKind.auth,
@@ -110,11 +113,86 @@ void main() {
       expect(session.saveObjectiveEntry(), isTrue);
       await session.launchExperience();
 
+      expect(attempts, 2);
       expect(session.route, '/cyber/curriculo');
       expect(session.entryStatus, 'erro');
       expect(session.entryError, contains('HTTP 401'));
       expect(session.returnTo, '/');
       expect(session.authed, isTrue);
+    },
+  );
+
+  test(
+    'onboarding renova auth logicamente e repete T00 uma vez quando servidor devolve 401',
+    () async {
+      var attempts = 0;
+      final session =
+          LabSession(
+              experiencePreparerOverride: (args) async {
+                attempts += 1;
+                if (attempts == 1) {
+                  throw const StudentExperienceEngineException(
+                    StudentExperienceErrorInfo(
+                      kind: StudentExperienceErrorKind.auth,
+                      message:
+                          'HTTP 401: {"error":"Unauthorized","reason":"invalid token"}',
+                    ),
+                  );
+                }
+                args.onStage?.call(StudentExperienceRouteStage.curriculum);
+                args.onStage?.call(StudentExperienceRouteStage.lesson);
+                args.onStage?.call(StudentExperienceRouteStage.ready);
+                return const StudentExperienceResult(
+                  destination: '/cyber/aula',
+                  curriculum: StudentCurriculum(
+                    topic: 'Matematica',
+                    totalItems: 1,
+                    generatedAt: null,
+                    provisional: false,
+                    items: [CurriculumItem(marker: 'M1', text: 'Frações')],
+                  ),
+                  startMarker: 'M1',
+                  startItemIndex: 0,
+                );
+              },
+            )
+            ..selectedLanguageCode = 'pt'
+            ..stableLang = 'pt-BR'
+            ..freeText = 'Quero aprender frações começando do zero.'
+            ..authReady = true
+            ..authed = true;
+
+      expect(session.saveObjectiveEntry(), isTrue);
+      await session.launchExperience();
+
+      expect(attempts, 2);
+      expect(session.entryStatus, 'primeira_aula_pronta');
+      expect(session.entryError, isNull);
+      expect(session.route, '/cyber/aula');
+    },
+  );
+
+  testWidgets(
+    'erro do onboarding respeita idioma portugues nos botoes de retry',
+    (tester) async {
+      setSimActiveLanguage('pt');
+      final session = LabSession()
+        ..authReady = true
+        ..authed = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'pt-BR'
+        ..entryStatus = 'erro'
+        ..entryError =
+            'O servidor recusou a preparacao da aula. Detalhe tecnico: HTTP 401 invalid token';
+
+      await tester.pumpWidget(
+        MaterialApp(home: PhaseBoundaryScreen(session: session)),
+      );
+
+      expect(find.text('Não consegui preparar agora.'), findsOneWidget);
+      expect(find.text('Tentar novamente'), findsOneWidget);
+      expect(find.text('Trocar objetivo'), findsOneWidget);
+      expect(find.text('Try again'), findsNothing);
     },
   );
 

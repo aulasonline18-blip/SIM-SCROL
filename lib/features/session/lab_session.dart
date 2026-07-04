@@ -751,6 +751,7 @@ class LabSession extends ChangeNotifier {
       if (prepareOverride == null && prefs != null) {
         final ready = await _ensureProtectedServerSession(
           returnTo: '/cyber/curriculo',
+          forceRefresh: true,
         );
         if (!ready) {
           if (!_isCurrentExperience(id, generation)) return;
@@ -798,12 +799,11 @@ class LabSession extends ChangeNotifier {
         },
       );
 
-      final result = prepareOverride == null
-          ? await simOrganismProvider
-                .forLesson(id)
-                .experienceEngine
-                .prepareStudentExperienceEntry(args)
-          : await prepareOverride(args);
+      final result = await _prepareExperienceWithAuthRetry(
+        id: id,
+        args: args,
+        prepareOverride: prepareOverride,
+      );
 
       if (!_isCurrentExperience(id, generation)) return;
       entryStatus = 'primeira_aula_pronta';
@@ -829,6 +829,39 @@ class LabSession extends ChangeNotifier {
     }
   }
 
+  Future<StudentExperienceResult> _prepareExperienceWithAuthRetry({
+    required String id,
+    required StudentExperienceArgs args,
+    required Future<StudentExperienceResult> Function(
+      StudentExperienceArgs args,
+    )?
+    prepareOverride,
+  }) async {
+    var retriedAuth = false;
+    while (true) {
+      try {
+        return prepareOverride == null
+            ? await simOrganismProvider
+                  .forLesson(id)
+                  .experienceEngine
+                  .prepareStudentExperienceEntry(args)
+            : await prepareOverride(args);
+      } on StudentExperienceEngineException catch (err) {
+        if (err.error.kind != StudentExperienceErrorKind.auth || retriedAuth) {
+          rethrow;
+        }
+        retriedAuth = true;
+        final refreshed = prepareOverride != null
+            ? true
+            : await _refreshProtectedServerSession();
+        if (!refreshed) rethrow;
+        entryStatus = 't00_running';
+        entryError = null;
+        notifyListeners();
+      }
+    }
+  }
+
   bool _isCurrentExperience(String id, int generation) {
     return lessonLocalId == id && _experienceGeneration == generation;
   }
@@ -850,8 +883,11 @@ class LabSession extends ChangeNotifier {
     ].join(' | ');
   }
 
-  Future<bool> _ensureProtectedServerSession({required String returnTo}) async {
-    final token = await _freshServerAccessToken();
+  Future<bool> _ensureProtectedServerSession({
+    required String returnTo,
+    bool forceRefresh = false,
+  }) async {
+    final token = await _freshServerAccessToken(forceRefresh: forceRefresh);
     if (token == null || token.trim().isEmpty) {
       goLogin(target: returnTo);
       return false;
@@ -859,14 +895,19 @@ class LabSession extends ChangeNotifier {
     return true;
   }
 
-  Future<String?> _freshServerAccessToken() async {
+  Future<bool> _refreshProtectedServerSession() async {
+    final token = await _freshServerAccessToken(forceRefresh: true);
+    return token != null && token.trim().isNotEmpty;
+  }
+
+  Future<String?> _freshServerAccessToken({bool forceRefresh = false}) async {
     final client = _supabaseClientOrNull();
     if (client == null) return null;
     var session = client.auth.currentSession;
     if (session == null) {
       return null;
     }
-    if (session.isExpired) {
+    if (forceRefresh || session.isExpired) {
       try {
         final refreshed = await client.auth.refreshSession();
         session = refreshed.session ?? client.auth.currentSession;

@@ -528,6 +528,7 @@ const Map<String, String> _ptStrings = {
   'open_lesson_named': 'Abrir aula {title}',
   'answer_option_named': 'Alternativa {label}',
   'signal_option_named': 'Sinal {value}: {label}',
+  'aula_try_again_2': 'Tentar novamente',
   'aula_return_current': 'Ir para a aula atual',
   'aula_doubt': 'Dúvida',
   'aula_doubt_processing': 'Analisando sua dúvida...',
