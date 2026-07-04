@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 
 import '../../core/utils/sim_constants.dart';
 import '../../shared/widgets/shared_widgets.dart';
+import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
@@ -433,6 +434,7 @@ class _ChatAulaMessageBody extends StatelessWidget {
             _ChatActionButton(
               label: nextBtnText(message.actionKey ?? ''),
               onPressed: onNext,
+              enabled: session?.doubt.status != DoubtStatus.processing,
             ),
           ],
         ],
@@ -745,22 +747,25 @@ class _ChatActionButton extends StatelessWidget {
   const _ChatActionButton({
     required this.label,
     required this.onPressed,
+    this.enabled = true,
     super.key,
   });
 
   final String label;
   final VoidCallback onPressed;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
     return Semantics(
       button: true,
+      enabled: enabled,
       child: Material(
-        color: palette.text,
+        color: enabled ? palette.text : palette.muted,
         borderRadius: BorderRadius.circular(SimRadius.md),
         child: InkWell(
-          onTap: onPressed,
+          onTap: enabled ? onPressed : null,
           borderRadius: BorderRadius.circular(SimRadius.md),
           child: Container(
             constraints: const BoxConstraints(minHeight: SimTouch.min),
@@ -769,7 +774,9 @@ class _ChatActionButton extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: palette.surface,
+                color: enabled
+                    ? palette.surface
+                    : palette.surface.withValues(alpha: 0.56),
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),

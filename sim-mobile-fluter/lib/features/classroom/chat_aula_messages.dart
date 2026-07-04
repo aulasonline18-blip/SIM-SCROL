@@ -83,4 +83,38 @@ class ChatLessonMessage {
 
   bool get hasInteractiveSignals =>
       kind == ChatLessonMessageKind.signals && signals.isNotEmpty;
+
+  ChatLessonMessage copyWith({
+    String? id,
+    ChatLessonMessageRole? role,
+    ChatLessonMessageKind? kind,
+    String? text,
+    List<ChatLessonOption>? options,
+    List<ChatLessonSignal>? signals,
+    String? imageData,
+    AnswerLetter? selectedAnswer,
+    DecisionSignal? selectedSignal,
+    bool? isCorrect,
+    String? actionKey,
+    String? imageStatus,
+    bool? hasPaidImageOffer,
+    int? progress,
+  }) {
+    return ChatLessonMessage(
+      id: id ?? this.id,
+      role: role ?? this.role,
+      kind: kind ?? this.kind,
+      text: text ?? this.text,
+      options: options ?? this.options,
+      signals: signals ?? this.signals,
+      imageData: imageData ?? this.imageData,
+      selectedAnswer: selectedAnswer ?? this.selectedAnswer,
+      selectedSignal: selectedSignal ?? this.selectedSignal,
+      isCorrect: isCorrect ?? this.isCorrect,
+      actionKey: actionKey ?? this.actionKey,
+      imageStatus: imageStatus ?? this.imageStatus,
+      hasPaidImageOffer: hasPaidImageOffer ?? this.hasPaidImageOffer,
+      progress: progress ?? this.progress,
+    );
+  }
 }

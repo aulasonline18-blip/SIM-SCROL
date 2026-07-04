@@ -31,6 +31,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   final TextEditingController _doubtController = TextEditingController();
   final List<ChatLessonMessage> _conversationMessages = <ChatLessonMessage>[];
   String? _conversationLessonKey;
+  int _conversationArchiveSeq = 0;
   int _fontScaleLevel = ClassroomTextScale.defaultLevel;
   bool _doubtSheetOpen = false;
 
@@ -238,20 +239,22 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     if (_conversationLessonKey != lessonKey) {
       _conversationLessonKey = lessonKey;
       _conversationMessages.clear();
+      _conversationArchiveSeq = 0;
     }
-
-    final incomingIds = incoming.map((message) => message.id).toSet();
-    _conversationMessages.removeWhere(
-      (message) =>
-          _transientMessageIds.contains(message.id) &&
-          !incomingIds.contains(message.id),
-    );
 
     for (final message in incoming) {
       final index = _conversationMessages.indexWhere(
         (current) => current.id == message.id,
       );
       if (index >= 0) {
+        final current = _conversationMessages[index];
+        if (_shouldArchiveAsNewTurn(current, message)) {
+          _conversationMessages[index] = current.copyWith(
+            id: _archivedMessageId(current.id),
+          );
+          _conversationMessages.add(message);
+          continue;
+        }
         _conversationMessages[index] = message;
         continue;
       }
@@ -297,10 +300,42 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     };
   }
 
-  static const Set<String> _transientMessageIds = {
-    'runtime-loading',
-    'doubt-processing',
-    'processing-signal',
-    'engine-error',
-  };
+  bool _shouldArchiveAsNewTurn(
+    ChatLessonMessage current,
+    ChatLessonMessage incoming,
+  ) {
+    if (current.kind != incoming.kind) return false;
+    if (_messageFingerprint(current) == _messageFingerprint(incoming)) {
+      return false;
+    }
+    return switch (incoming.kind) {
+      ChatLessonMessageKind.loading ||
+      ChatLessonMessageKind.processing ||
+      ChatLessonMessageKind.error => true,
+      ChatLessonMessageKind.feedback => incoming.id.startsWith('doubt-'),
+      _ => false,
+    };
+  }
+
+  String _archivedMessageId(String id) =>
+      '$id#archived-${_conversationArchiveSeq++}';
+
+  String _messageFingerprint(ChatLessonMessage message) {
+    return [
+      message.kind.name,
+      message.text ?? '',
+      message.imageData ?? '',
+      message.imageStatus,
+      message.hasPaidImageOffer,
+      message.selectedAnswer?.name ?? '',
+      message.selectedSignal?.name ?? '',
+      message.isCorrect?.toString() ?? '',
+      message.actionKey ?? '',
+      message.progress?.toString() ?? '',
+      for (final option in message.options)
+        '${option.letter.name}:${option.text}:${option.selected}:${option.enabled}',
+      for (final signal in message.signals)
+        '${signal.value}:${signal.labelKey}:${signal.enabled}',
+    ].join('|');
+  }
 }

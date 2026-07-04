@@ -416,7 +416,7 @@ void main() {
   );
 
   testWidgets(
-    'chat classroom removes transient loading after content arrives',
+    'chat classroom keeps transient loading as transcript after content arrives',
     (tester) async {
       final session = LabSession()
         ..authed = true
@@ -449,7 +449,7 @@ void main() {
       timeline = tester.widget<ChatAulaTimeline>(find.byType(ChatAulaTimeline));
       expect(
         timeline.messages.map((message) => message.id),
-        isNot(contains('runtime-loading')),
+        contains('runtime-loading'),
       );
       expect(
         timeline.messages.map((message) => message.text),
@@ -457,6 +457,87 @@ void main() {
       );
     },
   );
+
+  testWidgets('chat classroom archives repeated doubt answers as new turns', (
+    tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'Portuguese'
+      ..lessonLocalId = 'lesson-chat-doubt'
+      ..route = '/cyber/aula'
+      ..aulaSnapshot = _chatSnapshot(phase: const ClassroomPhase.reading())
+      ..setDoubt(
+        const DoubtState(
+          status: DoubtStatus.explaining,
+          progress: 100,
+          response: DoubtResponse(explanation: 'Primeira resposta da dúvida.'),
+        ),
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+
+    session.setDoubt(
+      const DoubtState(
+        status: DoubtStatus.explaining,
+        progress: 100,
+        response: DoubtResponse(explanation: 'Segunda resposta da dúvida.'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+
+    final timeline = tester.widget<ChatAulaTimeline>(
+      find.byType(ChatAulaTimeline),
+    );
+    final texts = timeline.messages.map((message) => message.text).toList();
+    expect(texts, contains('Primeira resposta da dúvida.'));
+    expect(texts, contains('Segunda resposta da dúvida.'));
+  });
+
+  testWidgets('chat feedback advance is disabled while doubt is processing', (
+    tester,
+  ) async {
+    var advances = 0;
+    final session = LabSession()
+      ..setDoubt(
+        const DoubtState(status: DoubtStatus.processing, progress: 40),
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            session: session,
+            messages: const [
+              ChatLessonMessage(
+                id: 'feedback',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.feedback,
+                text: 'Feedback pronto.',
+                isCorrect: true,
+                actionKey: 'aula_next_item',
+              ),
+            ],
+            onChooseAnswer: (_) {},
+            onSignal: (_) {},
+            onRetry: () {},
+            onNext: () => advances++,
+            onOpenDoubt: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Próximo tópico'));
+    await tester.pump();
+
+    expect(advances, 0);
+  });
 
   testWidgets('chat classroom shows audio bubble and stops audio on tap', (
     tester,
