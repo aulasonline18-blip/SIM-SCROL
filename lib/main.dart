@@ -272,9 +272,12 @@ class _SimAppState extends State<SimApp> {
       case '/cyber/placement':
         screen = PlacementLabScreen(session: session);
       case '/cyber/aula':
-        screen = SimScrollFlags.aulaChat
-            ? ChatAulaScreen(session: session)
-            : AulaLabScreen(session: session);
+        screen = _guardActiveLesson(
+          session,
+          child: SimScrollFlags.aulaChat
+              ? ChatAulaScreen(session: session)
+              : AulaLabScreen(session: session),
+        );
       case '/creditos':
         screen = _guardAuthenticated(
           session,
@@ -330,6 +333,20 @@ class _SimAppState extends State<SimApp> {
       ),
     );
   }
+}
+
+Widget _guardActiveLesson(LabSession session, {required Widget child}) {
+  final guarded = _guardAuthenticated(
+    session,
+    target: '/cyber/aula',
+    child: child,
+  );
+  if (guarded != child) return guarded;
+  final id = session.lessonLocalId;
+  if (id == null || id.trim().isEmpty) {
+    return ObjetoScreen(session: session);
+  }
+  return child;
 }
 
 Widget _guardAuthenticated(

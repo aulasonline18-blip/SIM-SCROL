@@ -28,12 +28,35 @@ void main() {
     final session = LabSession()
       ..authed = true
       ..authReady = true
-      ..route = '/cyber/aula';
+      ..route = '/cyber/aula'
+      ..lessonLocalId = 'lesson-chat-route';
 
     await tester.pumpWidget(SimMobileApp(initialSession: session));
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatAulaScreen), findsOneWidget);
+  });
+
+  testWidgets('A rota de aula sem lessonLocalId volta para objetivo', (
+    WidgetTester tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..route = '/cyber/aula';
+
+    await tester.pumpWidget(SimMobileApp(initialSession: session));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatAulaScreen), findsNothing);
+    expect(
+      _textAny([
+        'Tell us about who is going to study',
+        'Conte-nos sobre quem vai estudar',
+        'Parlez-nous de la personne qui va étudier',
+      ]),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Portal shows SIM entry point', (WidgetTester tester) async {
@@ -387,6 +410,7 @@ void main() {
       ..authed = true
       ..authReady = true
       ..route = '/cyber/aula'
+      ..lessonLocalId = 'lesson-no-curriculum'
       ..aulaRuntimeError = 'Aula sem curriculo no Estado do aluno.';
 
     await tester.pumpWidget(SimMobileApp(initialSession: session));
@@ -568,7 +592,7 @@ void main() {
 
     await tester.tap(find.text('Nova aula'));
     await tester.pumpAndSettle();
-    expect(session.route, '/cyber/aula');
+    expect(session.route, '/cyber/objeto');
     expect(session.lessonLocalId, isNull);
 
     session.lessonLocalId = 'lesson-delete';

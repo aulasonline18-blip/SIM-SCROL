@@ -237,13 +237,37 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         id: 'engine-error',
         role: ChatLessonMessageRole.system,
         kind: ChatLessonMessageKind.error,
-        text: phase?.message ?? input.runtimeError,
+        text: _studentFacingRuntimeError(phase?.message ?? input.runtimeError),
         actionKey: 'retry',
       ),
     );
   }
 
   return messages;
+}
+
+String? _studentFacingRuntimeError(String? raw) {
+  final text = raw?.trim();
+  if (text == null || text.isEmpty) return null;
+  final lower = text.toLowerCase();
+  if (lower.contains('lessonlocalid ausente')) {
+    return 'Escolha um objetivo para abrir a aula.';
+  }
+  if (lower.contains('http 401') ||
+      lower.contains('http 403') ||
+      lower.contains('invalid token') ||
+      lower.contains('unauthorized') ||
+      lower.contains('forbidden') ||
+      lower.contains('missing bearer')) {
+    return 'Sua sessão expirou. Entre novamente para continuar a aula.';
+  }
+  if (lower.contains('socketexception') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('connection') ||
+      lower.contains('timeout')) {
+    return 'Não consegui falar com o servidor agora. Tente novamente.';
+  }
+  return text;
 }
 
 String _activeMessageId(

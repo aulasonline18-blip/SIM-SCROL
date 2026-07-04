@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/features/onboarding/preparation_and_placement.dart';
+import 'package:sim_mobile/features/classroom/chat_aula_timeline_builder.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
 import 'package:sim_mobile/sim/auxiliary/aux_room_models.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
@@ -64,6 +66,26 @@ void main() {
     },
   );
 
+  test(
+    'preparacao real sem sessao nao chama servidor protegido e manda para login',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final session = LabSession(prefs: prefs)
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'pt-BR'
+        ..freeText = 'Quero aprender frações começando do zero.';
+
+      expect(session.saveObjectiveEntry(), isTrue);
+      await session.launchExperience();
+
+      expect(session.route, '/login');
+      expect(session.returnTo, '/cyber/curriculo');
+      expect(session.entryStatus, 'erro');
+      expect(session.entryError, contains('Entre novamente'));
+    },
+  );
+
   testWidgets(
     'curriculo copia SimWeb e espera authReady/authed antes de chamar T00',
     (tester) async {
@@ -113,6 +135,29 @@ void main() {
       expect(session.route, '/cyber/aula');
     },
   );
+
+  test('erros técnicos de auth e aula sem id são saneados no chat', () {
+    final messages = buildChatLessonMessages(
+      const ChatLessonTimelineInput(
+        snapshot: null,
+        runtimeError:
+            'SimExternalAiException HTTP 401: {"error":"Unauthorized","reason":"invalid token"}',
+      ),
+    );
+    expect(
+      messages.single.text,
+      'Sua sessão expirou. Entre novamente para continuar a aula.',
+    );
+
+    final noLesson = buildChatLessonMessages(
+      const ChatLessonTimelineInput(
+        snapshot: null,
+        runtimeError:
+            'Bad state: lessonLocalId ausente para abrir organismo SIM.',
+      ),
+    );
+    expect(noLesson.single.text, 'Escolha um objetivo para abrir a aula.');
+  });
 
   test(
     'startNewLessonFromDrawer clears stale aula media and audio UI state',
@@ -164,7 +209,7 @@ void main() {
       expect(session.lessonImageOfferLoading, isFalse);
       expect(session.audioPlaying, isFalse);
       expect(session.audioLoading, isFalse);
-      expect(session.route, '/cyber/aula');
+      expect(session.route, '/cyber/objeto');
     },
   );
 

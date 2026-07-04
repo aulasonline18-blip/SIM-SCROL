@@ -361,7 +361,7 @@ class LabSession extends ChangeNotifier {
       ..reviewRoom = null
       ..recoveryRoom = null
       ..resetDoubt();
-    navigationState.openRoute('/cyber/aula');
+    navigationState.openRoute('/cyber/objeto');
     notifyListeners();
   }
 
@@ -747,8 +747,17 @@ class LabSession extends ChangeNotifier {
 
     try {
       final prepareOverride = experiencePreparerOverride;
-      if (prepareOverride == null) {
-        await _refreshPreparationSessionIfPossible();
+      if (prepareOverride == null && prefs != null) {
+        final ready = await _ensureProtectedServerSession(
+          returnTo: '/cyber/curriculo',
+        );
+        if (!ready) {
+          if (!_isCurrentExperience(id, generation)) return;
+          entryStatus = 'erro';
+          entryError = 'Entre novamente para preparar sua aula com segurança.';
+          notifyListeners();
+          return;
+        }
       }
       debugPrint('[SIM] T00_STARTED lessonLocalId=$id');
       final onboarding = <String, dynamic>{
@@ -807,13 +816,25 @@ class LabSession extends ChangeNotifier {
     } on StudentExperienceEngineException catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
       debugPrint('[SIM] BLOCKED reason=${err.error.message}');
-      entryError = err.error.message;
+      if (err.error.kind == StudentExperienceErrorKind.auth) {
+        await _handleProtectedServerAuthFailure(returnTo: '/cyber/curriculo');
+        entryError =
+            'Sua sessão expirou. Entre novamente para continuar a aula.';
+      } else {
+        entryError = err.error.message;
+      }
       entryStatus = 'erro';
       notifyListeners();
     } catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
       debugPrint('[SIM] BLOCKED reason=${err.toString()}');
-      entryError = err.toString();
+      if (_looksLikeAuthFailure(err)) {
+        await _handleProtectedServerAuthFailure(returnTo: '/cyber/curriculo');
+        entryError =
+            'Sua sessão expirou. Entre novamente para continuar a aula.';
+      } else {
+        entryError = err.toString();
+      }
       entryStatus = 'erro';
       notifyListeners();
     }
@@ -840,23 +861,59 @@ class LabSession extends ChangeNotifier {
     ].join(' | ');
   }
 
-  Future<void> _refreshPreparationSessionIfPossible() async {
-    final client = _supabaseClientOrNull();
-    if (client == null) return;
+  Future<bool> _ensureProtectedServerSession({required String returnTo}) async {
+    final token = await _freshServerAccessToken();
+    if (token == null || token.trim().isEmpty) {
+      goLogin(target: returnTo);
+      return false;
+    }
+    return true;
+  }
 
+  Future<String?> _freshServerAccessToken() async {
+    final client = _supabaseClientOrNull();
+    if (client == null) return null;
     if (!authReady) {
       authSession.bindRealAuth();
     }
-
-    final session = client.auth.currentSession;
-    if (session != null) {
-      if (session.isExpired) {
-        try {
-          await client.auth.refreshSession();
-        } catch (_) {}
-      }
-      applySupabaseSession(client.auth.currentSession);
+    var session = client.auth.currentSession;
+    if (session == null) {
+      applySupabaseSession(null);
+      return null;
     }
+    if (session.isExpired) {
+      try {
+        final refreshed = await client.auth.refreshSession();
+        session = refreshed.session ?? client.auth.currentSession;
+      } catch (_) {
+        applySupabaseSession(null);
+        return null;
+      }
+    }
+    applySupabaseSession(session);
+    final token = session?.accessToken.trim();
+    return token == null || token.isEmpty ? null : token;
+  }
+
+  Future<void> _handleProtectedServerAuthFailure({
+    required String returnTo,
+  }) async {
+    try {
+      await authSession.signOutReal();
+    } catch (_) {
+      applySupabaseSession(null);
+    }
+    goLogin(target: returnTo);
+  }
+
+  bool _looksLikeAuthFailure(Object error) {
+    final lower = error.toString().toLowerCase();
+    return lower.contains('http 401') ||
+        lower.contains('http 403') ||
+        lower.contains('invalid token') ||
+        lower.contains('unauthorized') ||
+        lower.contains('forbidden') ||
+        lower.contains('missing bearer');
   }
 
   void retryExperience() {
@@ -1212,8 +1269,7 @@ class LabSession extends ChangeNotifier {
       baseUrl: simApiBaseUrl,
       t00Path: '/api/bootstrap-t00',
       t02Path: '/api/complete-lesson',
-      accessTokenProvider: () async =>
-          _supabaseClientOrNull()?.auth.currentSession?.accessToken,
+      accessTokenProvider: _freshServerAccessToken,
     );
   }
 
@@ -1684,6 +1740,14 @@ class LabSession extends ChangeNotifier {
 
   Future<void> openAulaRuntime() async {
     if (aulaRuntimeLoading) return;
+    final id = lessonLocalId;
+    if (id == null || id.trim().isEmpty) {
+      aulaSnapshot = null;
+      aulaRuntimeError = null;
+      navigationState.openRoute('/cyber/objeto');
+      notifyListeners();
+      return;
+    }
     aulaRuntimeLoading = true;
     aulaRuntimeError = null;
     notifyListeners();

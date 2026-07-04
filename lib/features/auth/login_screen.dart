@@ -217,11 +217,17 @@ class _LoginScreenState extends State<LoginScreen> {
                               children: [
                                 const GoogleMark(),
                                 const SizedBox(width: 10),
-                                Text(
-                                  loading ? t('login_wait') : t('login_google'),
-                                  style: TextStyle(
-                                    color: palette.text,
-                                    fontWeight: FontWeight.w600,
+                                Flexible(
+                                  child: Text(
+                                    loading
+                                        ? t('login_wait')
+                                        : t('login_google'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: palette.text,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ],
