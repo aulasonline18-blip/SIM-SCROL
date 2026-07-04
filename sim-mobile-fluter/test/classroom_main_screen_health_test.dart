@@ -10,8 +10,10 @@ import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
+import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
 LabSession _readyAulaSession() {
+  setSimActiveLanguage('pt');
   final session = LabSession()
     ..authed = true
     ..authReady = true
@@ -30,6 +32,12 @@ Future<LabSession> _pumpAula(WidgetTester tester) async {
   await session.openAulaRuntime();
   await tester.pumpAndSettle();
   return session;
+}
+
+Finder _signal2Finder() {
+  return find.bySemanticsLabel(
+    t('signal_option_named', {'value': 2, 'label': t('aula_sig_revisar')}),
+  );
 }
 
 void main() {
@@ -104,7 +112,7 @@ void main() {
 
     await tester.tap(find.text('B'));
     await tester.pumpAndSettle();
-    expect(find.bySemanticsLabel('Sinal 2: Revisar'), findsOneWidget);
+    expect(_signal2Finder(), findsOneWidget);
 
     await tester.binding.setSurfaceSize(null);
     semantics.dispose();
@@ -243,9 +251,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final selectedRect = tester.getRect(find.bySemanticsLabel('Alternativa B'));
-    final signalRect = tester.getRect(
-      find.bySemanticsLabel('Sinal 2: Revisar'),
-    );
+    final signalRect = tester.getRect(_signal2Finder());
     final nextOptionRect = tester.getRect(
       find.bySemanticsLabel('Alternativa C'),
     );

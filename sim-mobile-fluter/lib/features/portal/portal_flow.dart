@@ -104,7 +104,7 @@ class PortalScreen extends StatelessWidget {
                         session.authed
                             ? RoundIconButton(
                                 icon: Icons.menu,
-                                tooltip: 'Open lessons menu',
+                                tooltip: t('menu_open_lessons'),
                                 onTap: () => _showLabDrawer(context),
                               )
                             : const SizedBox(width: 48, height: 48),
@@ -116,8 +116,8 @@ class PortalScreen extends StatelessWidget {
                                   ? Icons.light_mode_outlined
                                   : Icons.dark_mode_outlined,
                               semanticLabel: theme.darkMode
-                                  ? 'Ativar modo claro'
-                                  : 'Ativar modo escuro',
+                                  ? t('theme_light')
+                                  : t('theme_dark'),
                               onPressed: theme.onToggleDarkMode,
                             ),
                             const SizedBox(width: 8),
@@ -195,7 +195,7 @@ class _PortalDrawerBody extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         MenuLine(
-          label: 'Abrir aula',
+          label: t('menu_open_lesson'),
           onTap: () {
             close();
             final id = session.lessonLocalId;
@@ -215,28 +215,28 @@ class _PortalDrawerBody extends StatelessWidget {
           },
         ),
         MenuLine(
-          label: 'Painel do Pai',
+          label: t('parent_panel'),
           onTap: () {
             close();
             session.openSupport('/pai');
           },
         ),
         MenuLine(
-          label: 'Privacidade',
+          label: t('privacy'),
           onTap: () {
             close();
             session.openSupport('/privacidade');
           },
         ),
         MenuLine(
-          label: 'Termos',
+          label: t('terms'),
           onTap: () {
             close();
             session.openSupport('/termos');
           },
         ),
         MenuLine(
-          label: 'Solicitar exclusão da conta',
+          label: t('delete_account_request'),
           onTap: () {
             close();
             session.openSupport('/conta/deletar');
@@ -502,14 +502,14 @@ class HelpCard extends StatelessWidget {
             children: [
               ContactButton(
                 asset: 'assets/whatsapp-logo.png',
-                label: 'Contact us on WhatsApp',
+                label: t('contact_whatsapp'),
                 onTap: () => session.openExternalDoor(
                   'https://wa.me/message/RLCYEXAYFUIIA1',
                 ),
               ),
               ContactButton(
                 asset: 'assets/messenger-logo.png',
-                label: 'Contact us on Messenger',
+                label: t('contact_messenger'),
                 onTap: () =>
                     session.openExternalDoor('https://m.me/61557707493807'),
               ),
@@ -518,7 +518,7 @@ class HelpCard extends StatelessWidget {
           if (session.externalDoorOpened != null) ...[
             const SizedBox(height: 10),
             Text(
-              'Porta externa: ${session.externalDoorOpened}',
+              t('external_door', {'url': session.externalDoorOpened}),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: palette.muted,

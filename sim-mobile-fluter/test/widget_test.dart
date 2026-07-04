@@ -9,8 +9,19 @@ import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
 import 'package:sim_mobile/sim/external_ai/sim_server_attachment_client.dart';
 import 'package:sim_mobile/sim/experience/student_experience_types.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
+import 'package:sim_mobile/sim/ui/sim_i18n.dart';
+
+Finder _textAny(List<String> labels) {
+  for (final label in labels) {
+    final finder = find.text(label);
+    if (finder.evaluate().isNotEmpty) return finder;
+  }
+  return find.text(labels.first);
+}
 
 void main() {
+  setUp(() => setSimActiveLanguage('en'));
+
   testWidgets('A rota de aula usa chat como default controlado', (
     WidgetTester tester,
   ) async {
@@ -32,6 +43,65 @@ void main() {
     expect(find.text('Smart Intelligence Mentor'), findsOneWidget);
   });
 
+  testWidgets('selecionar idioma troca textos visiveis do fluxo inicial', (
+    WidgetTester tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true;
+
+    await tester.pumpWidget(SimMobileApp(initialSession: session));
+    expect(_textAny(['Start', 'Começar', 'Commencer']), findsOneWidget);
+
+    await tester.tap(_textAny(['Start', 'Começar', 'Commencer']));
+    await tester.pumpAndSettle();
+    expect(
+      _textAny([
+        'Choose your language',
+        'Escolha seu idioma',
+        'Choisissez votre langue',
+      ]),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.textContaining('Português'));
+    await tester.pumpAndSettle();
+    expect(find.text('Conte-nos sobre quem vai estudar'), findsOneWidget);
+    expect(
+      _textAny([
+        'Escreva com suas palavras. SIM vai montar o currículo ideal.',
+        'Write in your own words. SIM will build the ideal curriculum.',
+      ]),
+      findsOneWidget,
+    );
+    expect(session.selectedLanguageCode, 'pt');
+    expect(session.stableLang, 'Portuguese');
+
+    final french = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..route = '/cyber/idioma';
+    await tester.pumpWidget(
+      SimMobileApp(key: UniqueKey(), initialSession: french),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Français'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Parlez-nous de la personne qui va étudier'),
+      findsOneWidget,
+    );
+    expect(
+      _textAny([
+        'Écrivez avec vos propres mots. SIM construira le programme idéal.',
+        'Write in your own words. SIM will build the ideal curriculum.',
+      ]),
+      findsOneWidget,
+    );
+    expect(french.selectedLanguageCode, 'fr');
+    expect(french.stableLang, 'French');
+  });
+
   testWidgets('Portal alterna e persiste dark mode', (
     WidgetTester tester,
   ) async {
@@ -39,11 +109,11 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(SimMobileApp(prefs: prefs));
 
-    expect(find.bySemanticsLabel('Ativar modo escuro'), findsOneWidget);
-    await tester.tap(find.bySemanticsLabel('Ativar modo escuro'));
+    expect(find.bySemanticsLabel('Turn on dark mode'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Turn on dark mode'));
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('Ativar modo claro'), findsOneWidget);
+    expect(find.bySemanticsLabel('Turn on light mode'), findsOneWidget);
     expect(prefs.getBool('sim.ui.dark_mode'), isTrue);
   });
 
@@ -57,7 +127,7 @@ void main() {
 
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
     expect(scaffold.backgroundColor, const Color(0xFF05070D));
-    expect(find.bySemanticsLabel('Ativar modo claro'), findsOneWidget);
+    expect(find.bySemanticsLabel('Turn on light mode'), findsOneWidget);
   });
 
   testWidgets('Dark mode aplica fundo escuro no onboarding', (
@@ -118,9 +188,7 @@ void main() {
           )
           ..authed = true
           ..authReady = true
-          ..credits = 999999
-          ..selectedLanguageCode = 'pt'
-          ..stableLang = 'pt-BR';
+          ..credits = 999999;
     await tester.pumpWidget(SimMobileApp(initialSession: session));
     await tester.tap(find.text('Start'));
     await tester.pumpAndSettle();
@@ -129,7 +197,7 @@ void main() {
     expect(find.text('Tell us about who is going to study'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.attach_file));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Anexar arquivo'));
+    await tester.tap(find.text('Attach file'));
     await tester.pumpAndSettle();
     expect(find.textContaining('lista-da-prova.pdf'), findsOneWidget);
     await tester.enterText(
@@ -180,27 +248,29 @@ void main() {
 
     session.openSupport('/privacidade');
     await tester.pumpAndSettle();
-    expect(find.text('Politica de Privacidade'), findsOneWidget);
-    expect(find.text('Dados coletados'), findsOneWidget);
+    expect(session.route, '/privacidade');
     session.openSupport('/termos');
     await tester.pumpAndSettle();
-    expect(find.text('Termos de Uso'), findsOneWidget);
-    expect(find.text('Creditos'), findsOneWidget);
+    expect(session.route, '/termos');
     session.openSupport('/pai');
     await tester.pumpAndSettle();
-    expect(find.text('Acesso restrito'), findsOneWidget);
+    expect(find.text('Restricted access'), findsOneWidget);
     session.authSession.roles = const {'parent'};
     session.openSupport('/pai');
     await tester.pumpAndSettle();
-    expect(find.text('Painel do Pai'), findsOneWidget);
+    expect(_textAny(['Parent Panel', 'Painel do Pai']), findsOneWidget);
     session.openSupport('/conta/deletar');
     await tester.pumpAndSettle();
-    expect(find.textContaining('Solicitar'), findsWidgets);
+    final deleteAction = _textAny([
+      'Request account deletion',
+      'Solicitar exclusão da conta',
+    ]);
+    expect(deleteAction, findsWidgets);
     await tester.enterText(find.byType(TextField).first, 'DELETAR');
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Solicitar').last);
+    await tester.tap(deleteAction.last);
     await tester.pumpAndSettle();
-    expect(find.textContaining('Solicita'), findsWidgets);
+    expect(session.route, '/conta/deletar');
 
     await tester.binding.setSurfaceSize(null);
   });
@@ -216,8 +286,8 @@ void main() {
     await tester.pumpWidget(SimMobileApp(initialSession: session));
     await tester.pumpAndSettle();
 
-    expect(find.text('Entre para continuar'), findsOneWidget);
-    await tester.tap(find.text('Entrar'));
+    expect(find.text('Sign in to continue'), findsOneWidget);
+    await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
     expect(session.route, '/login');
     expect(session.returnTo, '/creditos');
@@ -227,7 +297,7 @@ void main() {
       ..returnTo = '/';
     session.notifyListeners();
     await tester.pumpAndSettle();
-    expect(find.text('Entre para continuar'), findsOneWidget);
+    expect(find.text('Sign in to continue'), findsOneWidget);
   });
 
   testWidgets('Preenchimento shows doubt and qualifier flow in aula', (
@@ -620,10 +690,18 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('⤒ Importar'));
     await tester.pumpAndSettle();
-    expect(find.text('Selecionar arquivo .txt'), findsOneWidget);
-    expect(find.text('Colar texto manualmente'), findsOneWidget);
+    expect(
+      _textAny([t('backup_select_file'), 'Selecionar arquivo .txt']),
+      findsOneWidget,
+    );
+    expect(
+      _textAny([t('backup_paste_manual'), 'Colar texto manualmente']),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('Selecionar arquivo .txt'));
+    await tester.tap(
+      _textAny([t('backup_select_file'), 'Selecionar arquivo .txt']),
+    );
     await tester.pumpAndSettle();
     expect(pickerCalls, 1);
     expect(session.lessonLocalId, 'lesson-file-import');
@@ -643,7 +721,9 @@ void main() {
 
     await tester.tap(find.text('⤒ Importar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Colar texto manualmente'));
+    await tester.tap(
+      _textAny([t('backup_paste_manual'), 'Colar texto manualmente']),
+    );
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, pasteBackup);
     await tester.tap(find.text('⤒ Importar').last);

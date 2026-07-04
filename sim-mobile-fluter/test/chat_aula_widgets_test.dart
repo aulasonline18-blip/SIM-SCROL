@@ -16,9 +16,20 @@ import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
+import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 import 'package:sim_mobile/sim/ui/sim_theme.dart';
 
+Finder _textAny(List<String> labels) {
+  for (final label in labels) {
+    final finder = find.text(label);
+    if (finder.evaluate().isNotEmpty) return finder;
+  }
+  return find.text(labels.first);
+}
+
 void main() {
+  setUp(() => setSimActiveLanguage('pt'));
+
   testWidgets('chat timeline renders messages and answer callbacks', (
     tester,
   ) async {
@@ -133,7 +144,9 @@ void main() {
     await tester.tap(find.text('2'));
     expect(signal, 2);
 
-    await tester.tap(find.text('Tentar novamente'));
+    final retryFinder = find.text(t('aula_try_again_2'));
+    expect(retryFinder, findsOneWidget);
+    await tester.tap(retryFinder);
     expect(retries, 1);
   });
 
@@ -165,7 +178,9 @@ void main() {
     );
 
     expect(find.text('Exato! Você domina este ponto.'), findsOneWidget);
-    await tester.tap(find.text('Próximo tópico'));
+    await tester.tap(
+      _textAny(['Próximo tópico', 'Next topic', 'Sujet suivant']),
+    );
     expect(advances, 1);
   });
 
@@ -533,7 +548,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Próximo tópico'));
+    await tester.tap(
+      _textAny(['Próximo tópico', 'Next topic', 'Sujet suivant']),
+    );
     await tester.pump();
 
     expect(advances, 0);

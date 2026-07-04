@@ -88,7 +88,7 @@ class _IdiomaScreenState extends State<IdiomaScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Choose your language',
+            t('language_title'),
             style: TextStyle(
               color: palette.text,
               fontSize: 30,
@@ -98,7 +98,7 @@ class _IdiomaScreenState extends State<IdiomaScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'SIM will use this language for the app, lessons, explanations, images, audio and all guidance - from this point onward.',
+            t('language_body'),
             style: TextStyle(color: palette.muted, fontSize: 18, height: 1.45),
           ),
           const SizedBox(height: 28),
@@ -165,7 +165,7 @@ class _OtherLanguageBoxState extends State<OtherLanguageBox> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Type your language',
+            t('language_type'),
             style: TextStyle(
               color: palette.muted,
               fontSize: 15,
@@ -176,7 +176,7 @@ class _OtherLanguageBoxState extends State<OtherLanguageBox> {
             controller: controller,
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'e.g. Italian, German, Arabic, Kiribati...',
+              hintText: t('language_hint'),
               border: InputBorder.none,
               hintStyle: TextStyle(color: palette.muted),
             ),
@@ -199,7 +199,7 @@ class _OtherLanguageBoxState extends State<OtherLanguageBox> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Text(
-                      'Continue',
+                      t('continue'),
                       style: TextStyle(
                         color: palette.dark ? palette.onPrimary : simDark,
                         fontSize: 17,
@@ -253,8 +253,8 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
   void showObjectiveRequired() {
     setState(() {
       error = widget.session.attachments.isNotEmpty
-          ? objectiveRequiredWithAttachmentMessage
-          : objectiveRequiredMessage;
+          ? 'objective_required_attachment'
+          : 'objective_required';
     });
   }
 
@@ -275,7 +275,7 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
 
   Future<void> addAttachment(String source) async {
     if (widget.session.attachments.length >= maxAttachments) {
-      setState(() => error = 'Limite de 3 anexos por envio.');
+      setState(() => error = 'attachment_limit');
       return;
     }
     setState(() {
@@ -310,9 +310,9 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const CardTitle(
+                CardTitle(
                   icon: Icons.chat_bubble_outline,
-                  title: 'What should SIM help with?',
+                  title: t('objeto_card1_title'),
                 ),
                 AttachmentPreviewList(
                   attachments: widget.session.attachments,
@@ -331,9 +331,9 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Campo obrigatório',
-                            style: TextStyle(
+                          Text(
+                            t('objeto_required_label'),
+                            style: const TextStyle(
                               color: Colors.black,
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -341,9 +341,9 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            'Escreva o que você quer estudar. Se anexar um arquivo ou foto, explique o que deseja aprender com ele.',
-                            style: TextStyle(
+                          Text(
+                            t('objeto_required_help'),
+                            style: const TextStyle(
                               color: simMuted,
                               fontSize: 13,
                               height: 1.35,
@@ -355,12 +355,11 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
                             minLines: 6,
                             maxLines: 8,
                             maxLength: maxFreeText,
-                            decoration: const InputDecoration(
-                              hintText:
-                                  'Ex: Quero estudar essa lista para a prova.',
+                            decoration: InputDecoration(
+                              hintText: t('objeto_hint'),
                               border: InputBorder.none,
                               counterText: '',
-                              contentPadding: EdgeInsets.only(bottom: 48),
+                              contentPadding: const EdgeInsets.only(bottom: 48),
                             ),
                             style: const TextStyle(
                               color: simDark,
@@ -369,9 +368,8 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
                             ),
                             onChanged: (value) {
                               widget.session.setFreeText(value);
-                              if (error == objectiveRequiredMessage ||
-                                  error ==
-                                      objectiveRequiredWithAttachmentMessage) {
+                              if (error == 'objective_required' ||
+                                  error == 'objective_required_attachment') {
                                 setState(() => error = null);
                               } else {
                                 setState(() {});
@@ -384,7 +382,7 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
                         left: 0,
                         bottom: 0,
                         child: IconButton(
-                          tooltip: 'Abrir menu de anexos',
+                          tooltip: t('attachment_open_menu'),
                           onPressed: () => setState(
                             () => attachmentMenuOpen = !attachmentMenuOpen,
                           ),
@@ -417,23 +415,27 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Conte do seu jeito. Quanto mais você explicar seu nível, dificuldade, prova, prazo e onde trava, melhor o SIM encontra seu ponto da travessia.',
-                  style: TextStyle(color: simMuted, fontSize: 13, height: 1.35),
+                Text(
+                  t('objeto_long_help'),
+                  style: const TextStyle(
+                    color: simMuted,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
                 ),
                 if (widget.session.attachments.isNotEmpty &&
                     objectiveTooShort) ...[
                   const SizedBox(height: 8),
-                  const Text(
-                    objectiveRequiredWithAttachmentMessage,
-                    style: TextStyle(color: Colors.black, fontSize: 13),
+                  Text(
+                    t('objective_required_attachment'),
+                    style: const TextStyle(color: Colors.black, fontSize: 13),
                   ),
                 ],
                 if (remaining < 0) ...[
                   const SizedBox(height: 6),
-                  const Text(
-                    'Texto muito longo.',
-                    style: TextStyle(color: Colors.black, fontSize: 12),
+                  Text(
+                    t('objeto_too_long'),
+                    style: const TextStyle(color: Colors.black, fontSize: 12),
                   ),
                 ],
               ],
@@ -472,7 +474,7 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
           if (error != null) ...[
             const SizedBox(height: 16),
             Text(
-              error!,
+              t(error!),
               style: const TextStyle(color: Colors.black, fontSize: 14),
             ),
           ],
@@ -527,7 +529,7 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
                             sending
                                 ? t('objetivo_reading')
                                 : waitingAttachment
-                                ? 'Aguardando leitura do anexo...'
+                                ? t('attachment_waiting')
                                 : objectiveTooShort
                                 ? t('objeto_helper')
                                 : t('objeto_save_continue'),
@@ -557,56 +559,65 @@ class GuidedOnboardingSection extends StatelessWidget {
   static const _groups = [
     _GuidedGroup(
       keyName: 'purpose',
-      title: 'Qual resultado você quer?',
-      options: [
-        'Prova da escola',
-        'Concurso',
-        'Vestibular/ENEM',
-        'Lista de exercícios',
-        'Entender uma matéria',
+      titleKey: 'guided_purpose',
+      optionKeys: [
+        'guided_school_test',
+        'guided_exam',
+        'guided_enem',
+        'guided_exercises',
+        'guided_understand',
       ],
     ),
     _GuidedGroup(
       keyName: 'level',
-      title: 'Qual é seu ponto hoje?',
-      options: [
-        'Começando do zero',
-        'Sei um pouco',
-        'Erro muito',
-        'Quero avançado',
+      titleKey: 'guided_level',
+      optionKeys: [
+        'guided_zero',
+        'guided_some',
+        'guided_errors',
+        'guided_advanced',
       ],
     ),
     _GuidedGroup(
       keyName: 'blocker',
-      title: 'Onde o estudo pesa?',
-      options: [
-        'Falta base',
-        'Não entendo explicação',
-        'Esqueço rápido',
-        'Dificuldade de concentração',
-        'Travou em exercícios',
+      titleKey: 'guided_blocker',
+      optionKeys: [
+        'guided_base',
+        'guided_explanation',
+        'guided_memory',
+        'guided_focus',
+        'guided_exercise_block',
       ],
     ),
     _GuidedGroup(
       keyName: 'deadline',
-      title: 'Tem prazo?',
-      options: ['Hoje', 'Esta semana', 'Este mês', 'Sem prazo'],
+      titleKey: 'guided_deadline',
+      optionKeys: [
+        'guided_today',
+        'guided_week',
+        'guided_month',
+        'guided_no_deadline',
+      ],
     ),
     _GuidedGroup(
       keyName: 'style',
-      title: 'Como o SIM deve conduzir?',
-      options: [
-        'Bem simples',
-        'Passo a passo',
-        'Com imagens',
-        'Com áudio',
-        'Mais direto',
+      titleKey: 'guided_style',
+      optionKeys: [
+        'guided_simple',
+        'guided_step',
+        'guided_images',
+        'guided_audio',
+        'guided_direct',
       ],
     ),
     _GuidedGroup(
       keyName: 'start',
-      title: 'Como quer começar?',
-      options: ['Do zero', 'Descobrir meu ponto', 'Ir direto para o que cai'],
+      titleKey: 'guided_start',
+      optionKeys: [
+        'guided_from_zero',
+        'guided_find_point',
+        'guided_direct_exam',
+      ],
     ),
   ];
 
@@ -617,18 +628,15 @@ class GuidedOnboardingSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CardTitle(
-            icon: Icons.route_outlined,
-            title: 'Monte sua travessia',
-          ),
-          const Text(
-            'Responda o que souber. Isso ajuda o SIM a começar mais perto do seu nível e economizar passos.',
-            style: TextStyle(color: simMuted, fontSize: 13, height: 1.35),
+          CardTitle(icon: Icons.route_outlined, title: t('guided_title')),
+          Text(
+            t('guided_body'),
+            style: const TextStyle(color: simMuted, fontSize: 13, height: 1.35),
           ),
           const SizedBox(height: 14),
           for (final group in _groups) ...[
             Text(
-              group.title,
+              t(group.titleKey),
               style: const TextStyle(
                 color: simDark,
                 fontSize: 14,
@@ -640,13 +648,13 @@ class GuidedOnboardingSection extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final option in group.options)
+                for (final optionKey in group.optionKeys)
                   _GuidedChip(
-                    label: option,
-                    selected: answers[group.keyName] == option,
+                    label: t(optionKey),
+                    selected: answers[group.keyName] == optionKey,
                     onTap: () => session.setGuidedAnswer(
                       group.keyName,
-                      answers[group.keyName] == option ? '' : option,
+                      answers[group.keyName] == optionKey ? '' : optionKey,
                     ),
                   ),
               ],
@@ -662,13 +670,13 @@ class GuidedOnboardingSection extends StatelessWidget {
 class _GuidedGroup {
   const _GuidedGroup({
     required this.keyName,
-    required this.title,
-    required this.options,
+    required this.titleKey,
+    required this.optionKeys,
   });
 
   final String keyName;
-  final String title;
-  final List<String> options;
+  final String titleKey;
+  final List<String> optionKeys;
 }
 
 class _GuidedChip extends StatelessWidget {
@@ -822,9 +830,12 @@ class AttachmentMenu extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            MenuLine(label: 'Anexar arquivo', onTap: () => onPick('document')),
-            MenuLine(label: 'Tirar foto', onTap: () => onPick('camera')),
-            MenuLine(label: 'Escolher imagem', onTap: () => onPick('image')),
+            MenuLine(
+              label: t('attach_document'),
+              onTap: () => onPick('document'),
+            ),
+            MenuLine(label: t('attach_camera'), onTap: () => onPick('camera')),
+            MenuLine(label: t('attach_image'), onTap: () => onPick('image')),
           ],
         ),
       ),

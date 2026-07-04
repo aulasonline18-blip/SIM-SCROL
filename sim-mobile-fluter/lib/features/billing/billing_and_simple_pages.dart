@@ -56,6 +56,10 @@ import '../classroom/aula_widgets.dart';
 import '../billing/billing_and_simple_pages.dart';
 import '../../shared/widgets/shared_widgets.dart';
 
+bool widgetRouteIsPrivacy(String route) {
+  return (Uri.tryParse(route)?.path ?? route) == '/privacidade';
+}
+
 class CreditsLabScreen extends StatefulWidget {
   const CreditsLabScreen({required this.session, super.key});
 
@@ -101,7 +105,7 @@ class _CreditsLabScreenState extends State<CreditsLabScreen> {
                       SimIconAction(
                         icon: Icons.arrow_back,
                         onPressed: session.goPortal,
-                        semanticLabel: 'Voltar',
+                        semanticLabel: t('guard_back'),
                         size: 44,
                       ),
                       Expanded(
@@ -254,7 +258,7 @@ class _CreditsLabScreenState extends State<CreditsLabScreen> {
                   ),
                   const SizedBox(height: 18),
                   SecondaryWideButton(
-                    label: 'Voltar para aula',
+                    label: t('back_to_lesson'),
                     onTap: () => session.openSupport('/cyber/aula'),
                   ),
                 ],
@@ -290,7 +294,7 @@ class CreditPackButton extends StatelessWidget {
       child: Semantics(
         button: true,
         enabled: !disabled,
-        label: 'Comprar $credits créditos',
+        label: t('buy_credits_named', {'credits': credits}),
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(18),
@@ -396,20 +400,25 @@ class _CheckoutReturnScreenState extends State<CheckoutReturnScreen> {
         final pending = state?.status == CheckoutStatusKind.pending;
         final error = state?.error;
         return SimpleLabPage(
-          title: 'Retorno do pagamento',
+          title: t('checkout_return_title'),
           body: loading
-              ? 'Validando seu pagamento...'
+              ? t('checkout_validating')
               : success
-              ? 'Pagamento confirmado. ${state?.credits ?? 0} cr\u00e9ditos foram adicionados. Seu saldo agora \u00e9 ${state?.balance ?? widget.session.credits}.'
+              ? t('checkout_confirmed', {
+                  'credits': state?.credits ?? 0,
+                  'balance': state?.balance ?? widget.session.credits,
+                })
               : pending
-              ? 'O pagamento ainda n\u00e3o foi confirmado. Aguarde alguns segundos e tente novamente.'
-              : 'N\u00e3o foi poss\u00edvel confirmar o pagamento${error == null ? '.' : ': $error'}',
-          primary: success ? 'Continuar aula' : 'Tentar novamente',
+              ? t('checkout_pending')
+              : t('checkout_failed', {
+                  'error': error == null ? '' : ': $error',
+                }),
+          primary: success ? t('continue_lesson') : t('aula_try_again_2'),
           onPrimary: () => success
               ? widget.session.openSupport(state?.returnTo ?? '/cyber/aula')
               : widget.session.openCredits(),
           session: widget.session,
-          secondary: success ? 'Comprar mais' : 'Voltar',
+          secondary: success ? t('buy_more') : t('guard_back'),
           onSecondary: success
               ? widget.session.openCredits
               : widget.session.goPortal,
@@ -427,10 +436,14 @@ class FatherLabScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SimpleLabPage(
-      title: 'Painel do Pai',
-      body:
-          'Resumo vivo: idioma ${session.stableLang ?? '-'}, objetivo ${session.freeText.isEmpty ? '-' : session.freeText}, item ${session.currentAulaItemNumber}, camada ${session.currentAulaLayer.value}.',
-      primary: 'Voltar',
+      title: t('parent_panel'),
+      body: t('parent_summary', {
+        'lang': session.stableLang ?? '-',
+        'goal': session.freeText.isEmpty ? '-' : session.freeText,
+        'item': session.currentAulaItemNumber,
+        'layer': session.currentAulaLayer.value,
+      }),
+      primary: t('guard_back'),
       onPrimary: () => session.openSupport('/cyber/aula'),
       session: session,
     );
@@ -445,7 +458,7 @@ class LegalLabScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = title == 'Privacidade'
+    final content = widgetRouteIsPrivacy(session.route)
         ? privacyPageContent
         : termsPageContent;
     return Scaffold(
@@ -497,7 +510,7 @@ class LegalLabScreen extends StatelessWidget {
                   const SizedBox(height: 14),
                 ],
                 PrimaryWideButton(
-                  label: 'Voltar',
+                  label: t('guard_back'),
                   onTap: () => session.openSupport('/cyber/aula'),
                 ),
               ],
@@ -524,18 +537,22 @@ class DeleteAccountLabScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Solicitar exclus\u00e3o da conta',
-                  style: TextStyle(
+                Text(
+                  t('delete_account_request'),
+                  style: const TextStyle(
                     color: simDark,
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Digite DELETAR para registrar a solicita\u00e7\u00e3o de exclus\u00e3o. A execu\u00e7\u00e3o real acontece no servidor, sem chave secreta dentro do app.',
-                  style: TextStyle(color: simMuted, fontSize: 15, height: 1.45),
+                Text(
+                  t('delete_account_body'),
+                  style: const TextStyle(
+                    color: simMuted,
+                    fontSize: 15,
+                    height: 1.45,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 SimInput(
@@ -556,13 +573,13 @@ class DeleteAccountLabScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 PrimaryWideButton(
                   label: session.lessonUiState.accountDeletionLoading
-                      ? 'Registrando...'
-                      : 'Solicitar exclus\u00e3o da conta',
+                      ? t('delete_account_registering')
+                      : t('delete_account_request'),
                   onTap: session.requestAccountDeletion,
                 ),
                 const SizedBox(height: 10),
                 SecondaryWideButton(
-                  label: 'Voltar',
+                  label: t('guard_back'),
                   onTap: () => session.openSupport('/cyber/aula'),
                 ),
               ],

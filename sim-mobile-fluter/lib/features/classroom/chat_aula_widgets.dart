@@ -645,7 +645,10 @@ class _SignalButton extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: signal.enabled,
-      label: 'Sinal ${signal.value}',
+      label: t('signal_option_named', {
+        'value': signal.value,
+        'label': t(signal.labelKey),
+      }),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(SimRadius.lg),

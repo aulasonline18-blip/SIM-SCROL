@@ -170,7 +170,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    signup ? 'CREATE ACCOUNT' : 'SIGN IN',
+                    signup
+                        ? t('login_create_account')
+                        : t('login_sign_in_title'),
                     style: TextStyle(
                       color: palette.muted,
                       fontSize: 12,
@@ -216,9 +218,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const GoogleMark(),
                                 const SizedBox(width: 10),
                                 Text(
-                                  loading
-                                      ? 'Please wait...'
-                                      : 'Continue with Google',
+                                  loading ? t('login_wait') : t('login_google'),
                                   style: TextStyle(
                                     color: palette.text,
                                     fontWeight: FontWeight.w600,
@@ -237,7 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 horizontal: 12,
                               ),
                               child: Text(
-                                'or',
+                                t('login_or'),
                                 style: TextStyle(
                                   color: palette.muted,
                                   fontSize: 12,
@@ -252,7 +252,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 16),
                         if (signup) ...[
                           SimInput(
-                            hint: 'Your name',
+                            hint: t('login_name'),
                             controller: nameController,
                             onChanged: (_) {},
                           ),
@@ -266,7 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 12),
                         SimInput(
-                          hint: 'Password (min. 6 characters)',
+                          hint: t('login_password'),
                           controller: passwordController,
                           obscureText: true,
                           onChanged: (_) {},
@@ -284,10 +284,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               onPressed: loading ? null : emailSubmit,
                               child: Text(
                                 loading
-                                    ? 'Please wait...'
+                                    ? t('login_wait')
                                     : signup
-                                    ? 'Create account and get 3 free lessons'
-                                    : 'Sign in',
+                                    ? t('login_create_free')
+                                    : t('login_sign_in'),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: palette.dark
@@ -311,8 +311,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 },
                           child: Text(
                             signup
-                                ? 'Already have an account? Sign in'
-                                : 'No account? Create one now',
+                                ? t('login_has_account')
+                                : t('login_no_account'),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: palette.muted,
@@ -342,7 +342,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextButton(
                     onPressed: widget.session.goPortal,
                     child: Text(
-                      '← Back to portal',
+                      '← ${t('login_back_portal')}',
                       style: TextStyle(
                         color: palette.muted,
                         fontSize: 12,
@@ -357,7 +357,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: () =>
                             widget.session.openSupport('/privacidade'),
                         child: Text(
-                          'Privacidade',
+                          t('privacy'),
                           style: TextStyle(
                             color: palette.muted,
                             fontSize: 12,
@@ -369,7 +369,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextButton(
                         onPressed: () => widget.session.openSupport('/termos'),
                         child: Text(
-                          'Termos',
+                          t('terms'),
                           style: TextStyle(
                             color: palette.muted,
                             fontSize: 12,

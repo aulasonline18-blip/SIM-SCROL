@@ -1821,7 +1821,10 @@ class _SinalRow extends StatelessWidget {
               child: Semantics(
                 button: true,
                 excludeSemantics: true,
-                label: 'Sinal ${labels[i].$1}: ${labels[i].$2}',
+                label: t('signal_option_named', {
+                  'value': labels[i].$1,
+                  'label': labels[i].$2,
+                }),
                 child: Material(
                   color: Colors.transparent,
                   borderRadius: BorderRadius.circular(12),

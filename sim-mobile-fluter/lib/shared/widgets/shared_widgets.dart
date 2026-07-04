@@ -126,7 +126,7 @@ class AnswerButton extends StatelessWidget {
           enabled: enabled,
           selected: active,
           excludeSemantics: true,
-          label: 'Alternativa $label',
+          label: t('answer_option_named', {'label': label}),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -449,7 +449,7 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
     );
     if (!deleted) _flash(t('drawer_delete_cloud_error'));
     setState(() {});
-    _flash('Aula apagada.');
+    _flash(t('lesson_deleted'));
   }
 
   Future<void> _handleDeleteCloud(StudentStateSummaryRow row) async {
@@ -480,7 +480,7 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
     }
     await _refreshCloudLessons();
     setState(() {});
-    _flash('Aula apagada.');
+    _flash(t('lesson_deleted'));
   }
 
   Future<void> _handleExportBackup() async {
@@ -499,7 +499,7 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t('importar')),
-        content: const Text('Importe um backup do SIM por arquivo .txt.'),
+        content: Text(t('backup_import_file_help')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -507,11 +507,11 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop('paste'),
-            child: const Text('Colar texto manualmente'),
+            child: Text(t('backup_paste_manual')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop('file'),
-            child: const Text('Selecionar arquivo .txt'),
+            child: Text(t('backup_select_file')),
           ),
         ],
       ),
@@ -542,8 +542,8 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
           onChanged: (value) => pastedText = value,
           minLines: 6,
           maxLines: 10,
-          decoration: const InputDecoration(
-            hintText: 'Cole o JSON do backup aqui.',
+          decoration: InputDecoration(
+            hintText: t('backup_paste_hint'),
             border: OutlineInputBorder(),
           ),
         ),
@@ -650,7 +650,7 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
               SimIconAction(
                 icon: Icons.close,
                 onPressed: widget.onClose,
-                semanticLabel: 'Fechar menu',
+                semanticLabel: t('close_menu'),
                 size: 36,
               ),
             ],
@@ -760,7 +760,7 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
                             ),
                           ),
                           Text(
-                            'TOP UP',
+                            t('top_up'),
                             style: TextStyle(
                               fontFamily: kMono,
                               fontSize: 10,
@@ -1052,8 +1052,8 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
                 ),
                 const SizedBox(height: 6),
                 SimTextAction(
-                  label: 'Solicitar exclusão da conta',
-                  semanticLabel: 'Solicitar exclusão da conta',
+                  label: t('delete_account_request'),
+                  semanticLabel: t('delete_account_request'),
                   onPressed: () {
                     widget.onClose();
                     session.openSupport('/conta/deletar');
@@ -1171,7 +1171,7 @@ class _DrawerLessonRow extends StatelessWidget {
           Expanded(
             child: Semantics(
               button: true,
-              label: 'Abrir aula ${_lessonTitle(state)}',
+              label: t('open_lesson_named', {'title': _lessonTitle(state)}),
               child: Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
@@ -1288,8 +1288,9 @@ class _DrawerCloudLessonRow extends StatelessWidget {
           Expanded(
             child: Semantics(
               button: true,
-              label:
-                  'Abrir aula ${row.tema.trim().isEmpty ? row.lessonLocalId : row.tema}',
+              label: t('open_lesson_named', {
+                'title': row.tema.trim().isEmpty ? row.lessonLocalId : row.tema,
+              }),
               child: Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
@@ -1474,7 +1475,7 @@ void showSimDrawer(
                           SimIconAction(
                             icon: Icons.close,
                             onPressed: () => Navigator.of(ctx).pop(),
-                            semanticLabel: 'Fechar menu',
+                            semanticLabel: t('close_menu'),
                             size: 36,
                           ),
                         ],

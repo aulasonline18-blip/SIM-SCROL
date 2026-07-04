@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -23,6 +24,7 @@ import 'sim/config/sim_scroll_flags.dart';
 import 'sim/external_ai/sim_ai_server_config.dart';
 import 'sim/state/shared_prefs_state_storage.dart';
 import 'sim/state/student_state_store.dart';
+import 'sim/ui/sim_i18n.dart';
 import 'sim/ui/sim_theme.dart';
 
 export 'features/session/lab_session.dart';
@@ -255,6 +257,7 @@ class _SimAppState extends State<SimApp> {
 
   @override
   Widget build(BuildContext context) {
+    setSimActiveLanguage(session.selectedLanguageCode ?? session.stableLang);
     Widget screen;
     final routePath = Uri.tryParse(session.route)?.path ?? session.route;
     switch (routePath) {
@@ -290,9 +293,9 @@ class _SimAppState extends State<SimApp> {
           child: FatherLabScreen(session: session),
         );
       case '/privacidade':
-        screen = LegalLabScreen(session: session, title: 'Privacidade');
+        screen = LegalLabScreen(session: session, title: t('privacy'));
       case '/termos':
-        screen = LegalLabScreen(session: session, title: 'Termos');
+        screen = LegalLabScreen(session: session, title: t('terms'));
       case '/conta/deletar':
         screen = _guardAuthenticated(
           session,
@@ -311,6 +314,15 @@ class _SimAppState extends State<SimApp> {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'SIM',
+        locale: simActiveLocale,
+        supportedLocales: const [
+          Locale('en'),
+          Locale('pt', 'BR'),
+          Locale('es'),
+          Locale('fr'),
+          Locale('ja'),
+        ],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         themeMode: _darkMode ? ThemeMode.dark : ThemeMode.light,
         theme: lightTheme,
         darkTheme: darkTheme,
@@ -326,18 +338,18 @@ Widget _guardAuthenticated(
   required Widget child,
 }) {
   if (!session.authReady) {
-    return const _RouteGuardScreen(
-      title: 'Verificando conta',
-      body: 'Estamos conferindo sua sessão antes de abrir esta área.',
+    return _RouteGuardScreen(
+      title: t('guard_checking_title'),
+      body: t('guard_checking_body'),
     );
   }
   if (!session.authed) {
     return _RouteGuardScreen(
-      title: 'Entre para continuar',
-      body: 'Esta área usa dados da sua conta e precisa de login.',
-      primary: 'Entrar',
+      title: t('guard_login_title'),
+      body: t('guard_login_body'),
+      primary: t('guard_login_primary'),
       onPrimary: () => session.goLogin(target: target),
-      secondary: 'Voltar',
+      secondary: t('guard_back'),
       onSecondary: session.goPortal,
     );
   }
@@ -356,10 +368,9 @@ Widget _guardParentPanel(LabSession session, {required Widget child}) {
   ]);
   if (!allowed) {
     return _RouteGuardScreen(
-      title: 'Acesso restrito',
-      body:
-          'O painel do responsável exige uma função autorizada na conta. Solicite liberação ao suporte.',
-      primary: 'Voltar',
+      title: t('guard_restricted_title'),
+      body: t('guard_restricted_body'),
+      primary: t('guard_back'),
       onPrimary: session.goPortal,
     );
   }

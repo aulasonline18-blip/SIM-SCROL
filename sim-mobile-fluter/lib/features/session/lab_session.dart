@@ -538,7 +538,11 @@ class LabSession extends ChangeNotifier {
   }
 
   void chooseLanguage(String code, String name) {
-    entryForm.updateLanguage(code, name);
+    final stableLabel = code == 'other'
+        ? name.trim()
+        : stableLangLabelFor(code, name);
+    setSimActiveLanguage(code == 'other' ? stableLabel : code);
+    entryForm.updateLanguage(code, stableLabel);
     final cleanName = name.trim();
     if (code != 'other' || cleanName.isNotEmpty) {
       navigationState.openRoute('/cyber/objeto');
