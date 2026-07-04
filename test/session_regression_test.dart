@@ -86,6 +86,38 @@ void main() {
     },
   );
 
+  test(
+    'erro de auth vindo do preparo fica no curriculo com retry como SimWeb',
+    () async {
+      final session =
+          LabSession(
+              experiencePreparerOverride: (_) async {
+                throw const StudentExperienceEngineException(
+                  StudentExperienceErrorInfo(
+                    kind: StudentExperienceErrorKind.auth,
+                    message:
+                        'HTTP 401: {"error":"Unauthorized","reason":"invalid token"}',
+                  ),
+                );
+              },
+            )
+            ..selectedLanguageCode = 'pt'
+            ..stableLang = 'pt-BR'
+            ..freeText = 'Quero aprender frações começando do zero.'
+            ..authReady = true
+            ..authed = true;
+
+      expect(session.saveObjectiveEntry(), isTrue);
+      await session.launchExperience();
+
+      expect(session.route, '/cyber/curriculo');
+      expect(session.entryStatus, 'erro');
+      expect(session.entryError, contains('HTTP 401'));
+      expect(session.returnTo, '/');
+      expect(session.authed, isTrue);
+    },
+  );
+
   testWidgets(
     'curriculo copia SimWeb e espera authReady/authed antes de chamar T00',
     (tester) async {

@@ -817,25 +817,13 @@ class LabSession extends ChangeNotifier {
     } on StudentExperienceEngineException catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
       debugPrint('[SIM] BLOCKED reason=${err.error.message}');
-      if (err.error.kind == StudentExperienceErrorKind.auth) {
-        await _handleProtectedServerAuthFailure(returnTo: '/cyber/curriculo');
-        entryError =
-            'Sua sessão expirou. Entre novamente para continuar a aula.';
-      } else {
-        entryError = err.error.message;
-      }
+      entryError = err.error.message;
       entryStatus = 'erro';
       notifyListeners();
     } catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
       debugPrint('[SIM] BLOCKED reason=${err.toString()}');
-      if (_looksLikeAuthFailure(err)) {
-        await _handleProtectedServerAuthFailure(returnTo: '/cyber/curriculo');
-        entryError =
-            'Sua sessão expirou. Entre novamente para continuar a aula.';
-      } else {
-        entryError = err.toString();
-      }
+      entryError = err.toString();
       entryStatus = 'erro';
       notifyListeners();
     }
@@ -888,27 +876,6 @@ class LabSession extends ChangeNotifier {
     }
     final token = session?.accessToken.trim();
     return token == null || token.isEmpty ? null : token;
-  }
-
-  Future<void> _handleProtectedServerAuthFailure({
-    required String returnTo,
-  }) async {
-    try {
-      await authSession.signOutReal();
-    } catch (_) {
-      applySupabaseSession(null);
-    }
-    goLogin(target: returnTo);
-  }
-
-  bool _looksLikeAuthFailure(Object error) {
-    final lower = error.toString().toLowerCase();
-    return lower.contains('http 401') ||
-        lower.contains('http 403') ||
-        lower.contains('invalid token') ||
-        lower.contains('unauthorized') ||
-        lower.contains('forbidden') ||
-        lower.contains('missing bearer');
   }
 
   void retryExperience() {
