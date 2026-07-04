@@ -8,7 +8,7 @@ class SimEnvironment {
 
   static const configuredApiBaseUrl = String.fromEnvironment(
     'SIM_SERVER_URL',
-    defaultValue: 'https://gemini-aid-pal.lovable.app',
+    defaultValue: 'http://167.179.109.137:3000',
   );
 
   static const devApiBaseUrl = String.fromEnvironment(

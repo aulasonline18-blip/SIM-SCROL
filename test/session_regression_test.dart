@@ -17,9 +17,9 @@ import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
 void main() {
   test(
-    'default API URL is HTTPS so release APK boots without manual define',
+    'default API URL points to Scroll API, not the SimWeb host',
     () {
-      expect(SimEnvironment.apiBaseUrl, 'https://gemini-aid-pal.lovable.app');
+      expect(SimEnvironment.apiBaseUrl, 'http://167.179.109.137:3000');
       expect(SimEnvironment.assertProductionSafe, returnsNormally);
     },
   );
