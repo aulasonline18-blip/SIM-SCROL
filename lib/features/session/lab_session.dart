@@ -164,6 +164,7 @@ class LabSession extends ChangeNotifier {
       );
 
   bool _creditsLoaded = false;
+  Future<void>? _creditsLoadInFlight;
   Future<void>? _launchExperienceInFlight;
   int _experienceGeneration = 0;
 
@@ -873,12 +874,8 @@ class LabSession extends ChangeNotifier {
   Future<String?> _freshServerAccessToken() async {
     final client = _supabaseClientOrNull();
     if (client == null) return null;
-    if (!authReady) {
-      authSession.bindRealAuth();
-    }
     var session = client.auth.currentSession;
     if (session == null) {
-      applySupabaseSession(null);
       return null;
     }
     if (session.isExpired) {
@@ -886,11 +883,9 @@ class LabSession extends ChangeNotifier {
         final refreshed = await client.auth.refreshSession();
         session = refreshed.session ?? client.auth.currentSession;
       } catch (_) {
-        applySupabaseSession(null);
         return null;
       }
     }
-    applySupabaseSession(session);
     final token = session?.accessToken.trim();
     return token == null || token.isEmpty ? null : token;
   }
@@ -1225,24 +1220,31 @@ class LabSession extends ChangeNotifier {
   }
 
   void _loadCreditsFromServer({bool keepCurrent = false}) {
+    if (_creditsLoadInFlight != null) return;
     if (!keepCurrent) {
       authSession.credits = 1;
       authSession.isUnlimited = false;
     }
     _creditsLoaded = false;
+    final load = SimServerCreditsClient(config: _serverConfig())
+        .getMyCredits()
+        .then((snapshot) {
+          authSession.credits = snapshot.balance;
+          authSession.isUnlimited = snapshot.testCreditMode;
+          _creditsLoaded = true;
+          notifyListeners();
+        })
+        .catchError((_) {
+          _creditsLoaded = false;
+          notifyListeners();
+        });
+    _creditsLoadInFlight = load;
     unawaited(
-      SimServerCreditsClient(config: _serverConfig())
-          .getMyCredits()
-          .then((snapshot) {
-            authSession.credits = snapshot.balance;
-            authSession.isUnlimited = snapshot.testCreditMode;
-            _creditsLoaded = true;
-            notifyListeners();
-          })
-          .catchError((_) {
-            _creditsLoaded = false;
-            notifyListeners();
-          }),
+      load.whenComplete(() {
+        if (identical(_creditsLoadInFlight, load)) {
+          _creditsLoadInFlight = null;
+        }
+      }),
     );
   }
 
