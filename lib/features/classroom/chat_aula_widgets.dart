@@ -64,6 +64,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   double _manualAnchorAlignment = 0.12;
   bool _restoreAfterMetricsChangeScheduled = false;
   bool _programmaticScrollInProgress = false;
+  bool _userScrollInProgress = false;
 
   @override
   void initState() {
@@ -387,6 +388,10 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       _restoreAfterMetricsChangeScheduled = false;
       if (!mounted || !_scrollController.hasClients) return;
       if (_programmaticScrollInProgress) return;
+      if (_userScrollInProgress ||
+          _scrollController.position.isScrollingNotifier.value) {
+        return;
+      }
       if (_autoFollow) {
         _scrollToCurrent(immediate: true);
         return;
@@ -464,6 +469,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                       child: NotificationListener<UserScrollNotification>(
                         onNotification: (notification) {
                           if (notification.direction != ScrollDirection.idle) {
+                            _userScrollInProgress = true;
                             final metrics = notification.metrics;
                             final nearEnd =
                                 metrics.maxScrollExtent - metrics.pixels <= 96;
@@ -477,6 +483,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                             }
                             return false;
                           }
+                          _userScrollInProgress = false;
                           _handleScroll();
                           return false;
                         },

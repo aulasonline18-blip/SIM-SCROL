@@ -837,6 +837,44 @@ void main() {
     expect(controller.position.pixels, greaterThan(beforePageDown));
   });
 
+  testWidgets('chat timeline manual drag is not reset by metrics updates', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: _ChatTimelineHarness(scrollController: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final beforeDrag = controller.position.pixels;
+    expect(beforeDrag, greaterThan(300));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const Key('chat-aula-timeline'))),
+    );
+    await gesture.moveBy(const Offset(0, 180));
+
+    ScrollMetricsNotification(
+      metrics: controller.position,
+      context: tester.element(find.byKey(const Key('chat-aula-timeline'))),
+    ).dispatch(tester.element(find.byKey(const Key('chat-aula-timeline'))));
+
+    await tester.pump();
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 260));
+
+    expect(controller.position.pixels, lessThan(beforeDrag - 40));
+  });
+
   testWidgets(
     'chat timeline preserves manual context across compact to expanded resize',
     (tester) async {
