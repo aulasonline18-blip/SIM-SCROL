@@ -7,12 +7,12 @@ import 'package:sim_mobile/sim/ui/widgets/cyber_step_shell.dart';
 
 void main() {
   test('SIM Ideal breakpoints keep phone focused and tablet wider', () {
-    expect(SimBreakpoints.frameMaxWidth(390), 480);
-    expect(SimBreakpoints.learningMaxWidth(390), 480);
+    expect(SimBreakpoints.frameMaxWidth(390), double.infinity);
+    expect(SimBreakpoints.learningMaxWidth(390), double.infinity);
     expect(SimBreakpoints.frameMaxWidth(800), 840);
     expect(SimBreakpoints.learningMaxWidth(800), 640);
-    expect(SimBreakpoints.frameMaxWidth(1200), 1120);
-    expect(SimBreakpoints.learningMaxWidth(1200), 720);
+    expect(SimBreakpoints.frameMaxWidth(1200), 1200);
+    expect(SimBreakpoints.learningMaxWidth(1200), 840);
   });
 
   test('classroom text scale grows strongly on phone and tablet', () {

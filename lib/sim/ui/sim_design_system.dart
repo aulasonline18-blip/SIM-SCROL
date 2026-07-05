@@ -1,39 +1,31 @@
 import 'package:flutter/material.dart';
 
 import '../../core/utils/sim_constants.dart';
+import 'responsive/sim_responsive.dart';
 import 'sim_theme.dart';
 
 class SimBreakpoints {
   const SimBreakpoints._();
 
-  static const double compactMax = 599;
-  static const double tabletMin = 600;
-  static const double wideMin = 960;
+  static const double compactMax = SimResponsiveBreakpoints.medium - 1;
+  static const double tabletMin = SimResponsiveBreakpoints.medium;
+  static const double wideMin = SimResponsiveBreakpoints.expanded;
 
   static bool isTablet(double width) => width >= tabletMin;
   static bool isWide(double width) => width >= wideMin;
 
-  static double frameMaxWidth(double width) {
-    if (isWide(width)) return 1120;
-    if (isTablet(width)) return 840;
-    return 480;
-  }
+  static double frameMaxWidth(double width) =>
+      SimResponsive.frameMaxWidthFor(width);
 
-  static double learningMaxWidth(double width) {
-    if (isWide(width)) return 720;
-    if (isTablet(width)) return 640;
-    return 480;
-  }
+  static double learningMaxWidth(double width) =>
+      SimResponsive.contentMaxWidthFor(
+        width,
+        medium: 640,
+        expanded: SimResponsiveMaxWidth.conversation,
+      );
 
-  static EdgeInsets pagePadding(double width) {
-    if (isWide(width)) {
-      return const EdgeInsets.symmetric(horizontal: 32, vertical: 28);
-    }
-    if (isTablet(width)) {
-      return const EdgeInsets.symmetric(horizontal: 28, vertical: 24);
-    }
-    return const EdgeInsets.symmetric(horizontal: 16, vertical: 18);
-  }
+  static EdgeInsets pagePadding(double width) =>
+      SimResponsive.pagePaddingFor(width);
 
   static EdgeInsets classroomScrollPadding(double width) {
     final horizontal = isTablet(width) ? 28.0 : 16.0;
