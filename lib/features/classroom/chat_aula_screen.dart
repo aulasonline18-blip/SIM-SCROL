@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/classroom/classroom_text_scale.dart';
+import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/fixed_bubble.dart';
 import '../onboarding/preparation_and_placement.dart';
@@ -34,6 +35,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   int _conversationArchiveSeq = 0;
   int _fontScaleLevel = ClassroomTextScale.defaultLevel;
   bool _doubtSheetOpen = false;
+  final Set<String> _pendingConversationActions = <String>{};
 
   @override
   void initState() {
@@ -76,6 +78,39 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     if (_doubtSheetOpen) return;
     _doubtSheetOpen = true;
     _showDoubtSheet();
+  }
+
+  void _runConversationAction(String key, FutureOr<void> Function() action) {
+    if (_pendingConversationActions.contains(key)) return;
+    setState(() => _pendingConversationActions.add(key));
+    Future<void>.sync(action).whenComplete(() {
+      if (!mounted) return;
+      setState(() => _pendingConversationActions.remove(key));
+    });
+  }
+
+  void _chooseAnswer(AnswerLetter letter) {
+    _runConversationAction('answer', () {
+      widget.session.chooseAulaAnswer(letter.name);
+    });
+  }
+
+  void _submitSignal(int value) {
+    _runConversationAction('signal', () {
+      widget.session.submitAulaSignal(value);
+    });
+  }
+
+  void _retryLessonRuntime() {
+    _runConversationAction('retry', widget.session.openAulaRuntime);
+  }
+
+  void _advanceLesson() {
+    _runConversationAction('next', widget.session.advanceAula);
+  }
+
+  void _openDoubtFromAction() {
+    _runConversationAction('doubt', _openDoubtSheetFromChat);
   }
 
   void _showDoubtSheet() {
@@ -193,12 +228,12 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
                 messages: messages,
                 session: session,
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
-                onChooseAnswer: (letter) =>
-                    session.chooseAulaAnswer(letter.name),
-                onSignal: session.submitAulaSignal,
-                onRetry: () => unawaited(session.openAulaRuntime()),
-                onNext: () => unawaited(session.advanceAula()),
-                onOpenDoubt: _openDoubtSheetFromChat,
+                pendingActionKeys: _pendingConversationActions,
+                onChooseAnswer: _chooseAnswer,
+                onSignal: _submitSignal,
+                onRetry: _retryLessonRuntime,
+                onNext: _advanceLesson,
+                onOpenDoubt: _openDoubtFromAction,
               ),
             ),
             Positioned(

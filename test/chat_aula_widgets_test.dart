@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -320,6 +321,165 @@ void main() {
     expect(advanced, isTrue);
   });
 
+  testWidgets('chat feedback actions become dead when feedback is archived', (
+    tester,
+  ) async {
+    var openedDoubt = false;
+    var advanced = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            messages: const [
+              ChatLessonMessage(
+                id: 'feedback-read',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.feedback,
+                text: 'Feedback antigo.',
+                isCorrect: true,
+                actionKey: 'aula_next_item',
+                deliveryStatus: ChatLessonDeliveryStatus.read,
+              ),
+            ],
+            onChooseAnswer: (_) {},
+            onSignal: (_) {},
+            onRetry: () {},
+            onNext: () => advanced = true,
+            onOpenDoubt: () => openedDoubt = true,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
+    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
+
+    expect(openedDoubt, isFalse);
+    expect(advanced, isFalse);
+  });
+
+  testWidgets('chat feedback pending actions block duplicate taps', (
+    tester,
+  ) async {
+    var openedDoubt = 0;
+    var advanced = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            pendingActionKeys: const {'next', 'doubt'},
+            messages: const [
+              ChatLessonMessage(
+                id: 'feedback-pending',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.feedback,
+                text: 'Feedback pronto.',
+                isCorrect: true,
+                actionKey: 'aula_next_item',
+              ),
+            ],
+            onChooseAnswer: (_) {},
+            onSignal: (_) {},
+            onRetry: () {},
+            onNext: () => advanced++,
+            onOpenDoubt: () => openedDoubt++,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
+    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
+
+    expect(openedDoubt, 0);
+    expect(advanced, 0);
+  });
+
+  testWidgets('chat retry pending action is visible and inactive', (
+    tester,
+  ) async {
+    var retries = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            pendingActionKeys: const {'retry'},
+            messages: const [
+              ChatLessonMessage(
+                id: 'engine-error',
+                role: ChatLessonMessageRole.system,
+                kind: ChatLessonMessageKind.error,
+                text: 'Erro controlado',
+                actionKey: 'retry',
+              ),
+            ],
+            onChooseAnswer: (_) {},
+            onSignal: (_) {},
+            onRetry: () => retries++,
+            onNext: () {},
+            onOpenDoubt: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text(t('aula_retrying')), findsOneWidget);
+    await tester.tap(find.text(t('aula_retrying')));
+    expect(retries, 0);
+  });
+
+  testWidgets('chat answer and signal actions respect pending guards', (
+    tester,
+  ) async {
+    AnswerLetter? chosen;
+    var signal = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            pendingActionKeys: const {'answer', 'signal'},
+            messages: const [
+              ChatLessonMessage(
+                id: 'options-pending',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.options,
+                selectedAnswer: AnswerLetter.A,
+                options: [
+                  ChatLessonOption(
+                    letter: AnswerLetter.A,
+                    text: 'Alternativa A',
+                    selected: true,
+                    enabled: true,
+                  ),
+                ],
+                signals: [
+                  ChatLessonSignal(
+                    value: 1,
+                    labelKey: 'aula_sig_certeza',
+                    enabled: true,
+                  ),
+                ],
+              ),
+            ],
+            onChooseAnswer: (letter) => chosen = letter,
+            onSignal: (value) => signal = value,
+            onRetry: () {},
+            onNext: () {},
+            onOpenDoubt: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Alternativa A'));
+    await tester.tap(find.text(t('aula_sig_certeza')));
+
+    expect(chosen, isNull);
+    expect(signal, 0);
+  });
+
   testWidgets('chat aula advances only when next button is tapped', (
     tester,
   ) async {
@@ -413,6 +573,7 @@ void main() {
         find.byKey(const Key('chat-return-current-button')),
         findsOneWidget,
       );
+      expect(find.textContaining('Voltar ao feedback'), findsOneWidget);
       expect(find.text('Mensagem mais nova'), findsNothing);
 
       final buttonRect = tester.getRect(
@@ -427,6 +588,114 @@ void main() {
       expect(find.text('Mensagem mais nova'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'chat timeline targets the start of a new lesson turn instead of stale feedback',
+    (tester) async {
+      final key = GlobalKey<_ChatTimelineHarnessState>();
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 320,
+              child: _ChatTimelineHarness(
+                key: key,
+                scrollController: controller,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      await tester.drag(
+        find.byKey(const Key('chat-aula-timeline')),
+        const Offset(0, 900),
+      );
+      await tester.pump(const Duration(milliseconds: 220));
+
+      key.currentState!.appendNewLessonTurn();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(
+        find.byKey(const Key('chat-return-current-button')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Voltar ao novo item'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('chat-return-current-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nova explicacao do item.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('chat timeline supports certified keyboard navigation', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: _ChatTimelineHarness(scrollController: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.position.pixels, greaterThan(0));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.pumpAndSettle();
+    expect(controller.position.pixels, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+    expect(controller.position.pixels, greaterThan(0));
+
+    final beforePageUp = controller.position.pixels;
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
+    await tester.pumpAndSettle();
+    expect(controller.position.pixels, lessThan(beforePageUp));
+
+    final beforePageDown = controller.position.pixels;
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+    await tester.pumpAndSettle();
+    expect(controller.position.pixels, greaterThan(beforePageDown));
+  });
+
+  testWidgets('chat timeline exposes conversation region semantics', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: _ChatTimelineHarness(scrollController: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Conversa da aula'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Mensagem do SIM')), findsWidgets);
+    semantics.dispose();
+  });
 
   testWidgets('chat timeline exposes delivery status updates on same message', (
     tester,
@@ -1277,6 +1546,59 @@ class _ChatTimelineHarnessState extends State<_ChatTimelineHarness> {
           actionKey: 'aula_next',
         ),
       );
+    });
+  }
+
+  void appendNewLessonTurn() {
+    setState(() {
+      final id = _nextId++;
+      _messages.addAll([
+        ChatLessonMessage(
+          id: 'feedback-before-new-$id',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.feedback,
+          text: 'Feedback anterior.',
+          actionKey: 'aula_next',
+          deliveryStatus: ChatLessonDeliveryStatus.read,
+        ),
+        ChatLessonMessage(
+          id: 'new-explanation-$id',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.explanation,
+          text: 'Nova explicacao do item.',
+        ),
+        ChatLessonMessage(
+          id: 'new-question-$id',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.question,
+          text: 'Nova pergunta do item?',
+        ),
+        ChatLessonMessage(
+          id: 'new-options-$id',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.options,
+          options: const [
+            ChatLessonOption(
+              letter: AnswerLetter.A,
+              text: 'Nova alternativa A',
+              selected: false,
+              enabled: true,
+            ),
+            ChatLessonOption(
+              letter: AnswerLetter.B,
+              text: 'Nova alternativa B',
+              selected: false,
+              enabled: true,
+            ),
+            ChatLessonOption(
+              letter: AnswerLetter.C,
+              text: 'Nova alternativa C',
+              selected: false,
+              enabled: true,
+            ),
+          ],
+        ),
+      ]);
     });
   }
 
