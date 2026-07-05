@@ -129,6 +129,8 @@ class StudentLessonMediaService {
           language: language,
           voice: voice,
         );
+      } else {
+        markLessonAudioFailed(position, error: 'audio_playback_unavailable');
       }
       return ok;
     } catch (error) {

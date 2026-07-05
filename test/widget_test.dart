@@ -66,6 +66,33 @@ void main() {
     expect(find.text('Smart Intelligence Mentor'), findsOneWidget);
   });
 
+  testWidgets('Portal logado usa o mesmo menu sanduiche da aula', (
+    WidgetTester tester,
+  ) async {
+    setSimActiveLanguage('pt');
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..credits = 7;
+
+    await tester.pumpWidget(SimMobileApp(initialSession: session));
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Abrir menu da aula'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Abrir menu da aula'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+
+    expect(find.text('Nova aula'), findsOneWidget);
+    expect(find.text('Recarregar créditos'), findsOneWidget);
+    expect(_textAny(['Abrir aula', 'Open lesson']), findsOneWidget);
+    expect(_textAny(['Painel do Pai', 'Parent Panel']), findsOneWidget);
+    expect(_textAny(['Privacidade', 'Privacy']), findsOneWidget);
+    expect(_textAny(['Termos', 'Terms']), findsOneWidget);
+    expect(_textAny(['HISTÓRICO', 'HISTORY']), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 2300));
+  });
+
   testWidgets('selecionar idioma troca textos visiveis do fluxo inicial', (
     WidgetTester tester,
   ) async {

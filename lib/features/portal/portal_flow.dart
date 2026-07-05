@@ -102,12 +102,10 @@ class PortalScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         session.authed
-                            ? RoundIconButton(
-                                icon: Icons.menu,
-                                tooltip: t('menu_open_lessons'),
-                                onTap: () => _showLabDrawer(context),
+                            ? SimAulaMenuButton(
+                                onTap: () => showAulaMenu(context, session),
                               )
-                            : const SizedBox(width: 48, height: 48),
+                            : const SizedBox(width: 38, height: 38),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -170,79 +168,6 @@ class PortalScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-
-  void _showLabDrawer(BuildContext context) {
-    showSimDrawer(
-      context,
-      session: session,
-      body: (ctx) => _PortalDrawerBody(session: session, ctx: ctx),
-    );
-  }
-}
-
-class _PortalDrawerBody extends StatelessWidget {
-  const _PortalDrawerBody({required this.session, required this.ctx});
-
-  final LabSession session;
-  final BuildContext ctx;
-
-  @override
-  Widget build(BuildContext context) {
-    void close() => Navigator.of(ctx).pop();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        MenuLine(
-          label: t('menu_open_lesson'),
-          onTap: () {
-            close();
-            final id = session.lessonLocalId;
-            if (id != null && id.trim().isNotEmpty) {
-              session.openSupport('/cyber/aula');
-              unawaited(session.openAulaRuntime());
-            } else {
-              session.startNewLessonFromDrawer();
-            }
-          },
-        ),
-        MenuLine(
-          label: t('recarregar_creditos'),
-          onTap: () {
-            close();
-            session.openCredits();
-          },
-        ),
-        MenuLine(
-          label: t('parent_panel'),
-          onTap: () {
-            close();
-            session.openSupport('/pai');
-          },
-        ),
-        MenuLine(
-          label: t('privacy'),
-          onTap: () {
-            close();
-            session.openSupport('/privacidade');
-          },
-        ),
-        MenuLine(
-          label: t('terms'),
-          onTap: () {
-            close();
-            session.openSupport('/termos');
-          },
-        ),
-        MenuLine(
-          label: t('delete_account_request'),
-          onTap: () {
-            close();
-            session.openSupport('/conta/deletar');
-          },
-        ),
-      ],
     );
   }
 }

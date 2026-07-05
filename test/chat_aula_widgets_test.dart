@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sim_mobile/features/classroom/aula_widgets.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_screen.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_messages.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_widgets.dart';
@@ -150,6 +151,45 @@ void main() {
     expect(retries, 1);
   });
 
+  testWidgets(
+    'chat messages expose delivery status and live region semantics',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChatAulaTimeline(
+              messages: const [
+                ChatLessonMessage(
+                  id: 'processing',
+                  role: ChatLessonMessageRole.system,
+                  kind: ChatLessonMessageKind.processing,
+                  text: 'Preparando resposta',
+                  deliveryStatus: ChatLessonDeliveryStatus.processing,
+                  timestampLabel: '09:05',
+                ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      );
+
+      final node = tester.getSemantics(find.byType(ChatAulaMessageBubble));
+      expect(node.label, contains('Mensagem do sistema'));
+      expect(node.label, contains('09:05'));
+      expect(node.label, contains('Status: processando'));
+      expect(node.label, contains('Preparando resposta'));
+      expect(node.flagsCollection.isLiveRegion, isTrue);
+      semantics.dispose();
+    },
+  );
+
   testWidgets('chat timeline renders feedback advance action', (tester) async {
     var advances = 0;
 
@@ -252,6 +292,42 @@ void main() {
     },
   );
 
+  testWidgets('chat timeline exposes delivery status updates on same message', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final key = GlobalKey<_ChatTimelineHarnessState>();
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: _ChatTimelineHarness(key: key, scrollController: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(
+      tester.getSemantics(find.byType(ChatAulaMessageBubble).last).label,
+      contains('Status: entregue'),
+    );
+
+    await tester.pump(const Duration(milliseconds: 220));
+    key.currentState!.markLastMessageFailed();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+      tester.getSemantics(find.byType(ChatAulaMessageBubble).last).label,
+      contains('Status: falha'),
+    );
+    semantics.dispose();
+  });
+
   testWidgets('chat timeline renders doubt action callback', (tester) async {
     var opened = 0;
 
@@ -340,6 +416,60 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('chat history question preserves its own lesson image', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            messages: [
+              ChatLessonMessage(
+                id: 'history-question',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.historyQuestion,
+                text: 'Questão antiga com imagem?',
+                imageData: _svgDataUrl(),
+                options: [
+                  ChatLessonOption(
+                    letter: AnswerLetter.A,
+                    text: 'Alternativa antiga A',
+                    selected: true,
+                    enabled: false,
+                  ),
+                  ChatLessonOption(
+                    letter: AnswerLetter.B,
+                    text: 'Alternativa antiga B',
+                    selected: false,
+                    enabled: false,
+                  ),
+                ],
+              ),
+              const ChatLessonMessage(
+                id: 'history-answer',
+                role: ChatLessonMessageRole.student,
+                kind: ChatLessonMessageKind.historyAnswer,
+                text: 'A',
+                selectedAnswer: AnswerLetter.A,
+                isCorrect: true,
+              ),
+            ],
+            onChooseAnswer: (_) {},
+            onSignal: (_) {},
+            onRetry: () {},
+            onNext: () {},
+            onOpenDoubt: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Questão antiga com imagem?'), findsOneWidget);
+    expect(find.byType(LessonMediaImageView), findsOneWidget);
+    expect(find.text('Alternativa antiga A'), findsOneWidget);
+    expect(find.text('Alternativa antiga B'), findsOneWidget);
   });
 
   testWidgets('chat classroom keeps question visible while image loads', (
@@ -913,6 +1043,15 @@ class _ChatTimelineHarnessState extends State<_ChatTimelineHarness> {
           text: text,
           actionKey: 'aula_next',
         ),
+      );
+    });
+  }
+
+  void markLastMessageFailed() {
+    setState(() {
+      final last = _messages.removeLast();
+      _messages.add(
+        last.copyWith(deliveryStatus: ChatLessonDeliveryStatus.failed),
       );
     });
   }

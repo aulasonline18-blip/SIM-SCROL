@@ -2,6 +2,15 @@ import '../../sim/state/student_learning_state.dart';
 
 enum ChatLessonMessageRole { sim, student, system }
 
+enum ChatLessonDeliveryStatus {
+  sending,
+  sent,
+  delivered,
+  read,
+  processing,
+  failed,
+}
+
 enum ChatLessonMessageKind {
   loading,
   historyQuestion,
@@ -61,6 +70,9 @@ class ChatLessonMessage {
     this.imageStatus = 'idle',
     this.hasPaidImageOffer = false,
     this.progress,
+    this.deliveryStatus = ChatLessonDeliveryStatus.delivered,
+    this.timestampLabel,
+    this.sequenceIndex,
   });
 
   final String id;
@@ -77,6 +89,9 @@ class ChatLessonMessage {
   final String imageStatus;
   final bool hasPaidImageOffer;
   final int? progress;
+  final ChatLessonDeliveryStatus deliveryStatus;
+  final String? timestampLabel;
+  final int? sequenceIndex;
 
   bool get hasInteractiveOptions =>
       kind == ChatLessonMessageKind.options && options.isNotEmpty;
@@ -99,6 +114,9 @@ class ChatLessonMessage {
     String? imageStatus,
     bool? hasPaidImageOffer,
     int? progress,
+    ChatLessonDeliveryStatus? deliveryStatus,
+    String? timestampLabel,
+    int? sequenceIndex,
   }) {
     return ChatLessonMessage(
       id: id ?? this.id,
@@ -115,6 +133,9 @@ class ChatLessonMessage {
       imageStatus: imageStatus ?? this.imageStatus,
       hasPaidImageOffer: hasPaidImageOffer ?? this.hasPaidImageOffer,
       progress: progress ?? this.progress,
+      deliveryStatus: deliveryStatus ?? this.deliveryStatus,
+      timestampLabel: timestampLabel ?? this.timestampLabel,
+      sequenceIndex: sequenceIndex ?? this.sequenceIndex,
     );
   }
 }

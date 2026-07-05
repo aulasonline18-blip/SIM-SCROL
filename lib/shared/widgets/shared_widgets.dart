@@ -246,6 +246,54 @@ class _PressScaleState extends State<_PressScale> {
   }
 }
 
+class SimAulaMenuButton extends StatelessWidget {
+  const SimAulaMenuButton({
+    required this.onTap,
+    this.size = 38,
+    this.semanticLabel = 'Abrir menu da aula',
+    super.key,
+  });
+
+  final VoidCallback onTap;
+  final double size;
+  final String semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return SimIconAction(
+      icon: Icons.menu,
+      semanticLabel: semanticLabel,
+      onPressed: onTap,
+      size: size,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          for (int i = 0; i < 3; i++) ...[
+            if (i > 0) const SizedBox(height: 4),
+            Container(
+              width: 18,
+              height: 3,
+              decoration: BoxDecoration(
+                color: palette.text,
+                borderRadius: BorderRadius.circular(2),
+                boxShadow: [
+                  BoxShadow(
+                    color: palette.shadow.withValues(alpha: 0.35),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 void showAulaMenu(
   BuildContext context,
   LabSession session, {
@@ -335,6 +383,22 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
   void _handleNovaAula() {
     widget.onClose();
     widget.session.startNewLessonFromDrawer();
+  }
+
+  void _handleOpenCurrentLesson() {
+    widget.onClose();
+    final id = widget.session.lessonLocalId;
+    if (id != null && id.trim().isNotEmpty) {
+      widget.session.openSupport('/cyber/aula');
+      unawaited(widget.session.openAulaRuntime());
+    } else {
+      widget.session.startNewLessonFromDrawer();
+    }
+  }
+
+  void _handleSupportRoute(String route) {
+    widget.onClose();
+    widget.session.openSupport(route);
   }
 
   Future<void> _handleOpenLesson(String lessonLocalId) async {
@@ -773,6 +837,50 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
                     ),
                   ),
                 ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DrawerActionLine(
+                      icon: Icons.menu_book_outlined,
+                      label: t('menu_open_lesson'),
+                      compact: true,
+                      onTap: _handleOpenCurrentLesson,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _DrawerActionLine(
+                      icon: Icons.supervisor_account_outlined,
+                      label: t('parent_panel'),
+                      compact: true,
+                      onTap: () => _handleSupportRoute('/pai'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DrawerActionLine(
+                      icon: Icons.privacy_tip_outlined,
+                      label: t('privacy'),
+                      compact: true,
+                      onTap: () => _handleSupportRoute('/privacidade'),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _DrawerActionLine(
+                      icon: Icons.description_outlined,
+                      label: t('terms'),
+                      compact: true,
+                      onTap: () => _handleSupportRoute('/termos'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1424,80 +1532,65 @@ class _DrawerFooterBtn extends StatelessWidget {
   }
 }
 
-// DR-1..DR-6: Left-side panel drawer (88vw max 360, bg #F0F0F0)
-void showSimDrawer(
-  BuildContext context, {
-  required LabSession session,
-  required Widget Function(BuildContext ctx) body,
-}) {
-  showGeneralDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: 'menu',
-    barrierColor: Colors.black.withValues(alpha: 0.35),
-    transitionDuration: const Duration(milliseconds: 220),
-    pageBuilder: (ctx, anim1, anim2) {
-      final sw = MediaQuery.of(ctx).size.width;
-      final drawerW = (sw * 0.88).clamp(0.0, 360.0);
-      final palette = SimThemeScope.paletteOf(ctx);
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: AnimatedBuilder(
-          animation: anim1,
-          builder: (_, child) => Transform.translate(
-            offset: Offset(-drawerW * (1 - anim1.value), 0),
-            child: child,
-          ),
-          child: Material(
-            color: palette.surface,
-            child: SizedBox(
-              width: drawerW,
-              height: double.infinity,
-              child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header: MENU label + close
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 16, 4),
-                      child: Row(
-                        children: [
-                          Text(
-                            t('menu'),
-                            style: const TextStyle(
-                              color: simDark,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          const Spacer(),
-                          SimIconAction(
-                            icon: Icons.close,
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            semanticLabel: t('close_menu'),
-                            size: 36,
-                          ),
-                        ],
-                      ),
+class _DrawerActionLine extends StatelessWidget {
+  const _DrawerActionLine({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: double.infinity,
+            constraints: BoxConstraints(minHeight: compact ? 42 : 44),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 10 : 12,
+              vertical: compact ? 8 : 10,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: palette.border),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: palette.text),
+                SizedBox(width: compact ? 8 : 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: compact ? 12 : 13,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const Divider(color: Color(0xFFD1D5DB), height: 1),
-                    const SizedBox(height: 8),
-                    // Body content
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: body(ctx),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
-      );
-    },
-    transitionBuilder: (ctx, anim1, anim2, child) => child,
-  );
+      ),
+    );
+  }
 }
 
 class SupportedLang {

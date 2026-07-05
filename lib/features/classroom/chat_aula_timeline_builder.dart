@@ -42,6 +42,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
 
   for (var i = 0; i < (snapshot?.history.length ?? 0); i++) {
     final entry = snapshot!.history[i];
+    final timestampLabel = _formatTimestampLabel(entry.answeredAt);
     messages
       ..add(
         ChatLessonMessage(
@@ -49,7 +50,21 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           role: ChatLessonMessageRole.sim,
           kind: ChatLessonMessageKind.historyQuestion,
           text: entry.text,
+          options: entry.options
+              .map(
+                (option) => ChatLessonOption(
+                  letter: option.id,
+                  text: option.text,
+                  selected: option.id == entry.chosenOptionId,
+                  enabled: false,
+                ),
+              )
+              .toList(growable: false),
           imageData: entry.imageUrl,
+          selectedAnswer: entry.chosenOptionId,
+          isCorrect: entry.correct,
+          deliveryStatus: ChatLessonDeliveryStatus.read,
+          timestampLabel: timestampLabel,
         ),
       )
       ..add(
@@ -60,6 +75,8 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           text: entry.chosenOptionId.name,
           selectedAnswer: entry.chosenOptionId,
           isCorrect: entry.correct,
+          deliveryStatus: ChatLessonDeliveryStatus.read,
+          timestampLabel: timestampLabel,
         ),
       );
   }
@@ -71,6 +88,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         role: ChatLessonMessageRole.system,
         kind: ChatLessonMessageKind.loading,
         actionKey: 'retry',
+        deliveryStatus: ChatLessonDeliveryStatus.processing,
       ),
     );
   }
@@ -83,6 +101,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.explanation,
         text: content.explanation,
+        deliveryStatus: ChatLessonDeliveryStatus.delivered,
       ),
     );
 
@@ -94,6 +113,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           kind: ChatLessonMessageKind.loading,
           text: t('aula_doubt_processing'),
           progress: input.doubtProgress,
+          deliveryStatus: ChatLessonDeliveryStatus.processing,
         ),
       );
     } else if ((input.doubtError ?? '').trim().isNotEmpty) {
@@ -103,6 +123,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           role: ChatLessonMessageRole.system,
           kind: ChatLessonMessageKind.error,
           text: input.doubtError,
+          deliveryStatus: ChatLessonDeliveryStatus.failed,
         ),
       );
     } else if ((input.doubtResponse ?? '').trim().isNotEmpty) {
@@ -112,6 +133,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           role: ChatLessonMessageRole.sim,
           kind: ChatLessonMessageKind.feedback,
           text: input.doubtResponse,
+          deliveryStatus: ChatLessonDeliveryStatus.delivered,
         ),
       );
     }
@@ -132,6 +154,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           imageStatus: input.imageStatus,
           hasPaidImageOffer: input.hasPaidImageOffer,
           actionKey: input.hasPaidImageOffer ? 'paid-image-offer' : null,
+          deliveryStatus: input.imageStatus == 'loading'
+              ? ChatLessonDeliveryStatus.processing
+              : (input.imageError ?? '').trim().isNotEmpty
+              ? ChatLessonDeliveryStatus.failed
+              : ChatLessonDeliveryStatus.delivered,
         ),
       );
     }
@@ -142,6 +169,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.question,
         text: content.question,
+        deliveryStatus: ChatLessonDeliveryStatus.delivered,
       ),
     );
 
@@ -154,6 +182,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         kind: ChatLessonMessageKind.options,
         selectedAnswer: selected,
         options: _options(content, selected: selected, enabled: !locked),
+        deliveryStatus: ChatLessonDeliveryStatus.delivered,
       ),
     );
 
@@ -165,6 +194,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           kind: ChatLessonMessageKind.studentAnswer,
           text: selected.name,
           selectedAnswer: selected,
+          deliveryStatus: ChatLessonDeliveryStatus.sent,
         ),
       );
     }
@@ -176,6 +206,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           role: ChatLessonMessageRole.sim,
           kind: ChatLessonMessageKind.signals,
           signals: _signals(enabled: true),
+          deliveryStatus: ChatLessonDeliveryStatus.delivered,
         ),
       );
     } else if (phase?.type == ClassroomPhaseType.processando) {
@@ -187,6 +218,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
             kind: ChatLessonMessageKind.studentSignal,
             text: _signalText(phase?.signal),
             selectedSignal: phase?.signal,
+            deliveryStatus: ChatLessonDeliveryStatus.sent,
           ),
         )
         ..add(
@@ -195,6 +227,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
             role: ChatLessonMessageRole.system,
             kind: ChatLessonMessageKind.processing,
             text: t('aula_registering'),
+            deliveryStatus: ChatLessonDeliveryStatus.processing,
           ),
         );
     } else if (phase?.type == ClassroomPhaseType.concluido) {
@@ -206,6 +239,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
             kind: ChatLessonMessageKind.studentSignal,
             text: _signalText(phase?.signal),
             selectedSignal: phase?.signal,
+            deliveryStatus: ChatLessonDeliveryStatus.sent,
           ),
         )
         ..add(
@@ -215,6 +249,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
             kind: ChatLessonMessageKind.doubtAction,
             text: t('aula_doubt'),
             actionKey: 'open-doubt',
+            deliveryStatus: ChatLessonDeliveryStatus.delivered,
           ),
         )
         ..add(
@@ -225,6 +260,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
             text: feedbackText(phase?.message ?? ''),
             isCorrect: phase?.wasCorrect,
             actionKey: snapshot?.viewModel?.nextLabel,
+            deliveryStatus: ChatLessonDeliveryStatus.delivered,
           ),
         );
     }
@@ -239,11 +275,12 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         kind: ChatLessonMessageKind.error,
         text: _studentFacingRuntimeError(phase?.message ?? input.runtimeError),
         actionKey: 'retry',
+        deliveryStatus: ChatLessonDeliveryStatus.failed,
       ),
     );
   }
 
-  return messages;
+  return _withSequenceIndexes(messages);
 }
 
 String? _studentFacingRuntimeError(String? raw) {
@@ -281,6 +318,21 @@ String _activeMessageId(
     content.explanation,
   ].map(_safeIdPart).where((part) => part.isNotEmpty).toList(growable: false);
   return parts.isEmpty ? 'active' : parts.join('-');
+}
+
+String? _formatTimestampLabel(int? epochMs) {
+  if (epochMs == null || epochMs <= 0) return null;
+  final local = DateTime.fromMillisecondsSinceEpoch(epochMs).toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
+}
+
+List<ChatLessonMessage> _withSequenceIndexes(List<ChatLessonMessage> messages) {
+  return [
+    for (var i = 0; i < messages.length; i++)
+      messages[i].copyWith(sequenceIndex: i),
+  ];
 }
 
 String _safeIdPart(String value) {

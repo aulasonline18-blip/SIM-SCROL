@@ -110,10 +110,15 @@ void main() {
             QuestionHistoryEntry(
               id: 'h1',
               text: 'Pergunta antiga?',
-              options: [],
+              options: [
+                QuestionOptionEntry(id: AnswerLetter.A, text: 'Alpha'),
+                QuestionOptionEntry(id: AnswerLetter.B, text: 'Beta'),
+                QuestionOptionEntry(id: AnswerLetter.C, text: 'Gamma'),
+              ],
               chosenOptionId: AnswerLetter.C,
               correct: false,
               imageUrl: 'data:image/png;base64,AAAA',
+              answeredAt: 1767344700000,
             ),
           ],
         ),
@@ -122,9 +127,17 @@ void main() {
 
     expect(messages.first.kind, ChatLessonMessageKind.historyQuestion);
     expect(messages.first.imageData, isNotNull);
+    expect(messages.first.options, hasLength(3));
+    expect(
+      messages.first.options.singleWhere((option) => option.selected).letter,
+      AnswerLetter.C,
+    );
+    expect(messages.first.options.every((option) => option.enabled), isFalse);
+    expect(messages.first.timestampLabel, '09:05');
     expect(messages[1].kind, ChatLessonMessageKind.historyAnswer);
     expect(messages[1].selectedAnswer, AnswerLetter.C);
     expect(messages[1].isCorrect, isFalse);
+    expect(messages[1].timestampLabel, '09:05');
   });
 
   test('active messages use distinct ids across layers in the same item', () {
@@ -167,6 +180,7 @@ void main() {
     );
     expect(loading.single.kind, ChatLessonMessageKind.loading);
     expect(loading.single.actionKey, 'retry');
+    expect(loading.single.deliveryStatus, ChatLessonDeliveryStatus.processing);
 
     final error = buildChatLessonMessages(
       ChatLessonTimelineInput(
@@ -178,6 +192,63 @@ void main() {
     expect(error.last.kind, ChatLessonMessageKind.error);
     expect(error.last.text, 'T02 indisponivel');
     expect(error.last.actionKey, 'retry');
+    expect(error.last.deliveryStatus, ChatLessonDeliveryStatus.failed);
+  });
+
+  test('chat messages carry universal conversational delivery states', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.completed(
+            message: 'aula_fb_correct',
+            wasCorrect: true,
+            signal: DecisionSignal.one,
+          ),
+          history: const [
+            QuestionHistoryEntry(
+              id: 'h1',
+              text: 'Pergunta antiga?',
+              options: [
+                QuestionOptionEntry(id: AnswerLetter.A, text: 'Alpha'),
+                QuestionOptionEntry(id: AnswerLetter.B, text: 'Beta'),
+                QuestionOptionEntry(id: AnswerLetter.C, text: 'Gamma'),
+              ],
+              chosenOptionId: AnswerLetter.A,
+              correct: true,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(
+      messages
+          .singleWhere(
+            (message) => message.kind == ChatLessonMessageKind.historyQuestion,
+          )
+          .deliveryStatus,
+      ChatLessonDeliveryStatus.read,
+    );
+    expect(
+      messages
+          .singleWhere(
+            (message) => message.kind == ChatLessonMessageKind.studentSignal,
+          )
+          .deliveryStatus,
+      ChatLessonDeliveryStatus.sent,
+    );
+    expect(
+      messages
+          .singleWhere(
+            (message) => message.kind == ChatLessonMessageKind.feedback,
+          )
+          .deliveryStatus,
+      ChatLessonDeliveryStatus.delivered,
+    );
+    expect(
+      messages.map((message) => message.sequenceIndex).toList(),
+      List<int>.generate(messages.length, (index) => index),
+    );
   });
 
   test('image states stay non blocking before question and options', () {

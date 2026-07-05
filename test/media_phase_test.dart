@@ -518,6 +518,46 @@ void main() {
     expect(states['l1']!.audio.status, 'ready');
   });
 
+  test(
+    'lesson audio failure clears playing state and records recoverable error',
+    () async {
+      final states = {'l1': seedState()};
+      final playback = CountingPlaybackAdapter()..failPlatformTts = true;
+      final media = StudentLessonMediaService(
+        audioCore: AudioCore(preference: AudioPreference(), playback: playback),
+        readState: (id) => states[id]!,
+        writeState: (state) => states[state.lessonLocalId] = state,
+      );
+      final controller = LessonAudioController(
+        lessonLocalId: 'l1',
+        mediaService: media,
+        preference: AudioPreference(),
+      );
+      final content = LessonContent(
+        explanation: 'Explicacao',
+        question: 'Pergunta',
+        options: const {
+          AnswerLetter.A: 'A1',
+          AnswerLetter.B: 'B1',
+          AnswerLetter.C: 'C1',
+        },
+        correctAnswer: AnswerLetter.A,
+      );
+
+      expect(
+        await controller.playConteudo(content, 'M1', LessonLayer.l1),
+        false,
+      );
+      expect(states['l1']!.audio.status, 'failed');
+      expect(states['l1']!.audio.playing, false);
+      expect(states['l1']!.audio.error, 'audio_playback_unavailable');
+      expect(
+        states['l1']!.events.map((event) => event.type),
+        containsAll(['AUDIO_STARTED', 'AUDIO_FAILED']),
+      );
+    },
+  );
+
   test('ready material prepares audioText without starting playback', () async {
     final service = StudentLearningStateService(seed: {'l1': seedState()});
     final playback = CountingPlaybackAdapter();

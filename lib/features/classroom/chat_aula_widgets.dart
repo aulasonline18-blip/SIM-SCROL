@@ -137,6 +137,12 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
             message.text ?? '',
             message.imageData ?? '',
             message.imageStatus,
+            message.hasPaidImageOffer.toString(),
+            message.actionKey ?? '',
+            message.deliveryStatus.name,
+            message.timestampLabel ?? '',
+            message.sequenceIndex?.toString() ?? '',
+            message.isCorrect?.toString() ?? '',
             message.progress?.toString() ?? '',
             message.options
                 .map(
@@ -391,6 +397,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
 
     return Semantics(
       container: true,
+      liveRegion: _isLiveRegion(message),
       label: _semanticLabel(message),
       sortKey: OrdinalSortKey(semanticIndex.toDouble()),
       child: Align(
@@ -400,15 +407,41 @@ class ChatAulaMessageBubble extends StatelessWidget {
     );
   }
 
+  bool _isLiveRegion(ChatLessonMessage message) {
+    return switch (message.deliveryStatus) {
+      ChatLessonDeliveryStatus.processing ||
+      ChatLessonDeliveryStatus.failed => true,
+      _ => message.kind == ChatLessonMessageKind.feedback,
+    };
+  }
+
   String _semanticLabel(ChatLessonMessage message) {
     final owner = switch (message.role) {
       ChatLessonMessageRole.student => 'Mensagem do aluno',
       ChatLessonMessageRole.system => 'Mensagem do sistema',
       ChatLessonMessageRole.sim => 'Mensagem do SIM',
     };
+    final status = _deliveryStatusLabel(message.deliveryStatus);
+    final timestamp = message.timestampLabel?.trim();
     final text = (message.text ?? '').trim();
-    if (text.isEmpty) return owner;
-    return '$owner: $text';
+    final parts = [
+      owner,
+      if (timestamp != null && timestamp.isNotEmpty) timestamp,
+      'Status: $status',
+      if (text.isNotEmpty) text,
+    ];
+    return parts.join('. ');
+  }
+
+  String _deliveryStatusLabel(ChatLessonDeliveryStatus status) {
+    return switch (status) {
+      ChatLessonDeliveryStatus.sending => 'enviando',
+      ChatLessonDeliveryStatus.sent => 'enviada',
+      ChatLessonDeliveryStatus.delivered => 'entregue',
+      ChatLessonDeliveryStatus.read => 'lida',
+      ChatLessonDeliveryStatus.processing => 'processando',
+      ChatLessonDeliveryStatus.failed => 'falha',
+    };
   }
 }
 
@@ -506,8 +539,122 @@ class _ChatAulaMessageBody extends StatelessWidget {
       ChatLessonMessageKind.studentSignal => _StudentShortMessage(
         text: message.text ?? '',
       ),
+      ChatLessonMessageKind.historyQuestion => _HistoryQuestionMessage(
+        message: message,
+      ),
       _ => _TextMessage(message.text ?? ''),
     };
+  }
+}
+
+class _HistoryQuestionMessage extends StatelessWidget {
+  const _HistoryQuestionMessage({required this.message});
+
+  final ChatLessonMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageData = message.imageData?.trim();
+    final hasImage = imageData != null && imageData.isNotEmpty;
+    final palette = SimThemeScope.paletteOf(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasImage) ...[
+          Semantics(
+            label: 'Imagem da questão respondida',
+            image: true,
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 220, maxHeight: 160),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: palette.surface,
+                borderRadius: BorderRadius.circular(SimRadius.md),
+                border: Border.all(color: palette.border),
+              ),
+              child: LessonMediaImageView(data: imageData, compact: true),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        _TextMessage(message.text ?? ''),
+        if (message.options.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          for (final option in message.options)
+            _HistoryOptionRow(option: option, selected: option.selected),
+        ],
+      ],
+    );
+  }
+}
+
+class _HistoryOptionRow extends StatelessWidget {
+  const _HistoryOptionRow({required this.option, required this.selected});
+
+  final ChatLessonOption option;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      enabled: false,
+      selected: selected,
+      label: t('answer_option_named', {'label': option.letter.name}),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? palette.primary.withValues(alpha: 0.12)
+              : palette.surfaceSoft,
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          border: Border.all(
+            color: selected ? palette.primary : palette.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: selected ? simGradientPrimary : null,
+                color: selected ? null : palette.surface,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: selected
+                      ? palette.primary
+                      : palette.border.withValues(alpha: 0.6),
+                ),
+              ),
+              child: Text(
+                option.letter.name,
+                style: TextStyle(
+                  fontFamily: kMono,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: selected ? simDark : palette.text,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                option.text,
+                style: SimTypography.lessonBody.copyWith(
+                  color: palette.text,
+                  height: 1.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

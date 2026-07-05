@@ -28,7 +28,10 @@ void main() {
   });
 
   test('server brain and secrets routes are not app-side rooms', () {
-    final serverRoutes = simLiveRoutes.where((route) => route.serverOnly).map((route) => route.path).toSet();
+    final serverRoutes = simLiveRoutes
+        .where((route) => route.serverOnly)
+        .map((route) => route.path)
+        .toSet();
 
     expect(serverRoutes, contains('/api/bootstrap-t00'));
     expect(serverRoutes, contains('/api/generate-lesson-image'));
@@ -36,25 +39,30 @@ void main() {
     expect(serverRoutes, contains('/api/public/payments/webhook'));
   });
 
-  test('school environments include every healthy room and door destination resolves', () {
-    final ids = simSchoolEnvironments.map((environment) => environment.id).toSet();
+  test(
+    'school environments include every healthy room and door destination resolves',
+    () {
+      final ids = simSchoolEnvironments
+          .map((environment) => environment.id)
+          .toSet();
 
-    expect(ids, contains('portal'));
-    expect(ids, contains('login'));
-    expect(ids, contains('language'));
-    expect(ids, contains('objective'));
-    expect(ids, contains('preparation'));
-    expect(ids, contains('placement'));
-    expect(ids, contains('classroom'));
-    expect(ids, contains('drawer'));
-    expect(ids, contains('credits'));
-    expect(ids, contains('checkout_return'));
-    expect(ids, contains('father_panel'));
-    expect(ids, contains('delete_account'));
-    expect(ids, contains('privacy'));
-    expect(ids, contains('terms'));
-    expect(unresolvedInternalDestinations(), isEmpty);
-  });
+      expect(ids, contains('portal'));
+      expect(ids, contains('login'));
+      expect(ids, contains('language'));
+      expect(ids, contains('objective'));
+      expect(ids, contains('preparation'));
+      expect(ids, contains('placement'));
+      expect(ids, contains('classroom'));
+      expect(ids, contains('drawer'));
+      expect(ids, contains('credits'));
+      expect(ids, contains('checkout_return'));
+      expect(ids, contains('father_panel'));
+      expect(ids, contains('delete_account'));
+      expect(ids, contains('privacy'));
+      expect(ids, contains('terms'));
+      expect(unresolvedInternalDestinations(), isEmpty);
+    },
+  );
 
   test('critical doors preserve live button flow', () {
     final doors = {for (final door in allSimSchoolDoors()) door.id: door};
@@ -77,6 +85,10 @@ void main() {
     expect(aulaDrawerPageSize, 30);
     expect(actions['new_lesson']?.destination, '/cyber/aula');
     expect(actions['top_up']?.destination, '/creditos');
+    expect(actions['open_current_lesson']?.destination, '/cyber/aula');
+    expect(actions['parent_panel']?.destination, '/pai');
+    expect(actions['privacy']?.destination, '/privacidade');
+    expect(actions['terms']?.destination, '/termos');
     expect(actions['logout']?.destination, '/login');
     expect(actions['delete_account']?.destination, '/conta/deletar');
     expect(matchesLessonSearch('bio', ['Matemática', 'Biologia']), true);

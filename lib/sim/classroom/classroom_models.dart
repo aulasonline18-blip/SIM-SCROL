@@ -29,25 +29,25 @@ class ClassroomPhase {
   const ClassroomPhase.reading() : this(type: ClassroomPhaseType.lendo);
   const ClassroomPhase.doneEnd() : this(type: ClassroomPhaseType.fim);
   const ClassroomPhase.engineError(String message)
-      : this(type: ClassroomPhaseType.erroEngine, message: message);
+    : this(type: ClassroomPhaseType.erroEngine, message: message);
   const ClassroomPhase.expanded(AnswerLetter letter)
-      : this(type: ClassroomPhaseType.expandida, letter: letter);
+    : this(type: ClassroomPhaseType.expandida, letter: letter);
   const ClassroomPhase.processing(AnswerLetter letter, DecisionSignal signal)
-      : this(
-          type: ClassroomPhaseType.processando,
-          letter: letter,
-          signal: signal,
-        );
+    : this(
+        type: ClassroomPhaseType.processando,
+        letter: letter,
+        signal: signal,
+      );
   const ClassroomPhase.completed({
     required String message,
     required bool wasCorrect,
     required DecisionSignal signal,
   }) : this(
-          type: ClassroomPhaseType.concluido,
-          message: message,
-          wasCorrect: wasCorrect,
-          signal: signal,
-        );
+         type: ClassroomPhaseType.concluido,
+         message: message,
+         wasCorrect: wasCorrect,
+         signal: signal,
+       );
 }
 
 class PlannedItem {
@@ -70,10 +70,10 @@ class PlannedItem {
   final String? originalMarker;
 
   factory PlannedItem.fromCurriculum(CurriculumItem item) => PlannedItem(
-        marker: item.marker,
-        text: item.teacherText,
-        title: item.title,
-      );
+    marker: item.marker,
+    text: item.teacherText,
+    title: item.title,
+  );
 }
 
 class QuestionOptionEntry {
@@ -91,6 +91,7 @@ class QuestionHistoryEntry {
     required this.chosenOptionId,
     required this.correct,
     this.imageUrl,
+    this.answeredAt,
   });
 
   final String id;
@@ -99,6 +100,7 @@ class QuestionHistoryEntry {
   final AnswerLetter chosenOptionId;
   final bool correct;
   final String? imageUrl;
+  final int? answeredAt;
 }
 
 class QuestionBlockModel {
@@ -165,7 +167,10 @@ String nivelToAcademic(String? nivel) {
   final nextIdx = idx + 1;
   if (nextIdx >= pool.length) return null;
   final next = pool[nextIdx];
-  return (idx: nextIdx, layer: next.isReview ? next.reviewLayer ?? LessonLayer.l1 : LessonLayer.l1);
+  return (
+    idx: nextIdx,
+    layer: next.isReview ? next.reviewLayer ?? LessonLayer.l1 : LessonLayer.l1,
+  );
 }
 
 List<({int idx, PlannedItem item, LessonLayer layer})> lessonWindow(
@@ -175,7 +180,9 @@ List<({int idx, PlannedItem item, LessonLayer layer})> lessonWindow(
 ) {
   if (fromIdx < 0 || fromIdx >= pool.length) return const [];
   final first = pool[fromIdx];
-  final firstLayer = first.isReview ? first.reviewLayer ?? LessonLayer.l1 : currentLayer;
+  final firstLayer = first.isReview
+      ? first.reviewLayer ?? LessonLayer.l1
+      : currentLayer;
   final window = <({int idx, PlannedItem item, LessonLayer layer})>[
     (idx: fromIdx, item: first, layer: firstLayer),
   ];

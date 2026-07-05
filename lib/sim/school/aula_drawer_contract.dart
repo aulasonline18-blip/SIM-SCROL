@@ -32,6 +32,31 @@ const aulaDrawerActions = <AulaDrawerAction>[
     requiresAuth: true,
   ),
   AulaDrawerAction(
+    id: 'open_current_lesson',
+    label: 'Abrir aula',
+    effect: 'open current active lesson or start objective flow if none exists',
+    destination: '/cyber/aula',
+  ),
+  AulaDrawerAction(
+    id: 'parent_panel',
+    label: 'Painel do responsável',
+    effect: 'open responsible adult support panel',
+    destination: '/pai',
+    requiresAuth: true,
+  ),
+  AulaDrawerAction(
+    id: 'privacy',
+    label: 'Privacidade',
+    effect: 'open privacy policy',
+    destination: '/privacidade',
+  ),
+  AulaDrawerAction(
+    id: 'terms',
+    label: 'Termos',
+    effect: 'open terms of use',
+    destination: '/termos',
+  ),
+  AulaDrawerAction(
     id: 'search_history',
     label: 'Buscar histórico',
     effect: 'filter cloud and local lessons by tema, idioma, nivel or id',
@@ -93,5 +118,7 @@ const aulaDrawerActions = <AulaDrawerAction>[
 bool matchesLessonSearch(String query, List<Object?> parts) {
   final needle = query.trim().toLowerCase();
   if (needle.isEmpty) return true;
-  return parts.any((part) => (part ?? '').toString().toLowerCase().contains(needle));
+  return parts.any(
+    (part) => (part ?? '').toString().toLowerCase().contains(needle),
+  );
 }

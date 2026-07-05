@@ -832,6 +832,96 @@ void main() {
     },
   );
 
+  test('maintainLessonReadyWindow mirrors cache window metadata to state', () {
+    final service = StudentLearningStateService();
+    service.ensure(lessonLocalId: 'cyber-window');
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+      visualPipeline: fakeVisualPipeline(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      ),
+    );
+
+    materialService.maintainLessonReadyWindow(
+      lessonLocalId: 'cyber-window',
+      topic: 'Funções',
+      itemIdx: 0,
+      layer: LessonLayer.l1,
+      source: 'test-window',
+      items: const [
+        DopamineWindowItem(text: 'Item 1', marker: 'M1'),
+        DopamineWindowItem(text: 'Item 2', marker: 'M2'),
+      ],
+    );
+
+    final state = service.read('cyber-window');
+    final event = state?.events.singleWhere(
+      (event) => event.type == 'CACHE_WINDOW_UPDATED',
+    );
+    expect(state?.queuedActions, hasLength(1));
+    expect(event?.payload['currentItemIdx'], 0);
+    expect(event?.payload['currentLayer'], 1);
+    expect(event?.payload['windowSize'], 3);
+    expect(event?.payload['cachedCount'], 3);
+    expect(event?.payload['windowMarkers'], [
+      {'marker': 'M1', 'layer': 1, 'offset': 0},
+      {'marker': 'M1', 'layer': 2, 'offset': 1},
+      {'marker': 'M1', 'layer': 3, 'offset': 2},
+    ]);
+  });
+
+  test('maintainLessonReadyWindow does not duplicate active jobs', () {
+    final service = StudentLearningStateService();
+    service.ensure(lessonLocalId: 'cyber-window-dedupe');
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+      visualPipeline: fakeVisualPipeline(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      ),
+    );
+
+    for (var i = 0; i < 2; i++) {
+      materialService.maintainLessonReadyWindow(
+        lessonLocalId: 'cyber-window-dedupe',
+        topic: 'Funções',
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        source: 'test-window',
+        items: const [
+          DopamineWindowItem(text: 'Item 1', marker: 'M1'),
+          DopamineWindowItem(text: 'Item 2', marker: 'M2'),
+        ],
+      );
+    }
+
+    final state = service.read('cyber-window-dedupe');
+    expect(state?.queuedActions, hasLength(1));
+    expect(
+      state?.queuedActions.single['idempotency_key'],
+      'test-window:cyber-window-dedupe:0:L1',
+    );
+    expect(
+      state?.events.where((event) => event.type == 'CACHE_WINDOW_UPDATED'),
+      hasLength(2),
+    );
+  });
+
   test('invalid persistent cache entries are ignored', () async {
     SharedPreferences.setMockInitialValues({
       'sim-lesson-text-cache-v1': jsonEncode({

@@ -385,37 +385,7 @@ class _HamburgerBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = SimThemeScope.paletteOf(context);
-    return SimIconAction(
-      icon: Icons.menu,
-      semanticLabel: 'Abrir menu da aula',
-      onPressed: onTap,
-      size: size,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          for (int i = 0; i < 3; i++) ...[
-            if (i > 0) const SizedBox(height: 4),
-            Container(
-              width: 18,
-              height: 3,
-              decoration: BoxDecoration(
-                color: palette.text,
-                borderRadius: BorderRadius.circular(2),
-                boxShadow: [
-                  BoxShadow(
-                    color: palette.shadow.withValues(alpha: 0.35),
-                    blurRadius: 3,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
+    return SimAulaMenuButton(onTap: onTap, size: size);
   }
 }
 
@@ -662,7 +632,7 @@ class LessonImageStudySurface extends StatelessWidget {
     final palette = SimThemeScope.paletteOf(context);
     return Semantics(
       container: true,
-      label: 'Imagem da aula',
+      label: t('aula_image_alt'),
       image: true,
       child: Column(
         mainAxisSize: MainAxisSize.min,

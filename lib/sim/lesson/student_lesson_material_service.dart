@@ -224,30 +224,118 @@ class StudentLessonMaterialService {
     String priority = 'background',
     String? reason,
   }) {
+    final window = _buildReadyWindow(itemIdx, layer, items);
     stateService.mutate(lessonLocalId, (state) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final idempotencyKey = '$source:$lessonLocalId:$itemIdx:L${layer.value}';
       final jobs = [...state.queuedActions];
-      jobs.add({
-        'job_id': '${source}_${DateTime.now().millisecondsSinceEpoch}',
-        'type': 'PREPARE_READY_WINDOW',
-        'status': 'queued',
-        'idempotency_key': '$source:$lessonLocalId:$itemIdx:L${layer.value}',
-        'priority': priority,
-        'source': source,
-        'payload': {
-          'maxSlots': 3,
-          'reason': reason ?? 'lesson_window_visible',
-          'itemIdx': itemIdx,
-          'layer': layer.value,
-          'marker': items.length > itemIdx ? items[itemIdx].marker : null,
-          'topic': topic,
-        },
-        'created_at': DateTime.now().millisecondsSinceEpoch,
-        'started_at': null,
-        'finished_at': null,
-        'error': null,
-      });
-      return state.copyWith(queuedActions: jobs);
+      final hasActiveDuplicate = jobs.any(
+        (job) =>
+            job['type'] == 'PREPARE_READY_WINDOW' &&
+            job['idempotency_key'] == idempotencyKey &&
+            (job['status'] == 'queued' || job['status'] == 'running'),
+      );
+      if (!hasActiveDuplicate) {
+        jobs.add({
+          'job_id': 'PREPARE_READY_WINDOW:$idempotencyKey:$now',
+          'type': 'PREPARE_READY_WINDOW',
+          'status': 'queued',
+          'idempotency_key': idempotencyKey,
+          'priority': priority,
+          'source': source,
+          'payload': {
+            'maxSlots': 3,
+            'reason': reason ?? 'lesson_window_visible',
+            'itemIdx': itemIdx,
+            'layer': layer.value,
+            'marker': items.length > itemIdx ? items[itemIdx].marker : null,
+            'topic': topic,
+          },
+          'created_at': now,
+          'started_at': null,
+          'finished_at': null,
+          'error': null,
+          'attempts': 0,
+          'max_attempts': 3,
+          'next_retry_at': null,
+        });
+      }
+      return state.copyWith(
+        queuedActions: jobs,
+        events: [
+          ...state.events,
+          StudentLearningEvent(
+            type: 'CACHE_WINDOW_UPDATED',
+            ts: now,
+            payload: {
+              'lessonLocalId': lessonLocalId,
+              'currentItemIdx': itemIdx,
+              'currentLayer': layer.value,
+              'windowMarkers': window
+                  .map(
+                    (slot) => {
+                      'marker': slot.item.marker,
+                      'layer': slot.layer.value,
+                      'offset': slot.offset,
+                    },
+                  )
+                  .toList(growable: false),
+              'windowSize': window.length,
+              'cachedCount': window.length,
+            },
+          ),
+        ],
+      );
     });
+  }
+
+  List<({int offset, DopamineWindowItem item, LessonLayer layer})>
+  _buildReadyWindow(
+    int fromIdx,
+    LessonLayer layer,
+    List<DopamineWindowItem> items,
+  ) {
+    if (fromIdx < 0 || fromIdx >= items.length) return const [];
+    final first = items[fromIdx];
+    final firstLayer = first.isReview
+        ? first.reviewLayer ?? LessonLayer.l1
+        : layer;
+    final window = <({int offset, DopamineWindowItem item, LessonLayer layer})>[
+      (offset: 0, item: first, layer: firstLayer),
+    ];
+    var cursor = (idx: fromIdx, layer: firstLayer);
+    while (window.length < 3) {
+      final next = _nextReadyWindowSlot(cursor.idx, cursor.layer, items);
+      if (next == null || next.idx < 0 || next.idx >= items.length) break;
+      final item = items[next.idx];
+      window.add((offset: window.length, item: item, layer: next.layer));
+      cursor = next;
+    }
+    return window;
+  }
+
+  ({int idx, LessonLayer layer})? _nextReadyWindowSlot(
+    int idx,
+    LessonLayer layer,
+    List<DopamineWindowItem> items,
+  ) {
+    final item = idx >= 0 && idx < items.length ? items[idx] : null;
+    if (item == null) return null;
+    if (!item.isReview && layer != LessonLayer.l3) {
+      return (
+        idx: idx,
+        layer: layer == LessonLayer.l1 ? LessonLayer.l2 : LessonLayer.l3,
+      );
+    }
+    final nextIdx = idx + 1;
+    if (nextIdx >= items.length) return null;
+    final next = items[nextIdx];
+    return (
+      idx: nextIdx,
+      layer: next.isReview
+          ? next.reviewLayer ?? LessonLayer.l1
+          : LessonLayer.l1,
+    );
   }
 
   CompleteLesson? _readReadyFromStudentState(ResolveLessonMaterialInput input) {

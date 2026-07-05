@@ -70,6 +70,7 @@ class LessonAnswerProgressController {
       'layer-${position.layer.value}',
       content.question,
     ].join('::');
+    final answeredAt = DateTime.now().millisecondsSinceEpoch;
     final entry = QuestionHistoryEntry(
       id: questionId,
       text: content.question,
@@ -90,6 +91,7 @@ class LessonAnswerProgressController {
       chosenOptionId: letter,
       correct: correct,
       imageUrl: position.imagem,
+      answeredAt: answeredAt,
     );
     // Prevent double-tap (only block if the immediately preceding entry is identical)
     final lastEntry = position.history.isEmpty ? null : position.history.last;
