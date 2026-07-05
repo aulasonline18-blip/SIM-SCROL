@@ -823,6 +823,56 @@ void main() {
     );
   });
 
+  testWidgets(
+    'chat student doubt renders text and image attachment as message',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChatAulaTimeline(
+              messages: [
+                ChatLessonMessage(
+                  id: 'student-doubt',
+                  role: ChatLessonMessageRole.student,
+                  kind: ChatLessonMessageKind.studentDoubt,
+                  text: 'Nao entendi este grafico.',
+                  imageData: _svgDataUrl(),
+                  mediaName: 'grafico.png',
+                  mediaType: 'image/png',
+                  mediaSize: 2048,
+                  deliveryStatus: ChatLessonDeliveryStatus.sent,
+                  timestampLabel: '10:20',
+                ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Nao entendi este grafico.'), findsOneWidget);
+      expect(find.text('grafico.png'), findsOneWidget);
+      expect(find.text('2.0KB'), findsOneWidget);
+      expect(find.byType(LessonMediaImageView), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byType(ChatAulaMessageBubble)).label,
+        contains('grafico.png'),
+      );
+      expect(
+        tester.getSemantics(find.byType(ChatAulaMessageBubble)).label,
+        contains('Status: enviada'),
+      );
+
+      semantics.dispose();
+    },
+  );
+
   testWidgets('chat history question preserves its own lesson image', (
     tester,
   ) async {
@@ -1304,6 +1354,60 @@ void main() {
 
     expect(submitted?.cleanText, 'Nao entendi.');
     expect(submitted?.image, isNull);
+  });
+
+  testWidgets('chat composer submit becomes a student message in timeline', (
+    tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'Portuguese'
+      ..lessonLocalId = 'lesson-chat-composer'
+      ..route = '/cyber/aula'
+      ..aulaSnapshot = _chatSnapshot(
+        phase: const ClassroomPhase.completed(
+          message: 'aula_fb_correct',
+          wasCorrect: true,
+          signal: DecisionSignal.one,
+        ),
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('chat-feedback-doubt-button')),
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextField).last,
+      'Pode explicar melhor?',
+    );
+    await tester.tap(find.text('Enviar dúvida').last);
+    await tester.pump(const Duration(milliseconds: 120));
+
+    final timeline = tester.widget<ChatAulaTimeline>(
+      find.byType(ChatAulaTimeline),
+    );
+    expect(
+      timeline.messages.where(
+        (message) =>
+            message.kind == ChatLessonMessageKind.studentDoubt &&
+            message.text == 'Pode explicar melhor?',
+      ),
+      hasLength(1),
+    );
+    expect(
+      find.text('Pode explicar melhor?', skipOffstage: false),
+      findsOneWidget,
+    );
   });
 
   testWidgets('chat classroom covers normal flow through feedback', (

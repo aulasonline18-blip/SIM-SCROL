@@ -207,6 +207,9 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
             message.text ?? '',
             message.imageData ?? '',
             message.imageStatus,
+            message.mediaName ?? '',
+            message.mediaType ?? '',
+            message.mediaSize?.toString() ?? '',
             message.hasPaidImageOffer.toString(),
             message.actionKey ?? '',
             message.deliveryStatus.name,
@@ -653,13 +656,37 @@ class ChatAulaMessageBubble extends StatelessWidget {
     final status = _deliveryStatusLabel(message.deliveryStatus);
     final timestamp = message.timestampLabel?.trim();
     final text = (message.text ?? '').trim();
+    final mediaName = (message.mediaName ?? '').trim();
+    final media = mediaName.isEmpty ? _mediaStatusText(message) : mediaName;
     final parts = [
       owner,
       if (timestamp != null && timestamp.isNotEmpty) timestamp,
       'Status: $status',
       if (text.isNotEmpty) text,
+      if (media.isNotEmpty) media,
     ];
     return parts.join('. ');
+  }
+
+  String _mediaStatusText(ChatLessonMessage message) {
+    return switch (message.kind) {
+      ChatLessonMessageKind.image =>
+        message.imageStatus == 'loading'
+            ? t('aula_image_loading')
+            : (message.imageData ?? '').trim().isNotEmpty
+            ? t('aula_image_ready')
+            : (message.hasPaidImageOffer
+                  ? t('aula_img_desc')
+                  : t('aula_image_unavailable')),
+      ChatLessonMessageKind.studentDoubt =>
+        (message.imageData ?? '').trim().isNotEmpty
+            ? t('aula_attachment_image')
+            : '',
+      ChatLessonMessageKind.loading ||
+      ChatLessonMessageKind.processing => message.text ?? t('preparing_lesson'),
+      ChatLessonMessageKind.error => message.text ?? t('aula_gen_fail'),
+      _ => '',
+    };
   }
 
   String _deliveryStatusLabel(ChatLessonDeliveryStatus status) {
@@ -842,6 +869,9 @@ class _ChatAulaMessageBody extends StatelessWidget {
       ChatLessonMessageKind.studentSignal => _StudentShortMessage(
         text: message.text ?? '',
       ),
+      ChatLessonMessageKind.studentDoubt => _StudentDoubtMessage(
+        message: message,
+      ),
       ChatLessonMessageKind.historyQuestion => _HistoryQuestionMessage(
         message: message,
       ),
@@ -888,6 +918,125 @@ class _HistoryQuestionMessage extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+class _StudentDoubtMessage extends StatelessWidget {
+  const _StudentDoubtMessage({required this.message});
+
+  final ChatLessonMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = message.text?.trim();
+    final hasText = text != null && text.isNotEmpty;
+    final imageData = message.imageData?.trim();
+    final hasImage = imageData != null && imageData.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasText) _StudentShortMessage(text: text),
+        if (hasText && hasImage) const SizedBox(height: 10),
+        if (hasImage)
+          _ChatMediaAttachment(
+            imageData: imageData,
+            name: message.mediaName,
+            type: message.mediaType,
+            size: message.mediaSize,
+          ),
+      ],
+    );
+  }
+}
+
+class _ChatMediaAttachment extends StatelessWidget {
+  const _ChatMediaAttachment({
+    required this.imageData,
+    this.name,
+    this.type,
+    this.size,
+  });
+
+  final String imageData;
+  final String? name;
+  final String? type;
+  final int? size;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final displayName = (name ?? '').trim().isEmpty
+        ? t('aula_attachment_image')
+        : name!.trim();
+    final sizeLabel = _formatBytes(size);
+    final typeLabel = (type ?? '').trim();
+    final semanticName = typeLabel.isEmpty
+        ? displayName
+        : '$displayName, $typeLabel';
+    return Semantics(
+      container: true,
+      image: true,
+      label: t('aula_attachment_semantics', {'name': semanticName}),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 260),
+        decoration: BoxDecoration(
+          color: palette.surface,
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          border: Border.all(color: palette.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 10,
+              child: LessonMediaImageView(data: imageData, compact: true),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Row(
+                children: [
+                  Icon(Icons.image_outlined, size: 18, color: palette.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (sizeLabel != null) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      sizeLabel,
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontSize: 12,
+                        fontFamily: kMono,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _formatBytes(int? bytes) {
+    if (bytes == null || bytes <= 0) return null;
+    if (bytes < 1024) return '${bytes}B';
+    final kb = bytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(kb < 10 ? 1 : 0)}KB';
+    final mb = kb / 1024;
+    return '${mb.toStringAsFixed(mb < 10 ? 1 : 0)}MB';
   }
 }
 
@@ -982,14 +1131,14 @@ class ChatImageBubble extends StatelessWidget {
         ? Icons.add_photo_alternate_outlined
         : Icons.broken_image_outlined;
     final label = imageReady
-        ? 'Imagem da aula pronta'
+        ? t('aula_image_ready')
         : loading
-        ? 'Gerando imagem da aula...'
+        ? t('aula_image_loading')
         : offer
         ? t('aula_img_desc')
         : hasError
         ? message.text!
-        : 'Imagem indisponível. A aula continua.';
+        : t('aula_image_unavailable');
     return Container(
       constraints: const BoxConstraints(minHeight: 72),
       padding: const EdgeInsets.all(12),

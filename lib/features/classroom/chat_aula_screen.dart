@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../sim/auxiliary/aux_room_models.dart';
+import '../../sim/auxiliary/doubt_input_sheet.dart';
 import '../../sim/classroom/classroom_text_scale.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_theme.dart';
@@ -125,6 +126,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         onSubmit: (draft) {
           if (widget.session.doubtOpen) widget.session.toggleDoubt();
           Navigator.of(context).pop();
+          _appendStudentDoubtMessage(draft);
           unawaited(widget.session.submitDoubt(draft));
           _doubtController.clear();
         },
@@ -164,6 +166,33 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         widget.session.imageError != null ||
         widget.session.hasLessonPaidImageOffer ||
         (widget.session.aulaRuntimeLoading && imageData == null);
+  }
+
+  void _appendStudentDoubtMessage(DoubtInputDraft draft) {
+    final image = draft.image;
+    final text = draft.cleanText;
+    final now = DateTime.now();
+    final timestamp =
+        '${now.hour.toString().padLeft(2, '0')}:'
+        '${now.minute.toString().padLeft(2, '0')}';
+    setState(() {
+      _conversationMessages.add(
+        ChatLessonMessage(
+          id:
+              'student-doubt-${now.microsecondsSinceEpoch}-'
+              '${_conversationArchiveSeq++}',
+          role: ChatLessonMessageRole.student,
+          kind: ChatLessonMessageKind.studentDoubt,
+          text: text.isEmpty ? null : text,
+          imageData: image?.dataUrl,
+          mediaName: image?.name,
+          mediaType: image?.type,
+          mediaSize: image?.size,
+          deliveryStatus: ChatLessonDeliveryStatus.sent,
+          timestampLabel: timestamp,
+        ),
+      );
+    });
   }
 
   @override
@@ -406,6 +435,9 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       message.kind.name,
       message.text ?? '',
       message.imageData ?? '',
+      message.mediaName ?? '',
+      message.mediaType ?? '',
+      message.mediaSize?.toString() ?? '',
       message.imageStatus,
       message.hasPaidImageOffer,
       message.selectedAnswer?.name ?? '',

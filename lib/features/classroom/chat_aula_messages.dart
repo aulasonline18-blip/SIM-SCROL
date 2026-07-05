@@ -15,6 +15,7 @@ enum ChatLessonMessageKind {
   loading,
   historyQuestion,
   historyAnswer,
+  studentDoubt,
   explanation,
   image,
   question,
@@ -63,6 +64,9 @@ class ChatLessonMessage {
     this.options = const [],
     this.signals = const [],
     this.imageData,
+    this.mediaName,
+    this.mediaType,
+    this.mediaSize,
     this.selectedAnswer,
     this.selectedSignal,
     this.isCorrect,
@@ -82,6 +86,9 @@ class ChatLessonMessage {
   final List<ChatLessonOption> options;
   final List<ChatLessonSignal> signals;
   final String? imageData;
+  final String? mediaName;
+  final String? mediaType;
+  final int? mediaSize;
   final AnswerLetter? selectedAnswer;
   final DecisionSignal? selectedSignal;
   final bool? isCorrect;
@@ -107,6 +114,9 @@ class ChatLessonMessage {
     List<ChatLessonOption>? options,
     List<ChatLessonSignal>? signals,
     String? imageData,
+    String? mediaName,
+    String? mediaType,
+    int? mediaSize,
     AnswerLetter? selectedAnswer,
     DecisionSignal? selectedSignal,
     bool? isCorrect,
@@ -126,6 +136,9 @@ class ChatLessonMessage {
       options: options ?? this.options,
       signals: signals ?? this.signals,
       imageData: imageData ?? this.imageData,
+      mediaName: mediaName ?? this.mediaName,
+      mediaType: mediaType ?? this.mediaType,
+      mediaSize: mediaSize ?? this.mediaSize,
       selectedAnswer: selectedAnswer ?? this.selectedAnswer,
       selectedSignal: selectedSignal ?? this.selectedSignal,
       isCorrect: isCorrect ?? this.isCorrect,
