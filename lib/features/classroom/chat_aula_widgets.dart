@@ -403,157 +403,171 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final width = MediaQuery.sizeOf(context).width;
-    final pagePadding = SimResponsive.pagePaddingFor(width);
-    final horizontalPadding = pagePadding.horizontal / 2;
-    final contentMaxWidth = SimResponsive.contentMaxWidthFor(
-      width,
-      medium: 620,
-      expanded: 680,
-      large: 680,
-    );
-    return CallbackShortcuts(
-      bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.end): () {
-          _scrollToCurrent();
-        },
-        const SingleActivator(LogicalKeyboardKey.home): () {
-          _scrollToTranscriptStart();
-        },
-        const SingleActivator(LogicalKeyboardKey.pageDown): () {
-          _scrollByViewport(0.82);
-        },
-        const SingleActivator(LogicalKeyboardKey.pageUp): () {
-          _scrollByViewport(-0.82);
-        },
-      },
-      child: Focus(
-        autofocus: true,
-        focusNode: _timelineFocusNode,
-        child: Semantics(
-          container: true,
-          label: t('aula_conversation_region'),
-          hint: t('aula_conversation_keyboard_hint'),
-          child: Stack(
-            children: [
-              NotificationListener<ScrollMetricsNotification>(
-                onNotification: (_) {
-                  _scheduleMetricsRestore();
-                  return false;
-                },
-                child: NotificationListener<SizeChangedLayoutNotification>(
-                  onNotification: (_) {
-                    return false;
-                  },
-                  child: NotificationListener<UserScrollNotification>(
-                    onNotification: (notification) {
-                      if (notification.direction != ScrollDirection.idle) {
-                        final metrics = notification.metrics;
-                        final nearEnd =
-                            metrics.maxScrollExtent - metrics.pixels <= 96;
-                        if (!nearEnd && (_autoFollow || !_showCurrentButton)) {
-                          _captureVisibleAnchor();
-                          setState(() {
-                            _autoFollow = false;
-                            _showCurrentButton = true;
-                          });
-                        }
-                        return false;
-                      }
-                      _handleScroll();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final pagePadding = SimResponsive.pagePaddingFor(width);
+        final horizontalPadding = pagePadding.horizontal / 2;
+        final contentMaxWidth = SimResponsive.contentMaxWidthFor(
+          width,
+          medium: 620,
+          expanded: 620,
+          large: 680,
+        );
+        final returnButtonRight =
+            contentMaxWidth.isFinite && width > contentMaxWidth
+            ? ((width - contentMaxWidth) / 2) + 16
+            : 16.0;
+        return CallbackShortcuts(
+          bindings: <ShortcutActivator, VoidCallback>{
+            const SingleActivator(LogicalKeyboardKey.end): () {
+              _scrollToCurrent();
+            },
+            const SingleActivator(LogicalKeyboardKey.home): () {
+              _scrollToTranscriptStart();
+            },
+            const SingleActivator(LogicalKeyboardKey.pageDown): () {
+              _scrollByViewport(0.82);
+            },
+            const SingleActivator(LogicalKeyboardKey.pageUp): () {
+              _scrollByViewport(-0.82);
+            },
+          },
+          child: Focus(
+            autofocus: true,
+            focusNode: _timelineFocusNode,
+            child: Semantics(
+              container: true,
+              label: t('aula_conversation_region'),
+              hint: t('aula_conversation_keyboard_hint'),
+              child: Stack(
+                children: [
+                  NotificationListener<ScrollMetricsNotification>(
+                    onNotification: (_) {
+                      _scheduleMetricsRestore();
                       return false;
                     },
-                    child: ListView(
-                      key: const Key('chat-aula-timeline'),
-                      controller: _scrollController,
-                      restorationId: 'chat-aula-timeline-scroll',
-                      scrollCacheExtent: ScrollCacheExtent.pixels(
-                        (MediaQuery.sizeOf(context).height * 2).clamp(
-                          600.0,
-                          1400.0,
-                        ),
-                      ),
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      padding: EdgeInsets.fromLTRB(
-                        horizontalPadding,
-                        widget.padding.top,
-                        horizontalPadding,
-                        widget.padding.bottom + bottomInset,
-                      ),
-                      children: [
-                        if (widget.messages.isEmpty)
-                          Center(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: contentMaxWidth,
-                              ),
-                              child: const _ChatEmptyState(),
+                    child: NotificationListener<SizeChangedLayoutNotification>(
+                      onNotification: (_) {
+                        return false;
+                      },
+                      child: NotificationListener<UserScrollNotification>(
+                        onNotification: (notification) {
+                          if (notification.direction != ScrollDirection.idle) {
+                            final metrics = notification.metrics;
+                            final nearEnd =
+                                metrics.maxScrollExtent - metrics.pixels <= 96;
+                            if (!nearEnd &&
+                                (_autoFollow || !_showCurrentButton)) {
+                              _captureVisibleAnchor();
+                              setState(() {
+                                _autoFollow = false;
+                                _showCurrentButton = true;
+                              });
+                            }
+                            return false;
+                          }
+                          _handleScroll();
+                          return false;
+                        },
+                        child: ListView(
+                          key: const Key('chat-aula-timeline'),
+                          controller: _scrollController,
+                          restorationId: 'chat-aula-timeline-scroll',
+                          scrollCacheExtent: ScrollCacheExtent.pixels(
+                            (MediaQuery.sizeOf(context).height * 2).clamp(
+                              600.0,
+                              1400.0,
                             ),
-                          )
-                        else
-                          for (
-                            var index = 0;
-                            index < widget.messages.length;
-                            index++
-                          ) ...[
-                            if (index > 0) const SizedBox(height: 10),
-                            Center(
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: contentMaxWidth,
+                          ),
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: EdgeInsets.fromLTRB(
+                            horizontalPadding,
+                            widget.padding.top,
+                            horizontalPadding,
+                            widget.padding.bottom + bottomInset,
+                          ),
+                          children: [
+                            if (widget.messages.isEmpty)
+                              Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: contentMaxWidth,
+                                  ),
+                                  child: const _ChatEmptyState(),
                                 ),
-                                child: SizeChangedLayoutNotifier(
-                                  child: ChatAulaMessageBubble(
-                                    key: _keyForMessage(widget.messages[index]),
-                                    message: widget.messages[index],
-                                    semanticIndex: index,
-                                    session: widget.session,
-                                    onChooseAnswer: widget.onChooseAnswer,
-                                    onSignal: widget.onSignal,
-                                    onRetry: widget.onRetry,
-                                    onNext: widget.onNext,
-                                    onOpenDoubt: widget.onOpenDoubt,
-                                    pendingActionKeys: widget.pendingActionKeys,
-                                    onImageSettled: () {
-                                      widget.onImageSettled?.call();
-                                      if (_autoFollow) {
-                                        WidgetsBinding.instance
-                                            .addPostFrameCallback(
-                                              (_) => _scrollToCurrent(),
-                                            );
-                                      }
-                                    },
+                              )
+                            else
+                              for (
+                                var index = 0;
+                                index < widget.messages.length;
+                                index++
+                              ) ...[
+                                if (index > 0) const SizedBox(height: 10),
+                                Center(
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: contentMaxWidth,
+                                    ),
+                                    child: SizeChangedLayoutNotifier(
+                                      child: ChatAulaMessageBubble(
+                                        key: _keyForMessage(
+                                          widget.messages[index],
+                                        ),
+                                        message: widget.messages[index],
+                                        semanticIndex: index,
+                                        session: widget.session,
+                                        onChooseAnswer: widget.onChooseAnswer,
+                                        onSignal: widget.onSignal,
+                                        onRetry: widget.onRetry,
+                                        onNext: widget.onNext,
+                                        onOpenDoubt: widget.onOpenDoubt,
+                                        pendingActionKeys:
+                                            widget.pendingActionKeys,
+                                        onImageSettled: () {
+                                          widget.onImageSettled?.call();
+                                          if (_autoFollow) {
+                                            WidgetsBinding.instance
+                                                .addPostFrameCallback(
+                                                  (_) => _scrollToCurrent(),
+                                                );
+                                          }
+                                        },
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
+                              ],
                           ],
-                      ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  if (_showCurrentButton)
+                    Positioned(
+                      right: returnButtonRight,
+                      bottom: 16 + bottomInset,
+                      child: SafeArea(
+                        top: false,
+                        child: _ChatReturnToCurrentButton(
+                          label:
+                              _targetMessage()?.buttonLabel ??
+                              t('aula_return_current'),
+                          unreadCount: _unreadWhileAway,
+                          onPressed: _scrollToCurrent,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              if (_showCurrentButton)
-                Positioned(
-                  right: 16,
-                  bottom: 16 + bottomInset,
-                  child: SafeArea(
-                    top: false,
-                    child: _ChatReturnToCurrentButton(
-                      label:
-                          _targetMessage()?.buttonLabel ??
-                          t('aula_return_current'),
-                      unreadCount: _unreadWhileAway,
-                      onPressed: _scrollToCurrent,
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
