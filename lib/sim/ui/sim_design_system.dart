@@ -43,6 +43,7 @@ class SimSpacing {
   static const double lg = 20;
   static const double xl = 24;
   static const double xxl = 32;
+  static const double touchGap = xs;
 }
 
 class SimRadius {
@@ -57,8 +58,11 @@ class SimRadius {
 class SimTouch {
   const SimTouch._();
 
+  static const double wcagMinimum = 24;
+  static const double recommended = 48;
   static const double min = 48;
   static const double icon = 44;
+  static const double spacing = SimSpacing.touchGap;
 }
 
 class SimTypography {
@@ -69,6 +73,15 @@ class SimTypography {
     fontSize: 16,
     height: 1.5,
   );
+
+  static const TextStyle title = TextStyle(
+    color: simDark,
+    fontSize: 20,
+    height: 1.3,
+    fontWeight: FontWeight.w800,
+  );
+
+  static const TextStyle body = lessonBody;
 
   static const TextStyle lessonQuestion = TextStyle(
     color: simDark,
@@ -83,12 +96,39 @@ class SimTypography {
     fontWeight: FontWeight.w700,
   );
 
+  static const TextStyle label = TextStyle(
+    color: simDark,
+    fontSize: 14,
+    height: 1.35,
+    fontWeight: FontWeight.w700,
+  );
+
   static const TextStyle meta = TextStyle(
     color: simMuted,
     fontFamily: kMono,
     fontSize: 11,
     fontWeight: FontWeight.w700,
     letterSpacing: 1.2,
+  );
+
+  static const TextStyle caption = TextStyle(
+    color: simMuted,
+    fontSize: 12,
+    height: 1.35,
+    fontWeight: FontWeight.w600,
+  );
+
+  static const TextStyle muted = TextStyle(
+    color: simMuted,
+    fontSize: 14,
+    height: 1.4,
+  );
+
+  static const TextStyle emphasis = TextStyle(
+    color: simDark,
+    fontSize: 16,
+    height: 1.45,
+    fontWeight: FontWeight.w700,
   );
 }
 

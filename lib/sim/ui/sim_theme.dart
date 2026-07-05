@@ -12,6 +12,11 @@ class SimPalette {
     required this.border,
     required this.primary,
     required this.onPrimary,
+    required this.success,
+    required this.warning,
+    required this.danger,
+    required this.disabled,
+    required this.focus,
     required this.shadow,
   });
 
@@ -25,6 +30,11 @@ class SimPalette {
   final Color border;
   final Color primary;
   final Color onPrimary;
+  final Color success;
+  final Color warning;
+  final Color danger;
+  final Color disabled;
+  final Color focus;
   final Color shadow;
 
   static const light = SimPalette(
@@ -38,6 +48,11 @@ class SimPalette {
     border: Color(0xFFD1D5DB),
     primary: Color(0xFF111827),
     onPrimary: Colors.white,
+    success: Color(0xFF166534),
+    warning: Color(0xFF854D0E),
+    danger: Color(0xFFB91C1C),
+    disabled: Color(0xFF6B7280),
+    focus: Color(0xFF2563EB),
     shadow: Color(0x2E111827),
   );
 
@@ -52,6 +67,11 @@ class SimPalette {
     border: Color(0xFF334155),
     primary: Color(0xFFE5E7EB),
     onPrimary: Color(0xFF020617),
+    success: Color(0xFF86EFAC),
+    warning: Color(0xFFFDE68A),
+    danger: Color(0xFFFCA5A5),
+    disabled: Color(0xFF94A3B8),
+    focus: Color(0xFF93C5FD),
     shadow: Color(0x99000000),
   );
 }
