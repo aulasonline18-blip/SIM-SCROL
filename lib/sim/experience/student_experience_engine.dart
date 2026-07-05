@@ -112,28 +112,61 @@ class StudentExperienceEngine {
       final firstLessonPreparer = t02;
       final placementIsSettled = placement.settled;
       if (!placementIsSettled) {
+        if (firstLessonPreparer != null) {
+          unawaited(
+            firstLessonPreparer
+                .prepareFirstMinimumLesson(
+                  args: args,
+                  first: first,
+                  shellAlreadyOpen: true,
+                )
+                .catchError((Object error) {
+                  final info = classifyStudentExperienceError(error);
+                  publishStudentExperienceEvent(
+                    service,
+                    args.lessonLocalId,
+                    info.kind == StudentExperienceErrorKind.timeout
+                        ? StudentExperienceEventType.recoverableError
+                        : StudentExperienceEventType.blockingError,
+                    {
+                      'error': info.message,
+                      'phase': 'background_first_t02_before_placement',
+                    },
+                  );
+                }),
+          );
+        }
+        args.onStage?.call(StudentExperienceRouteStage.placement);
+        writeStudentExperienceSnapshot(
+          service,
+          lessonLocalId: args.lessonLocalId,
+          state: StudentExperienceState.nivelamentoNecessario,
+          destination: '/cyber/placement',
+          startMarker: first.marker,
+          startItemIndex: first.itemIndex,
+        );
         publishStudentExperienceEvent(
           service,
           args.lessonLocalId,
-          StudentExperienceEventType.placementDeferredUntilAfterFirstLesson,
-          {'marker': first.marker, 'reason': 'first_lesson_shell_has_priority'},
+          StudentExperienceEventType.placementRequired,
+          {'marker': first.marker},
+        );
+        publishStudentExperienceEvent(
+          service,
+          args.lessonLocalId,
+          StudentExperienceEventType.placementScreenReleasedAfterSlotA,
+          {'at': DateTime.now().millisecondsSinceEpoch, 'marker': first.marker},
+        );
+        return StudentExperienceResult(
+          destination: '/cyber/placement',
+          curriculum: first.curriculum,
+          startMarker: null,
+          startItemIndex: 0,
         );
       }
 
-      final decision = placementIsSettled
-          ? placement.readPlacementDecision()
-          : PlacementDecision(
-              enabled: false,
-              placement: PlacementState.empty(),
-              settled: false,
-            );
-      final target = placementIsSettled
-          ? placement.resolveStartPosition(first.curriculum, decision)
-          : StartPosition(
-              itemIndex: first.itemIndex,
-              marker: first.marker,
-              item: first.item,
-            );
+      final decision = placement.readPlacementDecision();
+      final target = placement.resolveStartPosition(first.curriculum, decision);
       if (target.item == null) {
         throw Exception('Nao encontrei o primeiro item da aula.');
       }

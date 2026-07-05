@@ -51,6 +51,60 @@ class FakeT00Client implements T00BootstrapClient {
   }
 }
 
+class ExpandingT00Client implements T00BootstrapClient {
+  @override
+  Stream<T00BootstrapChunk> runBootstrap(T00BootstrapRequest request) async* {
+    yield const T00BootstrapChunk(
+      type: 't00_item_partial',
+      payload: {
+        'item': {
+          'order': 1,
+          'marker': 'M1',
+          'title': 'Frações',
+          'microitem_for_teacher': 'Entender metade e um quarto',
+        },
+      },
+    );
+    yield const T00BootstrapChunk(
+      type: 't00_item_partial',
+      payload: {
+        'item': {
+          'order': 2,
+          'marker': 'M2',
+          'title': 'Comparar frações',
+          'microitem_for_teacher': 'Comparar frações com denominadores iguais',
+        },
+      },
+    );
+    yield const T00BootstrapChunk(
+      type: 't00_final',
+      payload: {
+        'curriculum': [
+          {
+            'order': 1,
+            'marker': 'M1',
+            'title': 'Frações',
+            'microitem_for_teacher': 'Entender metade e um quarto',
+          },
+          {
+            'order': 2,
+            'marker': 'M2',
+            'title': 'Comparar frações',
+            'microitem_for_teacher':
+                'Comparar frações com denominadores iguais',
+          },
+          {
+            'order': 3,
+            'marker': 'M3',
+            'title': 'Somar frações',
+            'microitem_for_teacher': 'Somar frações simples',
+          },
+        ],
+      },
+    );
+  }
+}
+
 class FakeT02Client implements T02LessonClient {
   final requests = <T02LessonRequest>[];
 
@@ -141,7 +195,7 @@ void main() {
   });
 
   test(
-    'StudentExperienceEngine releases first item and opens aula before placement',
+    'StudentExperienceEngine releases first item and routes to placement when unsettled',
     () async {
       final service = StudentLearningStateService();
       final t00 = StudentExperienceT00Adapter(
@@ -182,7 +236,7 @@ void main() {
         ),
       );
 
-      expect(result.destination, '/cyber/aula');
+      expect(result.destination, '/cyber/placement');
       expect(result.curriculum.items.first.marker, 'M1');
       expect(t02Client.requests, isNotEmpty);
       final state = service.read('cyber-fractions');
@@ -201,12 +255,60 @@ void main() {
       expect(progressEvents, contains('t00FallbackGatewayStarted'));
       expect(progressEvents, contains('t00PartialReady'));
       expect(progressEvents, contains('t00QualityCheckReceived'));
-      expect(
-        progressEvents,
-        contains('placementDeferredUntilAfterFirstLesson'),
-      );
-      expect(progressEvents, contains('firstLessonShellOpened'));
+      expect(progressEvents, contains('placementScreenReleasedAfterSlotA'));
+      expect(progressEvents, contains('placementRequired'));
+      expect(progressEvents, isNot(contains('firstLessonShellOpened')));
       expect(settledState?.curriculum?.items, hasLength(1));
+    },
+  );
+
+  test(
+    'T00 stream keeps expanding curriculum and triggers ready window callback',
+    () async {
+      final service = StudentLearningStateService();
+      final callbacks = <String>[];
+      final t00 = StudentExperienceT00Adapter(
+        service: service,
+        client: ExpandingT00Client(),
+        onCurriculumExpanded:
+            ({
+              required lessonLocalId,
+              required topic,
+              required itemIdx,
+              required layer,
+              required marker,
+              required source,
+            }) {
+              callbacks.add('$source:$marker:${layer.name}:$itemIdx');
+            },
+      );
+
+      final first = await t00.startT00UntilFirstItem(
+        const StudentExperienceArgs(
+          academic: 'fundamental',
+          idioma: 'pt-BR',
+          lessonLocalId: 'cyber-expanding',
+          onboarding: {'objetivo': 'Aprender frações'},
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final state = service.read('cyber-expanding');
+      expect(first.marker, 'M1');
+      expect(state?.curriculum?.items.map((item) => item.marker), [
+        'M1',
+        'M2',
+        'M3',
+      ]);
+      expect(
+        callbacks,
+        contains(startsWith('StudentExperienceEngineV2:t00_partial_expanded')),
+      );
+      expect(
+        callbacks,
+        contains(startsWith('StudentExperienceEngineV2:t00_final_expanded')),
+      );
     },
   );
 }

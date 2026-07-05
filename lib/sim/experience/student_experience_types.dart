@@ -44,6 +44,7 @@ enum StudentExperienceEventType {
   firstLessonShellOpened,
   timeToClassroom,
   placementRequired,
+  placementScreenReleasedAfterSlotA,
   placementDeferredUntilAfterFirstLesson,
   t02FirstLessonStarted,
   t02FirstMinimumLessonReady,

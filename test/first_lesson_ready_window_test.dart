@@ -1257,7 +1257,7 @@ void main() {
   );
 
   test(
-    'placement nao bloqueia a primeira aula quando ha item minimo',
+    'placement aparece quando necessario enquanto primeiro minimo prepara em background',
     () async {
       final service = StudentLearningStateService();
       final releaseFinal = Completer<void>();
@@ -1296,15 +1296,19 @@ void main() {
         ),
       );
 
-      expect(result.destination, '/cyber/aula');
+      expect(result.destination, '/cyber/placement');
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
       final events = service
           .read('cyber-no-placement-block')
           ?.events
           .where((event) => event.type == 'PROGRESS_UPDATED')
           .map((event) => event.payload['event'])
           .toList();
-      expect(events, contains('placementDeferredUntilAfterFirstLesson'));
-      expect(events, isNot(contains('placementRequired')));
+      expect(events, contains('placementRequired'));
+      expect(events, contains('placementScreenReleasedAfterSlotA'));
+      expect(events, isNot(contains('firstLessonShellOpened')));
+      expect(t02.requests, hasLength(1));
       t02.firstLesson.complete(t02._material(t02.requests.first));
       releaseFinal.complete();
     },

@@ -12,10 +12,23 @@ import 'student_experience_types.dart';
 import 't00_profile_writer.dart';
 
 class StudentExperienceT00Adapter {
-  StudentExperienceT00Adapter({required this.service, required this.client});
+  StudentExperienceT00Adapter({
+    required this.service,
+    required this.client,
+    this.onCurriculumExpanded,
+  });
 
   final StudentLearningStateService service;
   final T00BootstrapClient client;
+  final void Function({
+    required String lessonLocalId,
+    required String? topic,
+    required int itemIdx,
+    required LessonLayer layer,
+    required String? marker,
+    required String source,
+  })?
+  onCurriculumExpanded;
 
   Future<FirstCurriculumItem> startT00UntilFirstItem(
     StudentExperienceArgs args,
@@ -153,6 +166,12 @@ class StudentExperienceT00Adapter {
                 if (!completer.isCompleted && first != null) {
                   completer.complete(first);
                 }
+              } else if (result != null && result.count > 1) {
+                _notifyCurriculumExpanded(
+                  args.lessonLocalId,
+                  topic,
+                  'StudentExperienceEngineV2:t00_partial_expanded',
+                );
               }
             }
             break;
@@ -245,6 +264,11 @@ class StudentExperienceT00Adapter {
                 StudentExperienceEventType.t00FinalCurriculumReceived,
                 {'items': finalItems.length},
               );
+              _notifyCurriculumExpanded(
+                args.lessonLocalId,
+                topic,
+                'StudentExperienceEngineV2:t00_final_expanded',
+              );
               first ??= _firstItemFrom(curriculum);
             }
             if (!completer.isCompleted && first != null) {
@@ -319,6 +343,48 @@ class StudentExperienceT00Adapter {
       item: item,
       itemIndex: 0,
       marker: item.marker,
+    );
+  }
+
+  void _notifyCurriculumExpanded(
+    String lessonLocalId,
+    String topic,
+    String source,
+  ) {
+    service.mutate(lessonLocalId, (state) {
+      final progress = state.progress;
+      final totalItems = state.curriculum?.items.length ?? 0;
+      if (progress == null || totalItems <= progress.totalItems) {
+        return state;
+      }
+      final pctAvanco = totalItems == 0
+          ? 0
+          : ((progress.mainAdvances / totalItems) * 100).round().clamp(0, 100);
+      return state.copyWith(
+        progress: progress.copyWith(
+          totalItems: totalItems,
+          pctAvanco: pctAvanco.toInt(),
+        ),
+      );
+    });
+    final callback = onCurriculumExpanded;
+    if (callback == null) return;
+    final state = service.read(lessonLocalId);
+    final current = state?.current;
+    final progress = state?.progress;
+    final itemIdx = current?.itemIdx ?? progress?.itemIdx ?? 0;
+    final layer = current?.layer ?? progress?.layer ?? LessonLayer.l1;
+    final items = state?.curriculum?.items ?? const <CurriculumItem>[];
+    final marker =
+        current?.marker ??
+        (itemIdx >= 0 && itemIdx < items.length ? items[itemIdx].marker : null);
+    callback(
+      lessonLocalId: lessonLocalId,
+      topic: topic,
+      itemIdx: itemIdx,
+      layer: layer,
+      marker: marker,
+      source: source,
     );
   }
 }

@@ -96,6 +96,7 @@ class LessonRuntimeEngine {
   LessonSessionSnapshot? _session;
 
   CompleteLessonParams? activeLessonParams() {
+    _refreshSessionFromState();
     final position = _position;
     final session = _session;
     final item = position?.itemAtivo;
@@ -122,6 +123,7 @@ class LessonRuntimeEngine {
   }
 
   bool applyLessonUpdateForKey(String key, CompleteLesson lesson) {
+    _refreshSessionFromState();
     final position = _position;
     final activeKey = activeLessonKey();
     if (position == null || activeKey == null || activeKey != key) {
@@ -217,6 +219,7 @@ class LessonRuntimeEngine {
   }
 
   Future<void> signal(DecisionSignal signal) async {
+    _refreshSessionFromState();
     final position = _position;
     final session = _session;
     if (position == null || session == null) return;
@@ -230,6 +233,7 @@ class LessonRuntimeEngine {
   }
 
   Future<void> advance() async {
+    _refreshSessionFromState();
     final position = _position;
     final session = _session;
     if (position == null || session == null) return;
@@ -244,6 +248,7 @@ class LessonRuntimeEngine {
   }
 
   LessonRuntimeSnapshot snapshot() {
+    _refreshSessionFromState();
     final position = _position;
     final session = _session;
     if (position == null || session == null) {
@@ -285,5 +290,16 @@ class LessonRuntimeEngine {
       itemMarker: position.itemAtivo?.marker,
       itemText: position.itemAtivo?.text,
     );
+  }
+
+  void _refreshSessionFromState() {
+    final currentSession = _session;
+    if (currentSession == null) return;
+    final latestSession = sessionEngine.read(currentSession.lessonLocalId);
+    _session = latestSession;
+    final position = _position;
+    if (position != null) {
+      positionEngine.mergeBaseItems(position, latestSession.baseItems);
+    }
   }
 }

@@ -156,6 +156,61 @@ void main() {
     },
   );
 
+  test(
+    'LessonRuntimeEngine updates counter when T00 expands curriculum without reopening',
+    () async {
+      final initial = _classroomState().copyWith(
+        curriculum: const StudentCurriculum(
+          topic: 'Aprender regra de tres',
+          totalItems: 1,
+          generatedAt: null,
+          provisional: true,
+          items: [CurriculumItem(marker: 'M1', text: 'Item 1')],
+        ),
+        progress: const LessonProgress(
+          itemIdx: 0,
+          layer: LessonLayer.l1,
+          erros: 0,
+          amparoLvl: 0,
+          historia: [],
+          mainAdvances: 0,
+          concluidos: [],
+          pendentesMarkers: [],
+          totalItems: 1,
+          pctAvanco: 0,
+        ),
+      );
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': initial},
+      );
+      final t02 = FakeClassroomT02();
+      final runtime = _runtime(service, t02);
+
+      final first = await runtime.open(lessonLocalId: 'cyber-class');
+      expect(first.viewModel?.headerLabel, 'aula_item_of:1/1:aula_layer_1');
+
+      service.mutate('cyber-class', (state) {
+        return state.copyWith(
+          curriculum: const StudentCurriculum(
+            topic: 'Aprender regra de tres',
+            totalItems: 3,
+            generatedAt: null,
+            provisional: false,
+            items: [
+              CurriculumItem(marker: 'M1', text: 'Item 1'),
+              CurriculumItem(marker: 'M2', text: 'Item 2'),
+              CurriculumItem(marker: 'M3', text: 'Item 3'),
+            ],
+          ),
+        );
+      });
+
+      final expanded = runtime.snapshot();
+      expect(expanded.viewModel?.headerLabel, 'aula_item_of:1/3:aula_layer_1');
+      expect(expanded.itemMarker, 'M1');
+    },
+  );
+
   test('Classroom answer A with signal 1 advances from L1 to L3', () async {
     final service = StudentLearningStateService(
       seed: {'cyber-class': _classroomState()},

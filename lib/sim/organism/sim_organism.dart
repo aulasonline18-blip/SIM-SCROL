@@ -194,6 +194,7 @@ class SimOrganism {
     final t00Adapter = StudentExperienceT00Adapter(
       service: stateService,
       client: t00Client,
+      onCurriculumExpanded: materialService.prepareReadyWindowInBackground,
     );
     final t02Adapter = StudentExperienceT02Adapter(
       service: stateService,
