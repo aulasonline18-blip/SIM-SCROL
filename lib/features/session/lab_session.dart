@@ -1648,8 +1648,7 @@ class LabSession extends ChangeNotifier {
     notifyListeners();
     try {
       await _activeOrganism!.lessonOrchestrator.acceptPaidImageOffer(key);
-      final cached = _activeOrganism!.lessonOrchestrator.peekCachedLesson(key);
-      final dataUrl = cached?.imagem;
+      final dataUrl = aulaSnapshot?.imagem;
       if (dataUrl == null || dataUrl.trim().isEmpty) {
         throw StateError('Imagem indisponivel.');
       }

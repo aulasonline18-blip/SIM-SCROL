@@ -72,7 +72,7 @@ class LessonMaterialCache {
       _memory.remove(key);
       return null;
     }
-    return entry.lesson;
+    return _withoutImage(entry.lesson);
   }
 
   CompleteLesson? peekCachedLesson(String key) => peek(key);
@@ -83,7 +83,7 @@ class LessonMaterialCache {
     if (entry == null) return null;
     if (_isExpired(entry)) return null;
     _memory[key] = entry;
-    return entry.lesson;
+    return _withoutImage(entry.lesson);
   }
 
   Future<CompleteLesson?> getCachedLesson(String key) async => get(key);
@@ -92,7 +92,7 @@ class LessonMaterialCache {
     _memory.removeWhere((_, entry) => _isExpired(entry));
     _memory.remove(key);
     _memory[key] = _CacheEntry(
-      lesson: lesson,
+      lesson: _withoutImage(lesson),
       savedAt: DateTime.now().millisecondsSinceEpoch,
     );
     while (_memory.length > maxLessons) {
@@ -101,9 +101,8 @@ class LessonMaterialCache {
     _persist();
   }
 
-  // Persiste _memory em SharedPreferences. Imagens raster/IA continuam fora do
-  // cache leve; SVG de software é pequeno e determinístico, então pode ser
-  // reaproveitado ao retomar a aula sem pedir nova geração.
+  // Persiste somente texto/conteúdo. Imagens pertencem ao ciclo vivo da aula e
+  // nunca são salvas/restauradas pelo cache local.
   void _persist() {
     unawaited(
       Future(() async {
@@ -129,17 +128,8 @@ class LessonMaterialCache {
   static Map<String, dynamic> _lessonToJsonForCache(CompleteLesson lesson) {
     return {
       'conteudo': lesson.conteudo.toJson(),
-      'imagem': _cacheableFreeSvg(lesson.imagem),
       'audioText': lesson.audioText,
     };
-  }
-
-  static String? _cacheableFreeSvg(String? image) {
-    final trimmed = image?.trim();
-    if (trimmed == null || trimmed.isEmpty) return null;
-    if (!trimmed.startsWith('data:image/svg+xml')) return null;
-    if (trimmed.length > 120000) return null;
-    return trimmed;
   }
 
   static CompleteLesson? _lessonFromJson(Map<String, dynamic> json) {
@@ -152,7 +142,7 @@ class LessonMaterialCache {
       if (conteudo == null) return null;
       return CompleteLesson(
         conteudo: conteudo,
-        imagem: _cacheableFreeSvg(json['imagem'] as String?),
+        imagem: null,
         audioText: json['audioText'] as String? ?? conteudo.audioText,
       );
     } catch (_) {
@@ -166,5 +156,11 @@ class LessonMaterialCache {
     } catch (_) {
       return null;
     }
+  }
+
+  static CompleteLesson _withoutImage(CompleteLesson lesson) {
+    final image = lesson.imagem;
+    if (image == null || image.trim().isEmpty) return lesson;
+    return lesson.copyWith(imagem: null);
   }
 }

@@ -158,6 +158,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       trigger: trigger,
       lessonKey: key,
       stableLang: params.lang,
+      academicLevel: params.academic,
       allowPaidImages: true,
       acceptedOfferId: null,
     );
@@ -211,7 +212,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       imagem: imageData,
       audioText: lesson.audioText,
     );
-    cache.put(key, updated);
+    cache.put(key, updated.copyWith(imagem: null));
     bus.clearPaidImageOffer(key);
     bus.notify(key, updated);
   }
@@ -458,8 +459,6 @@ JsonMap preparedMaterialFromLesson({
     'generated_at': DateTime.now().toIso8601String(),
     'model': 'T02_content',
     'prompt_contract_version': 'T02_content.v3',
-    if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty)
-      'imagem': lesson.imagem,
     'for_itemIdx': itemIdx,
     'for_marker': marker,
     'for_layer': layer.name,

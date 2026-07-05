@@ -258,7 +258,7 @@ void main() {
 
       expect(textLesson.conteudo.visualTrigger, trigger);
       expect(updates.first.conteudo.visualTrigger, trigger);
-      final rendered = updates.last.imagem ?? cache.peek(key)?.imagem;
+      final rendered = updates.last.imagem;
       expect(rendered, startsWith('data:image/svg+xml;utf8,'));
       expect(rendered, contains('%3Csvg'));
     },
@@ -307,18 +307,22 @@ void main() {
       final offers = <LessonPaidImageOffer?>[];
       final unsubscribeOffer = bus.subscribePaidImageOffer(key, offers.add);
       addTearDown(unsubscribeOffer);
+      final updates = <CompleteLesson>[];
+      final unsubscribeLesson = bus.subscribe(key, updates.add);
+      addTearDown(unsubscribeLesson);
 
       await orchestrator.prefetchCompleteLesson(params, priority: 'active');
       await Future<void>.delayed(Duration.zero);
 
-      final rendered = cache.peek(key)?.imagem;
+      final rendered = updates.last.imagem;
       expect(rendered, startsWith('data:image/svg+xml;utf8,'));
+      expect(cache.peek(key)?.imagem, isNull);
       expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
     },
   );
 
   test(
-    'LessonOrchestrator replays cached image funnel through local software',
+    'LessonOrchestrator schedules fresh image funnel from cached text',
     () async {
       final trigger = <String, dynamic>{
         'needs_image': true,
@@ -349,6 +353,9 @@ void main() {
       final offers = <LessonPaidImageOffer?>[];
       final unsubscribeOffer = bus.subscribePaidImageOffer(key, offers.add);
       addTearDown(unsubscribeOffer);
+      final updates = <CompleteLesson>[];
+      final unsubscribeLesson = bus.subscribe(key, updates.add);
+      addTearDown(unsubscribeLesson);
       cache.put(
         key,
         CompleteLesson(
@@ -373,9 +380,10 @@ void main() {
       await orchestrator.prefetchCompleteLesson(params, priority: 'active');
       await Future<void>.delayed(Duration.zero);
 
-      final rendered = cache.peek(key)?.imagem;
+      final rendered = updates.last.imagem;
       expect(t02.calls, 0);
       expect(rendered, startsWith('data:image/svg+xml;utf8,'));
+      expect(cache.peek(key)?.imagem, isNull);
       expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
     },
   );
@@ -424,7 +432,7 @@ void main() {
       await orchestrator.prefetchCompleteLesson(params, priority: 'active');
       await Future<void>.delayed(Duration.zero);
 
-      final rendered = updates.last.imagem ?? cache.peek(key)?.imagem;
+      final rendered = updates.last.imagem;
       expect(rendered, startsWith('data:image/svg+xml;utf8,'));
       expect(Uri.decodeComponent(rendered!), contains('y = 2'));
     },
@@ -462,6 +470,9 @@ void main() {
       final offers = <LessonPaidImageOffer?>[];
       final unsubscribe = bus.subscribePaidImageOffer(key, offers.add);
       addTearDown(unsubscribe);
+      final updates = <CompleteLesson>[];
+      final unsubscribeLesson = bus.subscribe(key, updates.add);
+      addTearDown(unsubscribeLesson);
 
       await orchestrator.prefetchCompleteLesson(params, priority: 'active');
       await Future<void>.delayed(Duration.zero);
@@ -513,6 +524,9 @@ void main() {
       final offers = <LessonPaidImageOffer?>[];
       final unsubscribe = bus.subscribePaidImageOffer(key, offers.add);
       addTearDown(unsubscribe);
+      final updates = <CompleteLesson>[];
+      final unsubscribeLesson = bus.subscribe(key, updates.add);
+      addTearDown(unsubscribeLesson);
 
       await orchestrator.prefetchCompleteLesson(params, priority: 'active');
       await Future<void>.delayed(Duration.zero);
@@ -533,7 +547,8 @@ void main() {
 
       await orchestrator.acceptPaidImageOffer(key);
       expect(paidCalls, 1);
-      expect(cache.peek(key)?.imagem, startsWith('data:image/jpeg;base64,'));
+      expect(updates.last.imagem, startsWith('data:image/jpeg;base64,'));
+      expect(cache.peek(key)?.imagem, isNull);
     },
   );
 
@@ -562,32 +577,39 @@ void main() {
     },
   );
 
-  test('LessonEventBus replays latest image lesson to late subscriber', () {
-    final bus = LessonEventBus();
-    const lesson = CompleteLesson(
-      conteudo: LessonContent(
-        explanation: 'Explicacao',
-        question: 'Pergunta',
-        options: {
-          AnswerLetter.A: 'A',
-          AnswerLetter.B: 'B',
-          AnswerLetter.C: 'C',
-        },
-        correctAnswer: AnswerLetter.A,
-      ),
-      imagem:
-          'data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%201%201%22%3E%3C/svg%3E',
-      audioText: 'Explicacao. Pergunta',
-    );
+  test(
+    'LessonEventBus delivers live image but strips image from late replay',
+    () {
+      final bus = LessonEventBus();
+      const lesson = CompleteLesson(
+        conteudo: LessonContent(
+          explanation: 'Explicacao',
+          question: 'Pergunta',
+          options: {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+        imagem:
+            'data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%201%201%22%3E%3C/svg%3E',
+        audioText: 'Explicacao. Pergunta',
+      );
 
-    bus.notify('lesson-key', lesson);
-    final received = <CompleteLesson>[];
-    final unsubscribe = bus.subscribe('lesson-key', received.add);
-    addTearDown(unsubscribe);
+      final live = <CompleteLesson>[];
+      final unsubscribeLive = bus.subscribe('lesson-key', live.add);
+      addTearDown(unsubscribeLive);
+      bus.notify('lesson-key', lesson);
+      final received = <CompleteLesson>[];
+      final unsubscribe = bus.subscribe('lesson-key', received.add);
+      addTearDown(unsubscribe);
 
-    expect(received, [lesson]);
-    expect(received.single.imagem, startsWith('data:image/svg+xml;utf8,'));
-  });
+      expect(live.single.imagem, startsWith('data:image/svg+xml;utf8,'));
+      expect(received.single.imagem, isNull);
+      expect(received.single.conteudo.question, lesson.conteudo.question);
+    },
+  );
 
   test('review and recovery requests preserve visual_trigger', () async {
     final trigger = <String, dynamic>{
@@ -835,10 +857,14 @@ void main() {
         },
       );
       final cache = LessonMaterialCache();
+      final bus = LessonEventBus();
+      final updates = <CompleteLesson>[];
+      final unsubscribe = bus.subscribe(lessonKeyFor(params), updates.add);
+      addTearDown(unsubscribe);
       final orchestrator = LessonOrchestrator(
         t02Client: FakeT02Client(),
         cache: cache,
-        bus: LessonEventBus(),
+        bus: bus,
         visualPipeline: fakeVisualPipeline(),
       );
       final materialService = StudentLessonMaterialService(
@@ -863,7 +889,8 @@ void main() {
 
       expect(result?.conteudo.question, 'Onde fica a origem?');
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(cache.peek(lessonKeyFor(params))?.imagem, startsWith('data:'));
+      expect(updates.last.imagem, startsWith('data:'));
+      expect(cache.peek(lessonKeyFor(params))?.imagem, isNull);
     },
   );
 
@@ -907,10 +934,14 @@ void main() {
     final service = StudentLearningStateService(
       seed: {'cyber-cache': _stateWithCurriculum()},
     );
+    final bus = LessonEventBus();
+    final updates = <CompleteLesson>[];
+    final unsubscribe = bus.subscribe(lessonKeyFor(params), updates.add);
+    addTearDown(unsubscribe);
     final orchestrator = LessonOrchestrator(
       t02Client: FakeT02Client(),
       cache: cache,
-      bus: LessonEventBus(),
+      bus: bus,
       visualPipeline: fakeVisualPipeline(),
     );
     final materialService = StudentLessonMaterialService(
@@ -935,7 +966,8 @@ void main() {
 
     expect(result?.imagem, isNull);
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(cache.peek(lessonKeyFor(params))?.imagem, startsWith('data:'));
+    expect(updates.last.imagem, startsWith('data:'));
+    expect(cache.peek(lessonKeyFor(params))?.imagem, isNull);
   });
 
   test('StudentExperienceT02Adapter prepares first minimum lesson', () async {

@@ -28,7 +28,14 @@ import 'package:sim_mobile/sim/media/lesson_visual_models.dart';
 import 'package:sim_mobile/sim/media/lesson_visual_pipeline.dart';
 import 'package:sim_mobile/sim/media/math_templates/math_templates.dart';
 import 'package:sim_mobile/sim/media/paid_image_service.dart' as paid;
+import 'package:sim_mobile/sim/media/pedagogical_visual_components.dart';
+import 'package:sim_mobile/sim/media/pedagogical_visual_hierarchy.dart';
+import 'package:sim_mobile/sim/media/pedagogical_visual_layout.dart';
+import 'package:sim_mobile/sim/media/pedagogical_visual_level.dart';
+import 'package:sim_mobile/sim/media/pedagogical_visual_palette.dart';
 import 'package:sim_mobile/sim/media/platform_audio_adapter.dart';
+import 'package:sim_mobile/sim/media/sim_visual_identity.dart';
+import 'package:sim_mobile/sim/media/software_render_catalog.dart';
 import 'package:sim_mobile/sim/media/student_lesson_media_service.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
@@ -90,6 +97,7 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
   String? lastHighlightFocus;
   String? lastComplexity;
   String? lastStableLang;
+  int calls = 0;
 
   @override
   Future<VisualN3Result> routeVisual({
@@ -103,6 +111,7 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
     String? complexity,
     String? stableLang,
   }) async {
+    calls += 1;
     lastN2 = n2;
     lastTopic = topic;
     lastVisualType = visualType;
@@ -114,6 +123,39 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
     lastStableLang = stableLang;
     return result;
   }
+}
+
+class StubSoftwareRenderCatalog extends SoftwareRenderCatalog {
+  const StubSoftwareRenderCatalog({this.result});
+
+  final SoftwareRenderResult? result;
+
+  @override
+  SoftwareRenderResult? render(SoftwareVisualRequest request) => result;
+}
+
+class CapturingSoftwareRenderCatalog extends SoftwareRenderCatalog {
+  CapturingSoftwareRenderCatalog();
+
+  SoftwareVisualRequest? lastRequest;
+
+  @override
+  SoftwareRenderResult? render(SoftwareVisualRequest request) {
+    lastRequest = request;
+    return null;
+  }
+}
+
+String _renderSoftwareSvg(SoftwareVisualRequest request) {
+  final result = const SoftwareRenderCatalog().render(request);
+  expect(result, isNotNull);
+  return Uri.decodeFull(result!.dataUrl);
+}
+
+SoftwareRenderResult _renderSoftwareResult(SoftwareVisualRequest request) {
+  final result = const SoftwareRenderCatalog().render(request);
+  expect(result, isNotNull);
+  return result!;
 }
 
 class ThrowingGeneratedAudioClient implements GeneratedAudioClient {
@@ -767,23 +809,238 @@ void main() {
     expect(isUsableImageDataUrl('http://x'), false);
   });
 
-  test('image critic accepts concise SVG and rejects text-heavy visual', () {
+  test('image critic judges visual quality instead of raw text count', () {
     const critic = ImagePedagogicalCritic(maxTextNodes: 2);
-    final concise = sanitizeAndEncodeSvg(
-      '<svg viewBox="0 0 10 10"><text x="1" y="5">eixo</text></svg>',
+    String dataUrl(String body) {
+      return sanitizeAndEncodeSvg(
+        '<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">$body</svg>',
+      )!;
+    }
+
+    final richOrganized = dataUrl(
+      '<rect x="40" y="40" width="220" height="120" fill="#DCFCE7"/>'
+      '<rect x="340" y="40" width="220" height="120" fill="#E0F2FE"/>'
+      '<rect x="640" y="40" width="220" height="120" fill="#FEF3C7"/>'
+      '<path d="M260 100 L340 100 M560 100 L640 100" stroke="#334155"/>'
+      '<text x="60" y="80" fill="#0F172A" font-size="18">coleta seletiva</text>'
+      '<text x="60" y="110" fill="#0F172A" font-size="18">separar materiais</text>'
+      '<text x="360" y="80" fill="#0F172A" font-size="18">triagem</text>'
+      '<text x="360" y="110" fill="#0F172A" font-size="18">classificar residuos</text>'
+      '<text x="660" y="80" fill="#0F172A" font-size="18">reciclagem</text>'
+      '<text x="660" y="110" fill="#0F172A" font-size="18">novo ciclo produtivo</text>',
     );
-    final heavy = sanitizeAndEncodeSvg(
-      '<svg viewBox="0 0 10 10">'
-      '<text x="1" y="2">um</text>'
-      '<text x="1" y="4">dois</text>'
-      '<text x="1" y="6">tres</text>'
-      '</svg>',
+    final richManyConcepts = dataUrl(
+      List.generate(8, (index) {
+        final x = 60 + (index % 4) * 200;
+        final y = 80 + (index ~/ 4) * 180;
+        return '<rect x="$x" y="$y" width="150" height="70" fill="#F8FAFC" stroke="#1E293B"/>'
+            '<text x="${x + 12}" y="${y + 32}" fill="#0F172A" font-size="16">conceito ${index + 1}</text>'
+            '<text x="${x + 12}" y="${y + 55}" fill="#475569" font-size="13">função pedagógica</text>';
+      }).join(),
+    );
+    final usefulLegend = dataUrl(
+      '<rect x="40" y="40" width="180" height="70" fill="#DCFCE7"/>'
+      '<text x="60" y="82" fill="#0F172A" font-size="16">verde: conceito principal</text>'
+      '<rect x="40" y="130" width="180" height="70" fill="#FEF3C7"/>'
+      '<text x="60" y="172" fill="#0F172A" font-size="16">amarelo: foco de atenção</text>',
+    );
+    final smallClean = dataUrl(
+      '<circle cx="120" cy="120" r="48" fill="#DCFCE7" stroke="#16A34A"/>'
+      '<text x="92" y="126" fill="#0F172A" font-size="18">força</text>',
     );
 
-    expect(critic.evaluateSvgDataUrl(concise).accepted, isTrue);
-    final rejected = critic.evaluateSvgDataUrl(heavy);
-    expect(rejected.accepted, isFalse);
-    expect(rejected.reason, 'critic_too_much_text');
+    expect(critic.evaluateSvgDataUrl(richOrganized).accepted, isTrue);
+    expect(critic.evaluateSvgDataUrl(richManyConcepts).accepted, isTrue);
+    expect(critic.evaluateSvgDataUrl(usefulLegend).accepted, isTrue);
+    expect(critic.evaluateSvgDataUrl(smallClean).accepted, isTrue);
+
+    expect(
+      critic
+          .evaluateSvgDataUrl(
+            dataUrl(
+              '<text x="40" y="40" fill="#0F172A" font-size="6">microtexto</text>',
+            ),
+          )
+          .reason,
+      'critic_illegible_text',
+    );
+    expect(
+      critic
+          .evaluateSvgDataUrl(
+            dataUrl(
+              '<text x="40" y="40" fill="#FFFFFF" font-size="16">invisivel</text>',
+            ),
+          )
+          .reason,
+      'critic_low_contrast_text',
+    );
+    expect(
+      critic
+          .evaluateSvgDataUrl(
+            dataUrl(
+              '<rect x="20" y="20" width="100" height="40"/>'
+              '<text x="40" y="40">eco</text><text x="160" y="40">eco</text>'
+              '<text x="280" y="40">eco</text>',
+            ),
+          )
+          .reason,
+      'critic_duplicate_text',
+    );
+    expect(
+      critic
+          .evaluateSvgDataUrl(
+            dataUrl(
+              '<text x="1" y="1">1</text><text x="1" y="2">2</text>'
+              '<text x="1" y="3">3</text><text x="1" y="4">4</text>',
+            ),
+          )
+          .reason,
+      'critic_text_without_visual_structure',
+    );
+    expect(critic.evaluateSvgDataUrl('not-svg').reason, 'critic_invalid_svg');
+    expect(
+      critic
+          .evaluateSvgDataUrl(
+            'data:image/svg+xml;utf8,${Uri.encodeComponent('<svg viewBox="0 0 10 10"><script>alert(1)</script></svg>')}',
+          )
+          .reason,
+      'critic_svg_unsafe',
+    );
+  });
+
+  test('final visual quality accepts SVG that teaches the lesson context', () {
+    const critic = ImagePedagogicalCritic();
+    const evaluator = VisualFinalQualityEvaluator.standard;
+    final svg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">'
+      '<rect x="40" y="40" width="220" height="120" fill="#DCFCE7"/>'
+      '<path d="M260 100 L340 100" stroke="#334155"/>'
+      '<text x="70" y="88" fill="#0F172A" font-size="18">glicose</text>'
+      '<text x="360" y="88" fill="#0F172A" font-size="18">ATP</text>'
+      '<text x="560" y="88" fill="#0F172A" font-size="18">mitocôndria</text>'
+      '<text x="70" y="138" fill="#0F172A" font-size="18">energia celular</text>'
+      '</svg>',
+    )!;
+    const request = SoftwareVisualRequest(
+      n2: VisualN2Result(
+        verdict: VisualVerdict.svg,
+        matched: ['diagrama'],
+        reason: 'TEST',
+      ),
+      topic: 'respiração celular',
+      visualType: 'diagram',
+      keyElements: ['glicose', 'ATP', 'mitocôndria'],
+      highlightFocus: 'energia celular',
+      academicLevel: 'Ensino Médio',
+    );
+    final critique = critic.evaluateSvgDataUrl(svg);
+    final result = evaluator.evaluateSvg(
+      dataUrl: svg,
+      request: request,
+      critique: critique,
+      source: 'local_software',
+    );
+
+    expect(result.action, VisualFinalQualityAction.accepted);
+    expect(result.coveredKeyElements, 3);
+    expect(result.focusCovered, isTrue);
+  });
+
+  test('final visual quality escalates SVG that ignores lesson keys', () {
+    const critic = ImagePedagogicalCritic();
+    const evaluator = VisualFinalQualityEvaluator.standard;
+    final svg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">'
+      '<rect x="40" y="40" width="220" height="120" fill="#DCFCE7"/>'
+      '<text x="70" y="88" fill="#0F172A" font-size="18">modelo genérico</text>'
+      '</svg>',
+    )!;
+    const request = SoftwareVisualRequest(
+      n2: VisualN2Result(
+        verdict: VisualVerdict.svg,
+        matched: ['diagrama'],
+        reason: 'TEST',
+      ),
+      topic: 'metabolismo celular',
+      visualType: 'diagram',
+      keyElements: ['glicose', 'ATP', 'mitocôndria', 'oxigênio'],
+      highlightFocus: 'produção de ATP',
+      complexity: 'complex',
+      academicLevel: 'Universitário',
+    );
+    final critique = critic.evaluateSvgDataUrl(svg);
+    final result = evaluator.evaluateSvg(
+      dataUrl: svg,
+      request: request,
+      critique: critique,
+      source: 'local_software',
+    );
+
+    expect(result.action, VisualFinalQualityAction.needsN3);
+    expect(result.reason, contains('key_coverage'));
+  });
+
+  test('final visual quality preserves simple useful SVG for young levels', () {
+    const critic = ImagePedagogicalCritic();
+    const evaluator = VisualFinalQualityEvaluator.standard;
+    final svg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">'
+      '<circle cx="120" cy="120" r="48" fill="#DCFCE7" stroke="#16A34A"/>'
+      '<text x="92" y="126" fill="#0F172A" font-size="18">luz</text>'
+      '<text x="190" y="126" fill="#0F172A" font-size="18">planta</text>'
+      '</svg>',
+    )!;
+    const request = SoftwareVisualRequest(
+      n2: VisualN2Result(
+        verdict: VisualVerdict.svg,
+        matched: ['diagrama'],
+        reason: 'TEST',
+      ),
+      topic: 'fotossíntese',
+      visualType: 'diagram',
+      keyElements: ['luz', 'planta', 'alimento'],
+      academicLevel: 'Educação Infantil',
+    );
+    final critique = critic.evaluateSvgDataUrl(svg);
+    final result = evaluator.evaluateSvg(
+      dataUrl: svg,
+      request: request,
+      critique: critique,
+      source: 'local_software',
+    );
+
+    expect(result.action, VisualFinalQualityAction.accepted);
+  });
+
+  test('final visual quality follows critic rejection for illegible SVG', () {
+    const critic = ImagePedagogicalCritic();
+    const evaluator = VisualFinalQualityEvaluator.standard;
+    final svg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">'
+      '<text x="40" y="40" fill="#0F172A" font-size="6">glicose</text>'
+      '</svg>',
+    )!;
+    const request = SoftwareVisualRequest(
+      n2: VisualN2Result(
+        verdict: VisualVerdict.svg,
+        matched: ['diagrama'],
+        reason: 'TEST',
+      ),
+      topic: 'respiração celular',
+      visualType: 'diagram',
+      keyElements: ['glicose'],
+    );
+    final critique = critic.evaluateSvgDataUrl(svg);
+    final result = evaluator.evaluateSvg(
+      dataUrl: svg,
+      request: request,
+      critique: critique,
+      source: 'local_software',
+    );
+
+    expect(critique.reason, 'critic_illegible_text');
+    expect(result.action, VisualFinalQualityAction.rejected);
+    expect(result.reason, contains('critic_illegible_text'));
   });
 
   test('image data URL compression rewrites raster image to jpeg data URL', () {
@@ -791,6 +1048,1271 @@ void main() {
     final png = 'data:image/png;base64,${base64Encode(pngBytes)}';
     final compressed = compressImageDataUrl(png);
     expect(compressed, startsWith('data:image/jpeg;base64,'));
+  });
+
+  test('SoftwareVisualRequest accepts complete visual context fields', () {
+    const legend = [
+      BlueprintColorLegendItem(id: 1, label: 'força', color: '#FF1744'),
+      BlueprintColorLegendItem(id: 2, label: 'movimento', color: '#2979FF'),
+    ];
+    const request = SoftwareVisualRequest(
+      n2: VisualN2Result(
+        verdict: VisualVerdict.svg,
+        matched: ['diagrama'],
+        reason: 'TEST',
+      ),
+      topic: 'forças em bloco',
+      visualType: 'diagram',
+      imagePrompt: 'mostrar setas e bloco',
+      colorLegend: legend,
+      keyElements: ['bloco', 'força', 'atrito'],
+      highlightFocus: 'direção da força resultante',
+      complexity: 'moderate',
+      pedagogicalNeed: 'important',
+      academicLevel: 'Ensino Fundamental',
+      pedagogicalGoal: 'direção da força resultante',
+    );
+
+    expect(request.colorLegend, legend);
+    expect(request.keyElements, ['bloco', 'força', 'atrito']);
+    expect(request.highlightFocus, 'direção da força resultante');
+    expect(request.complexity, 'moderate');
+    expect(request.pedagogicalNeed, 'important');
+    expect(request.academicLevel, 'Ensino Fundamental');
+    expect(request.pedagogicalGoal, 'direção da força resultante');
+    expect(request.visualType, 'diagram');
+    expect(request.imagePrompt, 'mostrar setas e bloco');
+    expect(request.topic, 'forças em bloco');
+  });
+
+  test(
+    'pedagogical visual palette exposes semantic roles and safe contrast',
+    () {
+      const palette = PedagogicalVisualPalette.standard;
+
+      expect(palette.primaryConcept, '#16A34A');
+      expect(palette.supportingContext, '#0284C7');
+      expect(palette.attention, '#D97706');
+      expect(palette.critical, '#DC2626');
+      expect(palette.definition, '#7C3AED');
+      expect(palette.neutral, '#64748B');
+      expect(contrastRatio(palette.text, palette.background), greaterThan(4.5));
+      for (final role in PedagogicalVisualRole.values) {
+        expect(
+          contrastRatio(palette.text, palette.fillFor(role)),
+          greaterThan(4.5),
+        );
+      }
+    },
+  );
+
+  test('pedagogical visual hierarchy exposes reusable visual weights', () {
+    const hierarchy = PedagogicalVisualHierarchy.standard;
+
+    expect(
+      hierarchy.fontSize(PedagogicalVisualHierarchyRole.primary),
+      greaterThan(hierarchy.fontSize(PedagogicalVisualHierarchyRole.secondary)),
+    );
+    expect(
+      hierarchy.strokeWidth(PedagogicalVisualHierarchyRole.primary),
+      greaterThan(
+        hierarchy.strokeWidth(PedagogicalVisualHierarchyRole.connector),
+      ),
+    );
+    expect(
+      hierarchy.opacity(PedagogicalVisualHierarchyRole.connector),
+      lessThan(hierarchy.opacity(PedagogicalVisualHierarchyRole.primary)),
+    );
+    expect(
+      hierarchy.radius(PedagogicalVisualHierarchyRole.primary),
+      greaterThan(hierarchy.radius(PedagogicalVisualHierarchyRole.neutral)),
+    );
+    expect(
+      hierarchy.textAttrs(PedagogicalVisualHierarchyRole.critical),
+      contains('font-weight="800"'),
+    );
+  });
+
+  test('SIM visual identity centralizes brand tokens for software images', () {
+    const identity = SimVisualIdentity.standard;
+    const palette = PedagogicalVisualPalette.standard;
+
+    expect(identity.fontFamily, contains('Inter'));
+    expect(identity.canvasWidth, 900);
+    expect(identity.canvasHeightDefault, 560);
+    expect(identity.titleFontSize, 30);
+    expect(identity.badgeFontSize, 16);
+    expect(identity.arrowMarkerSize, 12);
+    expect(identity.largeArrowMarkerSize, 14);
+    expect(identity.canvasBackground(palette), contains('height="560"'));
+    expect(identity.compactCanvasBackground(palette), contains('height="520"'));
+    expect(identity.fontGroupAttrs(palette), contains('font-family="Inter'));
+    expect(identity.cardShadow(), contains('feDropShadow'));
+  });
+
+  test('pedagogical visual level detects cognitive profiles safely', () {
+    expect(
+      PedagogicalVisualLevelProfile.fromAcademicLevel(
+        'Educação Infantil',
+      ).level,
+      PedagogicalVisualLevel.child,
+    );
+    expect(
+      PedagogicalVisualLevelProfile.fromAcademicLevel(
+        'Ensino Fundamental',
+      ).level,
+      PedagogicalVisualLevel.fundamental,
+    );
+    expect(
+      PedagogicalVisualLevelProfile.fromAcademicLevel('Ensino Médio').level,
+      PedagogicalVisualLevel.highSchool,
+    );
+    expect(
+      PedagogicalVisualLevelProfile.fromAcademicLevel('Vestibular ENEM').level,
+      PedagogicalVisualLevel.examPrep,
+    );
+    expect(
+      PedagogicalVisualLevelProfile.fromAcademicLevel('Universitário').level,
+      PedagogicalVisualLevel.advanced,
+    );
+    expect(
+      PedagogicalVisualLevelProfile.fromAcademicLevel(null).level,
+      PedagogicalVisualLevel.highSchool,
+    );
+    expect(
+      PedagogicalVisualLevelProfile.advanced.detailSlots,
+      greaterThan(PedagogicalVisualLevelProfile.fundamental.detailSlots),
+    );
+    expect(
+      PedagogicalVisualLevelProfile.child.maxPrimaryElements,
+      lessThan(PedagogicalVisualLevelProfile.highSchool.maxPrimaryElements),
+    );
+  });
+
+  test('pedagogical visual layout wraps and spaces labels safely', () {
+    const layout = PedagogicalVisualLayout.standard;
+
+    final lines = layout.wrapLabel(
+      'fotossíntese transforma energia luminosa em energia química',
+      maxCharsPerLine: 14,
+      maxLines: 2,
+    );
+    expect(lines, hasLength(2));
+    expect(lines.last, endsWith('...'));
+    for (final line in lines) {
+      expect(line.length, lessThanOrEqualTo(14));
+    }
+
+    final svgText = layout.svgText(
+      x: 120,
+      y: 80,
+      text: 'clorofila captura luz solar',
+      attrs: 'font-size="18" font-weight="700"',
+      maxCharsPerLine: 12,
+      maxLines: 2,
+    );
+    expect(svgText, contains('<tspan'));
+    expect(svgText, contains('font-family="Inter, Arial, sans-serif"'));
+    expect(svgText, contains('font-size="18"'));
+
+    final centers = layout.evenlySpacedCenters(count: 3, start: 80, end: 820);
+    expect(centers, [80, 450, 820]);
+    expect(layout.alternatingOffsets(4), [72, -56, 72, -56]);
+  });
+
+  test('pedagogical visual components render reusable SVG bricks only', () {
+    const components = PedagogicalVisualComponents.standard;
+    const palette = PedagogicalVisualPalette.standard;
+
+    final box = components.semanticBox(
+      x: 10,
+      y: 20,
+      width: 120,
+      height: 60,
+      palette: palette,
+      fillRole: PedagogicalVisualRole.primaryConcept,
+      hierarchyRole: PedagogicalVisualHierarchyRole.primary,
+    );
+    expect(box, contains('<rect'));
+    expect(box, contains(palette.primaryConceptFill));
+    expect(box, contains('stroke-width="4.8"'));
+
+    final marker = components.arrowMarker(palette: palette);
+    expect(marker, contains('<marker id="arrow"'));
+    expect(marker, contains('fill="${palette.connector}"'));
+    expect(marker, contains('markerWidth="12"'));
+
+    final connector = components.connectorGroup(
+      palette: palette,
+      markerId: 'arrow',
+      paths: const ['<path d="M10 10 H90"/>'],
+    );
+    expect(connector, contains('marker-end="url(#arrow)"'));
+    expect(connector, contains('<path d="M10 10 H90"/>'));
+
+    final caption = components.caption(
+      x: 100,
+      y: 120,
+      text: 'texto pedagógico reutilizável com quebra segura',
+      palette: palette,
+      maxCharsPerLine: 16,
+    );
+    expect(caption, contains('<tspan'));
+    expect(caption, contains('font-family="Inter, Arial, sans-serif"'));
+
+    final title = components.title('SIM visual unificado', palette);
+    expect(title, contains('font-size="30"'));
+    expect(title, contains('font-family="Inter, Arial, sans-serif"'));
+
+    final badge = components.badge(
+      x: 10,
+      y: 20,
+      label: 'SIM',
+      palette: palette,
+    );
+    expect(badge, contains('font-family="Inter, Arial, sans-serif"'));
+    expect(badge, contains('font-size="16"'));
+
+    final all = [box, marker, connector, caption, title, badge].join('\n');
+    expect(all, isNot(contains('data:image')));
+    expect(all, isNot(contains('lessonKey')));
+    expect(all, isNot(contains('cache')));
+  });
+
+  test('pedagogical visual palette accepts safe colorLegend overrides', () {
+    final palette = PedagogicalVisualPalette.fromColorLegend(const [
+      BlueprintColorLegendItem(
+        id: 1,
+        label: 'conceito principal',
+        color: '#00E676',
+      ),
+      BlueprintColorLegendItem(
+        id: 2,
+        label: 'atenção do aluno',
+        color: '#FFEA00',
+      ),
+    ]);
+
+    expect(palette.primaryConceptFill, '#00E676');
+    expect(palette.attentionFill, '#FFEA00');
+    expect(
+      palette.supportingContextFill,
+      PedagogicalVisualPalette.standard.supportingContextFill,
+    );
+  });
+
+  test('pedagogical visual palette rejects unsafe colorLegend overrides', () {
+    final palette = PedagogicalVisualPalette.fromColorLegend(const [
+      BlueprintColorLegendItem(
+        id: 1,
+        label: 'conceito principal',
+        color: '#000000',
+      ),
+      BlueprintColorLegendItem(id: 2, label: 'apoio', color: 'blue'),
+    ]);
+
+    expect(
+      palette.primaryConceptFill,
+      PedagogicalVisualPalette.standard.primaryConceptFill,
+    );
+    expect(
+      palette.supportingContextFill,
+      PedagogicalVisualPalette.standard.supportingContextFill,
+    );
+  });
+
+  test(
+    'local flowchart renderer uses lesson context instead of placeholders',
+    () {
+      final svg = _renderSoftwareSvg(
+        const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['fluxograma'],
+            reason: 'TEST',
+          ),
+          topic: 'fluxograma da reciclagem do plástico',
+          visualType: 'flowchart',
+          keyElements: ['coleta seletiva', 'triagem', 'reciclagem'],
+          highlightFocus: 'ordem correta das etapas',
+          imagePrompt: 'mostrar o processo de reciclagem',
+        ),
+      );
+
+      expect(svg, contains('fluxograma da reciclagem do plástico'));
+      expect(svg, contains('coleta'));
+      expect(svg, contains('seletiva'));
+      expect(svg, contains('triagem'));
+      expect(svg, contains('reciclagem'));
+      expect(svg, contains('ordem correta das etapas'));
+      expect(svg, isNot(contains('observar')));
+      expect(svg, isNot(contains('decidir')));
+      expect(svg, isNot(contains('aplicar')));
+    },
+  );
+
+  test('local flowchart renderer applies semantic palette and colorLegend', () {
+    final svg = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['fluxograma'],
+          reason: 'TEST',
+        ),
+        topic: 'fluxograma da fotossíntese',
+        visualType: 'flowchart',
+        keyElements: ['luz', 'clorofila', 'glicose'],
+        colorLegend: [
+          BlueprintColorLegendItem(
+            id: 1,
+            label: 'conceito principal',
+            color: '#00E676',
+          ),
+        ],
+      ),
+    );
+
+    expect(svg, contains('#00E676'));
+    expect(
+      svg,
+      contains(PedagogicalVisualPalette.standard.supportingContextFill),
+    );
+    expect(svg, contains(PedagogicalVisualPalette.standard.attentionFill));
+    expect(svg, isNot(contains('fill="#000000"')));
+  });
+
+  test('local renderer final SVG carries unified SIM visual identity', () {
+    final result = _renderSoftwareResult(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['fluxograma'],
+          reason: 'TEST',
+        ),
+        topic: 'fluxograma da aprendizagem ativa',
+        visualType: 'flowchart',
+        keyElements: ['observar', 'comparar', 'concluir'],
+        highlightFocus: 'ordem de leitura do raciocínio',
+      ),
+    );
+    final svg = Uri.decodeFull(result.dataUrl);
+
+    expect(result.renderer, 'FlowchartRenderer');
+    expect(svg, contains('font-family="Inter, Arial, sans-serif"'));
+    expect(svg, contains('width="900" height="520"'));
+    expect(svg, contains('markerWidth="12"'));
+    expect(svg, contains(PedagogicalVisualPalette.standard.background));
+    expect(svg, contains(PedagogicalVisualPalette.standard.primaryConceptFill));
+    expect(svg, contains('stroke-width="4.8"'));
+    expect(svg, isNot(contains('font-family="Arial, sans-serif"')));
+  });
+
+  test('local renderer changes visual richness by academic level', () {
+    SoftwareVisualRequest requestFor(String academicLevel) =>
+        SoftwareVisualRequest(
+          n2: const VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['fluxograma'],
+            reason: 'TEST',
+          ),
+          topic: 'fluxograma da investigação científica',
+          visualType: 'flowchart',
+          academicLevel: academicLevel,
+          keyElements: const [
+            'observar',
+            'perguntar',
+            'testar',
+            'medir',
+            'registrar',
+            'revisar',
+          ],
+        );
+
+    final child = _renderSoftwareSvg(requestFor('Educação Infantil'));
+    final highSchool = _renderSoftwareSvg(requestFor('Ensino Médio'));
+    final advanced = _renderSoftwareSvg(requestFor('Universitário'));
+
+    expect(child, contains('observar'));
+    expect(child, contains('perguntar'));
+    expect(child, isNot(contains('medir')));
+    expect(child, isNot(contains('data-visual-level')));
+
+    expect(highSchool, contains('testar'));
+    expect(highSchool, contains('data-visual-level="Ensino Médio"'));
+    expect(highSchool, contains('medir'));
+    expect(highSchool, contains('registrar'));
+    expect(highSchool, isNot(contains('revisar')));
+
+    expect(advanced, contains('data-visual-level="Avançado"'));
+    expect(advanced, contains('medir'));
+    expect(advanced, contains('registrar'));
+    expect(advanced, contains('revisar'));
+    expect(advanced.length, greaterThan(child.length));
+  });
+
+  test(
+    'local renderers wrap long lesson labels instead of overflowing boxes',
+    () {
+      final flowchart = _renderSoftwareSvg(
+        const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['fluxograma'],
+            reason: 'TEST',
+          ),
+          topic: 'fluxograma de fotossíntese',
+          visualType: 'flowchart',
+          keyElements: [
+            'energia luminosa absorvida pela clorofila',
+            'gás carbônico combinado com água',
+            'glicose armazenando energia química',
+          ],
+        ),
+      );
+
+      expect(flowchart, contains('<tspan'));
+      expect(flowchart, contains('...'));
+      expect(
+        flowchart,
+        isNot(contains('energia luminosa absorvida pela clorofila</text>')),
+      );
+
+      final table = _renderSoftwareSvg(
+        const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['tabela'],
+            reason: 'TEST',
+          ),
+          topic: 'tabela de transformações de energia',
+          visualType: 'table',
+          keyElements: [
+            'situação observada',
+            'energia inicial',
+            'energia final',
+            'lâmpada incandescente acesa',
+            'energia elétrica',
+            'energia luminosa',
+            'painel solar exposto ao sol',
+            'energia luminosa',
+            'energia elétrica',
+            'freio aquecendo a roda',
+            'energia cinética',
+            'energia térmica',
+          ],
+        ),
+      );
+
+      expect(table, contains('<tspan'));
+      expect(table, contains('incandescente'));
+      expect(table, contains('font-size="24"'));
+    },
+  );
+
+  test(
+    'math template labels compact long text without expanding graph layout',
+    () {
+      final dataUrl = tryRenderMathTemplate({
+        'math_template': {
+          'name': 'linear_function',
+          'params': {
+            'a': 1,
+            'b': 2,
+            'labels': {
+              'title': 'função linear',
+              'root': 'raiz horizontal muito longa para caber no gráfico',
+            },
+          },
+        },
+      });
+
+      expect(dataUrl, startsWith('data:image/svg+xml;utf8,'));
+      final decoded = Uri.decodeFull(dataUrl!);
+      expect(decoded, contains('...'));
+      expect(
+        decoded,
+        isNot(contains('raiz horizontal muito longa para caber no gráfico')),
+      );
+    },
+  );
+
+  test('local renderer ignores invalid colorLegend without breaking SVG', () {
+    final svg = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['fluxograma'],
+          reason: 'TEST',
+        ),
+        topic: 'fluxograma seguro',
+        visualType: 'flowchart',
+        keyElements: ['entrada', 'processo', 'saída'],
+        colorLegend: [
+          BlueprintColorLegendItem(
+            id: 1,
+            label: 'conceito principal',
+            color: '#000000',
+          ),
+        ],
+      ),
+    );
+
+    expect(svg, contains(PedagogicalVisualPalette.standard.primaryConceptFill));
+    expect(svg, isNot(contains('fill="#000000"')));
+  });
+
+  test('local diagram renderers apply the pedagogical palette safely', () {
+    final cases = [
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['fluxograma'],
+            reason: 'TEST',
+          ),
+          topic: 'fluxograma da fotossíntese',
+          visualType: 'flowchart',
+          keyElements: ['luz', 'clorofila', 'glicose'],
+        ),
+        expectedColors: [
+          PedagogicalVisualPalette.standard.supportingContextFill,
+          PedagogicalVisualPalette.standard.primaryConceptFill,
+          PedagogicalVisualPalette.standard.attentionFill,
+        ],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['comparação'],
+            reason: 'TEST',
+          ),
+          topic: 'comparação entre mitose e meiose',
+          visualType: 'comparison',
+          keyElements: ['mitose', 'meiose', 'uma divisão', 'duas divisões'],
+        ),
+        expectedColors: [
+          PedagogicalVisualPalette.standard.supportingContextFill,
+          PedagogicalVisualPalette.standard.primaryConceptFill,
+        ],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['ciclo'],
+            reason: 'TEST',
+          ),
+          topic: 'ciclo da água',
+          visualType: 'cycle',
+          keyElements: [
+            'evaporação',
+            'condensação',
+            'precipitação',
+            'escoamento',
+          ],
+        ),
+        expectedColors: [
+          PedagogicalVisualPalette.standard.supportingContextFill,
+          PedagogicalVisualPalette.standard.primaryConceptFill,
+          PedagogicalVisualPalette.standard.attentionFill,
+          PedagogicalVisualPalette.standard.criticalFill,
+        ],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['mapa conceitual'],
+            reason: 'TEST',
+          ),
+          topic: 'mapa conceitual da fotossíntese',
+          visualType: 'concept map',
+          keyElements: ['fotossíntese', 'luz', 'água', 'glicose'],
+        ),
+        expectedColors: [
+          PedagogicalVisualPalette.standard.primaryConceptFill,
+          PedagogicalVisualPalette.standard.supportingContextFill,
+          PedagogicalVisualPalette.standard.attentionFill,
+          PedagogicalVisualPalette.standard.definitionFill,
+        ],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['força'],
+            reason: 'TEST',
+          ),
+          topic: 'diagrama de corpo livre',
+          visualType: 'diagram',
+          keyElements: ['bloco', 'normal', 'peso', 'força', 'atrito'],
+        ),
+        expectedColors: [PedagogicalVisualPalette.standard.primaryConceptFill],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['circuito'],
+            reason: 'TEST',
+          ),
+          topic: 'circuito elétrico simples',
+          visualType: 'diagram',
+          keyElements: ['positivo', 'negativo', 'resistor', 'LED', 'fonte'],
+        ),
+        expectedColors: [PedagogicalVisualPalette.standard.attentionFill],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['linha do tempo'],
+            reason: 'TEST',
+          ),
+          topic: 'linha do tempo da Revolução Francesa',
+          visualType: 'timeline',
+          keyElements: ['Estados Gerais', 'Bastilha', 'República', 'Diretório'],
+        ),
+        expectedColors: [
+          PedagogicalVisualPalette.standard.supportingContextFill,
+          PedagogicalVisualPalette.standard.primaryConceptFill,
+          PedagogicalVisualPalette.standard.attentionFill,
+          PedagogicalVisualPalette.standard.criticalFill,
+        ],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['tabela'],
+            reason: 'TEST',
+          ),
+          topic: 'tabela de classes gramaticais',
+          visualType: 'table',
+          keyElements: ['classe', 'função', 'exemplo'],
+        ),
+        expectedColors: [PedagogicalVisualPalette.standard.definitionFill],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['árvore sintática'],
+            reason: 'TEST',
+          ),
+          topic: 'árvore sintática',
+          visualType: 'diagram',
+          keyElements: ['frase', 'sujeito', 'predicado', 'núcleo'],
+        ),
+        expectedColors: [
+          PedagogicalVisualPalette.standard.definitionFill,
+          PedagogicalVisualPalette.standard.primaryConceptFill,
+          PedagogicalVisualPalette.standard.attentionFill,
+        ],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['cadeia alimentar'],
+            reason: 'TEST',
+          ),
+          topic: 'cadeia alimentar',
+          visualType: 'diagram',
+          keyElements: [
+            'capim',
+            'gafanhoto',
+            'herbívoro',
+            'sapo',
+            'carnívoro',
+            'fungos',
+          ],
+        ),
+        expectedColors: [
+          PedagogicalVisualPalette.standard.primaryConceptFill,
+          PedagogicalVisualPalette.standard.supportingContextFill,
+          PedagogicalVisualPalette.standard.attentionFill,
+          PedagogicalVisualPalette.standard.criticalFill,
+        ],
+      ),
+    ];
+
+    for (final testCase in cases) {
+      final svg = _renderSoftwareSvg(testCase.request);
+      for (final color in testCase.expectedColors) {
+        expect(svg, contains(color));
+      }
+      expect(svg, isNot(contains('fill="#000000"')));
+      expect(svg, isNot(contains('stroke="#000000"')));
+    }
+  });
+
+  test('local renderers encode visual hierarchy in final SVG', () {
+    final flowchart = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['fluxograma'],
+          reason: 'TEST',
+        ),
+        topic: 'fluxograma da fotossíntese',
+        visualType: 'flowchart',
+        keyElements: ['luz', 'clorofila', 'glicose'],
+        highlightFocus: 'clorofila transforma energia',
+      ),
+    );
+    expect(flowchart, contains('font-size="24"'));
+    expect(flowchart, contains('font-size="20"'));
+    expect(flowchart, contains('stroke-width="4.8"'));
+    expect(flowchart, contains('stroke-width="3.4"'));
+    expect(flowchart, contains('opacity="0.78"'));
+
+    final comparison = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['comparação'],
+          reason: 'TEST',
+        ),
+        topic: 'comparação entre mitose e meiose',
+        visualType: 'comparison',
+        keyElements: ['mitose', 'meiose', 'uma divisão', 'duas divisões'],
+        highlightFocus: 'meiose reduz cromossomos',
+      ),
+    );
+    expect(comparison, contains('font-size="24"'));
+    expect(comparison, contains('font-size="18"'));
+    expect(comparison, contains('stroke-width="4.8"'));
+    expect(comparison, contains('opacity="0.72"'));
+
+    final foodChain = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['cadeia alimentar'],
+          reason: 'TEST',
+        ),
+        topic: 'cadeia alimentar',
+        visualType: 'diagram',
+        keyElements: [
+          'capim',
+          'gafanhoto',
+          'herbívoro',
+          'sapo',
+          'carnívoro',
+          'fungos',
+        ],
+      ),
+    );
+    expect(foodChain, contains('font-size="24"'));
+    expect(foodChain, contains('font-size="21"'));
+    expect(foodChain, contains('stroke-width="4.4"'));
+  });
+
+  test('local math renderers apply palette without weakening axes', () {
+    final linear = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['linear'],
+          reason: 'TEST',
+        ),
+        topic: 'função linear',
+        visualType: 'graph',
+        imagePrompt: 'reta crescente com intercepto em y',
+      ),
+    );
+    expect(linear, contains(PedagogicalVisualPalette.standard.primaryConcept));
+    expect(linear, contains(PedagogicalVisualPalette.standard.attention));
+    expect(linear, contains(PedagogicalVisualPalette.standard.critical));
+    expect(linear, contains(PedagogicalVisualPalette.standard.border));
+    expect(linear, contains(PedagogicalVisualPalette.standard.neutralFill));
+    expect(linear, contains('stroke-width="4.2"'));
+    expect(linear, contains('r="10.5"'));
+    expect(linear, contains('font-size="17.0"'));
+
+    final quadratic = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['parábola'],
+          reason: 'TEST',
+        ),
+        topic: 'parábola',
+        visualType: 'graph',
+        imagePrompt: 'f(x)=x^2-1',
+      ),
+    );
+    expect(
+      quadratic,
+      contains(PedagogicalVisualPalette.standard.primaryConcept),
+    );
+    expect(quadratic, contains(PedagogicalVisualPalette.standard.attention));
+    expect(quadratic, contains(PedagogicalVisualPalette.standard.critical));
+    expect(quadratic, contains(PedagogicalVisualPalette.standard.border));
+    expect(quadratic, contains(PedagogicalVisualPalette.standard.neutralFill));
+    expect(quadratic, contains('stroke-width="4.2"'));
+    expect(quadratic, contains('r="10.5"'));
+    expect(quadratic, contains('font-size="17.0"'));
+  });
+
+  test('local cycle renderer uses key elements from the lesson', () {
+    final svg = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['ciclo'],
+          reason: 'TEST',
+        ),
+        topic: 'ciclo da água',
+        visualType: 'cycle',
+        keyElements: [
+          'evaporação',
+          'condensação',
+          'precipitação',
+          'escoamento',
+        ],
+        highlightFocus: 'mudança de estado da água',
+      ),
+    );
+
+    expect(svg, contains('ciclo da água'));
+    expect(svg, contains('evaporação'));
+    expect(svg, contains('condensação'));
+    expect(svg, contains('precipitação'));
+    expect(svg, contains('escoamento'));
+    expect(svg, isNot(contains('etapa 1')));
+    expect(svg, isNot(contains('etapa 2')));
+    expect(svg, isNot(contains('retorno')));
+  });
+
+  test('local comparison renderer replaces generic comparison labels', () {
+    final svg = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['comparação'],
+          reason: 'TEST',
+        ),
+        topic: 'comparação entre mitose e meiose',
+        visualType: 'comparison',
+        keyElements: [
+          'mitose',
+          'meiose',
+          'uma divisão',
+          'duas divisões',
+          'células iguais',
+          'células diferentes',
+          'crescimento',
+          'gametas',
+        ],
+        highlightFocus: 'diferença entre quantidade de divisões',
+      ),
+    );
+
+    expect(svg, contains('comparação entre mitose e meiose'));
+    expect(svg, contains('mitose'));
+    expect(svg, contains('meiose'));
+    expect(svg, contains('uma divisão'));
+    expect(svg, contains('duas divisões'));
+    expect(svg, contains('gametas'));
+    expect(svg, isNot(contains('ideia A')));
+    expect(svg, isNot(contains('ideia B')));
+    expect(svg, isNot(contains('característica')));
+  });
+
+  test('local structure renderers use context and keep legacy fallback', () {
+    final conceptMap = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['mapa conceitual'],
+          reason: 'TEST',
+        ),
+        topic: 'mapa conceitual da fotossíntese',
+        visualType: 'concept map',
+        keyElements: ['fotossíntese', 'luz solar', 'água', 'glicose'],
+      ),
+    );
+    expect(conceptMap, contains('fotossíntese'));
+    expect(conceptMap, contains('luz solar'));
+    expect(conceptMap, isNot(contains('parte 1')));
+
+    final fallback = _renderSoftwareSvg(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['fluxograma'],
+          reason: 'TEST',
+        ),
+        topic: 'fluxograma',
+        visualType: 'flowchart',
+      ),
+    );
+    expect(fallback, contains('observar'));
+    expect(fallback, contains('decidir'));
+    expect(fallback, contains('aplicar'));
+  });
+
+  test(
+    'remaining local renderers replace generic labels when context exists',
+    () {
+      final cases = [
+        (
+          request: const SoftwareVisualRequest(
+            n2: VisualN2Result(
+              verdict: VisualVerdict.svg,
+              matched: ['linha do tempo'],
+              reason: 'TEST',
+            ),
+            topic: 'linha do tempo da Revolução Francesa',
+            visualType: 'timeline',
+            keyElements: [
+              'Estados Gerais',
+              'Bastilha',
+              'República',
+              'Diretório',
+            ],
+            highlightFocus: 'ordem dos acontecimentos principais',
+          ),
+          expected: ['Estados Gerais', 'Bastilha', 'República', 'Diretório'],
+          blocked: ['início', 'mudança', 'evento-chave', 'resultado'],
+        ),
+        (
+          request: const SoftwareVisualRequest(
+            n2: VisualN2Result(
+              verdict: VisualVerdict.svg,
+              matched: ['tabela'],
+              reason: 'TEST',
+            ),
+            topic: 'tabela de classes gramaticais',
+            visualType: 'table',
+            keyElements: [
+              'classe',
+              'função',
+              'exemplo',
+              'substantivo',
+              'nomeia',
+              'casa',
+              'verbo',
+              'ação',
+              'correr',
+              'adjetivo',
+              'qualifica',
+              'azul',
+            ],
+          ),
+          expected: ['classe', 'função', 'substantivo', 'qualifica'],
+          blocked: ['tipo', 'característica', 'regra', 'atenção'],
+        ),
+        (
+          request: const SoftwareVisualRequest(
+            n2: VisualN2Result(
+              verdict: VisualVerdict.svg,
+              matched: ['força'],
+              reason: 'TEST',
+            ),
+            topic: 'diagrama de corpo livre',
+            visualType: 'diagram',
+            keyElements: [
+              'caixa',
+              'normal',
+              'peso',
+              'força aplicada',
+              'atrito cinético',
+            ],
+            highlightFocus: 'sentido das forças no bloco',
+          ),
+          expected: [
+            'caixa',
+            'normal',
+            'peso',
+            'força aplicada',
+            'atrito cinético',
+          ],
+          blocked: ['>N<', '>P<'],
+        ),
+        (
+          request: const SoftwareVisualRequest(
+            n2: VisualN2Result(
+              verdict: VisualVerdict.svg,
+              matched: ['circuito'],
+              reason: 'TEST',
+            ),
+            topic: 'circuito elétrico simples',
+            visualType: 'diagram',
+            keyElements: [
+              'polo positivo',
+              'polo negativo',
+              'resistor 10Ω',
+              'LED',
+              'bateria',
+            ],
+          ),
+          expected: ['polo positivo', 'polo negativo', 'resistor 10Ω', 'LED'],
+          blocked: ['lâmpada'],
+        ),
+        (
+          request: const SoftwareVisualRequest(
+            n2: VisualN2Result(
+              verdict: VisualVerdict.svg,
+              matched: ['árvore sintática'],
+              reason: 'TEST',
+            ),
+            topic: 'árvore sintática da frase simples',
+            visualType: 'diagram',
+            keyElements: [
+              'frase',
+              'menino',
+              'correu',
+              'núcleo nominal',
+              'adjunto',
+              'verbo',
+              'circunstância',
+            ],
+          ),
+          expected: ['frase', 'menino', 'correu', 'circunstâ'],
+          blocked: ['oração', 'sujeito', 'predicado', 'complemento'],
+        ),
+        (
+          request: const SoftwareVisualRequest(
+            n2: VisualN2Result(
+              verdict: VisualVerdict.svg,
+              matched: ['cadeia alimentar'],
+              reason: 'TEST',
+            ),
+            topic: 'cadeia alimentar do campo',
+            visualType: 'diagram',
+            keyElements: [
+              'capim',
+              'gafanhoto',
+              'herbívoro',
+              'sapo',
+              'carnívoro',
+              'fungos',
+            ],
+            highlightFocus: 'fluxo de energia entre seres vivos',
+          ),
+          expected: ['capim', 'gafanhoto', 'herbívoro', 'sapo', 'fungos'],
+          blocked: ['produtor', 'consumidor', 'decomp.'],
+        ),
+      ];
+
+      for (final testCase in cases) {
+        final svg = _renderSoftwareSvg(testCase.request);
+        for (final expected in testCase.expected) {
+          for (final part in expected.split(' ')) {
+            expect(svg, contains(part));
+          }
+        }
+        for (final blocked in testCase.blocked) {
+          expect(svg, isNot(contains(blocked)));
+        }
+      }
+    },
+  );
+
+  test('software catalog selects specialized renderers by domain evidence', () {
+    final cases = [
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['fluxograma'],
+            reason: 'TEST',
+          ),
+          topic: 'algoritmo de entrada processamento e saída',
+          visualType: 'flowchart',
+          keyElements: ['entrada', 'validação', 'decisão', 'saída'],
+          imagePrompt: 'fluxo lógico de programação',
+        ),
+        renderer: 'ProgrammingFlowRenderer',
+        expected: ['PROGRAMAÇÃO', 'entrada', 'validação', 'decisão', 'saída'],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['reação'],
+            reason: 'TEST',
+          ),
+          topic: 'reação química entre reagentes e produtos',
+          visualType: 'diagram',
+          keyElements: ['reagentes', 'catalisador', 'produtos', 'evidência'],
+          imagePrompt: 'moléculas antes e depois da reação',
+        ),
+        renderer: 'ChemistryReactionRenderer',
+        expected: ['química', 'reagentes', 'catalisador', 'produtos'],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['mapa'],
+            reason: 'TEST',
+          ),
+          topic: 'geografia do relevo clima e região',
+          visualType: 'mapa',
+          keyElements: ['região', 'relevo', 'clima', 'fluxo', 'impacto'],
+          imagePrompt: 'camadas espaciais de uma região',
+        ),
+        renderer: 'GeographyLayersRenderer',
+        expected: ['geografia', 'região', 'relevo', 'clima', 'fluxo'],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['premissa'],
+            reason: 'TEST',
+          ),
+          topic: 'lógica com premissa e conclusão',
+          visualType: 'diagram',
+          keyElements: [
+            'premissa maior',
+            'premissa menor',
+            'inferência',
+            'conclusão',
+          ],
+          imagePrompt: 'argumento lógico com regra de inferência',
+        ),
+        renderer: 'LogicArgumentRenderer',
+        expected: ['lógica', 'premissa maior', 'inferência', 'conclusão'],
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['oferta'],
+            reason: 'TEST',
+          ),
+          topic: 'economia de oferta demanda e mercado',
+          visualType: 'diagram',
+          keyElements: ['oferta', 'demanda', 'preço', 'equilíbrio', 'lucro'],
+          imagePrompt: 'relação econômica entre oferta e demanda',
+        ),
+        renderer: 'BusinessFlowRenderer',
+        expected: ['economia', 'oferta', 'demanda', 'preço', 'equilíbrio'],
+      ),
+    ];
+
+    for (final testCase in cases) {
+      final result = _renderSoftwareResult(testCase.request);
+      final svg = Uri.decodeFull(result.dataUrl);
+
+      expect(result.renderer, testCase.renderer);
+      expect(
+        svg,
+        contains(PedagogicalVisualPalette.standard.primaryConceptFill),
+      );
+      expect(svg, contains('font-size="20"'));
+      expect(svg, contains('stroke-width="4.8"'));
+      for (final expected in testCase.expected) {
+        for (final part in expected.split(' ')) {
+          expect(svg, contains(part));
+        }
+      }
+      expect(svg, isNot(contains('fill="#000000"')));
+    }
+  });
+
+  test('existing domain engines remain selected before generic fallback', () {
+    final cases = [
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['parábola'],
+            reason: 'TEST',
+          ),
+          topic: 'matemática função quadrática parábola',
+          visualType: 'graph',
+          imagePrompt: 'f(x)=x²-4x+3',
+        ),
+        renderer: 'QuadraticRenderer',
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['força'],
+            reason: 'TEST',
+          ),
+          topic: 'física diagrama de corpo livre com força resultante',
+          visualType: 'diagram',
+          keyElements: ['bloco', 'normal', 'peso', 'força', 'atrito'],
+        ),
+        renderer: 'ForceDiagramRenderer',
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['cadeia alimentar'],
+            reason: 'TEST',
+          ),
+          topic: 'biologia cadeia alimentar do ecossistema',
+          visualType: 'diagram',
+          keyElements: ['capim', 'gafanhoto', 'sapo', 'cobra', 'fungos'],
+        ),
+        renderer: 'FoodChainRenderer',
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['linha do tempo'],
+            reason: 'TEST',
+          ),
+          topic: 'história linha do tempo da Revolução Francesa',
+          visualType: 'timeline',
+          keyElements: ['Estados Gerais', 'Bastilha', 'República', 'Diretório'],
+        ),
+        renderer: 'TimelineRenderer',
+      ),
+      (
+        request: const SoftwareVisualRequest(
+          n2: VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['árvore sintática'],
+            reason: 'TEST',
+          ),
+          topic: 'gramática árvore sintática com sujeito e predicado',
+          visualType: 'diagram',
+          keyElements: ['oração', 'sujeito', 'predicado', 'verbo'],
+        ),
+        renderer: 'SyntaxTreeRenderer',
+      ),
+    ];
+
+    for (final testCase in cases) {
+      final result = _renderSoftwareResult(testCase.request);
+      expect(result.renderer, testCase.renderer);
+      expect(Uri.decodeFull(result.dataUrl), contains('<svg'));
+    }
+  });
+
+  test('unknown domain keeps safe generic renderer fallback', () {
+    final result = _renderSoftwareResult(
+      const SoftwareVisualRequest(
+        n2: VisualN2Result(
+          verdict: VisualVerdict.svg,
+          matched: ['fluxograma'],
+          reason: 'TEST',
+        ),
+        topic: 'fluxograma operacional sem matéria definida',
+        visualType: 'flowchart',
+        keyElements: ['receber pedido', 'verificar dados', 'responder'],
+      ),
+    );
+    final svg = Uri.decodeFull(result.dataUrl);
+
+    expect(result.renderer, 'FlowchartRenderer');
+    expect(svg, contains('receber'));
+    expect(svg, contains('pedido'));
+    expect(svg, contains(PedagogicalVisualPalette.standard.primaryConceptFill));
+    expect(svg, contains('<tspan'));
   });
 
   test('visual pipeline fetches only usable paid image data url', () async {
@@ -823,12 +2345,10 @@ void main() {
     'local software resolves schematic visual as free SVG without paid image',
     () async {
       final client = FakeImageClient();
-      final svg = sanitizeAndEncodeSvg(
-        '<svg width="120" height="80"><text x="10" y="20">Etapas</text></svg>',
-      );
+      final router = CapturingVisualRouterClient();
       final pipeline = LessonVisualPipeline(
         imageClient: client,
-        visualRouterClient: FakeVisualRouterClient(svgDataUrl: svg),
+        visualRouterClient: router,
       );
 
       final result = await pipeline.resolveVisual(
@@ -845,6 +2365,238 @@ void main() {
       expect(result.source, 'local_software');
       expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
       expect(client.calls, 0);
+      expect(router.calls, 0);
+    },
+  );
+
+  test('visual escalation sends rich local candidate to N3 first', () async {
+    final client = FakeImageClient();
+    final n3Svg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560"><rect width="900" height="560" fill="#F8FAFC"/>'
+      '<text x="80" y="90" fill="#0F172A" font-size="18">sintoma inicial</text>'
+      '<text x="80" y="130" fill="#0F172A" font-size="18">triagem</text>'
+      '<text x="80" y="170" fill="#0F172A" font-size="18">hipótese</text>'
+      '<text x="80" y="210" fill="#0F172A" font-size="18">conduta final</text></svg>',
+    );
+    final router = CapturingVisualRouterClient(
+      result: VisualN3Result(
+        verdict: VisualVerdict.svg,
+        reason: 'TEST_N3_RICH_SVG',
+        svgDataUrl: n3Svg,
+      ),
+    );
+    final pipeline = LessonVisualPipeline(
+      imageClient: client,
+      visualRouterClient: router,
+    );
+
+    final result = await pipeline.resolveVisual(
+      trigger: const LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'essential',
+        topic: 'fluxograma contextual de decisão clínica',
+        visualType: 'flowchart',
+        keyElements: [
+          'sintoma inicial',
+          'triagem',
+          'hipótese',
+          'exame',
+          'risco',
+          'conduta',
+        ],
+        highlightFocus: 'relação entre risco, hipótese e conduta final',
+        complexity: 'high',
+        imagePrompt: 'composição rica em camadas com decisões específicas',
+      ),
+      lessonKey: 'rich-local-goes-n3',
+      allowPaidImages: false,
+    );
+
+    expect(result.source, 'n3_software');
+    expect(result.displayUrl, n3Svg);
+    expect(router.calls, 1);
+    expect(router.lastComplexity, 'high');
+    expect(router.lastKeyElements, contains('conduta'));
+    expect(client.calls, 0);
+  });
+
+  test(
+    'visual escalation calls N3 before paid image when complexity demands it',
+    () async {
+      final client = FakeImageClient();
+      final router = CapturingVisualRouterClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: router,
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'sophisticated visual explanation',
+          topic: 'mapa conceitual de equilíbrio ecológico',
+          visualType: 'diagram',
+          keyElements: [
+            'produtores',
+            'consumidores',
+            'decompositores',
+            'energia',
+            'matéria',
+            'impacto humano',
+          ],
+          highlightFocus: 'como energia e matéria mudam em relações múltiplas',
+          complexity: 'complex',
+          imagePrompt: 'visual rico e contextual com múltiplos níveis',
+        ),
+        lessonKey: 'n3-before-paid',
+        allowPaidImages: true,
+        acceptedOfferId: 'offer-rich',
+      );
+
+      expect(router.calls, 1);
+      expect(result.source, 'ai_blueprint');
+      expect(client.calls, 1);
+      expect(client.lastVisualTrigger?['complexity'], 'complex');
+    },
+  );
+
+  test('visual escalation rejects generic local candidate before paid path', () async {
+    final client = FakeImageClient();
+    final n3Svg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560"><rect width="900" height="560" fill="#F8FAFC"/>'
+      '<text x="80" y="90" fill="#0F172A" font-size="18">glicose</text>'
+      '<text x="80" y="130" fill="#0F172A" font-size="18">ATP</text>'
+      '<text x="80" y="170" fill="#0F172A" font-size="18">mitocôndria</text>'
+      '<text x="80" y="210" fill="#0F172A" font-size="18">oxigênio</text></svg>',
+    );
+    final router = CapturingVisualRouterClient(
+      result: VisualN3Result(
+        verdict: VisualVerdict.svg,
+        reason: 'TEST_N3_SPECIFIC_SVG',
+        svgDataUrl: n3Svg,
+      ),
+    );
+    final genericSvg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560"><rect x="40" y="40" width="160" height="80"/>'
+      '<text x="60" y="88" fill="#0F172A" font-size="16">modelo genérico</text></svg>',
+    )!;
+    final pipeline = LessonVisualPipeline(
+      imageClient: client,
+      visualRouterClient: router,
+      softwareRenderCatalog: StubSoftwareRenderCatalog(
+        result: SoftwareRenderResult(
+          dataUrl: genericSvg,
+          renderer: 'FlowchartRenderer',
+          role: inferVisualPedagogicalRole(visualType: 'flowchart'),
+        ),
+      ),
+    );
+
+    final result = await pipeline.resolveVisual(
+      trigger: const LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'important',
+        topic: 'fluxograma de metabolismo celular',
+        visualType: 'flowchart',
+        keyElements: ['glicose', 'ATP', 'mitocôndria', 'oxigênio'],
+        highlightFocus: 'relação entre glicose, oxigênio e produção de ATP',
+        imagePrompt: 'desenho específico do metabolismo',
+      ),
+      lessonKey: 'generic-local-escalates',
+      allowPaidImages: false,
+    );
+
+    expect(router.calls, 1);
+    expect(result.source, 'n3_software');
+    expect(result.displayUrl, n3Svg);
+    expect(client.calls, 0);
+  });
+
+  test(
+    'visual escalation falls back to accepted local SVG when N3 transport fails',
+    () async {
+      final client = FakeImageClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: const ThrowingVisualRouterClient(),
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'essential',
+          topic: 'fluxograma contextual de decisão',
+          visualType: 'flowchart',
+          keyElements: [
+            'entrada',
+            'validação',
+            'decisão',
+            'resultado',
+            'erro',
+            'correção',
+          ],
+          highlightFocus: 'relação entre erro e correção',
+          complexity: 'high',
+          imagePrompt: 'fluxo rico com múltiplas etapas',
+        ),
+        lessonKey: 'n3-fails-local-fallback',
+        allowPaidImages: true,
+        acceptedOfferId: 'offer-should-not-run',
+      );
+
+      expect(result.source, 'local_software');
+      expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+      expect(client.calls, 0);
+    },
+  );
+
+  test(
+    'visual pipeline passes complete trigger context to local renderer',
+    () async {
+      const legend = [
+        BlueprintColorLegendItem(id: 1, label: 'entrada', color: '#00E5FF'),
+        BlueprintColorLegendItem(id: 2, label: 'saída', color: '#00E676'),
+      ];
+      final catalog = CapturingSoftwareRenderCatalog();
+      final router = CapturingVisualRouterClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: FakeImageClient(),
+        visualRouterClient: router,
+        softwareRenderCatalog: catalog,
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'essential',
+          topic: 'fluxograma de entrada e saída',
+          visualType: 'diagram',
+          keyElements: ['entrada', 'processamento', 'saída'],
+          colorLegend: legend,
+          highlightFocus: 'diferença entre entrada e saída',
+          complexity: 'technical',
+          imagePrompt: 'desenhar caixas conectadas por setas',
+        ),
+        lessonKey: 'context-transport',
+        stableLang: 'pt-BR',
+        academicLevel: 'Ensino Médio',
+        allowPaidImages: false,
+      );
+
+      expect(result.source, 'skip_no_paid');
+      final request = catalog.lastRequest;
+      expect(request, isNotNull);
+      expect(request!.colorLegend, legend);
+      expect(request.keyElements, ['entrada', 'processamento', 'saída']);
+      expect(request.highlightFocus, 'diferença entre entrada e saída');
+      expect(request.complexity, 'technical');
+      expect(request.pedagogicalNeed, 'essential');
+      expect(request.visualType, 'diagram');
+      expect(request.imagePrompt, 'desenhar caixas conectadas por setas');
+      expect(request.topic, 'fluxograma de entrada e saída');
+      expect(request.academicLevel, 'Ensino Médio');
+      expect(request.pedagogicalGoal, 'diferença entre entrada e saída');
+      expect(router.lastKeyElements, ['entrada', 'processamento', 'saída']);
     },
   );
 

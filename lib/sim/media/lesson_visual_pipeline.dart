@@ -11,6 +11,8 @@ import 'visual_pedagogical_role.dart';
 import 'visual_router_n2.dart';
 import 'visual_router_n3.dart';
 import 'visual_funnel_telemetry.dart';
+import 'visual_escalation_policy.dart';
+import 'visual_final_quality_evaluator.dart';
 import 'image_data_url_compression.dart';
 import 'math_templates/math_templates.dart';
 
@@ -33,6 +35,11 @@ export 'image_pedagogical_critic.dart'
     show ImagePedagogicalCritic, ImagePedagogicalCritique;
 export 'visual_funnel_telemetry.dart'
     show VisualFunnelTelemetry, VisualFunnelEvent, VisualFunnelSnapshot;
+export 'visual_final_quality_evaluator.dart'
+    show
+        VisualFinalQualityEvaluator,
+        VisualFinalQualityResult,
+        VisualFinalQualityAction;
 
 abstract interface class LessonImageClient {
   Future<String?> generateLessonImage({
@@ -161,17 +168,24 @@ class LessonVisualPipeline {
     required this.imageClient,
     required this.visualRouterClient,
     ImagePedagogicalCritic? imageCritic,
+    VisualFinalQualityEvaluator? finalQualityEvaluator,
     SoftwareRenderCatalog? softwareRenderCatalog,
     this.telemetry,
+    VisualEscalationPolicy? escalationPolicy,
   }) : imageCritic = imageCritic ?? const ImagePedagogicalCritic(),
+       finalQualityEvaluator =
+           finalQualityEvaluator ?? VisualFinalQualityEvaluator.standard,
        softwareRenderCatalog =
-           softwareRenderCatalog ?? const SoftwareRenderCatalog();
+           softwareRenderCatalog ?? const SoftwareRenderCatalog(),
+       escalationPolicy = escalationPolicy ?? VisualEscalationPolicy.standard;
 
   final LessonImageClient imageClient;
   final LessonVisualRouterClient visualRouterClient;
   final ImagePedagogicalCritic imageCritic;
+  final VisualFinalQualityEvaluator finalQualityEvaluator;
   final SoftwareRenderCatalog softwareRenderCatalog;
   final VisualFunnelTelemetry? telemetry;
+  final VisualEscalationPolicy escalationPolicy;
 
   /// Tenta renderizar usando math template SVG (custo zero).
   /// Retorna data URL do SVG ou null → chamador usa fallback IA.
@@ -190,6 +204,7 @@ class LessonVisualPipeline {
     required LessonVisualTrigger trigger,
     required String lessonKey,
     String? stableLang,
+    String? academicLevel,
     bool allowPaidImages = false,
     String? acceptedOfferId,
     String? idempotencyKey,
@@ -208,7 +223,12 @@ class LessonVisualPipeline {
     if (trigger.renderStrategy == 'software' && trigger.svgPayload != null) {
       final svgDataUrl = sanitizeAndEncodeSvg(trigger.svgPayload);
       if (svgDataUrl != null) {
-        if (_acceptSoftwareSvg(lessonKey, 'svg_inline', svgDataUrl)) {
+        if (_acceptFinalSoftwareSvg(
+          lessonKey,
+          'svg_inline',
+          svgDataUrl,
+          _requestFromTrigger(trigger, academicLevel: academicLevel),
+        )) {
           _visualLog(
             lessonKey,
             'svg_inline',
@@ -233,7 +253,12 @@ class LessonVisualPipeline {
     if (trigger.mathTemplate != null) {
       final mathSvg = tryRenderMathTemplate(trigger.toVisualTriggerMap());
       if (mathSvg != null) {
-        if (_acceptSoftwareSvg(lessonKey, 'math_template', mathSvg)) {
+        if (_acceptFinalSoftwareSvg(
+          lessonKey,
+          'math_template',
+          mathSvg,
+          _requestFromTrigger(trigger, academicLevel: academicLevel),
+        )) {
           _visualLog(
             lessonKey,
             'math_template',
@@ -266,24 +291,38 @@ class LessonVisualPipeline {
       'verdict=${n2.verdict.name} reason=${n2.reason} matched=${n2.matched.take(8).join('|')}',
     );
 
-    final localSoftware = softwareRenderCatalog.render(
-      SoftwareVisualRequest(
-        n2: n2,
-        topic: trigger.topic,
-        visualType: trigger.visualType,
-        imagePrompt: trigger.imagePrompt,
-      ),
+    final softwareRequest = SoftwareVisualRequest(
+      n2: n2,
+      topic: trigger.topic,
+      visualType: trigger.visualType,
+      imagePrompt: trigger.imagePrompt,
+      colorLegend: trigger.colorLegend,
+      keyElements: trigger.keyElements,
+      highlightFocus: trigger.highlightFocus,
+      complexity: trigger.complexity,
+      pedagogicalNeed: trigger.pedagogicalNeed,
+      academicLevel: academicLevel,
+      pedagogicalGoal: trigger.highlightFocus,
     );
+    final localSoftware = softwareRenderCatalog.render(softwareRequest);
+    var localAccepted = false;
     if (localSoftware != null) {
-      if (_acceptSoftwareSvg(
+      localAccepted = _acceptFinalSoftwareSvg(
         lessonKey,
         'local_software:${localSoftware.renderer}',
         localSoftware.dataUrl,
-      )) {
+        softwareRequest,
+      );
+      final localDecision = escalationPolicy.decide(
+        request: softwareRequest,
+        localResult: localSoftware,
+        localAccepted: localAccepted,
+      );
+      if (localDecision.acceptLocalBeforeN3) {
         _visualLog(
           lessonKey,
           'local_software',
-          'renderer=${localSoftware.renderer} role=${localSoftware.role.id}',
+          'renderer=${localSoftware.renderer} role=${localSoftware.role.id} policy=${localDecision.reason}',
         );
         _recordOutcome(
           lessonKey,
@@ -299,15 +338,28 @@ class LessonVisualPipeline {
           n2Reason: n2.reason,
         );
       }
-      _visualLog(
-        lessonKey,
-        'local_software',
-        'rejected renderer=${localSoftware.renderer}',
-      );
+      if (localAccepted && localDecision.shouldCallN3) {
+        _visualLog(
+          lessonKey,
+          'local_software_escalated',
+          'renderer=${localSoftware.renderer} policy=${localDecision.reason}',
+        );
+      }
+      if (!localAccepted) {
+        _visualLog(
+          lessonKey,
+          'local_software',
+          'rejected renderer=${localSoftware.renderer}',
+        );
+      }
     }
+    final escalationDecision = escalationPolicy.decide(
+      request: softwareRequest,
+      localResult: localSoftware,
+      localAccepted: localAccepted,
+    );
 
-    if (n2.verdict == VisualVerdict.svg ||
-        n2.verdict == VisualVerdict.ambiguous) {
+    if (escalationDecision.shouldCallN3) {
       final n3 = await routeVisualCheapN3(
         client: visualRouterClient,
         n2: n2,
@@ -326,7 +378,13 @@ class LessonVisualPipeline {
         'verdict=${n3.verdict.name} reason=${_shortVisualText(n3.reason)} confidence=${n3.confidence?.toStringAsFixed(2) ?? 'n/a'} role=${n3.pedagogicalRole ?? 'n/a'} hasSvg=${n3.svgDataUrl != null}',
       );
       if (n3.verdict == VisualVerdict.svg && n3.svgDataUrl != null) {
-        if (_acceptSoftwareSvg(lessonKey, 'n3_software', n3.svgDataUrl!)) {
+        final n3Accepted = _acceptFinalSoftwareSvg(
+          lessonKey,
+          'n3_software',
+          n3.svgDataUrl!,
+          softwareRequest,
+        );
+        if (n3Accepted) {
           _recordOutcome(lessonKey, 'software', 'n3_software', n2.reason);
           return LessonVisualResult(
             svg: n3.svgDataUrl,
@@ -335,6 +393,51 @@ class LessonVisualPipeline {
             n2Reason: n2.reason,
           );
         }
+        if (localSoftware != null &&
+            localAccepted &&
+            escalationDecision.allowLocalAfterN3Failure) {
+          _visualLog(
+            lessonKey,
+            'local_software_after_n3_quality',
+            'renderer=${localSoftware.renderer} n3=${_shortVisualText(n3.reason)} policy=${escalationDecision.reason}',
+          );
+          _recordOutcome(
+            lessonKey,
+            'software',
+            'local_software',
+            n2.reason,
+            localSoftware.renderer,
+          );
+          return LessonVisualResult(
+            svg: localSoftware.dataUrl,
+            dataUrl: null,
+            source: 'local_software',
+            n2Reason: n2.reason,
+          );
+        }
+      }
+      if (n3.transportFailed &&
+          localSoftware != null &&
+          localAccepted &&
+          escalationDecision.allowLocalAfterN3Failure) {
+        _visualLog(
+          lessonKey,
+          'local_software_after_n3_failure',
+          'renderer=${localSoftware.renderer} n3=${_shortVisualText(n3.reason)} policy=${escalationDecision.reason}',
+        );
+        _recordOutcome(
+          lessonKey,
+          'software',
+          'local_software',
+          n2.reason,
+          localSoftware.renderer,
+        );
+        return LessonVisualResult(
+          svg: localSoftware.dataUrl,
+          dataUrl: null,
+          source: 'local_software',
+          n2Reason: n2.reason,
+        );
       }
       if (n3.verdict == VisualVerdict.noImage) {
         _recordOutcome(lessonKey, 'no_image', 'n3_no_image', n2.reason);
@@ -432,14 +535,58 @@ class LessonVisualPipeline {
     );
   }
 
-  bool _acceptSoftwareSvg(String lessonKey, String stage, String dataUrl) {
+  SoftwareVisualRequest _requestFromTrigger(
+    LessonVisualTrigger trigger, {
+    String? academicLevel,
+    VisualN2Result? n2,
+  }) {
+    return SoftwareVisualRequest(
+      n2:
+          n2 ??
+          const VisualN2Result(
+            verdict: VisualVerdict.svg,
+            matched: ['software'],
+            reason: 'PRE_N2_SOFTWARE',
+          ),
+      topic: trigger.topic,
+      visualType: trigger.visualType,
+      imagePrompt: trigger.imagePrompt,
+      colorLegend: trigger.colorLegend,
+      keyElements: trigger.keyElements,
+      highlightFocus: trigger.highlightFocus,
+      complexity: trigger.complexity,
+      pedagogicalNeed: trigger.pedagogicalNeed,
+      academicLevel: academicLevel,
+      pedagogicalGoal: trigger.highlightFocus,
+    );
+  }
+
+  bool _acceptFinalSoftwareSvg(
+    String lessonKey,
+    String stage,
+    String dataUrl,
+    SoftwareVisualRequest request,
+  ) {
     final critique = imageCritic.evaluateSvgDataUrl(dataUrl);
     _visualLog(
       lessonKey,
       'image_critic',
       'stage=$stage accepted=${critique.accepted} reason=${critique.reason} textNodes=${critique.textNodeCount}',
     );
-    return critique.accepted;
+    if (!critique.accepted) return false;
+
+    final finalQuality = finalQualityEvaluator.evaluateSvg(
+      dataUrl: dataUrl,
+      request: request,
+      critique: critique,
+      source: stage.contains(':') ? stage.split(':').first : stage,
+    );
+    _visualLog(
+      lessonKey,
+      'image_final_quality',
+      'stage=$stage action=${finalQuality.action.name} reason=${finalQuality.reason} keyCoverage=${finalQuality.coveredKeyElements}/${finalQuality.requiredKeyElements} focus=${finalQuality.focusCovered}',
+    );
+    return finalQuality.accepted;
   }
 
   void _recordOutcome(

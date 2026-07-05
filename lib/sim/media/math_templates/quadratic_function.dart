@@ -17,8 +17,12 @@ String? renderQuadraticFunction(Map<String, dynamic> p) {
   final xv = -b / (2 * a);
   final yv = a * xv * xv + b * xv + c;
 
-  final xMin = (p['x_min'] is num) ? (p['x_min'] as num).toDouble() : math.min(xv - 5, -5.0);
-  final xMax = (p['x_max'] is num) ? (p['x_max'] as num).toDouble() : math.max(xv + 5, 5.0);
+  final xMin = (p['x_min'] is num)
+      ? (p['x_min'] as num).toDouble()
+      : math.min(xv - 5, -5.0);
+  final xMax = (p['x_max'] is num)
+      ? (p['x_max'] as num).toDouble()
+      : math.max(xv + 5, 5.0);
   if (xMax <= xMin) return null;
 
   double yFn(double x) => a * x * x + b * x + c;
@@ -45,24 +49,55 @@ String? renderQuadraticFunction(Map<String, dynamic> p) {
   final yLbl = labels['y']?.toString() ?? 'y';
   final vertexLbl = labels['vertex']?.toString() ?? 'vertex';
   final title = labels['title']?.toString() ?? 'y = a·x² + b·x + c';
+  final palette =
+      MathVisualPalette.fromParams(p['visual_palette']) ??
+      const MathVisualPalette();
+  final hierarchy =
+      MathVisualHierarchy.fromParams(p['visual_hierarchy']) ??
+      const MathVisualHierarchy();
 
   final body = StringBuffer();
-  body.write(renderAxes(s, xLabel: xLbl, yLabel: yLbl));
+  body.write(
+    renderAxes(
+      s,
+      xLabel: xLbl,
+      yLabel: yLbl,
+      palette: palette,
+      hierarchy: hierarchy,
+    ),
+  );
 
   // Curva
-  final pathParts = pts.asMap().entries.map((e) {
-    final i = e.key;
-    final pt = e.value;
-    return '${i == 0 ? 'M' : 'L'}${s.toX(pt.x).toStringAsFixed(2)},${s.toY(pt.y).toStringAsFixed(2)}';
-  }).join(' ');
-  body.write('<path d="$pathParts" fill="none" stroke="$cyberCurve" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>');
+  final pathParts = pts
+      .asMap()
+      .entries
+      .map((e) {
+        final i = e.key;
+        final pt = e.value;
+        return '${i == 0 ? 'M' : 'L'}${s.toX(pt.x).toStringAsFixed(2)},${s.toY(pt.y).toStringAsFixed(2)}';
+      })
+      .join(' ');
+  body.write(
+    '<path d="$pathParts" fill="none" stroke="${palette.curve}" stroke-width="${hierarchy.curveStrokeWidth.toStringAsFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>',
+  );
 
   // Vértice
   if (xv >= xMin && xv <= xMax) {
     final px = s.toX(xv);
     final py = s.toY(yv);
-    body.write(highlightPoint(px, py, color: cyberAccent));
-    body.write(labelTag(px, py, '$vertexLbl: (${fmt(xv)}, ${fmt(yv)})', color: cyberAccent, anchor: a > 0 ? 'below' : 'above'));
+    body.write(
+      highlightPoint(px, py, color: palette.accent, hierarchy: hierarchy),
+    );
+    body.write(
+      labelTag(
+        px,
+        py,
+        '$vertexLbl: (${fmt(xv)}, ${fmt(yv)})',
+        color: palette.accent,
+        anchor: a > 0 ? 'below' : 'above',
+        hierarchy: hierarchy,
+      ),
+    );
   }
 
   // Raízes (Bhaskara)
@@ -75,14 +110,37 @@ String? renderQuadraticFunction(Map<String, dynamic> p) {
       if (xr >= xMin && xr <= xMax && (xr - xv).abs() > 1e-6) {
         final px = s.toX(xr);
         final py = s.toY(0);
-        body.write(highlightPoint(px, py, color: cyberCritical));
-        body.write(labelTag(px, py, 'x = ${fmt(xr)}', color: cyberCritical, anchor: 'below'));
+        body.write(
+          highlightPoint(px, py, color: palette.critical, hierarchy: hierarchy),
+        );
+        body.write(
+          labelTag(
+            px,
+            py,
+            'x = ${fmt(xr)}',
+            color: palette.critical,
+            anchor: 'below',
+            hierarchy: hierarchy,
+          ),
+        );
       }
     }
   }
 
   final bSign = b >= 0 ? '+' : '−';
   final cSign = c >= 0 ? '+' : '−';
-  body.write(equationBadge('y = ${fmt(a)}·x² $bSign ${fmt(b.abs())}·x $cSign ${fmt(c.abs())}', minW: 140));
-  return wrapSvg(title, body.toString());
+  body.write(
+    equationBadge(
+      'y = ${fmt(a)}·x² $bSign ${fmt(b.abs())}·x $cSign ${fmt(c.abs())}',
+      minW: 140,
+      palette: palette,
+      hierarchy: hierarchy,
+    ),
+  );
+  return wrapSvg(
+    title,
+    body.toString(),
+    palette: palette,
+    hierarchy: hierarchy,
+  );
 }

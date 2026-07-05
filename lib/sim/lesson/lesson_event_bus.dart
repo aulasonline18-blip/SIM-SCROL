@@ -44,7 +44,7 @@ class LessonEventBus {
   }
 
   void notify(String key, CompleteLesson lesson) {
-    _latestLessons[key] = lesson;
+    _latestLessons[key] = lesson.copyWith(imagem: null);
     final set = _subscribers[key];
     if (set == null) return;
     for (final listener in List<LessonListener>.from(set)) {

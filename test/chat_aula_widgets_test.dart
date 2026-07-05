@@ -388,6 +388,7 @@ void main() {
           headerLabel: 'aula_item_of:1/4:aula_layer_1',
           explanation: 'Primeira explicacao preservada.',
           question: 'Primeira pergunta preservada?',
+          imagem: _svgDataUrl(),
         );
 
       await tester.pumpWidget(
@@ -421,6 +422,11 @@ void main() {
       expect(texts, contains('Primeira pergunta preservada?'));
       expect(texts, contains('Segunda explicacao nova.'));
       expect(texts, contains('Segunda pergunta nova?'));
+      final imageMessages = timeline.messages
+          .where((message) => message.kind == ChatLessonMessageKind.image)
+          .toList();
+      expect(imageMessages, hasLength(1));
+      expect(imageMessages.single.imageData, _svgDataUrl());
       expect(
         timeline.messages
             .where((message) => message.text == 'Primeira pergunta preservada?')

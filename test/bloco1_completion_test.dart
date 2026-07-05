@@ -173,26 +173,24 @@ void main() {
     },
   );
 
-  test(
-    'LessonMaterialCache preserva SVG gratis e descarta raster pago pesado',
-    () async {
-      SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
-      final svg = 'data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%2010%2010%22%3E%3Ccircle%20cx%3D%225%22%20cy%3D%225%22%20r%3D%224%22%2F%3E%3C%2Fsvg%3E';
+  test('LessonMaterialCache descarta toda imagem ao hidratar material', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final svg =
+        'data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%2010%2010%22%3E%3Ccircle%20cx%3D%225%22%20cy%3D%225%22%20r%3D%224%22%2F%3E%3C%2Fsvg%3E';
 
-      final first = LessonMaterialCache();
-      first.put('svg-free', _lesson('Com SVG gratis', imagem: svg));
-      first.put(
-        'raster-paid',
-        _lesson('Com raster pago', imagem: 'data:image/png;base64,AAAA'),
-      );
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+    final first = LessonMaterialCache();
+    first.put('svg-free', _lesson('Com SVG gratis', imagem: svg));
+    first.put(
+      'raster-paid',
+      _lesson('Com raster pago', imagem: 'data:image/png;base64,AAAA'),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      final hydrated = LessonMaterialCache();
-      hydrated.hydrateFromPreferences(prefs);
+    final hydrated = LessonMaterialCache();
+    hydrated.hydrateFromPreferences(prefs);
 
-      expect(hydrated.peekCachedLesson('svg-free')?.imagem, svg);
-      expect(hydrated.peekCachedLesson('raster-paid')?.imagem, isNull);
-    },
-  );
+    expect(hydrated.peekCachedLesson('svg-free')?.imagem, isNull);
+    expect(hydrated.peekCachedLesson('raster-paid')?.imagem, isNull);
+  });
 }

@@ -33,19 +33,46 @@ String? renderLinearFunction(Map<String, dynamic> p) {
   final yLbl = labels['y']?.toString() ?? 'y';
   final rootLbl = labels['root']?.toString() ?? 'root';
   final title = labels['title']?.toString() ?? 'y = a·x + b';
+  final palette =
+      MathVisualPalette.fromParams(p['visual_palette']) ??
+      const MathVisualPalette();
+  final hierarchy =
+      MathVisualHierarchy.fromParams(p['visual_hierarchy']) ??
+      const MathVisualHierarchy();
 
   final body = StringBuffer();
-  body.write(renderAxes(s, xLabel: xLbl, yLabel: yLbl));
+  body.write(
+    renderAxes(
+      s,
+      xLabel: xLbl,
+      yLabel: yLbl,
+      palette: palette,
+      hierarchy: hierarchy,
+    ),
+  );
 
   // Reta
-  body.write('<line x1="${s.toX(xMin).toStringAsFixed(2)}" y1="${s.toY(yLeft).toStringAsFixed(2)}" x2="${s.toX(xMax).toStringAsFixed(2)}" y2="${s.toY(yRight).toStringAsFixed(2)}" stroke="$cyberCurve" stroke-width="3" stroke-linecap="round"/>');
+  body.write(
+    '<line x1="${s.toX(xMin).toStringAsFixed(2)}" y1="${s.toY(yLeft).toStringAsFixed(2)}" x2="${s.toX(xMax).toStringAsFixed(2)}" y2="${s.toY(yRight).toStringAsFixed(2)}" stroke="${palette.curve}" stroke-width="${hierarchy.curveStrokeWidth.toStringAsFixed(1)}" stroke-linecap="round"/>',
+  );
 
   // Intercepto y = (0, b)
   if (xMin <= 0 && xMax >= 0) {
     final px = s.toX(0);
     final py = s.toY(b);
-    body.write(highlightPoint(px, py, color: cyberAccent));
-    body.write(labelTag(px, py, '(0, ${fmt(b)})', color: cyberAccent, anchor: 'right'));
+    body.write(
+      highlightPoint(px, py, color: palette.accent, hierarchy: hierarchy),
+    );
+    body.write(
+      labelTag(
+        px,
+        py,
+        '(0, ${fmt(b)})',
+        color: palette.accent,
+        anchor: 'right',
+        hierarchy: hierarchy,
+      ),
+    );
   }
 
   // Raiz x = -b/a
@@ -54,12 +81,34 @@ String? renderLinearFunction(Map<String, dynamic> p) {
     if (xr >= xMin && xr <= xMax) {
       final px = s.toX(xr);
       final py = s.toY(0);
-      body.write(highlightPoint(px, py, color: cyberCritical));
-      body.write(labelTag(px, py, '$rootLbl: x = ${fmt(xr)}', color: cyberCritical, anchor: 'below'));
+      body.write(
+        highlightPoint(px, py, color: palette.critical, hierarchy: hierarchy),
+      );
+      body.write(
+        labelTag(
+          px,
+          py,
+          '$rootLbl: x = ${fmt(xr)}',
+          color: palette.critical,
+          anchor: 'below',
+          hierarchy: hierarchy,
+        ),
+      );
     }
   }
 
   final sign = b >= 0 ? '+' : '−';
-  body.write(equationBadge('y = ${fmt(a)}·x $sign ${fmt(b.abs())}'));
-  return wrapSvg(title, body.toString());
+  body.write(
+    equationBadge(
+      'y = ${fmt(a)}·x $sign ${fmt(b.abs())}',
+      palette: palette,
+      hierarchy: hierarchy,
+    ),
+  );
+  return wrapSvg(
+    title,
+    body.toString(),
+    palette: palette,
+    hierarchy: hierarchy,
+  );
 }

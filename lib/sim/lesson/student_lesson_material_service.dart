@@ -74,7 +74,7 @@ class StudentLessonMaterialService {
         input.params,
         fromState.conteudo,
         priority: 'active',
-        initialImage: fromState.imagem,
+        initialImage: null,
       );
       _prepareLessonAudio(input, visualReady.conteudo);
       _mirrorCurrentLessonMaterial(input, visualReady);
@@ -264,12 +264,9 @@ class StudentLessonMaterialService {
     if ((material['for_marker'] as String?) != input.marker) return null;
     try {
       final content = validatedLessonContentFromJson(JsonMap.from(material));
-      final image = material['imagem'] is String
-          ? (material['imagem'] as String).trim()
-          : '';
       return CompleteLesson(
         conteudo: content,
-        imagem: image.isEmpty ? null : image,
+        imagem: null,
         audioText: content.audioText,
       );
     } on LessonContentValidationException catch (error) {
@@ -363,7 +360,7 @@ class StudentLessonMaterialService {
       input.params,
       lesson.conteudo,
       priority: 'active',
-      initialImage: lesson.imagem,
+      initialImage: null,
     );
   }
 
