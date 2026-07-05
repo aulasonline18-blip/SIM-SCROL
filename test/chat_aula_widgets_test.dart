@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1410,6 +1411,241 @@ void main() {
     );
   });
 
+  testWidgets(
+    'chat route restoration preserves dead history and student media',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..lessonLocalId = 'lesson-chat-restore-route'
+        ..route = '/cyber/aula'
+        ..aulaSnapshot = _chatSnapshot(
+          phase: const ClassroomPhase.completed(
+            message: 'aula_fb_correct',
+            wasCorrect: true,
+            signal: DecisionSignal.one,
+          ),
+        );
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: session)),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('chat-feedback-doubt-button')),
+        180,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(TextField).last,
+        'Ainda tenho dúvida.',
+      );
+      await tester.tap(find.text('Enviar dúvida').last);
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(
+        find.text('Ainda tenho dúvida.', skipOffstage: false),
+        findsOneWidget,
+      );
+
+      session.aulaSnapshot = _chatSnapshot(
+        phase: const ClassroomPhase.reading(),
+        headerLabel: 'aula_item_of:1/4:aula_layer_2',
+        explanation: 'Item atual restaurado.',
+        question: 'Pergunta atual restaurada?',
+      );
+      session.notifyListeners();
+      await tester.pump(const Duration(milliseconds: 160));
+
+      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+      await tester.pump(const Duration(milliseconds: 220));
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: session)),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final timeline = tester.widget<ChatAulaTimeline>(
+        find.byType(ChatAulaTimeline),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final savedRaw = prefs.getString(
+        _chatConversationPrefsKey('lesson-chat-restore-route'),
+      );
+      expect(savedRaw, isNot(contains('data:image')));
+      final messages = timeline.messages;
+      expect(
+        messages.map((message) => message.text),
+        contains('Ainda tenho dúvida.'),
+      );
+      expect(
+        messages.map((message) => message.text),
+        contains('Item atual restaurado.'),
+      );
+      expect(
+        messages.map((message) => message.text),
+        contains('Pergunta atual restaurada?'),
+      );
+      expect(
+        messages.any(
+          (message) =>
+              message.kind == ChatLessonMessageKind.feedback &&
+              message.deliveryStatus == ChatLessonDeliveryStatus.read,
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'chat app restoration restores student attachment and loading error messages',
+    (tester) async {
+      final savedMessages = [
+        const ChatLessonMessage(
+          id: 'old-feedback',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.feedback,
+          text: 'Feedback antigo salvo.',
+          actionKey: 'aula_next',
+          deliveryStatus: ChatLessonDeliveryStatus.read,
+        ),
+        ChatLessonMessage(
+          id: 'student-doubt-saved',
+          role: ChatLessonMessageRole.student,
+          kind: ChatLessonMessageKind.studentDoubt,
+          text: 'Dúvida salva com foto.',
+          imageData: _svgDataUrl(),
+          mediaName: 'duvida.png',
+          mediaType: 'image/png',
+          mediaSize: 4096,
+          deliveryStatus: ChatLessonDeliveryStatus.sent,
+        ),
+        const ChatLessonMessage(
+          id: 'saved-loading',
+          role: ChatLessonMessageRole.system,
+          kind: ChatLessonMessageKind.loading,
+          text: 'Carregamento salvo.',
+          deliveryStatus: ChatLessonDeliveryStatus.processing,
+        ),
+        const ChatLessonMessage(
+          id: 'saved-error',
+          role: ChatLessonMessageRole.system,
+          kind: ChatLessonMessageKind.error,
+          text: 'Erro recuperável salvo.',
+          actionKey: 'retry',
+          deliveryStatus: ChatLessonDeliveryStatus.failed,
+        ),
+      ];
+      SharedPreferences.setMockInitialValues({
+        _chatConversationPrefsKey('lesson-chat-restore-app'): jsonEncode({
+          'version': 1,
+          'lessonKey': 'lesson-chat-restore-app',
+          'archiveSeq': 7,
+          'messages': savedMessages
+              .map((message) => message.toJson(includeInlineImageData: false))
+              .toList(),
+        }),
+      });
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..lessonLocalId = 'lesson-chat-restore-app'
+        ..route = '/cyber/aula'
+        ..aulaRuntimeLoading = true
+        ..aulaRuntimeError = 'Falha temporária'
+        ..aulaSnapshot = _chatSnapshot(phase: const ClassroomPhase.reading());
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: session)),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final timeline = tester.widget<ChatAulaTimeline>(
+        find.byType(ChatAulaTimeline),
+      );
+      expect(
+        timeline.messages.map((message) => message.text),
+        contains('Feedback antigo salvo.'),
+      );
+      expect(
+        timeline.messages.map((message) => message.text),
+        contains('Dúvida salva com foto.'),
+      );
+      expect(
+        timeline.messages.map((message) => message.text),
+        contains('Carregamento salvo.'),
+      );
+      expect(
+        timeline.messages.map((message) => message.text),
+        contains('Erro recuperável salvo.'),
+      );
+      expect(
+        timeline.messages
+            .where((message) => message.id == 'student-doubt-saved')
+            .single
+            .imageData,
+        isNull,
+      );
+      expect(find.text('duvida.png', skipOffstage: false), findsOneWidget);
+      expect(find.text('4.0KB', skipOffstage: false), findsOneWidget);
+      expect(
+        timeline.messages.any(
+          (message) =>
+              message.id == 'old-feedback' &&
+              message.deliveryStatus == ChatLessonDeliveryStatus.read,
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'chat restored timeline return targets current item instead of old feedback',
+    (tester) async {
+      final key = GlobalKey<_RestoredTimelineHarnessState>();
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 320,
+              child: _RestoredTimelineHarness(
+                key: key,
+                scrollController: controller,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      await tester.drag(
+        find.byKey(const Key('chat-aula-timeline')),
+        const Offset(0, 900),
+      );
+      await tester.pump(const Duration(milliseconds: 220));
+
+      key.currentState!.appendRestoredStudentMessage();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(
+        find.byKey(const Key('chat-return-current-button')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Voltar ao novo item'), findsOneWidget);
+      expect(find.textContaining('Voltar ao feedback'), findsNothing);
+    },
+  );
+
   testWidgets('chat classroom covers normal flow through feedback', (
     tester,
   ) async {
@@ -1617,6 +1853,11 @@ String _svgDataUrl() {
   return 'data:image/svg+xml;utf8,$svg';
 }
 
+String _chatConversationPrefsKey(String lessonKey) {
+  final encoded = base64Url.encode(utf8.encode(lessonKey));
+  return 'sim.chat_aula.conversation.v1.$encoded';
+}
+
 class _ChatTimelineHarness extends StatefulWidget {
   const _ChatTimelineHarness({required this.scrollController, super.key});
 
@@ -1711,6 +1952,89 @@ class _ChatTimelineHarnessState extends State<_ChatTimelineHarness> {
       final last = _messages.removeLast();
       _messages.add(
         last.copyWith(deliveryStatus: ChatLessonDeliveryStatus.failed),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ChatAulaTimeline(
+      messages: _messages,
+      scrollController: widget.scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      onChooseAnswer: (_) {},
+      onSignal: (_) {},
+      onRetry: () {},
+      onNext: () {},
+      onOpenDoubt: () {},
+    );
+  }
+}
+
+class _RestoredTimelineHarness extends StatefulWidget {
+  const _RestoredTimelineHarness({required this.scrollController, super.key});
+
+  final ScrollController scrollController;
+
+  @override
+  State<_RestoredTimelineHarness> createState() =>
+      _RestoredTimelineHarnessState();
+}
+
+class _RestoredTimelineHarnessState extends State<_RestoredTimelineHarness> {
+  late final List<ChatLessonMessage> _messages = [
+    for (var i = 1; i <= 24; i++)
+      ChatLessonMessage(
+        id: 'restored-history-$i',
+        role: ChatLessonMessageRole.sim,
+        kind: ChatLessonMessageKind.explanation,
+        text: 'Historico restaurado $i\nLinha preservada.',
+      ),
+    const ChatLessonMessage(
+      id: 'feedback-old-restored',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.feedback,
+      text: 'Feedback antigo restaurado.',
+      actionKey: 'aula_next',
+      deliveryStatus: ChatLessonDeliveryStatus.read,
+    ),
+    const ChatLessonMessage(
+      id: 'explanation-current-restored',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.explanation,
+      text: 'Item atual restaurado.',
+    ),
+    const ChatLessonMessage(
+      id: 'question-current-restored',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.question,
+      text: 'Pergunta atual restaurada?',
+    ),
+    const ChatLessonMessage(
+      id: 'options-current-restored',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.options,
+      options: [
+        ChatLessonOption(
+          letter: AnswerLetter.A,
+          text: 'Alternativa restaurada A',
+          selected: false,
+          enabled: true,
+        ),
+      ],
+    ),
+  ];
+
+  void appendRestoredStudentMessage() {
+    setState(() {
+      _messages.add(
+        const ChatLessonMessage(
+          id: 'student-restored-note',
+          role: ChatLessonMessageRole.student,
+          kind: ChatLessonMessageKind.studentDoubt,
+          text: 'Mensagem restaurada depois da volta.',
+          deliveryStatus: ChatLessonDeliveryStatus.sent,
+        ),
       );
     });
   }

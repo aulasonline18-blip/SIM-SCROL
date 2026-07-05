@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,8 +31,12 @@ class ChatAulaScreen extends StatefulWidget {
 
 class _ChatAulaScreenState extends State<ChatAulaScreen>
     with WidgetsBindingObserver {
+  static const _conversationSnapshotPrefix = 'sim.chat_aula.conversation.v1.';
+
   final TextEditingController _doubtController = TextEditingController();
   final List<ChatLessonMessage> _conversationMessages = <ChatLessonMessage>[];
+  final Set<String> _restoredConversationKeys = <String>{};
+  final Set<String> _restoringConversationKeys = <String>{};
   String? _conversationLessonKey;
   int _conversationArchiveSeq = 0;
   int _fontScaleLevel = ClassroomTextScale.defaultLevel;
@@ -71,6 +76,81 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) => _showDoubtSheet());
     }
     if (mounted) setState(() {});
+  }
+
+  void _ensureConversationRestored(LabSession session) {
+    final key = _conversationKeyFor(session);
+    if (_restoredConversationKeys.contains(key) ||
+        _restoringConversationKeys.contains(key)) {
+      return;
+    }
+    _restoringConversationKeys.add(key);
+    unawaited(_restoreConversationSnapshot(key));
+  }
+
+  Future<void> _restoreConversationSnapshot(String lessonKey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_conversationSnapshotKey(lessonKey));
+      if (!mounted) return;
+      final restored = _decodeConversationSnapshot(raw);
+      _restoringConversationKeys.remove(lessonKey);
+      _restoredConversationKeys.add(lessonKey);
+      if (restored == null) {
+        unawaited(_persistConversationSnapshot(lessonKey));
+        return;
+      }
+      setState(() {
+        _conversationLessonKey = lessonKey;
+        _conversationMessages
+          ..clear()
+          ..addAll(restored.messages);
+        _conversationArchiveSeq = restored.archiveSeq;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      _restoringConversationKeys.remove(lessonKey);
+      _restoredConversationKeys.add(lessonKey);
+    }
+  }
+
+  Future<void> _persistConversationSnapshot(String lessonKey) async {
+    if (!_restoredConversationKeys.contains(lessonKey)) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _conversationSnapshotKey(lessonKey),
+      jsonEncode({
+        'version': 1,
+        'lessonKey': lessonKey,
+        'archiveSeq': _conversationArchiveSeq,
+        'messages': _messagesWithDeadPastFeedbackActions()
+            .map((message) => message.toJson(includeInlineImageData: false))
+            .toList(),
+      }),
+    );
+  }
+
+  String _conversationSnapshotKey(String lessonKey) {
+    final encoded = base64Url.encode(utf8.encode(lessonKey));
+    return '$_conversationSnapshotPrefix$encoded';
+  }
+
+  _RestoredConversation? _decodeConversationSnapshot(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+    final messagesRaw = decoded['messages'];
+    if (messagesRaw is! List) return null;
+    final messages = messagesRaw
+        .map(ChatLessonMessage.fromJson)
+        .nonNulls
+        .toList(growable: false);
+    if (messages.isEmpty) return null;
+    final archiveSeq = decoded['archiveSeq'];
+    return _RestoredConversation(
+      messages: messages,
+      archiveSeq: archiveSeq is int ? archiveSeq : messages.length,
+    );
   }
 
   void _openDoubtSheetFromChat() {
@@ -143,6 +223,8 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
 
   @override
   void dispose() {
+    final key = _conversationLessonKey;
+    if (key != null) unawaited(_persistConversationSnapshot(key));
     WidgetsBinding.instance.removeObserver(this);
     widget.session.removeListener(_onSessionChange);
     widget.session.stopActiveAudio(notify: false);
@@ -155,6 +237,8 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
+      final key = _conversationLessonKey;
+      if (key != null) unawaited(_persistConversationSnapshot(key));
       widget.session.stopActiveAudio();
     }
   }
@@ -176,6 +260,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         '${now.hour.toString().padLeft(2, '0')}:'
         '${now.minute.toString().padLeft(2, '0')}';
     setState(() {
+      _conversationLessonKey ??= _conversationKeyFor(widget.session);
       _conversationMessages.add(
         ChatLessonMessage(
           id:
@@ -193,12 +278,15 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         ),
       );
     });
+    final key = _conversationLessonKey;
+    if (key != null) unawaited(_persistConversationSnapshot(key));
   }
 
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
     final snapshot = session.aulaSnapshot;
+    _ensureConversationRestored(session);
 
     if (snapshot?.isDone ?? false) {
       return LessonDoneScreen(session: session);
@@ -331,30 +419,53 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       _insertConversationMessage(message, incoming, incomingIndex);
     }
 
-    return List.unmodifiable(_messagesWithDeadPastFeedbackActions());
+    final messages = List<ChatLessonMessage>.unmodifiable(
+      _messagesWithDeadPastFeedbackActions(),
+    );
+    if (_restoredConversationKeys.contains(lessonKey)) {
+      unawaited(_persistConversationSnapshot(lessonKey));
+    }
+    return messages;
   }
 
   List<ChatLessonMessage> _messagesWithDeadPastFeedbackActions() {
     var activeFeedbackIndex = -1;
+    String? latestTurnId;
     for (var i = 0; i < _conversationMessages.length; i++) {
       final message = _conversationMessages[i];
+      if (message.kind == ChatLessonMessageKind.explanation) {
+        latestTurnId = _turnIdFor(message);
+      }
       if (message.kind == ChatLessonMessageKind.feedback &&
           (message.actionKey ?? '').isNotEmpty) {
         activeFeedbackIndex = i;
       }
     }
-    if (activeFeedbackIndex < 0) return _conversationMessages;
+    if (activeFeedbackIndex < 0 && latestTurnId == null) {
+      return _conversationMessages;
+    }
     return [
       for (var i = 0; i < _conversationMessages.length; i++)
-        if (i != activeFeedbackIndex &&
-            _conversationMessages[i].kind == ChatLessonMessageKind.feedback &&
-            (_conversationMessages[i].actionKey ?? '').isNotEmpty)
+        if (_conversationMessages[i].kind == ChatLessonMessageKind.feedback &&
+            (_conversationMessages[i].actionKey ?? '').isNotEmpty &&
+            (i != activeFeedbackIndex ||
+                _turnIdFor(_conversationMessages[i]) != latestTurnId))
           _conversationMessages[i].copyWith(
             deliveryStatus: ChatLessonDeliveryStatus.read,
           )
         else
           _conversationMessages[i],
     ];
+  }
+
+  String? _turnIdFor(ChatLessonMessage message) {
+    final prefix = switch (message.kind) {
+      ChatLessonMessageKind.explanation => 'explanation-',
+      ChatLessonMessageKind.feedback => 'feedback-',
+      _ => null,
+    };
+    if (prefix == null || !message.id.startsWith(prefix)) return null;
+    return message.id.substring(prefix.length);
   }
 
   void _insertConversationMessage(
@@ -451,4 +562,14 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         '${signal.value}:${signal.labelKey}:${signal.enabled}',
     ].join('|');
   }
+}
+
+class _RestoredConversation {
+  const _RestoredConversation({
+    required this.messages,
+    required this.archiveSeq,
+  });
+
+  final List<ChatLessonMessage> messages;
+  final int archiveSeq;
 }

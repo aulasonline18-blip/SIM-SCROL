@@ -932,12 +932,17 @@ class _StudentDoubtMessage extends StatelessWidget {
     final hasText = text != null && text.isNotEmpty;
     final imageData = message.imageData?.trim();
     final hasImage = imageData != null && imageData.isNotEmpty;
+    final hasAttachmentMetadata =
+        (message.mediaName ?? '').trim().isNotEmpty ||
+        (message.mediaType ?? '').trim().isNotEmpty ||
+        message.mediaSize != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (hasText) _StudentShortMessage(text: text),
-        if (hasText && hasImage) const SizedBox(height: 10),
-        if (hasImage)
+        if (hasText && (hasImage || hasAttachmentMetadata))
+          const SizedBox(height: 10),
+        if (hasImage || hasAttachmentMetadata)
           _ChatMediaAttachment(
             imageData: imageData,
             name: message.mediaName,
@@ -950,14 +955,9 @@ class _StudentDoubtMessage extends StatelessWidget {
 }
 
 class _ChatMediaAttachment extends StatelessWidget {
-  const _ChatMediaAttachment({
-    required this.imageData,
-    this.name,
-    this.type,
-    this.size,
-  });
+  const _ChatMediaAttachment({this.imageData, this.name, this.type, this.size});
 
-  final String imageData;
+  final String? imageData;
   final String? name;
   final String? type;
   final int? size;
@@ -973,6 +973,8 @@ class _ChatMediaAttachment extends StatelessWidget {
     final semanticName = typeLabel.isEmpty
         ? displayName
         : '$displayName, $typeLabel';
+    final previewData = imageData?.trim();
+    final hasPreview = previewData != null && previewData.isNotEmpty;
     return Semantics(
       container: true,
       image: true,
@@ -988,10 +990,23 @@ class _ChatMediaAttachment extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AspectRatio(
-              aspectRatio: 16 / 10,
-              child: LessonMediaImageView(data: imageData, compact: true),
-            ),
+            if (hasPreview)
+              AspectRatio(
+                aspectRatio: 16 / 10,
+                child: LessonMediaImageView(data: previewData, compact: true),
+              )
+            else
+              Container(
+                height: 84,
+                width: double.infinity,
+                alignment: Alignment.center,
+                color: palette.surfaceSoft,
+                child: Icon(
+                  Icons.image_outlined,
+                  size: 30,
+                  color: palette.primary,
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Row(

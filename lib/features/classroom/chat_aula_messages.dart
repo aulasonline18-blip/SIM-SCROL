@@ -41,6 +41,28 @@ class ChatLessonOption {
   final String text;
   final bool selected;
   final bool enabled;
+
+  Map<String, Object?> toJson() => {
+    'letter': letter.name,
+    'text': text,
+    'selected': selected,
+    'enabled': enabled,
+  };
+
+  static ChatLessonOption? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final letter = _enumByName(AnswerLetter.values, raw['letter']);
+    final text = raw['text'];
+    final selected = raw['selected'];
+    final enabled = raw['enabled'];
+    if (letter == null || text is! String) return null;
+    return ChatLessonOption(
+      letter: letter,
+      text: text,
+      selected: selected is bool ? selected : false,
+      enabled: enabled is bool ? enabled : false,
+    );
+  }
 }
 
 class ChatLessonSignal {
@@ -53,6 +75,25 @@ class ChatLessonSignal {
   final int value;
   final String labelKey;
   final bool enabled;
+
+  Map<String, Object?> toJson() => {
+    'value': value,
+    'labelKey': labelKey,
+    'enabled': enabled,
+  };
+
+  static ChatLessonSignal? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final value = raw['value'];
+    final labelKey = raw['labelKey'];
+    final enabled = raw['enabled'];
+    if (value is! int || labelKey is! String) return null;
+    return ChatLessonSignal(
+      value: value,
+      labelKey: labelKey,
+      enabled: enabled is bool ? enabled : false,
+    );
+  }
 }
 
 class ChatLessonMessage {
@@ -151,4 +192,78 @@ class ChatLessonMessage {
       sequenceIndex: sequenceIndex ?? this.sequenceIndex,
     );
   }
+
+  Map<String, Object?> toJson({bool includeInlineImageData = true}) => {
+    'id': id,
+    'role': role.name,
+    'kind': kind.name,
+    'text': text,
+    'options': options.map((option) => option.toJson()).toList(),
+    'signals': signals.map((signal) => signal.toJson()).toList(),
+    'imageData': includeInlineImageData ? imageData : null,
+    'mediaName': mediaName,
+    'mediaType': mediaType,
+    'mediaSize': mediaSize,
+    'selectedAnswer': selectedAnswer?.name,
+    'selectedSignal': selectedSignal?.name,
+    'isCorrect': isCorrect,
+    'actionKey': actionKey,
+    'imageStatus': imageStatus,
+    'hasPaidImageOffer': hasPaidImageOffer,
+    'progress': progress,
+    'deliveryStatus': deliveryStatus.name,
+    'timestampLabel': timestampLabel,
+    'sequenceIndex': sequenceIndex,
+  };
+
+  static ChatLessonMessage? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final id = raw['id'];
+    final role = _enumByName(ChatLessonMessageRole.values, raw['role']);
+    final kind = _enumByName(ChatLessonMessageKind.values, raw['kind']);
+    if (id is! String || role == null || kind == null) return null;
+    return ChatLessonMessage(
+      id: id,
+      role: role,
+      kind: kind,
+      text: _stringOrNull(raw['text']),
+      options: _listOf(raw['options'], ChatLessonOption.fromJson),
+      signals: _listOf(raw['signals'], ChatLessonSignal.fromJson),
+      imageData: _stringOrNull(raw['imageData']),
+      mediaName: _stringOrNull(raw['mediaName']),
+      mediaType: _stringOrNull(raw['mediaType']),
+      mediaSize: _intOrNull(raw['mediaSize']),
+      selectedAnswer: _enumByName(AnswerLetter.values, raw['selectedAnswer']),
+      selectedSignal: _enumByName(DecisionSignal.values, raw['selectedSignal']),
+      isCorrect: raw['isCorrect'] is bool ? raw['isCorrect'] as bool : null,
+      actionKey: _stringOrNull(raw['actionKey']),
+      imageStatus: _stringOrNull(raw['imageStatus']) ?? 'idle',
+      hasPaidImageOffer: raw['hasPaidImageOffer'] is bool
+          ? raw['hasPaidImageOffer'] as bool
+          : false,
+      progress: _intOrNull(raw['progress']),
+      deliveryStatus:
+          _enumByName(ChatLessonDeliveryStatus.values, raw['deliveryStatus']) ??
+          ChatLessonDeliveryStatus.delivered,
+      timestampLabel: _stringOrNull(raw['timestampLabel']),
+      sequenceIndex: _intOrNull(raw['sequenceIndex']),
+    );
+  }
+}
+
+T? _enumByName<T extends Enum>(List<T> values, Object? name) {
+  if (name is! String) return null;
+  for (final value in values) {
+    if (value.name == name) return value;
+  }
+  return null;
+}
+
+String? _stringOrNull(Object? value) => value is String ? value : null;
+
+int? _intOrNull(Object? value) => value is int ? value : null;
+
+List<T> _listOf<T>(Object? raw, T? Function(Object? item) parse) {
+  if (raw is! List) return const [];
+  return raw.map(parse).whereType<T>().toList(growable: false);
 }
