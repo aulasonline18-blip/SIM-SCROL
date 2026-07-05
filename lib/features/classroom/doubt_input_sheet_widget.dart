@@ -17,6 +17,7 @@ class DoubtInputSheet extends StatefulWidget {
     required this.busy,
     required this.onSubmit,
     required this.onClose,
+    this.initialImage,
     super.key,
   });
 
@@ -25,15 +26,40 @@ class DoubtInputSheet extends StatefulWidget {
   final void Function(DoubtInputDraft input) onSubmit;
   final VoidCallback onClose;
 
+  @visibleForTesting
+  final DoubtImagePayload? initialImage;
+
   @override
   State<DoubtInputSheet> createState() => _DoubtInputSheetState();
 }
 
 class _DoubtInputSheetState extends State<DoubtInputSheet> {
   final ImagePicker _picker = ImagePicker();
+  final ScrollController _scrollController = ScrollController();
+  final FocusNode _textFocusNode = FocusNode();
+  final GlobalKey _textFieldKey = GlobalKey();
   DoubtImagePayload? _image;
   bool _menuOpen = false;
   String? _error;
+  double _lastBottomInset = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _image = widget.initialImage;
+    _textFocusNode.addListener(() {
+      if (_textFocusNode.hasFocus) {
+        _ensureTextFieldVisible();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _textFocusNode.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     setState(() {
@@ -77,6 +103,23 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
     });
   }
 
+  void _ensureTextFieldVisible() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final fieldContext = _textFieldKey.currentContext;
+      if (fieldContext == null) return;
+      Scrollable.ensureVisible(
+        fieldContext,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        alignment: 0.72,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
@@ -84,8 +127,17 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
     final responsive = SimResponsive.fromContext(context);
     final bottomInset = media.viewInsets.bottom;
     final textLength = widget.controller.text.length;
-    final maxHeight = media.size.height * (bottomInset > 0 ? 0.86 : 0.72);
+    final keyboardOpen = bottomInset > 0;
+    final visibleHeight = (media.size.height - bottomInset - media.padding.top)
+        .clamp(0.0, media.size.height);
+    final maxHeight = keyboardOpen ? visibleHeight : media.size.height * 0.72;
     final horizontalPadding = responsive.isCompact ? 16.0 : 20.0;
+    if (_lastBottomInset != bottomInset) {
+      _lastBottomInset = bottomInset;
+      if (_textFocusNode.hasFocus) {
+        _ensureTextFieldVisible();
+      }
+    }
     return SafeArea(
       top: false,
       child: AnimatedPadding(
@@ -97,36 +149,37 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
           child: Container(
+            key: const Key('doubt-input-sheet-frame'),
             decoration: BoxDecoration(
               color: palette.surface,
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(20),
               ),
             ),
-            child: SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.only(bottom: media.padding.bottom),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      margin: const EdgeInsets.only(top: 12),
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: palette.border,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: palette.border,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  Padding(
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: EdgeInsets.fromLTRB(
                       horizontalPadding,
                       18,
                       horizontalPadding,
-                      16,
+                      14,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -184,6 +237,7 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                           const SizedBox(height: 12),
                         ],
                         Container(
+                          key: _textFieldKey,
                           decoration: BoxDecoration(
                             color: palette.surface,
                             borderRadius: BorderRadius.circular(12),
@@ -193,6 +247,7 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                           child: Stack(
                             children: [
                               TextField(
+                                focusNode: _textFocusNode,
                                 controller: widget.controller,
                                 minLines: 4,
                                 maxLines: 5,
@@ -211,6 +266,7 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                                   fontSize: 16,
                                   height: 1.35,
                                 ),
+                                onTap: _ensureTextFieldVisible,
                                 onChanged: (_) => setState(() => _error = null),
                               ),
                               Positioned(
@@ -290,37 +346,43 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              minHeight: SimTouch.min,
-                            ),
-                            child: OutlinedButton(
-                              onPressed: widget.busy ? null : _submit,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: palette.text,
-                                side: BorderSide(color: palette.border),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: Text(
-                                widget.busy ? 'Enviando...' : 'Enviar dúvida',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    0,
+                    horizontalPadding,
+                    16 + media.padding.bottom,
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minHeight: SimTouch.min,
+                      ),
+                      child: OutlinedButton(
+                        key: const Key('doubt-input-submit-button'),
+                        onPressed: widget.busy ? null : _submit,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: palette.text,
+                          side: BorderSide(color: palette.border),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          widget.busy ? 'Enviando...' : 'Enviar dúvida',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
