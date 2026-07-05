@@ -113,6 +113,11 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
 
   Future<void> _scrollToCurrent({bool immediate = false}) async {
     if (!_scrollController.hasClients) return;
+    final disableAnimations =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = immediate || disableAnimations
+        ? Duration.zero
+        : _scrollDuration;
     final position = _scrollController.position;
     if (!position.hasContentDimensions) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
@@ -124,7 +129,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     if (targetContext != null && target != null) {
       await Scrollable.ensureVisible(
         targetContext,
-        duration: immediate ? Duration.zero : _scrollDuration,
+        duration: duration,
         curve: Curves.easeOutCubic,
         alignment: target.alignment,
         alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
@@ -132,6 +137,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     } else {
       final fallbackOffset = _fallbackOffsetFor(position, target?.message);
       if (immediate) {
+        _scrollController.jumpTo(fallbackOffset);
+      } else if (disableAnimations) {
         _scrollController.jumpTo(fallbackOffset);
       } else {
         await _scrollController.animateTo(
@@ -147,7 +154,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         if (retryContext != null && retryContext.mounted) {
           await Scrollable.ensureVisible(
             retryContext,
-            duration: immediate ? Duration.zero : _scrollDuration,
+            duration: duration,
             curve: Curves.easeOutCubic,
             alignment: target.alignment,
             alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
@@ -306,6 +313,13 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final width = MediaQuery.sizeOf(context).width;
+    final horizontalPadding = width >= 600 ? 24.0 : 16.0;
+    final contentMaxWidth = width >= 960
+        ? 680.0
+        : width >= 600
+        ? 620.0
+        : double.infinity;
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.end): () {
@@ -362,39 +376,60 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                     restorationId: 'chat-aula-timeline-scroll',
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: widget.padding.copyWith(
-                      bottom: widget.padding.bottom + bottomInset,
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      widget.padding.top,
+                      horizontalPadding,
+                      widget.padding.bottom + bottomInset,
                     ),
                     children: [
-                      for (
-                        var index = 0;
-                        index < widget.messages.length;
-                        index++
-                      ) ...[
-                        if (index > 0) const SizedBox(height: 10),
-                        SizeChangedLayoutNotifier(
-                          child: ChatAulaMessageBubble(
-                            key: _keyForMessage(widget.messages[index]),
-                            message: widget.messages[index],
-                            semanticIndex: index,
-                            session: widget.session,
-                            onChooseAnswer: widget.onChooseAnswer,
-                            onSignal: widget.onSignal,
-                            onRetry: widget.onRetry,
-                            onNext: widget.onNext,
-                            onOpenDoubt: widget.onOpenDoubt,
-                            pendingActionKeys: widget.pendingActionKeys,
-                            onImageSettled: () {
-                              widget.onImageSettled?.call();
-                              if (_autoFollow) {
-                                WidgetsBinding.instance.addPostFrameCallback(
-                                  (_) => _scrollToCurrent(),
-                                );
-                              }
-                            },
+                      if (widget.messages.isEmpty)
+                        Center(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: contentMaxWidth,
+                            ),
+                            child: const _ChatEmptyState(),
                           ),
-                        ),
-                      ],
+                        )
+                      else
+                        for (
+                          var index = 0;
+                          index < widget.messages.length;
+                          index++
+                        ) ...[
+                          if (index > 0) const SizedBox(height: 10),
+                          Center(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: contentMaxWidth,
+                              ),
+                              child: SizeChangedLayoutNotifier(
+                                child: ChatAulaMessageBubble(
+                                  key: _keyForMessage(widget.messages[index]),
+                                  message: widget.messages[index],
+                                  semanticIndex: index,
+                                  session: widget.session,
+                                  onChooseAnswer: widget.onChooseAnswer,
+                                  onSignal: widget.onSignal,
+                                  onRetry: widget.onRetry,
+                                  onNext: widget.onNext,
+                                  onOpenDoubt: widget.onOpenDoubt,
+                                  pendingActionKeys: widget.pendingActionKeys,
+                                  onImageSettled: () {
+                                    widget.onImageSettled?.call();
+                                    if (_autoFollow) {
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback(
+                                            (_) => _scrollToCurrent(),
+                                          );
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                     ],
                   ),
                 ),
@@ -415,6 +450,38 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatEmptyState extends StatelessWidget {
+  const _ChatEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      container: true,
+      label: t('aula_empty_conversation'),
+      child: Container(
+        key: const Key('chat-empty-state'),
+        constraints: const BoxConstraints(minHeight: 160),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: palette.surfaceSoft,
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          border: Border.all(color: palette.border),
+        ),
+        child: Text(
+          t('aula_empty_conversation'),
+          textAlign: TextAlign.center,
+          style: SimTypography.lessonBody.copyWith(
+            color: palette.muted,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -1299,6 +1366,15 @@ class _InlineSignalChoices extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
+    final compact = MediaQuery.sizeOf(context).width < 380;
+    final buttons = [
+      for (var i = 0; i < signals.length; i++)
+        _SignalButton(
+          signal: signals[i],
+          busy: pendingActionKeys.contains('signal'),
+          onPressed: () => onSignal(signals[i].value),
+        ),
+    ];
     return Container(
       key: const Key('inline-signal-choices'),
       margin: const EdgeInsets.only(top: 8, left: 12, bottom: 10),
@@ -1306,20 +1382,23 @@ class _InlineSignalChoices extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(left: BorderSide(color: palette.primary, width: 1)),
       ),
-      child: Row(
-        children: [
-          for (var i = 0; i < signals.length; i++) ...[
-            if (i > 0) const SizedBox(width: 8),
-            Expanded(
-              child: _SignalButton(
-                signal: signals[i],
-                busy: pendingActionKeys.contains('signal'),
-                onPressed: () => onSignal(signals[i].value),
-              ),
+      child: compact
+          ? Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final button in buttons)
+                  SizedBox(width: 96, child: button),
+              ],
+            )
+          : Row(
+              children: [
+                for (var i = 0; i < buttons.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(child: buttons[i]),
+                ],
+              ],
             ),
-          ],
-        ],
-      ),
     );
   }
 }
@@ -1337,23 +1416,35 @@ class _ChatSignals extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 380;
+    final buttons = [
+      for (final signal in message.signals)
+        _SignalButton(
+          signal: signal,
+          busy: pendingActionKeys.contains('signal'),
+          onPressed: () => onSignal(signal.value),
+        ),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            for (var i = 0; i < message.signals.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              Expanded(
-                child: _SignalButton(
-                  signal: message.signals[i],
-                  busy: pendingActionKeys.contains('signal'),
-                  onPressed: () => onSignal(message.signals[i].value),
-                ),
-              ),
+        if (compact)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final button in buttons) SizedBox(width: 96, child: button),
             ],
-          ],
-        ),
+          )
+        else
+          Row(
+            children: [
+              for (var i = 0; i < buttons.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                Expanded(child: buttons[i]),
+              ],
+            ],
+          ),
       ],
     );
   }
@@ -1460,21 +1551,28 @@ class _StatusMessage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (loading)
-              SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: palette.primary,
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: palette.primary,
+                  ),
                 ),
               )
             else
-              Icon(
-                warn ? Icons.warning_amber_rounded : Icons.info_outline,
-                color: warn ? simWarn : palette.primary,
-                size: 20,
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(
+                  warn ? Icons.warning_amber_rounded : Icons.info_outline,
+                  color: warn ? simWarn : palette.primary,
+                  size: 20,
+                ),
               ),
             const SizedBox(width: 10),
             Expanded(child: _TextMessage(text)),

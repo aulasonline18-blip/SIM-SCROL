@@ -94,6 +94,87 @@ void main() {
     expect(chosen, AnswerLetter.B);
   });
 
+  testWidgets('chat timeline renders a clear empty state', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            messages: const [],
+            onChooseAnswer: (_) {},
+            onSignal: (_) {},
+            onRetry: () {},
+            onNext: () {},
+            onOpenDoubt: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('chat-empty-state')), findsOneWidget);
+    expect(find.text(t('aula_empty_conversation')), findsOneWidget);
+  });
+
+  testWidgets('chat timeline respects reduce motion', (tester) async {
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(disableAnimations: true),
+        child: MaterialApp(
+          home: Scaffold(
+            body: ChatAulaTimeline(
+              messages: const [
+                ChatLessonMessage(
+                  id: 'reduced-motion',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.explanation,
+                  text: 'Sem animacao obrigatoria.',
+                ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Sem animacao obrigatoria.'), findsOneWidget);
+    expect(find.byType(TweenAnimationBuilder<double>), findsNothing);
+  });
+
+  testWidgets('chat timeline keeps mature width on tablet', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1024, 768));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            messages: const [
+              ChatLessonMessage(
+                id: 'tablet-message',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.explanation,
+                text: 'Mensagem em tablet com largura controlada.',
+              ),
+            ],
+            onChooseAnswer: (_) {},
+            onSignal: (_) {},
+            onRetry: () {},
+            onNext: () {},
+            onOpenDoubt: () {},
+          ),
+        ),
+      ),
+    );
+
+    final bubbleRect = tester.getRect(find.byType(ChatAulaMessageBubble));
+    expect(bubbleRect.width, lessThanOrEqualTo(640));
+    expect(bubbleRect.left, greaterThan(200));
+  });
+
   testWidgets('chat options open signals inline under selected answer', (
     tester,
   ) async {
@@ -1355,6 +1436,48 @@ void main() {
 
     expect(submitted?.cleanText, 'Nao entendi.');
     expect(submitted?.image, isNull);
+  });
+
+  testWidgets('shared doubt sheet stays usable with keyboard open', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(
+          size: Size(390, 640),
+          viewInsets: EdgeInsets.only(bottom: 300),
+        ),
+        child: MaterialApp(
+          home: Scaffold(
+            body: DoubtInputSheet(
+              controller: controller,
+              busy: false,
+              onSubmit: (_) {},
+              onClose: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 220));
+
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    final sendButton = find.text('Enviar dúvida').last;
+    await tester.scrollUntilVisible(
+      sendButton,
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(sendButton, findsOneWidget);
+    final buttonRect = tester.getRect(sendButton);
+    expect(buttonRect.bottom, lessThanOrEqualTo(640));
   });
 
   testWidgets('chat composer submit becomes a student message in timeline', (

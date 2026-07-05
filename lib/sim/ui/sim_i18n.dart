@@ -150,6 +150,8 @@ const Map<String, String> _simStrings = {
   'aula_conversation_region': 'Conversa da aula',
   'aula_conversation_keyboard_hint':
       'Use Home para o início, End para o item atual, Page Up e Page Down para navegar.',
+  'aula_empty_conversation':
+      'A conversa da aula aparece aqui assim que o SIM preparar o próximo passo.',
   'aula_doubt': 'Dúvida',
   'aula_doubt_about_question': 'Tenho dúvida sobre essa questão',
   'aula_doubt_processing': 'Analisando sua dúvida...',
@@ -431,6 +433,8 @@ const Map<String, String> _enStrings = {
   'aula_conversation_region': 'Lesson conversation',
   'aula_conversation_keyboard_hint':
       'Use Home for the beginning, End for the current item, Page Up and Page Down to navigate.',
+  'aula_empty_conversation':
+      'The lesson conversation appears here as soon as SIM prepares the next step.',
   'aula_doubt': 'Question',
   'aula_doubt_about_question': 'I have a question about this',
   'aula_doubt_processing': 'Analyzing your question...',
@@ -608,6 +612,8 @@ const Map<String, String> _ptStrings = {
   'aula_conversation_region': 'Conversa da aula',
   'aula_conversation_keyboard_hint':
       'Use Home para o início, End para o item atual, Page Up e Page Down para navegar.',
+  'aula_empty_conversation':
+      'A conversa da aula aparece aqui assim que o SIM preparar o próximo passo.',
   'aula_doubt': 'Dúvida',
   'aula_doubt_about_question': 'Tenho dúvida sobre essa questão',
   'aula_doubt_processing': 'Analisando sua dúvida...',
@@ -789,6 +795,8 @@ const Map<String, String> _frStrings = {
   'aula_conversation_region': 'Conversation de la leçon',
   'aula_conversation_keyboard_hint':
       'Utilisez Home pour le début, End pour l’item actuel, Page Up et Page Down pour naviguer.',
+  'aula_empty_conversation':
+      'La conversation de la leçon apparaîtra ici dès que SIM préparera la suite.',
   'aula_doubt': 'Question',
   'aula_doubt_about_question': 'J’ai une question sur ce point',
   'aula_doubt_processing': 'Analyse de votre question...',
@@ -969,6 +977,8 @@ const Map<String, String> _esStrings = {
   'aula_conversation_region': 'Conversación de la clase',
   'aula_conversation_keyboard_hint':
       'Usa Home para el inicio, End para el ítem actual, Page Up y Page Down para navegar.',
+  'aula_empty_conversation':
+      'La conversación de la clase aparecerá aquí cuando SIM prepare el siguiente paso.',
   'aula_doubt': 'Duda',
   'aula_doubt_about_question': 'Tengo una duda sobre esta pregunta',
   'aula_doubt_processing': 'Analizando tu duda...',
@@ -1140,6 +1150,7 @@ const Map<String, String> _jaStrings = {
   'aula_conversation_region': '授業の会話',
   'aula_conversation_keyboard_hint':
       'Home で先頭、End で現在の項目、Page Up と Page Down で移動します。',
+  'aula_empty_conversation': 'SIMが次のステップを準備すると、授業の会話がここに表示されます。',
   'aula_doubt': '質問',
   'aula_doubt_about_question': 'この問題について質問があります',
   'aula_doubt_processing': '質問を分析中...',
