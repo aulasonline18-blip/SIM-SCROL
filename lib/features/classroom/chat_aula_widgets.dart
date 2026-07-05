@@ -301,15 +301,22 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         latestLiveMessage = message;
       }
     }
-    if (latestExplanationIndex > latestLiveIndex) {
-      final hasPriorFeedback = widget.messages
-          .take(latestExplanationIndex)
-          .any((message) => message.kind == ChatLessonMessageKind.feedback);
-      if (hasPriorFeedback) {
-        return _ChatScrollTarget.forMessage(
-          widget.messages[latestExplanationIndex],
-        );
+    if (latestLiveIndex >= 0 && latestExplanationIndex > latestLiveIndex) {
+      for (
+        var i = widget.messages.length - 1;
+        i >= latestExplanationIndex;
+        i--
+      ) {
+        final message = widget.messages[i];
+        if (message.kind == ChatLessonMessageKind.options ||
+            message.kind == ChatLessonMessageKind.question ||
+            message.kind == ChatLessonMessageKind.image) {
+          return _ChatScrollTarget.forMessage(message);
+        }
       }
+      return _ChatScrollTarget.forMessage(
+        widget.messages[latestExplanationIndex],
+      );
     }
     if (latestLiveMessage != null) {
       return _ChatScrollTarget.forMessage(latestLiveMessage);

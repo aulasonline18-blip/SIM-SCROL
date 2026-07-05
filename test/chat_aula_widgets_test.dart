@@ -716,7 +716,7 @@ void main() {
   );
 
   testWidgets(
-    'chat timeline targets the start of a new lesson turn instead of stale feedback',
+    'chat timeline targets full new lesson content instead of stale feedback',
     (tester) async {
       final key = GlobalKey<_ChatTimelineHarnessState>();
       final controller = ScrollController();
@@ -750,12 +750,13 @@ void main() {
         find.byKey(const Key('chat-return-current-button')),
         findsOneWidget,
       );
-      expect(find.textContaining('Voltar ao novo item'), findsOneWidget);
+      expect(find.textContaining('Voltar às alternativas'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('chat-return-current-button')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Nova explicacao do item.'), findsOneWidget);
+      expect(find.text('Nova alternativa B'), findsOneWidget);
+      expect(find.text('Feedback anterior.'), findsNothing);
     },
   );
 
@@ -2163,7 +2164,7 @@ void main() {
         find.byKey(const Key('chat-return-current-button')),
         findsOneWidget,
       );
-      expect(find.textContaining('Voltar ao novo item'), findsOneWidget);
+      expect(find.textContaining('Voltar às alternativas'), findsOneWidget);
       expect(find.textContaining('Voltar ao feedback'), findsNothing);
     },
   );
@@ -2433,6 +2434,13 @@ class _ChatTimelineHarnessState extends State<_ChatTimelineHarness> {
           role: ChatLessonMessageRole.sim,
           kind: ChatLessonMessageKind.explanation,
           text: 'Nova explicacao do item.',
+        ),
+        ChatLessonMessage(
+          id: 'new-image-$id',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.image,
+          imageData: _svgDataUrl(),
+          imageStatus: 'ready',
         ),
         ChatLessonMessage(
           id: 'new-question-$id',
