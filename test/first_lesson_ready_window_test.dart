@@ -402,6 +402,72 @@ void main() {
   );
 
   test(
+    'LessonOrchestrator uses lesson text over stale prompt for h(t) physics graph',
+    () async {
+      final stalePrompt = List.filled(
+        90,
+        'foto realista genérica de apoio visual sem fórmula nem eixo',
+      ).join(' ');
+      final trigger = <String, dynamic>{
+        'needs_image': true,
+        'pedagogical_need': 'important',
+        'visual_type': 'photo',
+        'topic': 'apoio visual',
+        'image_prompt': stalePrompt,
+      };
+      final cache = LessonMaterialCache();
+      final bus = LessonEventBus();
+      final orchestrator = LessonOrchestrator(
+        t02Client: FakeT02Client(
+          visualTrigger: trigger,
+          explanation:
+              'Ao substituir t por zero na função, a altura inicial aparece '
+              'no termo constante. Isso conecta a fórmula ao ponto inicial '
+              'do gráfico no eixo vertical.',
+          question:
+              'A altura (h) de uma bola lançada para cima, em metros, é '
+              'descrita pela função h(t) = -2t^2 + 8t + 10, onde t é o '
+              'tempo em segundos. Qual é a altura inicial da bola no momento '
+              'do lançamento (t = 0)?',
+          options: const {
+            AnswerLetter.A: '10 metros',
+            AnswerLetter.B: '8 metros',
+            AnswerLetter.C: '2 metros',
+          },
+        ),
+        cache: cache,
+        bus: bus,
+        visualPipeline: fakeVisualPipeline(),
+      );
+      const params = CompleteLessonParams(
+        lessonLocalId: 'cyber-ht-physics-graph',
+        item: 'Item 5',
+        lang: 'pt-BR',
+        academic: 'ensino médio',
+        layer: LessonLayer.l3,
+        mode: LessonMode.session,
+        marker: 'M5',
+      );
+      final key = lessonKeyFor(params);
+      final offers = <LessonPaidImageOffer?>[];
+      final unsubscribeOffer = bus.subscribePaidImageOffer(key, offers.add);
+      addTearDown(unsubscribeOffer);
+      final updates = <CompleteLesson>[];
+      final unsubscribeLesson = bus.subscribe(key, updates.add);
+      addTearDown(unsubscribeLesson);
+
+      await orchestrator.prefetchCompleteLesson(params, priority: 'active');
+      await Future<void>.delayed(Duration.zero);
+
+      final rendered = updates.last.imagem;
+      expect(rendered, startsWith('data:image/svg+xml;utf8,'));
+      expect(rendered, contains('Par%C3%A1bola'));
+      expect(cache.peek(key)?.imagem, rendered);
+      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
+    },
+  );
+
+  test(
     'LessonOrchestrator ignores stale image decision after lesson content refresh',
     () async {
       final staleTrigger = <String, dynamic>{

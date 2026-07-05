@@ -579,7 +579,7 @@ class LessonVisualPipeline {
       dataUrl: dataUrl,
       request: request,
       critique: critique,
-      source: stage.contains(':') ? stage.split(':').first : stage,
+      source: stage,
     );
     _visualLog(
       lessonKey,

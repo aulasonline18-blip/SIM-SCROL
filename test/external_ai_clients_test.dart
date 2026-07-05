@@ -233,6 +233,21 @@ void main() {
     expect(body['highlightFocus'], 'inclinação da reta');
     expect(body['complexity'], 'simple');
     expect(body['stableLang'], 'pt-BR');
+    expect(
+      (body['outputContract'] as Map)['format'],
+      'structured_visual_route',
+    );
+    expect((body['outputContract'] as Map)['allowedVerdicts'], [
+      'svg',
+      'ai',
+      'no_image',
+    ]);
+    expect((body['outputContract'] as Map)['paidImageIsLastResort'], isTrue);
+    expect((body['qualityGate'] as Map)['preferPedagogicalSvg'], isTrue);
+    expect(
+      (body['qualityGate'] as Map)['avoidPaidForDiagramsGraphsTablesTimelines'],
+      isTrue,
+    );
     expect((body['n2'] as Map)['reason'], 'N2_AMBIGUOUS');
     expect((body['n2'] as Map)['confidence'], 0.5);
     expect(result.verdict, VisualVerdict.svg);

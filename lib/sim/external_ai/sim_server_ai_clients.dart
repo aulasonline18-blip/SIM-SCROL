@@ -209,6 +209,20 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
         if (n2.pedagogicalRole != null)
           'pedagogicalRole': n2.pedagogicalRole!.id,
       },
+      'outputContract': {
+        'format': 'structured_visual_route',
+        'allowedVerdicts': ['svg', 'ai', 'no_image'],
+        'requiredFields': ['verdict', 'reason'],
+        'svgField': 'svgDataUrl',
+        'svgMustBeDataUrl': true,
+        'paidImageIsLastResort': true,
+      },
+      'qualityGate': {
+        'preferPedagogicalSvg': true,
+        'avoidPaidForDiagramsGraphsTablesTimelines': true,
+        'rejectEmptyDecorativeSvg': true,
+        'mustRespectLessonContext': true,
+      },
       if (keyElements.isNotEmpty) 'keyElements': keyElements,
     };
     if (pedagogicalNeed != null) body['pedagogicalNeed'] = pedagogicalNeed;
@@ -240,10 +254,22 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
         ? VisualVerdict.noImage
         : VisualVerdict.ai;
     final svgDataUrl = decoded['svgDataUrl']?.toString();
+    final hasSvgPayload = svgDataUrl != null && svgDataUrl.trim().isNotEmpty;
+    if (verdict == VisualVerdict.svg && !hasSvgPayload) {
+      return VisualN3Result(
+        verdict: VisualVerdict.ambiguous,
+        reason: decoded['reason']?.toString() ?? 'N3_SVG_MISSING_PAYLOAD',
+        confidence: _doubleFromJson(decoded['confidence']),
+        pedagogicalRole:
+            decoded['pedagogicalRole']?.toString() ??
+            decoded['pedagogical_role']?.toString(),
+        requestId: decoded['requestId']?.toString() ?? requestId,
+      );
+    }
     return VisualN3Result(
       verdict: verdict,
       reason: decoded['reason']?.toString() ?? 'N3_HTTP_ROUTE',
-      svgDataUrl: svgDataUrl?.trim().isEmpty == true ? null : svgDataUrl,
+      svgDataUrl: hasSvgPayload ? svgDataUrl : null,
       confidence: _doubleFromJson(decoded['confidence']),
       pedagogicalRole:
           decoded['pedagogicalRole']?.toString() ??

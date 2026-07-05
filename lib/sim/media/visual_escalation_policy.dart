@@ -46,6 +46,15 @@ class VisualEscalationPolicy {
       );
     }
 
+    if (_isDeterministicRenderer(localResult.renderer)) {
+      return const VisualEscalationDecision(
+        acceptLocalBeforeN3: true,
+        shouldCallN3: false,
+        allowLocalAfterN3Failure: true,
+        reason: 'deterministic_local_authoritative',
+      );
+    }
+
     final richness = _richnessScore(request, localResult);
     if (richness <= 1) {
       return const VisualEscalationDecision(
@@ -159,6 +168,18 @@ class VisualEscalationPolicy {
       'ConceptMapRenderer',
       'TimelineRenderer',
       'TableRenderer',
+    }.contains(renderer);
+  }
+
+  bool _isDeterministicRenderer(String renderer) {
+    return const {
+      'LinearRenderer',
+      'QuadraticRenderer',
+      'KinematicsGraphRenderer',
+      'ForceDiagramRenderer',
+      'CircuitRenderer',
+      'ChemistryReactionRenderer',
+      'SyntaxTreeRenderer',
     }.contains(renderer);
   }
 

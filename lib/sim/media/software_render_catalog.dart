@@ -782,6 +782,10 @@ _VisualKnowledgeDomain _inferKnowledgeDomain(String text) {
     'física',
     'fisica',
     'physics',
+    'lançada',
+    'lancada',
+    'lançamento',
+    'lancamento',
     'força',
     'forca',
     'force',
@@ -846,6 +850,10 @@ _VisualKnowledgeDomain _inferKnowledgeDomain(String text) {
     'algebra',
     'geometria',
     'f(x)',
+    'h(t)',
+    't^2',
+    'x^2',
+    '²',
     'y =',
   ])) {
     return _VisualKnowledgeDomain.mathematics;
@@ -892,14 +900,15 @@ class _QuadraticRenderer extends SoftwareVisualRenderer {
   @override
   bool accepts(SoftwareVisualRequest request) {
     return _containsAny(request.text, const [
-      'parábola',
-      'parabola',
-      'quadratic',
-      'quadrática',
-      'quadratica',
-      'função quadrática',
-      'funcao quadratica',
-    ]);
+          'parábola',
+          'parabola',
+          'quadratic',
+          'quadrática',
+          'quadratica',
+          'função quadrática',
+          'funcao quadratica',
+        ]) ||
+        _containsQuadraticFormula(request.text);
   }
 
   @override
@@ -2445,13 +2454,65 @@ String? _extractFormula(String text) {
   final normalized = text
       .replaceAll('−', '-')
       .replaceAll('×', '*')
-      .replaceAll('·', '*');
-  final match = RegExp(
-    r'\b(?:f\s*\(\s*x\s*\)|y)\s*=\s*[-+0-9xX\s*/^().²³×·−]+',
+      .replaceAll('·', '*')
+      .replaceAll('²', '^2')
+      .replaceAll('³', '^3');
+  final formulaPattern = RegExp(
+    r'\b(?:([a-zA-Z])\s*\(\s*([a-zA-Z])\s*\)|([a-zA-Z]))\s*=\s*[-+0-9a-zA-Z\s*/^().]+',
     caseSensitive: false,
-  ).firstMatch(normalized);
+  );
+  final matches = formulaPattern.allMatches(normalized).toList();
+  final match = matches.cast<RegExpMatch?>().firstWhere(
+    (candidate) => candidate?.group(0)?.contains('^2') == true,
+    orElse: () => matches.isEmpty ? null : matches.first,
+  );
   if (match == null) return null;
-  return match.group(0)?.trim();
+  final raw = match.group(0)?.trim();
+  if (raw == null || raw.isEmpty) return null;
+  final variable = match.group(2)?.toLowerCase();
+  final parts = raw.split('=');
+  if (parts.length < 2) return raw;
+  final sourceVariable = variable ?? 'x';
+  final rhs = parts
+      .sublist(1)
+      .join('=')
+      .split(RegExp(r'[,;?]|\bonde\b|\bwhere\b', caseSensitive: false))
+      .first
+      .trim()
+      ._leadingFormulaExpression(sourceVariable)
+      .replaceAll(RegExp(sourceVariable, caseSensitive: false), 'x')
+      .replaceAllMapped(
+        RegExp(r'(\d)\s*x', caseSensitive: false),
+        (match) => '${match.group(1)}*x',
+      );
+  if (variable != null && variable != 'x') return 'y = $rhs';
+  return '${parts.first.trim()} = $rhs';
+}
+
+extension _FormulaString on String {
+  String _leadingFormulaExpression(String variable) {
+    final buffer = StringBuffer();
+    for (var i = 0; i < length; i += 1) {
+      final char = this[i];
+      final lower = char.toLowerCase();
+      final allowed =
+          RegExp(r'[0-9\s+\-*/^().,]').hasMatch(char) ||
+          lower == variable.toLowerCase();
+      if (!allowed) break;
+      buffer.write(char);
+    }
+    return buffer.toString().trim();
+  }
+}
+
+bool _containsQuadraticFormula(String text) {
+  final normalized = text
+      .toLowerCase()
+      .replaceAll('²', '^2')
+      .replaceAll('−', '-');
+  return RegExp(
+    r'\b[a-z](?:\s*\(\s*[a-z]\s*\))?\s*=\s*[^|.;?]*\^2',
+  ).hasMatch(normalized);
 }
 
 num? _extractAngle(String text) {

@@ -2927,6 +2927,51 @@ void main() {
   );
 
   test(
+    'deterministic graph stays local even when visual request is rich',
+    () async {
+      final client = FakeImageClient();
+      final router = CapturingVisualRouterClient(
+        result: const VisualN3Result(
+          verdict: VisualVerdict.svg,
+          reason: 'N3_SHOULD_NOT_BE_NEEDED_FOR_EXACT_GRAPH',
+          svgDataUrl: 'data:image/svg+xml;utf8,%3Csvg%3Ebad%3C%2Fsvg%3E',
+        ),
+      );
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: router,
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'essential',
+          topic: 'função quadrática',
+          visualType: 'graph',
+          keyElements: [
+            'coeficiente a',
+            'coeficiente b',
+            'coeficiente c',
+            'vértice',
+            'intercepto',
+          ],
+          complexity: 'high',
+          highlightFocus: 'mostrar a parábola exata sem alterar coeficientes',
+          imagePrompt: 'desenhe h(t) = -2t^2 + 8t + 10 com vértice e eixos',
+        ),
+        lessonKey: 'deterministic-rich-graph',
+        allowPaidImages: true,
+        acceptedOfferId: 'offer-should-not-be-used',
+      );
+
+      expect(result.source, 'local_software');
+      expect(Uri.decodeFull(result.displayUrl!), contains('-2·x² + 8·x + 10'));
+      expect(router.calls, 0);
+      expect(client.calls, 0);
+    },
+  );
+
+  test(
     'formula without math_template renders local SVG before paid offer',
     () async {
       final client = FakeImageClient();
@@ -2951,6 +2996,41 @@ void main() {
       expect(result.source, 'local_software');
       expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
       expect(Uri.decodeFull(result.displayUrl!), contains('x²'));
+      expect(client.calls, 0);
+    },
+  );
+
+  test(
+    'physics height function h(t) renders exact local quadratic SVG before paid offer',
+    () async {
+      final client = FakeImageClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: const ThrowingVisualRouterClient(),
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'important',
+          topic: 'apoio visual',
+          visualType: 'graph',
+          imagePrompt:
+              'A altura h(t) = -2t^2 + 8t + 10 descreve uma bola lançada '
+              'para cima. Mostre o gráfico altura por tempo e a altura inicial.',
+        ),
+        lessonKey: 'physics-height-ht',
+        allowPaidImages: true,
+        acceptedOfferId: null,
+      );
+
+      expect(result.source, 'local_software');
+      expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+      final decoded = Uri.decodeFull(result.displayUrl!);
+      expect(decoded, contains('x²'));
+      expect(decoded, contains('-2'));
+      expect(decoded, contains('+ 8'));
+      expect(decoded, contains('+ 10'));
       expect(client.calls, 0);
     },
   );

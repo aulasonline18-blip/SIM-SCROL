@@ -240,11 +240,13 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
 
     final enrichedTopic = _joinVisualContext([trigger.topic, params.item]);
     final enrichedPrompt = _joinVisualContext([
-      trigger.imagePrompt,
       lessonText,
-    ], maxChars: 1400);
-    final inferredVisualType =
-        trigger.visualType ?? _inferVisualTypeFromLessonText(lessonText);
+      trigger.imagePrompt,
+    ], maxChars: 1800);
+    final inferredVisualType = _resolveVisualTypeFromLessonText(
+      current: trigger.visualType,
+      lessonText: lessonText,
+    );
 
     return trigger.copyWith(
       topic: enrichedTopic.isEmpty ? null : enrichedTopic,
@@ -473,6 +475,54 @@ String? _inferVisualTypeFromLessonText(String text) {
     return 'comparison';
   }
   return null;
+}
+
+String? _resolveVisualTypeFromLessonText({
+  required String? current,
+  required String lessonText,
+}) {
+  final inferred = _inferVisualTypeFromLessonText(lessonText);
+  if (inferred == null) return current;
+  final currentType = current?.trim().toLowerCase();
+  if (currentType == null || currentType.isEmpty) return inferred;
+  if (inferred == 'graph' &&
+      _isGenericOrAiVisualType(currentType) &&
+      _lessonTextHasGraphEvidence(lessonText)) {
+    return inferred;
+  }
+  return current;
+}
+
+bool _isGenericOrAiVisualType(String value) {
+  return const {
+    'ai',
+    'image',
+    'photo',
+    'realistic',
+    'illustration',
+    'diagram',
+    'generic',
+    'anatomy',
+  }.contains(value);
+}
+
+bool _lessonTextHasGraphEvidence(String text) {
+  final normalized = text
+      .toLowerCase()
+      .replaceAll('²', '^2')
+      .replaceAll('−', '-');
+  return RegExp(
+        r'\b[a-z](?:\s*\(\s*[a-z]\s*\))?\s*=\s*[^|.;?]*\^2',
+      ).hasMatch(normalized) ||
+      [
+        'função',
+        'funcao',
+        'parábola',
+        'parabola',
+        'gráfico',
+        'grafico',
+        'eixo',
+      ].any(normalized.contains);
 }
 
 String _stableOfferId(String lessonKey, String prompt) {

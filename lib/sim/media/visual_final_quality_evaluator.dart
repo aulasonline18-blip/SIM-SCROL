@@ -57,6 +57,17 @@ class VisualFinalQualityEvaluator {
     final focusCovered = _focusCovered(svg, request.highlightFocus);
     final textNodes = critique.textNodeCount;
 
+    if (_isDeterministicSvgSource(source) &&
+        _hasDeterministicVisualEvidence(request)) {
+      return VisualFinalQualityResult(
+        action: VisualFinalQualityAction.accepted,
+        reason: 'final_accepted_deterministic_visual',
+        coveredKeyElements: covered,
+        requiredKeyElements: keyElements.length,
+        focusCovered: focusCovered,
+      );
+    }
+
     if (keyElements.isNotEmpty) {
       final minimum = _minimumKeyCoverage(keyElements.length, level);
       if (covered < minimum) {
@@ -174,13 +185,63 @@ class VisualFinalQualityEvaluator {
     PedagogicalVisualLevelProfile level,
     String source,
   ) {
-    if (source != 'local_software' && source != 'n3_software') return false;
+    if (!source.startsWith('local_software') &&
+        !source.startsWith('n3_software')) {
+      return false;
+    }
     if (level.level != PedagogicalVisualLevel.advanced &&
         level.level != PedagogicalVisualLevel.examPrep) {
       return false;
     }
     if (keyCount < 5) return false;
     return textNodes < 3;
+  }
+
+  bool _isDeterministicSvgSource(String source) {
+    return const {
+      'local_software:LinearRenderer',
+      'local_software:QuadraticRenderer',
+      'local_software:KinematicsGraphRenderer',
+      'local_software:ForceDiagramRenderer',
+      'local_software:CircuitRenderer',
+      'local_software:ChemistryReactionRenderer',
+      'local_software:SyntaxTreeRenderer',
+      'math_template',
+    }.contains(source);
+  }
+
+  bool _hasDeterministicVisualEvidence(SoftwareVisualRequest request) {
+    final text = _norm(
+      [
+        request.topic,
+        request.visualType,
+        request.imagePrompt,
+        request.highlightFocus,
+        ...request.keyElements,
+      ].whereType<String>().join(' '),
+    );
+    return _hasAny(text, const [
+      'f(x)',
+      'h(t)',
+      's(t)',
+      'v(t)',
+      'x²',
+      'x^2',
+      't²',
+      't^2',
+      'função',
+      'funcao',
+      'gráfico',
+      'grafico',
+      'parábola',
+      'parabola',
+      'força',
+      'forca',
+      'circuito',
+      'reação',
+      'reacao',
+      'sintaxe',
+    ]);
   }
 
   bool _excessiveUselessText(

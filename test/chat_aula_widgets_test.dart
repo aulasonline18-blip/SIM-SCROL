@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/features/classroom/aula_widgets.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_screen.dart';
@@ -680,6 +681,56 @@ void main() {
       expect(imageIndex, greaterThan(explanationIndex));
       expect(questionIndex, greaterThan(imageIndex));
       expect(optionsIndex, greaterThan(questionIndex));
+    },
+  );
+
+  testWidgets(
+    'chat classroom renders ready local SVG image on the lesson screen without paid offer',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 820));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..lessonLocalId = 'lesson-chat-ready-svg'
+        ..route = '/cyber/aula'
+        ..aulaSnapshot = _chatSnapshot(
+          phase: const ClassroomPhase.reading(),
+          imagem: _svgDataUrl(),
+          explanation: 'Explicacao com grafico local pronto.',
+          question: 'Qual ponto o grafico destaca?',
+        );
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: session)),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(find.byType(ChatAulaTimeline), findsOneWidget);
+      expect(find.text('Explicacao com grafico local pronto.'), findsOneWidget);
+      expect(find.byType(LessonMediaImageView), findsOneWidget);
+      expect(find.byType(SvgPicture), findsOneWidget);
+      expect(find.text('Qual ponto o grafico destaca?'), findsOneWidget);
+      expect(
+        find.text(
+          'Esta parte da aula tem uma imagem criada por inteligência artificial.',
+          skipOffstage: false,
+        ),
+        findsNothing,
+      );
+
+      final timeline = tester.widget<ChatAulaTimeline>(
+        find.byType(ChatAulaTimeline),
+      );
+      final kinds = timeline.messages.map((message) => message.kind).toList();
+      final explanationIndex = kinds.indexOf(ChatLessonMessageKind.explanation);
+      final imageIndex = kinds.indexOf(ChatLessonMessageKind.image);
+      final questionIndex = kinds.indexOf(ChatLessonMessageKind.question);
+      expect(imageIndex, greaterThan(explanationIndex));
+      expect(questionIndex, greaterThan(imageIndex));
     },
   );
 
