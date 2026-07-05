@@ -26,6 +26,17 @@ class SimResponsiveMaxWidth {
   static const double largeFrame = 1200;
 }
 
+class SimResponsiveDensity {
+  const SimResponsiveDensity._();
+
+  static const double touchMin = 48;
+  static const double touchGap = 8;
+  static const double gapCompact = 12;
+  static const double gapMedium = 16;
+  static const double gapExpanded = 20;
+  static const double gapLarge = 24;
+}
+
 class SimResponsive {
   const SimResponsive._();
 
@@ -110,6 +121,8 @@ class SimResponsive {
     );
   }
 
+  static EdgeInsets paddingFor(double width) => pagePaddingFor(width);
+
   static EdgeInsets pagePaddingFor(double width) {
     return switch (widthClassFor(width)) {
       SimWindowClass.compact => const EdgeInsets.symmetric(
@@ -129,6 +142,82 @@ class SimResponsive {
     };
   }
 
+  static EdgeInsets cardPaddingFor(double width) {
+    return switch (widthClassFor(width)) {
+      SimWindowClass.compact => const EdgeInsets.all(16),
+      SimWindowClass.medium => const EdgeInsets.all(20),
+      SimWindowClass.expanded => const EdgeInsets.all(24),
+      SimWindowClass.large ||
+      SimWindowClass.extraLarge => const EdgeInsets.all(28),
+    };
+  }
+
+  static double cardMaxWidthFor(double width) {
+    return contentMaxWidthFor(
+      width,
+      medium: SimResponsiveMaxWidth.text,
+      expanded: SimResponsiveMaxWidth.page,
+      large: SimResponsiveMaxWidth.page,
+    );
+  }
+
+  static double gapFor(double width) {
+    return switch (widthClassFor(width)) {
+      SimWindowClass.compact => SimResponsiveDensity.gapCompact,
+      SimWindowClass.medium => SimResponsiveDensity.gapMedium,
+      SimWindowClass.expanded => SimResponsiveDensity.gapExpanded,
+      SimWindowClass.large ||
+      SimWindowClass.extraLarge => SimResponsiveDensity.gapLarge,
+    };
+  }
+
+  static EdgeInsets buttonPaddingFor(double width) {
+    return switch (widthClassFor(width)) {
+      SimWindowClass.compact => const EdgeInsets.symmetric(horizontal: 16),
+      SimWindowClass.medium => const EdgeInsets.symmetric(horizontal: 20),
+      SimWindowClass.expanded ||
+      SimWindowClass.large ||
+      SimWindowClass.extraLarge => const EdgeInsets.symmetric(horizontal: 24),
+    };
+  }
+
+  static Size buttonMinimumSizeFor(double width) {
+    final horizontal = widthClassFor(width) == SimWindowClass.compact
+        ? SimResponsiveDensity.touchMin
+        : SimResponsiveDensity.touchMin + SimResponsiveDensity.gapMedium;
+    return Size(horizontal, SimResponsiveDensity.touchMin);
+  }
+
+  static EdgeInsets safePaddingFor(MediaQueryData mediaQuery) {
+    return mediaQuery.padding;
+  }
+
+  static EdgeInsets keyboardInsetsFor(MediaQueryData mediaQuery) {
+    return mediaQuery.viewInsets;
+  }
+
+  static EdgeInsets safeKeyboardPaddingFor(MediaQueryData mediaQuery) {
+    final safe = safePaddingFor(mediaQuery);
+    final keyboard = keyboardInsetsFor(mediaQuery);
+    return safe.copyWith(
+      bottom: safe.bottom > keyboard.bottom ? safe.bottom : keyboard.bottom,
+    );
+  }
+
+  static Size visibleSizeFor(MediaQueryData mediaQuery) {
+    final safe = safePaddingFor(mediaQuery);
+    final keyboard = keyboardInsetsFor(mediaQuery);
+    final width = mediaQuery.size.width - safe.left - safe.right;
+    final bottomInset = safe.bottom > keyboard.bottom
+        ? safe.bottom
+        : keyboard.bottom;
+    final height = mediaQuery.size.height - safe.top - bottomInset;
+    return Size(
+      width.clamp(0, double.infinity),
+      height.clamp(0, double.infinity),
+    );
+  }
+
   static SimResponsiveData fromContext(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final media = MediaQuery.of(context);
@@ -137,7 +226,9 @@ class SimResponsive {
       widthClass: widthClassFor(size.width),
       heightClass: heightClassFor(size.height),
       padding: media.padding,
+      safeKeyboardPadding: safeKeyboardPaddingFor(media),
       viewInsets: media.viewInsets,
+      visibleSize: visibleSizeFor(media),
       textScaler: media.textScaler,
       disableAnimations: media.disableAnimations,
     );
@@ -150,7 +241,9 @@ class SimResponsiveData {
     required this.widthClass,
     required this.heightClass,
     required this.padding,
+    required this.safeKeyboardPadding,
     required this.viewInsets,
+    required this.visibleSize,
     required this.textScaler,
     required this.disableAnimations,
   });
@@ -159,7 +252,9 @@ class SimResponsiveData {
   final SimWindowClass widthClass;
   final SimWindowClass heightClass;
   final EdgeInsets padding;
+  final EdgeInsets safeKeyboardPadding;
   final EdgeInsets viewInsets;
+  final Size visibleSize;
   final TextScaler textScaler;
   final bool disableAnimations;
 

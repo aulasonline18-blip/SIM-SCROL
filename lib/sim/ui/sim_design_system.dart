@@ -43,7 +43,7 @@ class SimSpacing {
   static const double lg = 20;
   static const double xl = 24;
   static const double xxl = 32;
-  static const double touchGap = xs;
+  static const double touchGap = SimResponsiveDensity.touchGap;
 }
 
 class SimRadius {
@@ -59,8 +59,8 @@ class SimTouch {
   const SimTouch._();
 
   static const double wcagMinimum = 24;
-  static const double recommended = 48;
-  static const double min = 48;
+  static const double recommended = SimResponsiveDensity.touchMin;
+  static const double min = SimResponsiveDensity.touchMin;
   static const double icon = 44;
   static const double spacing = SimSpacing.touchGap;
 }
