@@ -14,6 +14,7 @@ import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
+import 'package:sim_mobile/sim/media/lesson_visual_pipeline.dart';
 import 'package:sim_mobile/sim/lesson/student_lesson_material_service.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/live_entry_state.dart';
@@ -69,6 +70,46 @@ class FakeT02Client implements T02LessonClient {
   @override
   Future<T02LessonMaterial> placement(T02LessonRequest request) =>
       completeLesson(request);
+}
+
+class _StaleThenSvgVisualPipeline extends LessonVisualPipeline {
+  _StaleThenSvgVisualPipeline({required this.releaseFirst})
+    : super(
+        imageClient: const FakeNoopImageClient(),
+        visualRouterClient: const FakeVisualRouterClient(),
+      );
+
+  final Completer<void> releaseFirst;
+  int calls = 0;
+  final prompts = <String?>[];
+
+  @override
+  Future<LessonVisualResult> resolveVisual({
+    required LessonVisualTrigger trigger,
+    required String lessonKey,
+    String? stableLang,
+    String? academicLevel,
+    bool allowPaidImages = false,
+    String? acceptedOfferId,
+    String? idempotencyKey,
+  }) async {
+    calls += 1;
+    prompts.add(trigger.imagePrompt);
+    if (calls == 1) {
+      await releaseFirst.future;
+      return const LessonVisualResult(
+        svg: null,
+        dataUrl: null,
+        source: 'skip_no_offer',
+      );
+    }
+    return const LessonVisualResult(
+      svg:
+          'data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%2010%2010%22%3E%3Ctext%3Equadratic%3C%2Ftext%3E%3C%2Fsvg%3E',
+      dataUrl: null,
+      source: 'local_software',
+    );
+  }
 }
 
 class AuditT00Client implements T00BootstrapClient {
@@ -357,6 +398,104 @@ void main() {
       expect(rendered, startsWith('data:image/svg+xml;utf8,'));
       expect(cache.peek(key)?.imagem, rendered);
       expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
+    },
+  );
+
+  test(
+    'LessonOrchestrator ignores stale image decision after lesson content refresh',
+    () async {
+      final staleTrigger = <String, dynamic>{
+        'needs_image': true,
+        'pedagogical_need': 'important',
+        'topic': 'foto realista',
+        'visual_type': 'photo',
+        'image_prompt': 'foto realista de apoio',
+      };
+      final freshTrigger = <String, dynamic>{
+        'needs_image': true,
+        'pedagogical_need': 'important',
+        'topic': 'apoio visual',
+        'image_prompt': 'criar imagem de apoio para a aula',
+      };
+      const params = CompleteLessonParams(
+        lessonLocalId: 'cyber-stale-image-decision',
+        item: 'Função quadrática',
+        lang: 'pt-BR',
+        academic: 'ensino médio',
+        layer: LessonLayer.l1,
+        mode: LessonMode.session,
+        marker: 'M5',
+      );
+      final key = lessonKeyFor(params);
+      final cache = LessonMaterialCache();
+      cache.put(
+        key,
+        CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'material antigo sem contexto suficiente',
+            question: 'Pergunta antiga',
+            options: const {
+              AnswerLetter.A: 'A',
+              AnswerLetter.B: 'B',
+              AnswerLetter.C: 'C',
+            },
+            correctAnswer: AnswerLetter.A,
+            visualTrigger: staleTrigger,
+          ),
+          imagem: null,
+          audioText: 'material antigo',
+        ),
+      );
+      final bus = LessonEventBus();
+      final releaseFirst = Completer<void>();
+      final pipeline = _StaleThenSvgVisualPipeline(releaseFirst: releaseFirst);
+      final t02 = FakeT02Client(
+        visualTrigger: freshTrigger,
+        explanation:
+            'Para achar o cruzamento com o eixo Y em uma função quadrática, usamos x = 0.',
+        question:
+            'Dada a função quadrática f(x) = 3x² + 4x - 7, qual é o ponto onde a parábola cruza o eixo Y?',
+        options: const {
+          AnswerLetter.A: '(0, -7)',
+          AnswerLetter.B: '(-7, 0)',
+          AnswerLetter.C: '(0, 4)',
+        },
+      );
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: cache,
+        bus: bus,
+        visualPipeline: pipeline,
+      );
+      final offers = <LessonPaidImageOffer?>[];
+      final unsubscribeOffer = bus.subscribePaidImageOffer(key, offers.add);
+      addTearDown(unsubscribeOffer);
+      final updates = <CompleteLesson>[];
+      final unsubscribeLesson = bus.subscribe(key, updates.add);
+      addTearDown(unsubscribeLesson);
+
+      await orchestrator.prefetchCompleteLesson(params);
+      await Future<void>.delayed(Duration.zero);
+      expect(pipeline.calls, 1);
+
+      await orchestrator.prefetchCompleteLesson(
+        params,
+        priority: 'active',
+        forceRefresh: true,
+      );
+      expect(t02.calls, 1);
+      expect(cache.peek(key)?.conteudo.question, contains('função quadrática'));
+
+      releaseFirst.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(pipeline.calls, 2);
+      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
+      expect(cache.peek(key)?.conteudo.question, contains('função quadrática'));
+      expect(cache.peek(key)?.imagem, startsWith('data:image/svg+xml;utf8,'));
+      expect(updates.last.imagem, cache.peek(key)?.imagem);
+      expect(pipeline.prompts.first, contains('Pergunta antiga'));
+      expect(pipeline.prompts.last, contains('função quadrática'));
     },
   );
 

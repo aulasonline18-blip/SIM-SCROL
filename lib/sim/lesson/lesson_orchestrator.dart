@@ -1,4 +1,6 @@
 // MIRROR OF: src/cyber/lesson-orchestrator.ts (Web, source of truth)
+import 'dart:convert';
+
 import '../media/lesson_visual_pipeline.dart';
 import '../media/lesson_paid_image_offer.dart';
 import '../modules/pedagogical_module_contracts.dart';
@@ -26,8 +28,9 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
   final Map<String, Future<CompleteLesson>> _textInflight = {};
   final Map<String, _PaidPending> _paidPending = {};
   final Map<String, Future<String?>> _paidInflight = {};
-  final Map<String, Future<void>> _imageInflight = {};
-  final Set<String> _declinedKeys = {};
+  final Map<String, _ImageInflight> _imageInflight = {};
+  final Map<String, int> _imageEpochByKey = {};
+  final Map<String, String> _declinedImageSignaturesByKey = {};
   final ImageSequentialQueue _imageQueue = ImageSequentialQueue();
   final BackgroundTextSemaphore _bgText = BackgroundTextSemaphore();
   Future<void> _lastLessonFullyComplete = Future.value();
@@ -130,20 +133,46 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
 
   void _scheduleImage(CompleteLessonParams params, CompleteLesson lesson) {
     final key = lessonKeyFor(params);
-    if (_imageInflight.containsKey(key)) return;
+    final signature = _lessonContentSignature(lesson);
+    final existing = _imageInflight[key];
+    if (existing != null && existing.signature == signature) return;
+
+    final pending = _paidPending[key];
+    final pendingChanged = pending != null && pending.signature != signature;
+    if (pendingChanged) {
+      _paidPending.remove(key);
+    }
+    final declinedSignature = _declinedImageSignaturesByKey[key];
+    if (declinedSignature != null && declinedSignature != signature) {
+      _declinedImageSignaturesByKey.remove(key);
+    }
+    if (pending == null || pendingChanged) {
+      bus.clearPaidImageOffer(key);
+    }
+
+    final epoch = (_imageEpochByKey[key] ?? 0) + 1;
+    _imageEpochByKey[key] = epoch;
     final future = _imageQueue
-        .run(() => _fetchImage(params, lesson))
+        .run(() => _fetchImage(params, lesson, signature, epoch))
         .catchError((_) {});
-    _imageInflight[key] = future;
-    future.whenComplete(() => _imageInflight.remove(key));
+    _imageInflight[key] = _ImageInflight(signature: signature, epoch: epoch);
+    future.whenComplete(() {
+      final current = _imageInflight[key];
+      if (current != null && current.epoch == epoch) {
+        _imageInflight.remove(key);
+      }
+    });
   }
 
   // D2.1: image pipeline — central funnel: software first, paid offer only.
   Future<void> _fetchImage(
     CompleteLessonParams params,
     CompleteLesson lesson,
+    String signature,
+    int epoch,
   ) async {
     final key = lessonKeyFor(params);
+    if (!_isCurrentImageDecision(key, signature, epoch)) return;
     final vt = lesson.conteudo.visualTrigger;
     final trigger = _enrichVisualTrigger(
       LessonVisualTrigger.fromJson(vt),
@@ -162,6 +191,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       allowPaidImages: true,
       acceptedOfferId: null,
     );
+    if (!_isCurrentImageDecision(key, signature, epoch)) return;
     if (result.hasImage) {
       _publishImage(key, lesson, result.displayUrl!);
       return;
@@ -174,6 +204,23 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
         source: result.source,
       );
     }
+  }
+
+  bool _isCurrentImageDecision(String key, String signature, int epoch) {
+    final current = _imageInflight[key];
+    if (current == null ||
+        current.epoch != epoch ||
+        current.signature != signature) {
+      return false;
+    }
+    final cached = cache.peek(key);
+    if (cached == null) return true;
+    return _lessonContentSignature(cached) == signature;
+  }
+
+  String? _currentContentSignature(String key) {
+    final cached = cache.peek(key);
+    return cached == null ? null : _lessonContentSignature(cached);
   }
 
   LessonVisualTrigger _enrichVisualTrigger(
@@ -223,7 +270,12 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     required LessonVisualTrigger trigger,
     required String source,
   }) {
-    if (_declinedKeys.contains(key) || _paidPending.containsKey(key)) return;
+    final currentSignature = _currentContentSignature(key);
+    if ((currentSignature != null &&
+            _declinedImageSignaturesByKey[key] == currentSignature) ||
+        _paidPending.containsKey(key)) {
+      return;
+    }
     final prompt = visualPipeline.buildPromptForTrigger(
       topic: trigger.topic ?? params.item,
       trigger: trigger,
@@ -254,6 +306,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       trigger: trigger,
       stableLang: params.lang,
       source: source,
+      signature: currentSignature,
     );
     _publishPendingPaidImageOffer(key);
   }
@@ -262,7 +315,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
   Future<void> acceptPaidImageOffer(String lessonKey) async {
     final pending = _paidPending.remove(lessonKey);
     if (pending == null) return;
-    _declinedKeys.remove(lessonKey);
+    _declinedImageSignaturesByKey.remove(lessonKey);
     final existing = _paidInflight[lessonKey];
     if (existing != null) {
       await existing;
@@ -298,18 +351,23 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
 
   @override
   void declinePaidImageOffer(String lessonKey) {
-    _declinedKeys.add(lessonKey);
+    _declinedImageSignaturesByKey[lessonKey] =
+        _currentContentSignature(lessonKey) ?? '';
     bus.clearPaidImageOffer(lessonKey);
   }
 
   void resetDeclinedPaidImageOffer(String lessonKey) {
-    _declinedKeys.remove(lessonKey);
+    _declinedImageSignaturesByKey.remove(lessonKey);
     _publishPendingPaidImageOffer(lessonKey);
   }
 
   void _publishPendingPaidImageOffer(String lessonKey) {
     final pending = _paidPending[lessonKey];
-    if (pending == null || _declinedKeys.contains(lessonKey)) return;
+    if (pending == null ||
+        (pending.signature != null &&
+            _declinedImageSignaturesByKey[lessonKey] == pending.signature)) {
+      return;
+    }
     bus.notifyPaidImageOffer(
       lessonKey,
       LessonPaidImageOffer(
@@ -429,6 +487,10 @@ String _stableHash(String input) {
   return (hash & 0xffffffff).toRadixString(36);
 }
 
+String _lessonContentSignature(CompleteLesson lesson) {
+  return jsonEncode(lesson.conteudo.toJson());
+}
+
 class _PaidPending {
   const _PaidPending({
     required this.approvedPrompt,
@@ -437,6 +499,7 @@ class _PaidPending {
     required this.trigger,
     required this.stableLang,
     required this.source,
+    required this.signature,
   });
 
   final String approvedPrompt;
@@ -445,6 +508,14 @@ class _PaidPending {
   final LessonVisualTrigger trigger;
   final String stableLang;
   final String source;
+  final String? signature;
+}
+
+class _ImageInflight {
+  const _ImageInflight({required this.signature, required this.epoch});
+
+  final String signature;
+  final int epoch;
 }
 
 JsonMap preparedMaterialFromLesson({
