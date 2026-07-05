@@ -7,6 +7,7 @@ import '../../shared/widgets/shared_widgets.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
+import '../../sim/ui/responsive/sim_responsive.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/doubt_progress_bar.dart';
 import '../session/lab_session.dart';
@@ -59,6 +60,10 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   bool _showCurrentButton = false;
   int _unreadWhileAway = 0;
   String _messageSignature = '';
+  String? _manualAnchorMessageId;
+  double _manualAnchorAlignment = 0.12;
+  bool _restoreAfterMetricsChangeScheduled = false;
+  bool _programmaticScrollInProgress = false;
 
   @override
   void initState() {
@@ -102,6 +107,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
     final nearEnd = position.maxScrollExtent - position.pixels <= 96;
+    if (!nearEnd) _captureVisibleAnchor();
     if (nearEnd != _autoFollow || _showCurrentButton == nearEnd) {
       setState(() {
         _autoFollow = nearEnd;
@@ -123,6 +129,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
       return;
     }
+    _programmaticScrollInProgress = true;
     final target = _targetMessage();
     final targetKey = target == null ? null : _messageKeys[target.message.id];
     final targetContext = targetKey?.currentContext;
@@ -167,11 +174,16 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       _autoFollow = true;
       _showCurrentButton = false;
       _unreadWhileAway = 0;
+      _manualAnchorMessageId = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _programmaticScrollInProgress = false;
     });
   }
 
   Future<void> _scrollByViewport(double factor) async {
     if (!_scrollController.hasClients) return;
+    _programmaticScrollInProgress = true;
     final position = _scrollController.position;
     final target = (position.pixels + (position.viewportDimension * factor))
         .clamp(0.0, position.maxScrollExtent);
@@ -180,15 +192,27 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       duration: const Duration(milliseconds: 240),
       curve: Curves.easeOutCubic,
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _programmaticScrollInProgress = false;
+    });
   }
 
   Future<void> _scrollToTranscriptStart() async {
     if (!_scrollController.hasClients) return;
+    _programmaticScrollInProgress = true;
     await _scrollController.animateTo(
       0,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
     );
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    _manualAnchorMessageId = widget.messages.isEmpty
+        ? null
+        : widget.messages.first.id;
+    _manualAnchorAlignment = 0.05;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _programmaticScrollInProgress = false;
+    });
   }
 
   double _fallbackOffsetFor(
@@ -241,6 +265,10 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   void _retainMessageKeys(List<ChatLessonMessage> messages) {
     final ids = messages.map((message) => message.id).toSet();
     _messageKeys.removeWhere((id, _) => !ids.contains(id));
+    if (_manualAnchorMessageId != null &&
+        !ids.contains(_manualAnchorMessageId)) {
+      _manualAnchorMessageId = null;
+    }
   }
 
   GlobalKey _keyForMessage(ChatLessonMessage message) {
@@ -310,16 +338,81 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     return _ChatScrollTarget.forMessage(latestTurnStart);
   }
 
+  void _captureVisibleAnchor() {
+    if (!mounted || widget.messages.isEmpty) return;
+    final viewportBox = context.findRenderObject();
+    if (viewportBox is! RenderBox || !viewportBox.attached) return;
+    final viewportTop = viewportBox.localToGlobal(Offset.zero).dy;
+    final viewportHeight = viewportBox.size.height;
+    if (viewportHeight <= 0) return;
+
+    String? bestId;
+    double? bestDistance;
+    double bestAlignment = 0.12;
+    for (final message in widget.messages) {
+      final box = _messageKeys[message.id]?.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached || !box.hasSize) continue;
+      final messageTop = box.localToGlobal(Offset.zero).dy;
+      final messageBottom = messageTop + box.size.height;
+      final overlapsViewport =
+          messageBottom >= viewportTop &&
+          messageTop <= viewportTop + viewportHeight;
+      if (!overlapsViewport) continue;
+      final distance = (messageTop - viewportTop).abs();
+      if (bestDistance == null || distance < bestDistance) {
+        bestDistance = distance;
+        bestId = message.id;
+        bestAlignment = ((messageTop - viewportTop) / viewportHeight).clamp(
+          0.05,
+          0.72,
+        );
+      }
+    }
+    if (bestId == null) return;
+    _manualAnchorMessageId = bestId;
+    _manualAnchorAlignment = bestAlignment;
+  }
+
+  void _scheduleMetricsRestore() {
+    if (_restoreAfterMetricsChangeScheduled) return;
+    _restoreAfterMetricsChangeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restoreAfterMetricsChangeScheduled = false;
+      if (!mounted || !_scrollController.hasClients) return;
+      if (_programmaticScrollInProgress) return;
+      if (_autoFollow) {
+        _scrollToCurrent(immediate: true);
+        return;
+      }
+      final anchorId = _manualAnchorMessageId;
+      final anchorContext = anchorId == null
+          ? null
+          : _messageKeys[anchorId]?.currentContext;
+      if (anchorContext == null || !anchorContext.mounted) {
+        _captureVisibleAnchor();
+        return;
+      }
+      Scrollable.ensureVisible(
+        anchorContext,
+        duration: Duration.zero,
+        alignment: _manualAnchorAlignment,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final width = MediaQuery.sizeOf(context).width;
-    final horizontalPadding = width >= 600 ? 24.0 : 16.0;
-    final contentMaxWidth = width >= 960
-        ? 680.0
-        : width >= 600
-        ? 620.0
-        : double.infinity;
+    final pagePadding = SimResponsive.pagePaddingFor(width);
+    final horizontalPadding = pagePadding.horizontal / 2;
+    final contentMaxWidth = SimResponsive.contentMaxWidthFor(
+      width,
+      medium: 620,
+      expanded: 680,
+      large: 680,
+    );
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.end): () {
@@ -344,93 +437,101 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
           hint: t('aula_conversation_keyboard_hint'),
           child: Stack(
             children: [
-              NotificationListener<SizeChangedLayoutNotification>(
+              NotificationListener<ScrollMetricsNotification>(
                 onNotification: (_) {
-                  if (_autoFollow) {
-                    WidgetsBinding.instance.addPostFrameCallback(
-                      (_) => _scrollToCurrent(),
-                    );
-                  }
+                  _scheduleMetricsRestore();
                   return false;
                 },
-                child: NotificationListener<UserScrollNotification>(
-                  onNotification: (notification) {
-                    if (notification.direction != ScrollDirection.idle) {
-                      final metrics = notification.metrics;
-                      final nearEnd =
-                          metrics.maxScrollExtent - metrics.pixels <= 96;
-                      if (!nearEnd && (_autoFollow || !_showCurrentButton)) {
-                        setState(() {
-                          _autoFollow = false;
-                          _showCurrentButton = true;
-                        });
-                      }
-                      return false;
-                    }
-                    _handleScroll();
+                child: NotificationListener<SizeChangedLayoutNotification>(
+                  onNotification: (_) {
                     return false;
                   },
-                  child: ListView(
-                    key: const Key('chat-aula-timeline'),
-                    controller: _scrollController,
-                    restorationId: 'chat-aula-timeline-scroll',
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.fromLTRB(
-                      horizontalPadding,
-                      widget.padding.top,
-                      horizontalPadding,
-                      widget.padding.bottom + bottomInset,
-                    ),
-                    children: [
-                      if (widget.messages.isEmpty)
-                        Center(
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: contentMaxWidth,
-                            ),
-                            child: const _ChatEmptyState(),
-                          ),
-                        )
-                      else
-                        for (
-                          var index = 0;
-                          index < widget.messages.length;
-                          index++
-                        ) ...[
-                          if (index > 0) const SizedBox(height: 10),
+                  child: NotificationListener<UserScrollNotification>(
+                    onNotification: (notification) {
+                      if (notification.direction != ScrollDirection.idle) {
+                        final metrics = notification.metrics;
+                        final nearEnd =
+                            metrics.maxScrollExtent - metrics.pixels <= 96;
+                        if (!nearEnd && (_autoFollow || !_showCurrentButton)) {
+                          _captureVisibleAnchor();
+                          setState(() {
+                            _autoFollow = false;
+                            _showCurrentButton = true;
+                          });
+                        }
+                        return false;
+                      }
+                      _handleScroll();
+                      return false;
+                    },
+                    child: ListView(
+                      key: const Key('chat-aula-timeline'),
+                      controller: _scrollController,
+                      restorationId: 'chat-aula-timeline-scroll',
+                      scrollCacheExtent: ScrollCacheExtent.pixels(
+                        (MediaQuery.sizeOf(context).height * 2).clamp(
+                          600.0,
+                          1400.0,
+                        ),
+                      ),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: EdgeInsets.fromLTRB(
+                        horizontalPadding,
+                        widget.padding.top,
+                        horizontalPadding,
+                        widget.padding.bottom + bottomInset,
+                      ),
+                      children: [
+                        if (widget.messages.isEmpty)
                           Center(
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
                                 maxWidth: contentMaxWidth,
                               ),
-                              child: SizeChangedLayoutNotifier(
-                                child: ChatAulaMessageBubble(
-                                  key: _keyForMessage(widget.messages[index]),
-                                  message: widget.messages[index],
-                                  semanticIndex: index,
-                                  session: widget.session,
-                                  onChooseAnswer: widget.onChooseAnswer,
-                                  onSignal: widget.onSignal,
-                                  onRetry: widget.onRetry,
-                                  onNext: widget.onNext,
-                                  onOpenDoubt: widget.onOpenDoubt,
-                                  pendingActionKeys: widget.pendingActionKeys,
-                                  onImageSettled: () {
-                                    widget.onImageSettled?.call();
-                                    if (_autoFollow) {
-                                      WidgetsBinding.instance
-                                          .addPostFrameCallback(
-                                            (_) => _scrollToCurrent(),
-                                          );
-                                    }
-                                  },
+                              child: const _ChatEmptyState(),
+                            ),
+                          )
+                        else
+                          for (
+                            var index = 0;
+                            index < widget.messages.length;
+                            index++
+                          ) ...[
+                            if (index > 0) const SizedBox(height: 10),
+                            Center(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: contentMaxWidth,
+                                ),
+                                child: SizeChangedLayoutNotifier(
+                                  child: ChatAulaMessageBubble(
+                                    key: _keyForMessage(widget.messages[index]),
+                                    message: widget.messages[index],
+                                    semanticIndex: index,
+                                    session: widget.session,
+                                    onChooseAnswer: widget.onChooseAnswer,
+                                    onSignal: widget.onSignal,
+                                    onRetry: widget.onRetry,
+                                    onNext: widget.onNext,
+                                    onOpenDoubt: widget.onOpenDoubt,
+                                    pendingActionKeys: widget.pendingActionKeys,
+                                    onImageSettled: () {
+                                      widget.onImageSettled?.call();
+                                      if (_autoFollow) {
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback(
+                                              (_) => _scrollToCurrent(),
+                                            );
+                                      }
+                                    },
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                    ],
+                          ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1366,15 +1467,6 @@ class _InlineSignalChoices extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    final compact = MediaQuery.sizeOf(context).width < 380;
-    final buttons = [
-      for (var i = 0; i < signals.length; i++)
-        _SignalButton(
-          signal: signals[i],
-          busy: pendingActionKeys.contains('signal'),
-          onPressed: () => onSignal(signals[i].value),
-        ),
-    ];
     return Container(
       key: const Key('inline-signal-choices'),
       margin: const EdgeInsets.only(top: 8, left: 12, bottom: 10),
@@ -1382,23 +1474,11 @@ class _InlineSignalChoices extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(left: BorderSide(color: palette.primary, width: 1)),
       ),
-      child: compact
-          ? Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final button in buttons)
-                  SizedBox(width: 96, child: button),
-              ],
-            )
-          : Row(
-              children: [
-                for (var i = 0; i < buttons.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  Expanded(child: buttons[i]),
-                ],
-              ],
-            ),
+      child: _SignalButtonGroup(
+        signals: signals,
+        busy: pendingActionKeys.contains('signal'),
+        onSignal: onSignal,
+      ),
     );
   }
 }
@@ -1416,36 +1496,75 @@ class _ChatSignals extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 380;
-    final buttons = [
-      for (final signal in message.signals)
-        _SignalButton(
-          signal: signal,
-          busy: pendingActionKeys.contains('signal'),
-          onPressed: () => onSignal(signal.value),
-        ),
-    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (compact)
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final button in buttons) SizedBox(width: 96, child: button),
-            ],
-          )
-        else
-          Row(
+        _SignalButtonGroup(
+          signals: message.signals,
+          busy: pendingActionKeys.contains('signal'),
+          onSignal: onSignal,
+        ),
+      ],
+    );
+  }
+}
+
+class _SignalButtonGroup extends StatelessWidget {
+  const _SignalButtonGroup({
+    required this.signals,
+    required this.busy,
+    required this.onSignal,
+  });
+
+  final List<ChatLessonSignal> signals;
+  final bool busy;
+  final void Function(int value) onSignal;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final compact = SimResponsive.isCompact(
+          MediaQuery.sizeOf(context).width,
+        );
+        final minButtonWidth = compact ? 96.0 : 112.0;
+        final canUseRow =
+            !compact && available >= (signals.length * minButtonWidth) + 16;
+        final buttons = [
+          for (final signal in signals)
+            _SignalButton(
+              signal: signal,
+              busy: busy,
+              onPressed: () => onSignal(signal.value),
+            ),
+        ];
+        if (canUseRow) {
+          return Row(
             children: [
               for (var i = 0; i < buttons.length; i++) ...[
                 if (i > 0) const SizedBox(width: 8),
                 Expanded(child: buttons[i]),
               ],
             ],
-          ),
-      ],
+          );
+        }
+        final columns = available >= (minButtonWidth * 2) + 8 ? 2 : 1;
+        final buttonWidth = ((available - (8 * (columns - 1))) / columns).clamp(
+          minButtonWidth,
+          available,
+        );
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final button in buttons)
+              SizedBox(width: buttonWidth, child: button),
+          ],
+        );
+      },
     );
   }
 }
@@ -1511,9 +1630,7 @@ class _SignalButton extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   t(signal.labelKey),
-                  maxLines: 2,
                   textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
@@ -1652,8 +1769,7 @@ class _ChatActionButton extends StatelessWidget {
                   child: Text(
                     label,
                     textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    maxLines: 3,
                     style: TextStyle(
                       color: enabled && !busy ? foreground : palette.muted,
                       fontSize: 14,

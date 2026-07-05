@@ -8,6 +8,7 @@ import '../../core/utils/sim_constants.dart';
 import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/auxiliary/doubt_input_sheet.dart';
 import '../../sim/ui/sim_design_system.dart';
+import '../../sim/ui/responsive/sim_responsive.dart';
 import '../../sim/ui/sim_theme.dart';
 
 class DoubtInputSheet extends StatefulWidget {
@@ -80,9 +81,11 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
     final media = MediaQuery.of(context);
+    final responsive = SimResponsive.fromContext(context);
     final bottomInset = media.viewInsets.bottom;
     final textLength = widget.controller.text.length;
     final maxHeight = media.size.height * (bottomInset > 0 ? 0.86 : 0.72);
+    final horizontalPadding = responsive.isCompact ? 16.0 : 20.0;
     return SafeArea(
       top: false,
       child: AnimatedPadding(
@@ -119,7 +122,12 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      18,
+                      horizontalPadding,
+                      16,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -285,20 +293,25 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                         const SizedBox(height: 14),
                         SizedBox(
                           width: double.infinity,
-                          height: 48,
-                          child: OutlinedButton(
-                            onPressed: widget.busy ? null : _submit,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: palette.text,
-                              side: BorderSide(color: palette.border),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minHeight: SimTouch.min,
                             ),
-                            child: Text(
-                              widget.busy ? 'Enviando...' : 'Enviar dúvida',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                            child: OutlinedButton(
+                              onPressed: widget.busy ? null : _submit,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: palette.text,
+                                side: BorderSide(color: palette.border),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                widget.busy ? 'Enviando...' : 'Enviar dúvida',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ),

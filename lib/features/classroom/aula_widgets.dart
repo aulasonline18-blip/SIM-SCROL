@@ -81,164 +81,227 @@ class AulaTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final fill = ((progress ?? 0) / 100).clamp(0.0, 1.0);
     final palette = SimThemeScope.paletteOf(context);
-    final compactTopBar = MediaQuery.sizeOf(context).width > 0;
-    final iconTouchSize = compactTopBar ? 38.0 : SimTouch.icon;
-    final edgeGap = compactTopBar ? 4.0 : 10.0;
-    final actionGap = compactTopBar ? 4.0 : 6.0;
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          padding: EdgeInsets.fromLTRB(
-            compactTopBar ? 8 : 12,
-            0,
-            compactTopBar ? 8 : 12,
-            12,
-          ),
-          decoration: BoxDecoration(
-            color: palette.surface.withValues(alpha: 0.96),
-            border: Border(bottom: BorderSide(color: palette.border, width: 1)),
-            boxShadow: [
-              BoxShadow(
-                color: palette.shadow,
-                blurRadius: 12,
-                offset: Offset(0, 2),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final compactTopBar = !SimBreakpoints.isTablet(width);
+        final veryCompactTopBar = width < 360;
+        final iconTouchSize = SimTouch.min;
+        final edgeGap = veryCompactTopBar
+            ? 2.0
+            : compactTopBar
+            ? 4.0
+            : 10.0;
+        final actionGap = veryCompactTopBar
+            ? 2.0
+            : compactTopBar
+            ? 4.0
+            : 6.0;
+        return ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(
+                veryCompactTopBar
+                    ? 4
+                    : compactTopBar
+                    ? 6
+                    : 12,
+                0,
+                veryCompactTopBar
+                    ? 4
+                    : compactTopBar
+                    ? 6
+                    : 12,
+                12,
               ),
-            ],
-          ),
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Row(
-                children: [
-                  _HamburgerBtn(
-                    onTap: () =>
-                        showAulaMenu(context, session, textScale: textScale),
-                    size: iconTouchSize,
+              decoration: BoxDecoration(
+                color: palette.surface.withValues(alpha: 0.96),
+                border: Border(
+                  bottom: BorderSide(color: palette.border, width: 1),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: palette.shadow,
+                    blurRadius: 12,
+                    offset: Offset(0, 2),
                   ),
-                  SizedBox(width: edgeGap),
-                  Expanded(
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(999),
-                            child: Container(
-                              height: 3,
-                              color: palette.border.withValues(alpha: 0.35),
-                              alignment: Alignment.centerLeft,
-                              child: TweenAnimationBuilder<double>(
-                                tween: Tween<double>(begin: 0, end: fill),
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeOut,
-                                builder: (context, value, child) {
-                                  return FractionallySizedBox(
-                                    widthFactor: value,
+                ],
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Row(
+                    children: [
+                      _HamburgerBtn(
+                        onTap: () => showAulaMenu(
+                          context,
+                          session,
+                          textScale: textScale,
+                        ),
+                        size: iconTouchSize,
+                      ),
+                      SizedBox(width: edgeGap),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final badgeMaxWidth = constraints.maxWidth.clamp(
+                              0.0,
+                              compactTopBar ? 92.0 : 220.0,
+                            );
+                            final showBadge =
+                                !veryCompactTopBar && badgeMaxWidth >= 64;
+                            return Stack(
+                              fit: StackFit.expand,
+                              alignment: Alignment.center,
+                              children: [
+                                Positioned.fill(
+                                  child: Align(
                                     alignment: Alignment.centerLeft,
-                                    child: child,
-                                  );
-                                },
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    gradient: simGradientPrimary,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Color(0x2E111827),
-                                        blurRadius: 10,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(999),
+                                      child: Container(
+                                        height: 3,
+                                        color: palette.border.withValues(
+                                          alpha: 0.35,
+                                        ),
+                                        alignment: Alignment.centerLeft,
+                                        child: TweenAnimationBuilder<double>(
+                                          tween: Tween<double>(
+                                            begin: 0,
+                                            end: fill,
+                                          ),
+                                          duration: const Duration(
+                                            milliseconds: 300,
+                                          ),
+                                          curve: Curves.easeOut,
+                                          builder: (context, value, child) {
+                                            return FractionallySizedBox(
+                                              widthFactor: value,
+                                              alignment: Alignment.centerLeft,
+                                              child: child,
+                                            );
+                                          },
+                                          child: Container(
+                                            decoration: const BoxDecoration(
+                                              gradient: simGradientPrimary,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Color(0x2E111827),
+                                                  blurRadius: 10,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          ),
+                                if (showBadge)
+                                  Positioned.fill(
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: badgeMaxWidth,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: palette.surface,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                            border: Border.all(
+                                              color: palette.border,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: palette.shadow,
+                                                blurRadius: 8,
+                                                offset: Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              (headerLabel ??
+                                                      (session.stableLang ??
+                                                          'SIM'))
+                                                  .toUpperCase(),
+                                              maxLines: 1,
+                                              style: TextStyle(
+                                                fontFamily: kMono,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                                color: palette.text,
+                                                letterSpacing: 0.14 * 10,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
                         ),
-                        Container(
-                          constraints: const BoxConstraints(maxWidth: 220),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: palette.surface,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: palette.border),
-                            boxShadow: [
-                              BoxShadow(
-                                color: palette.shadow,
-                                blurRadius: 8,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              (headerLabel ?? (session.stableLang ?? 'SIM'))
-                                  .toUpperCase(),
-                              maxLines: 1,
-                              style: TextStyle(
-                                fontFamily: kMono,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: palette.text,
-                                letterSpacing: 0.14 * 10,
-                              ),
-                            ),
-                          ),
+                      ),
+                      SizedBox(width: compactTopBar ? 5 : 8),
+                      _HeaderIconCard(
+                        icon: session.audioLoading
+                            ? Icons.hourglass_empty
+                            : session.audioPlaying
+                            ? Icons.stop
+                            : Icons.volume_up,
+                        color: session.audioEnabled
+                            ? palette.text
+                            : palette.muted,
+                        semanticLabel: session.audioLoading
+                            ? 'Preparando áudio da aula'
+                            : session.audioPlaying
+                            ? 'Parar áudio da aula'
+                            : 'Tocar áudio da aula',
+                        onTap: session.toggleAudio,
+                        size: iconTouchSize,
+                      ),
+                      SizedBox(width: actionGap),
+                      _DarkModeToggleBtn(size: iconTouchSize),
+                      if (!veryCompactTopBar &&
+                          fontScaleLevel != null &&
+                          onFontScaleTap != null) ...[
+                        SizedBox(width: actionGap),
+                        _HeaderFontScaleBtn(
+                          level: fontScaleLevel!,
+                          onTap: onFontScaleTap!,
+                          size: iconTouchSize,
                         ),
                       ],
-                    ),
-                  ),
-                  SizedBox(width: compactTopBar ? 5 : 8),
-                  _HeaderIconCard(
-                    icon: session.audioLoading
-                        ? Icons.hourglass_empty
-                        : session.audioPlaying
-                        ? Icons.stop
-                        : Icons.volume_up,
-                    color: session.audioEnabled ? palette.text : palette.muted,
-                    semanticLabel: session.audioLoading
-                        ? 'Preparando áudio da aula'
-                        : session.audioPlaying
-                        ? 'Parar áudio da aula'
-                        : 'Tocar áudio da aula',
-                    onTap: session.toggleAudio,
-                    size: iconTouchSize,
-                  ),
-                  SizedBox(width: actionGap),
-                  _DarkModeToggleBtn(size: iconTouchSize),
-                  if (fontScaleLevel != null && onFontScaleTap != null) ...[
-                    SizedBox(width: actionGap),
-                    _HeaderFontScaleBtn(
-                      level: fontScaleLevel!,
-                      onTap: onFontScaleTap!,
-                      size: iconTouchSize,
-                    ),
-                  ],
-                  if (showReviewButton) ...[
-                    SizedBox(width: actionGap),
-                    Semantics(
-                      button: true,
-                      excludeSemantics: true,
-                      label: 'Abrir revisão',
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(SimRadius.md),
-                        child: InkWell(
-                          onTap: session.openReviewRoom,
-                          borderRadius: BorderRadius.circular(SimRadius.md),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
+                      if (showReviewButton) ...[
+                        SizedBox(width: actionGap),
+                        Semantics(
+                          button: true,
+                          excludeSemantics: true,
+                          label: 'Abrir revisão',
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(SimRadius.md),
+                            child: InkWell(
+                              onTap: session.openReviewRoom,
+                              borderRadius: BorderRadius.circular(SimRadius.md),
+                              child: Container(
+                                width: compactTopBar ? iconTouchSize : null,
                                 height: iconTouchSize,
                                 padding: EdgeInsets.symmetric(
-                                  horizontal: compactTopBar ? 6 : 8,
+                                  horizontal: compactTopBar ? 0 : 8,
                                 ),
+                                alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   gradient: simGradientPrimary,
                                   borderRadius: BorderRadius.circular(
@@ -249,6 +312,7 @@ class AulaTopBar extends StatelessWidget {
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
                                       Icons.menu_book_outlined,
@@ -271,18 +335,18 @@ class AulaTopBar extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                ],
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

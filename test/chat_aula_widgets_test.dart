@@ -754,6 +754,93 @@ void main() {
     expect(controller.position.pixels, greaterThan(beforePageDown));
   });
 
+  testWidgets(
+    'chat timeline preserves manual context across compact to expanded resize',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 740));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 520,
+              child: _ChatTimelineHarness(scrollController: controller),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.textContaining('Mensagem 12'),
+        -220,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(find.textContaining('Mensagem 12'), findsOneWidget);
+
+      await tester.binding.setSurfaceSize(const Size(980, 520));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.textContaining('Mensagem 12', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(controller.position.pixels, greaterThan(0));
+    },
+  );
+
+  testWidgets(
+    'chat timeline keeps current lesson visible through rotation with reduced motion',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 740));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(
+            size: Size(390, 740),
+            disableAnimations: true,
+          ),
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                height: 520,
+                child: _ChatTimelineHarness(scrollController: controller),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Mensagem 32', skipOffstage: false),
+        findsOneWidget,
+      );
+
+      await tester.binding.setSurfaceSize(const Size(740, 390));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.textContaining('Mensagem 32', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+    },
+  );
+
   testWidgets('chat timeline exposes conversation region semantics', (
     tester,
   ) async {
@@ -1039,6 +1126,197 @@ void main() {
     );
     expect(find.text('Alternativa A', skipOffstage: false), findsOneWidget);
   });
+
+  testWidgets('compact phone keeps feedback actions reachable with larger text', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(
+          size: Size(320, 640),
+          textScaler: TextScaler.linear(1.6),
+        ),
+        child: MaterialApp(
+          home: Scaffold(
+            body: ChatAulaTimeline(
+              messages: const [
+                ChatLessonMessage(
+                  id: 'compact-feedback',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.feedback,
+                  text:
+                      'Feedback com explicação suficiente para validar leitura em tela estreita.',
+                  isCorrect: true,
+                  actionKey: 'aula_next_item',
+                ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 220));
+
+    expect(tester.takeException(), isNull);
+    final doubtRect = tester.getRect(
+      find.byKey(const Key('chat-feedback-doubt-button')),
+    );
+    final nextRect = tester.getRect(
+      find.byKey(const Key('chat-feedback-next-button')),
+    );
+    expect(doubtRect.width, lessThanOrEqualTo(288));
+    expect(nextRect.width, lessThanOrEqualTo(288));
+    expect(doubtRect.height, greaterThanOrEqualTo(48));
+    expect(nextRect.height, greaterThanOrEqualTo(48));
+    expect(nextRect.top, greaterThan(doubtRect.bottom));
+  });
+
+  testWidgets(
+    'compact phone renders alternatives and inline signals without overflow',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(
+            size: Size(320, 640),
+            textScaler: TextScaler.linear(1.5),
+          ),
+          child: MaterialApp(
+            home: Scaffold(
+              body: ChatAulaTimeline(
+                messages: const [
+                  ChatLessonMessage(
+                    id: 'compact-options',
+                    role: ChatLessonMessageRole.sim,
+                    kind: ChatLessonMessageKind.options,
+                    selectedAnswer: AnswerLetter.B,
+                    options: [
+                      ChatLessonOption(
+                        letter: AnswerLetter.A,
+                        text:
+                            'Alternativa A com texto longo para tela pequena.',
+                        selected: false,
+                        enabled: true,
+                      ),
+                      ChatLessonOption(
+                        letter: AnswerLetter.B,
+                        text:
+                            'Alternativa B com texto longo para validar quebra.',
+                        selected: true,
+                        enabled: true,
+                      ),
+                      ChatLessonOption(
+                        letter: AnswerLetter.C,
+                        text:
+                            'Alternativa C com texto longo para manter leitura.',
+                        selected: false,
+                        enabled: true,
+                      ),
+                    ],
+                    signals: [
+                      ChatLessonSignal(
+                        value: 1,
+                        labelKey: 'aula_sig_certeza',
+                        enabled: true,
+                      ),
+                      ChatLessonSignal(
+                        value: 2,
+                        labelKey: 'aula_sig_revisar',
+                        enabled: true,
+                      ),
+                      ChatLessonSignal(
+                        value: 3,
+                        labelKey: 'aula_sig_nao_sei',
+                        enabled: true,
+                      ),
+                    ],
+                  ),
+                ],
+                onChooseAnswer: (_) {},
+                onSignal: (_) {},
+                onRetry: () {},
+                onNext: () {},
+                onOpenDoubt: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 220));
+
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('Alternativa B'), findsOneWidget);
+      expect(find.byKey(const Key('inline-signal-choices')), findsOneWidget);
+      for (final label in [
+        t('aula_sig_certeza'),
+        t('aula_sig_revisar'),
+        t('aula_sig_nao_sei'),
+      ]) {
+        expect(find.text(label, skipOffstage: false), findsOneWidget);
+      }
+    },
+  );
+
+  testWidgets(
+    'compact classroom top bar does not overlap timeline with largest font',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({ClassroomTextScale.prefsKey: 5});
+      await tester.binding.setSurfaceSize(const Size(320, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..route = '/cyber/aula'
+        ..credits = 3
+        ..aulaSnapshot = _chatSnapshot(
+          phase: const ClassroomPhase.reading(),
+          headerLabel: 'aula_item_of:12/12:aula_layer_5',
+        );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SimThemeScope(
+            darkMode: false,
+            onToggleDarkMode: () {},
+            child: ChatAulaScreen(session: session),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 220));
+
+      expect(tester.takeException(), isNull);
+      final topBarRect = tester.getRect(find.byType(AulaTopBar));
+      final timelineRect = tester.getRect(find.byType(ChatAulaTimeline));
+      expect(timelineRect.top, greaterThanOrEqualTo(topBarRect.bottom));
+      expect(
+        find.text('Qual alternativa está correta?', skipOffstage: false),
+        findsOneWidget,
+      );
+      for (final label in [
+        'Abrir menu da aula',
+        'Tocar áudio da aula',
+        'Modo escuro',
+        'Abrir revisão',
+      ]) {
+        final rect = tester.getRect(find.bySemanticsLabel(label));
+        expect(rect.width, greaterThanOrEqualTo(48));
+        expect(rect.height, greaterThanOrEqualTo(48));
+      }
+    },
+  );
 
   testWidgets(
     'chat classroom inserts late image panel between explanation and question',
@@ -1478,6 +1756,45 @@ void main() {
     expect(sendButton, findsOneWidget);
     final buttonRect = tester.getRect(sendButton);
     expect(buttonRect.bottom, lessThanOrEqualTo(640));
+  });
+
+  testWidgets('shared doubt sheet preserves focused text across resize', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DoubtInputSheet(
+            controller: controller,
+            busy: false,
+            onSubmit: (_) {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+
+    await tester.tap(find.byType(TextField).last);
+    await tester.enterText(find.byType(TextField).last, 'Texto preservado');
+    await tester.pump();
+    expect(controller.text, 'Texto preservado');
+    expect(FocusManager.instance.primaryFocus, isNotNull);
+
+    await tester.binding.setSurfaceSize(const Size(740, 390));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 220));
+
+    expect(tester.takeException(), isNull);
+    expect(controller.text, 'Texto preservado');
+    expect(find.text('Texto preservado'), findsOneWidget);
+    expect(FocusManager.instance.primaryFocus, isNotNull);
   });
 
   testWidgets('chat composer submit becomes a student message in timeline', (
