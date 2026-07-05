@@ -200,28 +200,17 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         ),
       );
     } else if (phase?.type == ClassroomPhaseType.concluido) {
-      messages
-        ..add(
-          ChatLessonMessage(
-            id: 'doubt-action',
-            role: ChatLessonMessageRole.sim,
-            kind: ChatLessonMessageKind.doubtAction,
-            text: t('aula_doubt'),
-            actionKey: 'open-doubt',
-            deliveryStatus: ChatLessonDeliveryStatus.delivered,
-          ),
-        )
-        ..add(
-          ChatLessonMessage(
-            id: 'feedback-$activeId',
-            role: ChatLessonMessageRole.sim,
-            kind: ChatLessonMessageKind.feedback,
-            text: feedbackText(phase?.message ?? ''),
-            isCorrect: phase?.wasCorrect,
-            actionKey: snapshot?.viewModel?.nextLabel,
-            deliveryStatus: ChatLessonDeliveryStatus.delivered,
-          ),
-        );
+      messages.add(
+        ChatLessonMessage(
+          id: 'feedback-$activeId',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.feedback,
+          text: feedbackText(phase?.message ?? ''),
+          isCorrect: phase?.wasCorrect,
+          actionKey: snapshot?.viewModel?.nextLabel,
+          deliveryStatus: ChatLessonDeliveryStatus.delivered,
+        ),
+      );
     }
   }
 

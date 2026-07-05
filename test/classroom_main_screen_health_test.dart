@@ -289,14 +289,10 @@ void main() {
 
       await tester.tap(find.text('2'));
       await tester.pumpAndSettle();
-      final feedbackRect = tester.getRect(
-        find.text(t('aula_fb_correct')),
-      );
+      final feedbackRect = tester.getRect(find.text(t('aula_fb_correct')));
       expect(feedbackRect.top, greaterThanOrEqualTo(0));
       expect(feedbackRect.bottom, lessThanOrEqualTo(560));
-      final nextRect = tester.getRect(find.textContaining('>>').last);
-      expect(nextRect.top, greaterThanOrEqualTo(0));
-      expect(nextRect.bottom, lessThanOrEqualTo(560));
+      expect(find.textContaining('>>'), findsNothing);
 
       await tester.binding.setSurfaceSize(null);
     },

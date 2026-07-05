@@ -212,7 +212,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       imagem: imageData,
       audioText: lesson.audioText,
     );
-    cache.put(key, updated.copyWith(imagem: null));
+    cache.put(key, updated);
     bus.clearPaidImageOffer(key);
     bus.notify(key, updated);
   }

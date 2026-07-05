@@ -72,7 +72,7 @@ class LessonMaterialCache {
       _memory.remove(key);
       return null;
     }
-    return _withoutImage(entry.lesson);
+    return entry.lesson;
   }
 
   CompleteLesson? peekCachedLesson(String key) => peek(key);
@@ -83,7 +83,7 @@ class LessonMaterialCache {
     if (entry == null) return null;
     if (_isExpired(entry)) return null;
     _memory[key] = entry;
-    return _withoutImage(entry.lesson);
+    return entry.lesson;
   }
 
   Future<CompleteLesson?> getCachedLesson(String key) async => get(key);
@@ -92,7 +92,7 @@ class LessonMaterialCache {
     _memory.removeWhere((_, entry) => _isExpired(entry));
     _memory.remove(key);
     _memory[key] = _CacheEntry(
-      lesson: _withoutImage(lesson),
+      lesson: lesson,
       savedAt: DateTime.now().millisecondsSinceEpoch,
     );
     while (_memory.length > maxLessons) {
@@ -101,8 +101,8 @@ class LessonMaterialCache {
     _persist();
   }
 
-  // Persiste somente texto/conteúdo. Imagens pertencem ao ciclo vivo da aula e
-  // nunca são salvas/restauradas pelo cache local.
+  // Espelha o Web: imagem vive no cache em memória, mas não é serializada no
+  // armazenamento local para evitar restaurar imagem stale de outra sessão.
   void _persist() {
     unawaited(
       Future(() async {
@@ -156,11 +156,5 @@ class LessonMaterialCache {
     } catch (_) {
       return null;
     }
-  }
-
-  static CompleteLesson _withoutImage(CompleteLesson lesson) {
-    final image = lesson.imagem;
-    if (image == null || image.trim().isEmpty) return lesson;
-    return lesson.copyWith(imagem: null);
   }
 }

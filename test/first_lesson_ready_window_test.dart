@@ -355,7 +355,7 @@ void main() {
 
       final rendered = updates.last.imagem;
       expect(rendered, startsWith('data:image/svg+xml;utf8,'));
-      expect(cache.peek(key)?.imagem, isNull);
+      expect(cache.peek(key)?.imagem, rendered);
       expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
     },
   );
@@ -422,7 +422,7 @@ void main() {
       final rendered = updates.last.imagem;
       expect(t02.calls, 0);
       expect(rendered, startsWith('data:image/svg+xml;utf8,'));
-      expect(cache.peek(key)?.imagem, isNull);
+      expect(cache.peek(key)?.imagem, rendered);
       expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
     },
   );
@@ -587,7 +587,7 @@ void main() {
       await orchestrator.acceptPaidImageOffer(key);
       expect(paidCalls, 1);
       expect(updates.last.imagem, startsWith('data:image/jpeg;base64,'));
-      expect(cache.peek(key)?.imagem, isNull);
+      expect(cache.peek(key)?.imagem, updates.last.imagem);
     },
   );
 
@@ -617,7 +617,7 @@ void main() {
   );
 
   test(
-    'LessonEventBus delivers live image but strips image from late replay',
+    'LessonEventBus delivers live image and replays image to late subscriber',
     () {
       final bus = LessonEventBus();
       const lesson = CompleteLesson(
@@ -645,7 +645,7 @@ void main() {
       addTearDown(unsubscribe);
 
       expect(live.single.imagem, startsWith('data:image/svg+xml;utf8,'));
-      expect(received.single.imagem, isNull);
+      expect(received.single.imagem, lesson.imagem);
       expect(received.single.conteudo.question, lesson.conteudo.question);
     },
   );
@@ -1019,7 +1019,7 @@ void main() {
       expect(result?.conteudo.question, 'Onde fica a origem?');
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(updates.last.imagem, startsWith('data:'));
-      expect(cache.peek(lessonKeyFor(params))?.imagem, isNull);
+      expect(cache.peek(lessonKeyFor(params))?.imagem, updates.last.imagem);
     },
   );
 
@@ -1096,7 +1096,7 @@ void main() {
     expect(result?.imagem, isNull);
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(updates.last.imagem, startsWith('data:'));
-    expect(cache.peek(lessonKeyFor(params))?.imagem, isNull);
+    expect(cache.peek(lessonKeyFor(params))?.imagem, updates.last.imagem);
   });
 
   test('StudentExperienceT02Adapter prepares first minimum lesson', () async {

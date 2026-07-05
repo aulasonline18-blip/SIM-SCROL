@@ -43,6 +43,8 @@ class ChatAulaTimeline extends StatefulWidget {
 }
 
 class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
+  static const _scrollDuration = Duration(milliseconds: 420);
+
   late final ScrollController _scrollController =
       widget.scrollController ?? ScrollController();
   late final bool _ownsScrollController = widget.scrollController == null;
@@ -107,15 +109,20 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     if (targetContext != null) {
       await Scrollable.ensureVisible(
         targetContext,
-        duration: const Duration(milliseconds: 260),
+        duration: _scrollDuration,
         curve: Curves.easeOutCubic,
-        alignment: 1,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        alignment: _alignmentFor(
+          widget.messages.lastWhere(
+            (message) => _messageKeys[message.id] == targetKey,
+            orElse: () => widget.messages.last,
+          ),
+        ),
+        alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
       );
     } else {
       await _scrollController.animateTo(
         position.maxScrollExtent,
-        duration: const Duration(milliseconds: 260),
+        duration: _scrollDuration,
         curve: Curves.easeOutCubic,
       );
     }
@@ -180,6 +187,15 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       orElse: () => widget.messages.last,
     );
     return _messageKeys[preferred.id];
+  }
+
+  double _alignmentFor(ChatLessonMessage message) {
+    return switch (message.kind) {
+      ChatLessonMessageKind.feedback => 0.18,
+      ChatLessonMessageKind.question => 0.14,
+      ChatLessonMessageKind.options => 0.56,
+      _ => 0.78,
+    };
   }
 
   @override
@@ -386,6 +402,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
             onChooseAnswer: onChooseAnswer,
             onSignal: onSignal,
             onRetry: onRetry,
+            onNext: onNext,
             onOpenDoubt: onOpenDoubt,
             onImageSettled: onImageSettled,
           ),
@@ -449,6 +466,7 @@ class _ChatAulaMessageBody extends StatelessWidget {
     required this.onChooseAnswer,
     required this.onSignal,
     required this.onRetry,
+    required this.onNext,
     required this.onOpenDoubt,
     this.session,
     this.onImageSettled,
@@ -459,6 +477,7 @@ class _ChatAulaMessageBody extends StatelessWidget {
   final void Function(AnswerLetter letter) onChooseAnswer;
   final void Function(int value) onSignal;
   final VoidCallback onRetry;
+  final VoidCallback onNext;
   final VoidCallback onOpenDoubt;
   final VoidCallback? onImageSettled;
 
@@ -516,6 +535,44 @@ class _ChatAulaMessageBody extends StatelessWidget {
               Expanded(child: _TextMessage(message.text ?? '')),
             ],
           ),
+          if ((message.actionKey ?? '').isNotEmpty) ...[
+            const SizedBox(height: 14),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 360;
+                final enabled =
+                    message.deliveryStatus != ChatLessonDeliveryStatus.read;
+                final doubtButton = _ChatActionButton(
+                  label: t('aula_doubt_about_question'),
+                  enabled: enabled,
+                  primary: false,
+                  onPressed: onOpenDoubt,
+                );
+                final nextButton = _ChatActionButton(
+                  label: t(message.actionKey ?? 'aula_next'),
+                  enabled: enabled,
+                  onPressed: onNext,
+                );
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      doubtButton,
+                      const SizedBox(height: 10),
+                      nextButton,
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: doubtButton),
+                    const SizedBox(width: 10),
+                    Expanded(child: nextButton),
+                  ],
+                );
+              },
+            ),
+          ],
         ],
       ),
       ChatLessonMessageKind.doubtAction => _ChatActionButton(
@@ -982,31 +1039,47 @@ class _ChatActionButton extends StatelessWidget {
   const _ChatActionButton({
     required this.label,
     required this.onPressed,
+    this.enabled = true,
+    this.primary = true,
     super.key,
   });
 
   final String label;
   final VoidCallback onPressed;
+  final bool enabled;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
+    final background = primary ? palette.text : palette.surface;
+    final foreground = primary ? palette.surface : palette.text;
     return Semantics(
       button: true,
+      enabled: enabled,
       child: Material(
-        color: palette.text,
+        color: enabled ? background : palette.surfaceSoft,
         borderRadius: BorderRadius.circular(SimRadius.md),
         child: InkWell(
-          onTap: onPressed,
+          onTap: enabled ? onPressed : null,
           borderRadius: BorderRadius.circular(SimRadius.md),
           child: Container(
             constraints: const BoxConstraints(minHeight: SimTouch.min),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(SimRadius.md),
+              border: Border.all(
+                color: primary ? palette.text : palette.border,
+              ),
+            ),
             child: Text(
               label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: palette.surface,
+                color: enabled ? foreground : palette.muted,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),

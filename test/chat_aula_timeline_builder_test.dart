@@ -89,10 +89,7 @@ void main() {
 
     expect(
       messages.map((message) => message.kind),
-      containsAllInOrder([
-        ChatLessonMessageKind.doubtAction,
-        ChatLessonMessageKind.feedback,
-      ]),
+      contains(ChatLessonMessageKind.feedback),
     );
     expect(
       messages.where(
@@ -101,12 +98,10 @@ void main() {
       isEmpty,
     );
     expect(
-      messages
-          .singleWhere(
-            (message) => message.kind == ChatLessonMessageKind.doubtAction,
-          )
-          .actionKey,
-      'open-doubt',
+      messages.where(
+        (message) => message.kind == ChatLessonMessageKind.doubtAction,
+      ),
+      isEmpty,
     );
     final feedback = messages.singleWhere(
       (message) => message.kind == ChatLessonMessageKind.feedback,
@@ -268,12 +263,10 @@ void main() {
       ChatLessonDeliveryStatus.read,
     );
     expect(
-      messages
-          .singleWhere(
-            (message) => message.kind == ChatLessonMessageKind.doubtAction,
-          )
-          .deliveryStatus,
-      ChatLessonDeliveryStatus.delivered,
+      messages.where(
+        (message) => message.kind == ChatLessonMessageKind.doubtAction,
+      ),
+      isEmpty,
     );
     expect(
       messages
@@ -390,9 +383,14 @@ void main() {
         ),
       ),
     );
+    expect(completed.where((message) => message.id == 'doubt-action'), isEmpty);
     expect(
-      completed.singleWhere((message) => message.id == 'doubt-action').text,
-      'Question',
+      completed
+          .singleWhere(
+            (message) => message.kind == ChatLessonMessageKind.feedback,
+          )
+          .text,
+      '✅ Exact. Vous maîtrisez ce point.',
     );
   });
 }

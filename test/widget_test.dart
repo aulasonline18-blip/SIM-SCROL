@@ -350,50 +350,33 @@ void main() {
     expect(find.text('Sign in to continue'), findsOneWidget);
   });
 
-  testWidgets('Preenchimento shows doubt and qualifier flow in aula', (
-    WidgetTester tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(480, 1200));
-    final session = LabSession()
-      ..authed = true
-      ..authReady = true
-      ..credits = 3
-      ..selectedLanguageCode = 'pt'
-      ..stableLang = 'Portuguese'
-      ..freeText = 'Fracoes equivalentes explicadas com exemplos simples.';
-    expect(session.saveObjectiveEntry(), isTrue);
-    session.route = '/cyber/aula';
-    await session.openAulaRuntime();
-    await tester.pumpWidget(SimMobileApp(initialSession: session));
+  testWidgets(
+    'Preenchimento keeps qualifier feedback with doubt action visible',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(480, 1200));
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..credits = 3
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..freeText = 'Fracoes equivalentes explicadas com exemplos simples.';
+      expect(session.saveObjectiveEntry(), isTrue);
+      session.route = '/cyber/aula';
+      await session.openAulaRuntime();
+      await tester.pumpWidget(SimMobileApp(initialSession: session));
 
-    expect(find.byIcon(Icons.help_outline), findsNothing);
-    await tester.tap(find.text('B'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('2'));
-    await tester.pumpAndSettle();
-    expect(find.text('Dúvida'), findsOneWidget);
-    await tester.tap(find.text('Dúvida'));
-    await tester.pumpAndSettle();
-    expect(find.text('Enviar dúvida'), findsWidgets);
-    expect(
-      find.text(
-        'Escreva sua dúvida ou envie uma foto do exercício, resolução, fórmula, gráfico ou tabela.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.byType(TextField), findsWidgets);
-    await tester.tap(find.byIcon(Icons.attach_file).last);
-    await tester.pumpAndSettle();
-    expect(find.text('Tirar foto'), findsOneWidget);
-    expect(find.text('Escolher imagem'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).last, 'Nao entendi a conta.');
-    await tester.tap(find.text('Enviar dúvida').last);
-    await tester.pump(const Duration(milliseconds: 20));
-    expect(session.doubt.status.name, 'explaining');
-    expect(session.doubt.response?.explanation, contains('frações'));
+      expect(find.byIcon(Icons.help_outline), findsNothing);
+      await tester.tap(find.text('B'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('2'));
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(find.text('Tenho dúvida sobre essa questão'), findsOneWidget);
+      expect(find.text(t('aula_fb_correct')), findsOneWidget);
 
-    await tester.binding.setSurfaceSize(null);
-  });
+      await tester.binding.setSurfaceSize(null);
+    },
+  );
 
   testWidgets('aula keeps signals and feedback visible after answer flow', (
     WidgetTester tester,
@@ -421,9 +404,7 @@ void main() {
 
     await tester.tap(find.text('2'));
     await tester.pumpAndSettle();
-    final feedbackRect = tester.getRect(
-      find.text(t('aula_fb_correct')),
-    );
+    final feedbackRect = tester.getRect(find.text(t('aula_fb_correct')));
     expect(feedbackRect.top, greaterThanOrEqualTo(0));
     expect(feedbackRect.bottom, lessThanOrEqualTo(520));
 

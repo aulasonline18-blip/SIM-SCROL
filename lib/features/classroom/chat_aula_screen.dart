@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../sim/auxiliary/aux_room_models.dart';
-import '../../sim/classroom/classroom_models.dart';
 import '../../sim/classroom/classroom_text_scale.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/fixed_bubble.dart';
@@ -29,16 +28,12 @@ class ChatAulaScreen extends StatefulWidget {
 
 class _ChatAulaScreenState extends State<ChatAulaScreen>
     with WidgetsBindingObserver {
-  static const _autoAdvanceDelay = Duration(milliseconds: 1500);
-
   final TextEditingController _doubtController = TextEditingController();
   final List<ChatLessonMessage> _conversationMessages = <ChatLessonMessage>[];
   String? _conversationLessonKey;
   int _conversationArchiveSeq = 0;
   int _fontScaleLevel = ClassroomTextScale.defaultLevel;
   bool _doubtSheetOpen = false;
-  Timer? _autoAdvanceTimer;
-  String? _autoAdvanceKey;
 
   @override
   void initState() {
@@ -46,7 +41,6 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     WidgetsBinding.instance.addObserver(this);
     widget.session.addListener(_onSessionChange);
     unawaited(_loadFontScaleLevel());
-    _syncAutoAdvance();
   }
 
   Future<void> _loadFontScaleLevel() async {
@@ -73,53 +67,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       _doubtSheetOpen = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _showDoubtSheet());
     }
-    _syncAutoAdvance();
     if (mounted) setState(() {});
-  }
-
-  void _syncAutoAdvance() {
-    final session = widget.session;
-    final snapshot = session.aulaSnapshot;
-    final phase = snapshot?.phase;
-    final canAutoAdvance =
-        phase?.type == ClassroomPhaseType.concluido &&
-        session.doubt.status != DoubtStatus.processing;
-    if (!canAutoAdvance) {
-      _cancelAutoAdvance();
-      return;
-    }
-
-    final key = [
-      session.lessonLocalId ?? '',
-      snapshot?.itemMarker ?? '',
-      snapshot?.viewModel?.headerLabel ?? '',
-      phase?.message ?? '',
-      phase?.wasCorrect?.toString() ?? '',
-      phase?.signal?.name ?? '',
-    ].join('|');
-    if (_autoAdvanceKey == key && (_autoAdvanceTimer?.isActive ?? false)) {
-      return;
-    }
-
-    _cancelAutoAdvance();
-    _autoAdvanceKey = key;
-    _autoAdvanceTimer = Timer(_autoAdvanceDelay, () {
-      if (!mounted || _autoAdvanceKey != key) return;
-      _autoAdvanceTimer = null;
-      _autoAdvanceKey = null;
-      if (widget.session.doubt.status == DoubtStatus.processing) return;
-      unawaited(
-        widget.session.advanceAula().catchError((Object error) {
-          debugPrint('[SIM] AUTO_ADVANCE_FAILED $error');
-        }),
-      );
-    });
-  }
-
-  void _cancelAutoAdvance() {
-    _autoAdvanceTimer?.cancel();
-    _autoAdvanceTimer = null;
-    _autoAdvanceKey = null;
   }
 
   void _openDoubtSheetFromChat() {
@@ -160,7 +108,6 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.session.removeListener(_onSessionChange);
-    _cancelAutoAdvance();
     widget.session.stopActiveAudio(notify: false);
     _doubtController.dispose();
     super.dispose();
@@ -320,7 +267,30 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       _insertConversationMessage(message, incoming, incomingIndex);
     }
 
-    return List.unmodifiable(_conversationMessages);
+    return List.unmodifiable(_messagesWithDeadPastFeedbackActions());
+  }
+
+  List<ChatLessonMessage> _messagesWithDeadPastFeedbackActions() {
+    var activeFeedbackIndex = -1;
+    for (var i = 0; i < _conversationMessages.length; i++) {
+      final message = _conversationMessages[i];
+      if (message.kind == ChatLessonMessageKind.feedback &&
+          (message.actionKey ?? '').isNotEmpty) {
+        activeFeedbackIndex = i;
+      }
+    }
+    if (activeFeedbackIndex < 0) return _conversationMessages;
+    return [
+      for (var i = 0; i < _conversationMessages.length; i++)
+        if (i != activeFeedbackIndex &&
+            _conversationMessages[i].kind == ChatLessonMessageKind.feedback &&
+            (_conversationMessages[i].actionKey ?? '').isNotEmpty)
+          _conversationMessages[i].copyWith(
+            deliveryStatus: ChatLessonDeliveryStatus.read,
+          )
+        else
+          _conversationMessages[i],
+    ];
   }
 
   void _insertConversationMessage(

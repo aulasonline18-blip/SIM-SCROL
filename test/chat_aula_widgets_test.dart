@@ -273,9 +273,11 @@ void main() {
     },
   );
 
-  testWidgets('chat timeline renders feedback without manual advance action', (
+  testWidgets('chat timeline renders feedback with doubt and advance actions', (
     tester,
   ) async {
+    var openedDoubt = false;
+    var advanced = false;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -293,21 +295,33 @@ void main() {
             onChooseAnswer: (_) {},
             onSignal: (_) {},
             onRetry: () {},
-            onNext: () {},
-            onOpenDoubt: () {},
+            onNext: () => advanced = true,
+            onOpenDoubt: () => openedDoubt = true,
           ),
         ),
       ),
     );
 
     expect(find.text('✅ Exato. Você domina este ponto.'), findsOneWidget);
-    expect(
-      _textAny(['Próximo tópico >>', 'Next topic >>', 'Sujet suivant >>']),
-      findsNothing,
-    );
+    expect(find.text('Tenho dúvida sobre essa questão'), findsOneWidget);
+    final nextItem = _textAny([
+      'Próximo item',
+      'Next topic',
+      'Sujet suivant',
+      'Siguiente tema',
+    ]);
+    expect(nextItem, findsOneWidget);
+
+    await tester.tap(find.text('Tenho dúvida sobre essa questão'));
+    expect(openedDoubt, isTrue);
+
+    await tester.tap(nextItem);
+    expect(advanced, isTrue);
   });
 
-  testWidgets('chat aula auto advances 1500ms after feedback', (tester) async {
+  testWidgets('chat aula advances only when next button is tapped', (
+    tester,
+  ) async {
     final session = _AutoAdvanceSession()
       ..authed = true
       ..authReady = true
@@ -338,6 +352,10 @@ void main() {
     expect(session.autoAdvances, 0);
 
     await tester.pump(const Duration(milliseconds: 1));
+    expect(session.autoAdvances, 0);
+
+    await tester.tap(_textAny(['Próximo', 'Next', 'Suivant', 'Siguiente']));
+    await tester.pump();
     expect(session.autoAdvances, 1);
   });
 
@@ -1032,9 +1050,7 @@ void main() {
       findsOneWidget,
     );
 
-    final signal2 = find.text('2', skipOffstage: false);
-    await tester.ensureVisible(signal2);
-    await tester.tap(signal2);
+    session.submitAulaSignal(2);
     await tester.pump(const Duration(milliseconds: 120));
     expect(
       find.text(t('aula_fb_correct'), skipOffstage: false),

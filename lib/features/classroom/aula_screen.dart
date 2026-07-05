@@ -71,6 +71,8 @@ enum _AulaScrollTarget { image, question, signal, feedback, error }
 
 class _AulaLabScreenState extends State<AulaLabScreen>
     with WidgetsBindingObserver {
+  static const _scrollDuration = Duration(milliseconds: 420);
+
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _doubtController = TextEditingController();
   int _lastHistoryLen = 0;
@@ -231,8 +233,8 @@ class _AulaLabScreenState extends State<AulaLabScreen>
             requestGeneration,
             () => _scrollController.animateTo(
               _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 140),
-              curve: Curves.easeOut,
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
             ),
           ),
         );
@@ -277,8 +279,8 @@ class _AulaLabScreenState extends State<AulaLabScreen>
           requestGeneration,
           () => _scrollController.animateTo(
             _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
+            duration: _scrollDuration,
+            curve: Curves.easeOutCubic,
           ),
         );
         return;
@@ -288,8 +290,8 @@ class _AulaLabScreenState extends State<AulaLabScreen>
         () => Scrollable.ensureVisible(
           ctx,
           alignment: alignment,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
+          duration: _scrollDuration,
+          curve: Curves.easeOutCubic,
         ),
       );
     }
@@ -343,7 +345,7 @@ class _AulaLabScreenState extends State<AulaLabScreen>
     if (phase?.type == ClassroomPhaseType.concluido) {
       _scrollToTarget(
         _feedbackKey,
-        alignment: 0.72,
+        alignment: 0.18,
         force: force,
         target: _AulaScrollTarget.feedback,
       );
@@ -405,6 +407,16 @@ class _AulaLabScreenState extends State<AulaLabScreen>
     _forceNextSnapshotScroll = true;
     _userScrollOverride = false;
     _clearPendingScroll();
+  }
+
+  String? _activeLayerLabel(String? headerLabel) {
+    if (headerLabel == null) return null;
+    final match = RegExp(
+      r'aula_(?:layer|review_lbl)_(\d+)',
+    ).firstMatch(headerLabel);
+    final n = match?.group(1);
+    if (n == null || n.isEmpty) return null;
+    return t('aula_layer_label').replaceAll('{n}', n);
   }
 
   bool _isNearBottom() {
@@ -473,8 +485,8 @@ class _AulaLabScreenState extends State<AulaLabScreen>
     final isDone = snapshot?.isDone ?? false;
     final wasCorrect = phase?.wasCorrect;
     final feedbackKey = phase?.message;
-    final nextKey = viewModel?.nextLabel ?? '';
     final locked = viewModel?.locked ?? false;
+    final layerLabel = _activeLayerLabel(viewModel?.headerLabel);
     final media = MediaQuery.of(context);
     final screenWidth = media.size.width;
     final palette = SimThemeScope.paletteOf(context);
@@ -738,117 +750,131 @@ class _AulaLabScreenState extends State<AulaLabScreen>
 
                     // Theory card â€” only when content is loaded
                     if (content != null) ...[
-                      SimCard(
-                        key: _contentKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // AUL-4: TEORIA section label
-                            Row(
-                              children: [
+                      _RevealOnMount(
+                        key: ValueKey(
+                          'theory:${snapshot?.itemMarker}:${content.explanation.hashCode}',
+                        ),
+                        child: SimCard(
+                          key: _contentKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (layerLabel != null) ...[
+                                _LayerBadge(label: layerLabel),
+                                const SizedBox(height: 10),
+                              ],
+                              // AUL-4: TEORIA section label
+                              Row(
+                                children: [
+                                  Text(
+                                    t('aula_theory'),
+                                    style: TextStyle(
+                                      fontFamily: kMono,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: palette.muted,
+                                      letterSpacing: 1.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              if (session.prefs == null)
                                 Text(
-                                  t('aula_theory'),
+                                  content.explanation,
                                   style: TextStyle(
-                                    fontFamily: kMono,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: palette.muted,
-                                    letterSpacing: 1.2,
+                                    color: palette.text,
+                                    fontSize: 16,
+                                    height: 1.5,
+                                  ),
+                                )
+                              else
+                                SimTypewriter(
+                                  text: content.explanation,
+                                  charactersPerTick: 3,
+                                  tickDuration: const Duration(
+                                    milliseconds: 18,
+                                  ),
+                                  style: SimTypography.lessonBody.copyWith(
+                                    color: palette.text,
+                                  ),
+                                  cursorColor: palette.text,
+                                  onTick: _scrollToBottom,
+                                  onDone: () {
+                                    setState(
+                                      () =>
+                                          _theoryDoneKey = content.explanation,
+                                    );
+                                    _scrollToBottom();
+                                  },
+                                ),
+                              // Doubt: processing â†’ progress bar
+                              if (session.doubt.status ==
+                                  DoubtStatus.processing) ...[
+                                const SizedBox(height: 12),
+                                DoubtProgressBar(
+                                  progress: session.doubt.progress.toDouble(),
+                                  label: 'Analisando sua dúvida...',
+                                ),
+                              ],
+                              // Doubt: explaining / error â†’ explanation card
+                              if (session.doubt.status ==
+                                      DoubtStatus.explaining ||
+                                  session.doubt.status ==
+                                      DoubtStatus.error) ...[
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: palette.surface,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: palette.border),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Color(0x59111827),
+                                        blurRadius: 30,
+                                        spreadRadius: -24,
+                                        offset: Offset(0, 10),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Explicação da sua dúvida',
+                                        style: TextStyle(
+                                          color: palette.text,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      if (session.doubt.error != null)
+                                        Text(
+                                          session.doubt.error!,
+                                          style: TextStyle(
+                                            color: palette.muted,
+                                            fontSize: 14,
+                                            height: 1.4,
+                                          ),
+                                        )
+                                      else if (session.doubt.response != null)
+                                        Text(
+                                          session.doubt.response!.explanation,
+                                          style: TextStyle(
+                                            color: palette.text,
+                                            fontSize: 14,
+                                            height: 1.5,
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 8),
-                            if (session.prefs == null)
-                              Text(
-                                content.explanation,
-                                style: TextStyle(
-                                  color: palette.text,
-                                  fontSize: 16,
-                                  height: 1.5,
-                                ),
-                              )
-                            else
-                              SimTypewriter(
-                                text: content.explanation,
-                                charactersPerTick: 3,
-                                tickDuration: const Duration(milliseconds: 18),
-                                style: SimTypography.lessonBody.copyWith(
-                                  color: palette.text,
-                                ),
-                                cursorColor: palette.text,
-                                onTick: _scrollToBottom,
-                                onDone: () {
-                                  setState(
-                                    () => _theoryDoneKey = content.explanation,
-                                  );
-                                  _scrollToBottom();
-                                },
-                              ),
-                            // Doubt: processing â†’ progress bar
-                            if (session.doubt.status ==
-                                DoubtStatus.processing) ...[
-                              const SizedBox(height: 12),
-                              DoubtProgressBar(
-                                progress: session.doubt.progress.toDouble(),
-                                label: 'Analisando sua dúvida...',
-                              ),
                             ],
-                            // Doubt: explaining / error â†’ explanation card
-                            if (session.doubt.status ==
-                                    DoubtStatus.explaining ||
-                                session.doubt.status == DoubtStatus.error) ...[
-                              const SizedBox(height: 12),
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: palette.surface,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: palette.border),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x59111827),
-                                      blurRadius: 30,
-                                      spreadRadius: -24,
-                                      offset: Offset(0, 10),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Explicação da sua dúvida',
-                                      style: TextStyle(
-                                        color: palette.text,
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    if (session.doubt.error != null)
-                                      Text(
-                                        session.doubt.error!,
-                                        style: TextStyle(
-                                          color: palette.muted,
-                                          fontSize: 14,
-                                          height: 1.4,
-                                        ),
-                                      )
-                                    else if (session.doubt.response != null)
-                                      Text(
-                                        session.doubt.response!.explanation,
-                                        style: TextStyle(
-                                          color: palette.text,
-                                          fontSize: 14,
-                                          height: 1.5,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -857,7 +883,7 @@ class _AulaLabScreenState extends State<AulaLabScreen>
                     if (content != null &&
                         theoryReady &&
                         _hasLessonImagePanel()) ...[
-                      KeyedSubtree(
+                      _RevealOnMount(
                         key: _imageKey,
                         child: SimCard(
                           child: LessonImagePanel(
@@ -870,21 +896,23 @@ class _AulaLabScreenState extends State<AulaLabScreen>
                     ],
 
                     if (content == null) ...[
-                      SimCard(
+                      _RevealOnMount(
                         key: _questionKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (_hasLessonImagePanel()) ...[
-                              KeyedSubtree(
-                                key: _imageKey,
-                                child: LessonImagePanel(
-                                  session: session,
-                                  onImageSettled: _onLessonImageSettled,
+                        child: SimCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_hasLessonImagePanel()) ...[
+                                KeyedSubtree(
+                                  key: _imageKey,
+                                  child: LessonImagePanel(
+                                    session: session,
+                                    onImageSettled: _onLessonImageSettled,
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -918,130 +946,89 @@ class _AulaLabScreenState extends State<AulaLabScreen>
                           ],
                         ),
                       ),
-                      SimCard(
-                        key: _questionKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (session.prefs == null)
-                              Text(
-                                content.question,
-                                style: SimTypography.lessonQuestion.copyWith(
-                                  color: palette.text,
-                                ),
-                              )
-                            else
-                              SimTypewriter(
-                                key: ValueKey('question:${content.question}'),
-                                text: content.question,
-                                charactersPerTick: 4,
-                                tickDuration: const Duration(milliseconds: 16),
-                                style: SimTypography.lessonQuestion.copyWith(
-                                  color: palette.text,
-                                ),
-                                cursorColor: palette.text,
-                                onTick: _scrollToBottom,
-                                onDone: () {
-                                  setState(
-                                    () => _questionDoneKey = content.question,
-                                  );
-                                  _scrollToTarget(
-                                    _answersKey,
-                                    alignment: 0.5,
-                                    force: !_userScrollOverride,
-                                    target: _AulaScrollTarget.question,
-                                  );
-                                },
-                              ),
-                            if (questionReady) ...[
-                              const SizedBox(height: 10),
-                              _StaggeredAnswerList(
-                                key: _answersKey,
-                                children: [
-                                  answerWithSignals(AnswerLetter.A, 'A'),
-                                  answerWithSignals(AnswerLetter.B, 'B'),
-                                  answerWithSignals(AnswerLetter.C, 'C'),
-                                ],
-                              ),
-                            ],
-
-                            if (isProcessing) ...[
-                              const SizedBox(height: 14),
-                              const StatusLine(
-                                icon: Icons.auto_awesome_outlined,
-                                text: 'Registrando...',
-                                loading: true,
-                              ),
-                            ],
-                          ],
+                      _RevealOnMount(
+                        key: ValueKey(
+                          'question:${snapshot?.itemMarker}:${content.question.hashCode}',
                         ),
-                      ),
-                    ], // end challenge block
-                    // FeedbackBox + Duvida button + Proximo
-                    if (isCompleted && feedbackKey != null) ...[
-                      const SizedBox(height: 10),
-                      // "Duvida" button (spec: concluido state, before FeedbackBox)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Semantics(
-                          button: true,
-                          enabled:
-                              session.doubt.status != DoubtStatus.processing,
-                          label: 'Abrir dúvida da aula',
-                          child: Material(
-                            color: palette.surface,
-                            borderRadius: BorderRadius.circular(8),
-                            child: InkWell(
-                              onTap:
-                                  session.doubt.status != DoubtStatus.processing
-                                  ? session.toggleDoubt
-                                  : null,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
+                        child: SimCard(
+                          key: _questionKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (session.prefs == null)
+                                Text(
+                                  content.question,
+                                  style: SimTypography.lessonQuestion.copyWith(
+                                    color: palette.text,
+                                  ),
+                                )
+                              else
+                                SimTypewriter(
+                                  key: ValueKey('question:${content.question}'),
+                                  text: content.question,
+                                  charactersPerTick: 4,
+                                  tickDuration: const Duration(
+                                    milliseconds: 16,
+                                  ),
+                                  style: SimTypography.lessonQuestion.copyWith(
+                                    color: palette.text,
+                                  ),
+                                  cursorColor: palette.text,
+                                  onTick: _scrollToBottom,
+                                  onDone: () {
+                                    setState(
+                                      () => _questionDoneKey = content.question,
+                                    );
+                                    _scrollToTarget(
+                                      _answersKey,
+                                      alignment: 0.5,
+                                      force: !_userScrollOverride,
+                                      target: _AulaScrollTarget.question,
+                                    );
+                                  },
                                 ),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: palette.border),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x47111827),
-                                      blurRadius: 20,
-                                      spreadRadius: -16,
-                                      offset: Offset(0, 8),
-                                    ),
+                              if (questionReady) ...[
+                                const SizedBox(height: 10),
+                                _StaggeredAnswerList(
+                                  key: _answersKey,
+                                  children: [
+                                    answerWithSignals(AnswerLetter.A, 'A'),
+                                    answerWithSignals(AnswerLetter.B, 'B'),
+                                    answerWithSignals(AnswerLetter.C, 'C'),
                                   ],
                                 ),
-                                child: Text(
-                                  session.doubt.status == DoubtStatus.processing
-                                      ? 'Dúvida...'
-                                      : 'Dúvida',
-                                  style: TextStyle(
-                                    color:
-                                        session.doubt.status ==
-                                            DoubtStatus.processing
-                                        ? palette.muted
-                                        : palette.text,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              ],
+
+                              if (isProcessing) ...[
+                                const SizedBox(height: 14),
+                                const StatusLine(
+                                  icon: Icons.auto_awesome_outlined,
+                                  text: 'Registrando...',
+                                  loading: true,
                                 ),
-                              ),
-                            ),
+                              ],
+                            ],
                           ),
                         ),
                       ),
+                    ], // end challenge block
+                    if (isCompleted && feedbackKey != null) ...[
                       const SizedBox(height: 10),
                       KeyedSubtree(
                         key: _feedbackKey,
                         child: _FeedbackBox(
                           isCorrect: wasCorrect ?? false,
                           message: feedbackText(feedbackKey),
-                          nextLabel: nextBtnText(nextKey),
-                          nextReady:
-                              session.doubt.status != DoubtStatus.processing,
+                          doubtLabel:
+                              session.doubt.status == DoubtStatus.processing
+                              ? t('aula_doubt_processing')
+                              : t('aula_doubt_about_question'),
+                          nextLabel: t(viewModel?.nextLabel ?? 'aula_next'),
+                          busy: session.doubt.status == DoubtStatus.processing,
+                          onAskDoubt: () {
+                            _prepareUserDrivenScroll();
+                            session.toggleDoubt();
+                          },
                           onNext: () {
                             _prepareUserDrivenScroll();
                             unawaited(session.advanceAula());
@@ -1546,21 +1533,119 @@ class _QuestionHistoryBlock extends StatelessWidget {
   }
 }
 
+class _RevealOnMount extends StatefulWidget {
+  const _RevealOnMount({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  State<_RevealOnMount> createState() => _RevealOnMountState();
+}
+
+class _RevealOnMountState extends State<_RevealOnMount>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (MediaQuery.of(context).disableAnimations) {
+        _controller.value = 1;
+      } else {
+        _controller.forward();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.of(context).disableAnimations) return widget.child;
+    return AnimatedBuilder(
+      animation: _controller,
+      child: widget.child,
+      builder: (context, child) {
+        final value = Curves.easeOutCubic.transform(_controller.value);
+        return Opacity(
+          opacity: value,
+          child: Transform.scale(
+            scale: 0.96 + (0.04 * value),
+            alignment: Alignment.topLeft,
+            child: Transform.translate(
+              offset: Offset(0, 12 * (1 - value)),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LayerBadge extends StatelessWidget {
+  const _LayerBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: palette.text,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1F111827),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: palette.background,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+}
+
 // AUL-5: FeedbackBox with fade+slide-up animation on appear
 class _FeedbackBox extends StatefulWidget {
   const _FeedbackBox({
     required this.isCorrect,
     required this.message,
-    this.nextLabel,
-    this.nextReady = true,
-    this.onNext,
+    required this.doubtLabel,
+    required this.nextLabel,
+    required this.busy,
+    required this.onAskDoubt,
+    required this.onNext,
   });
 
   final bool isCorrect;
   final String message;
-  final String? nextLabel;
-  final bool nextReady;
-  final VoidCallback? onNext;
+  final String doubtLabel;
+  final String nextLabel;
+  final bool busy;
+  final VoidCallback onAskDoubt;
+  final VoidCallback onNext;
 
   @override
   State<_FeedbackBox> createState() => _FeedbackBoxState();
@@ -1642,68 +1727,110 @@ class _FeedbackBoxState extends State<_FeedbackBox>
                   ),
                 ],
               );
-              final next = widget.onNext == null
-                  ? null
-                  : Semantics(
-                      button: true,
-                      enabled: widget.nextReady,
-                      excludeSemantics: true,
-                      label: 'Avançar aula',
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                        child: InkWell(
-                          onTap: widget.nextReady ? widget.onNext : null,
-                          borderRadius: BorderRadius.circular(10),
-                          child: Container(
-                            alignment: Alignment.center,
-                            constraints: const BoxConstraints(
-                              minHeight: SimTouch.min,
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: widget.nextReady
-                                  ? simGradientPrimary
-                                  : null,
-                              color: widget.nextReady ? null : simLight,
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: widget.nextReady
-                                  ? simShadowGlow
-                                  : null,
-                            ),
-                            child: Text(
-                              '${widget.nextLabel ?? ''} >>',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: widget.nextReady
-                                    ? palette.text
-                                    : palette.muted,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-              if (next == null) return message;
-              if (compact) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [message, const SizedBox(height: 12), next],
-                );
-              }
-              return Row(
+              final actions = [
+                Expanded(
+                  child: _FeedbackActionButton(
+                    label: widget.doubtLabel,
+                    enabled: !widget.busy,
+                    primary: false,
+                    onTap: widget.onAskDoubt,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _FeedbackActionButton(
+                    label: widget.nextLabel,
+                    enabled: !widget.busy,
+                    primary: true,
+                    onTap: widget.onNext,
+                  ),
+                ),
+              ];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: message),
-                  const SizedBox(width: 10),
-                  Flexible(child: next),
+                  message,
+                  const SizedBox(height: 14),
+                  if (compact)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _FeedbackActionButton(
+                          label: widget.doubtLabel,
+                          enabled: !widget.busy,
+                          primary: false,
+                          onTap: widget.onAskDoubt,
+                        ),
+                        const SizedBox(height: 10),
+                        _FeedbackActionButton(
+                          label: widget.nextLabel,
+                          enabled: !widget.busy,
+                          primary: true,
+                          onTap: widget.onNext,
+                        ),
+                      ],
+                    )
+                  else
+                    Row(children: actions),
                 ],
               );
             },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeedbackActionButton extends StatelessWidget {
+  const _FeedbackActionButton({
+    required this.label,
+    required this.enabled,
+    required this.primary,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool enabled;
+  final bool primary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final background = primary ? palette.text : palette.surface;
+    final foreground = primary ? palette.background : palette.text;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      child: Material(
+        color: enabled ? background : palette.surfaceSoft,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: primary ? palette.text : palette.border,
+              ),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: enabled ? foreground : palette.muted,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ),
       ),
@@ -1782,9 +1909,13 @@ class _StaggeredAnswerListState extends State<_StaggeredAnswerList>
               final curved = Curves.easeOutCubic.transform(value);
               return Opacity(
                 opacity: curved,
-                child: Transform.translate(
-                  offset: Offset(0, 10 * (1 - curved)),
-                  child: child,
+                child: Transform.scale(
+                  scale: 0.97 + (0.03 * curved),
+                  alignment: Alignment.topLeft,
+                  child: Transform.translate(
+                    offset: Offset(0, 10 * (1 - curved)),
+                    child: child,
+                  ),
                 ),
               );
             },
