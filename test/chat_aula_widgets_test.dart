@@ -175,6 +175,50 @@ void main() {
     expect(bubbleRect.left, greaterThan(200));
   });
 
+  testWidgets('chat timeline constrains reading width on medium and wide', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    for (final entry in const [
+      (size: Size(700, 900), maxWidth: 620.0),
+      (size: Size(1024, 768), maxWidth: 620.0),
+      (size: Size(1440, 900), maxWidth: 680.0),
+    ]) {
+      await tester.binding.setSurfaceSize(entry.size);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChatAulaTimeline(
+              messages: const [
+                ChatLessonMessage(
+                  id: 'wide-readable-message',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.explanation,
+                  text:
+                      'Mensagem longa para validar leitura madura em tablet e telas largas.',
+                ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+
+      final bubbleRect = tester.getRect(find.byType(ChatAulaMessageBubble));
+      expect(bubbleRect.width, lessThanOrEqualTo(entry.maxWidth));
+      expect(
+        (bubbleRect.left - ((entry.size.width - bubbleRect.width) / 2)).abs(),
+        lessThan(1),
+      );
+    }
+  });
+
   testWidgets('chat options open signals inline under selected answer', (
     tester,
   ) async {
@@ -714,6 +758,44 @@ void main() {
       expect(find.text('Nova explicacao do item.'), findsOneWidget);
     },
   );
+
+  testWidgets('chat return button follows reading column on wide layout', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final key = GlobalKey<_ChatTimelineHarnessState>();
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 520,
+            child: _ChatTimelineHarness(key: key, scrollController: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const Key('chat-aula-timeline')),
+      const Offset(0, 900),
+    );
+    await tester.pump(const Duration(milliseconds: 220));
+
+    key.currentState!.appendNewLessonTurn();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    final buttonRect = tester.getRect(
+      find.byKey(const Key('chat-return-current-button')),
+    );
+    expect(buttonRect.right, lessThan(1100));
+    expect(buttonRect.left, greaterThan(720));
+  });
 
   testWidgets('chat timeline supports certified keyboard navigation', (
     tester,
