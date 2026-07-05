@@ -182,66 +182,25 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         kind: ChatLessonMessageKind.options,
         selectedAnswer: selected,
         options: _options(content, selected: selected, enabled: !locked),
+        signals: phase?.type == ClassroomPhaseType.expandida
+            ? _signals(enabled: true)
+            : const [],
         deliveryStatus: ChatLessonDeliveryStatus.delivered,
       ),
     );
 
-    if (selected != null) {
+    if (phase?.type == ClassroomPhaseType.processando) {
       messages.add(
         ChatLessonMessage(
-          id: 'student-answer-$activeId',
-          role: ChatLessonMessageRole.student,
-          kind: ChatLessonMessageKind.studentAnswer,
-          text: selected.name,
-          selectedAnswer: selected,
-          deliveryStatus: ChatLessonDeliveryStatus.sent,
+          id: 'processing-signal',
+          role: ChatLessonMessageRole.system,
+          kind: ChatLessonMessageKind.processing,
+          text: t('aula_registering'),
+          deliveryStatus: ChatLessonDeliveryStatus.processing,
         ),
       );
-    }
-
-    if (phase?.type == ClassroomPhaseType.expandida) {
-      messages.add(
-        ChatLessonMessage(
-          id: 'signals-$activeId',
-          role: ChatLessonMessageRole.sim,
-          kind: ChatLessonMessageKind.signals,
-          signals: _signals(enabled: true),
-          deliveryStatus: ChatLessonDeliveryStatus.delivered,
-        ),
-      );
-    } else if (phase?.type == ClassroomPhaseType.processando) {
-      messages
-        ..add(
-          ChatLessonMessage(
-            id: 'student-signal-$activeId',
-            role: ChatLessonMessageRole.student,
-            kind: ChatLessonMessageKind.studentSignal,
-            text: _signalText(phase?.signal),
-            selectedSignal: phase?.signal,
-            deliveryStatus: ChatLessonDeliveryStatus.sent,
-          ),
-        )
-        ..add(
-          ChatLessonMessage(
-            id: 'processing-signal',
-            role: ChatLessonMessageRole.system,
-            kind: ChatLessonMessageKind.processing,
-            text: t('aula_registering'),
-            deliveryStatus: ChatLessonDeliveryStatus.processing,
-          ),
-        );
     } else if (phase?.type == ClassroomPhaseType.concluido) {
       messages
-        ..add(
-          ChatLessonMessage(
-            id: 'student-signal-$activeId',
-            role: ChatLessonMessageRole.student,
-            kind: ChatLessonMessageKind.studentSignal,
-            text: _signalText(phase?.signal),
-            selectedSignal: phase?.signal,
-            deliveryStatus: ChatLessonDeliveryStatus.sent,
-          ),
-        )
         ..add(
           ChatLessonMessage(
             id: 'doubt-action',
@@ -376,13 +335,4 @@ List<ChatLessonSignal> _signals({required bool enabled}) {
         ),
       )
       .toList(growable: false);
-}
-
-String _signalText(DecisionSignal? signal) {
-  return switch (signal) {
-    DecisionSignal.one => '1',
-    DecisionSignal.two => '2',
-    DecisionSignal.three => '3',
-    null => '',
-  };
 }

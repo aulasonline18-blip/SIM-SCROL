@@ -25,8 +25,12 @@ String buildLessonAnswerFeedback({
   }
   if (correct && signal == DecisionSignal.one) return 'aula_fb_correct';
   if (correct && signal == DecisionSignal.two) return 'aula_fb_correct_rev';
-  if (signal == DecisionSignal.three) return 'aula_fb_dont_know';
-  return 'aula_fb_redo';
+  if (correct && signal == DecisionSignal.three) {
+    return 'aula_fb_correct_dont_know';
+  }
+  if (signal == DecisionSignal.one) return 'aula_fb_wrong_confident';
+  if (signal == DecisionSignal.two) return 'aula_fb_wrong_uncertain';
+  return 'aula_fb_wrong_dont_know';
 }
 
 String nextButtonLabel({

@@ -2798,33 +2798,31 @@ void main() {
     final pipeline = LessonVisualPipeline(
       imageClient: FakeImageClient(),
       visualRouterClient: router,
+      softwareRenderCatalog: const StubSoftwareRenderCatalog(),
     );
 
     await pipeline.resolveVisual(
       trigger: const LessonVisualTrigger(
         needsImage: true,
         pedagogicalNeed: 'important',
-        topic: 'diagrama ambíguo de causa e efeito',
+        topic: 'fluxograma de entrada e saída',
         visualType: 'diagram',
-        keyElements: ['causa', 'efeito'],
-        highlightFocus: 'relação entre os eventos',
+        keyElements: ['entrada', 'processamento', 'saída'],
+        highlightFocus: 'ordem entre entrada e saída',
         complexity: 'simple',
-        imagePrompt: 'diagrama de causa e efeito sem foto realista',
+        imagePrompt: 'desenhar caixas conectadas por setas',
       ),
       lessonKey: 'n3-context',
       stableLang: 'pt-BR',
       allowPaidImages: false,
     );
 
-    expect(router.lastTopic, 'diagrama ambíguo de causa e efeito');
+    expect(router.lastTopic, 'fluxograma de entrada e saída');
     expect(router.lastVisualType, 'diagram');
-    expect(
-      router.lastImagePrompt,
-      'diagrama de causa e efeito sem foto realista',
-    );
-    expect(router.lastKeyElements, ['causa', 'efeito']);
+    expect(router.lastImagePrompt, 'desenhar caixas conectadas por setas');
+    expect(router.lastKeyElements, ['entrada', 'processamento', 'saída']);
     expect(router.lastPedagogicalNeed, 'important');
-    expect(router.lastHighlightFocus, 'relação entre os eventos');
+    expect(router.lastHighlightFocus, 'ordem entre entrada e saída');
     expect(router.lastComplexity, 'simple');
     expect(router.lastStableLang, 'pt-BR');
     expect(router.lastN2?.pedagogicalRole?.id, isNotEmpty);
@@ -2845,15 +2843,17 @@ void main() {
       imageClient: client,
       visualRouterClient: router,
       telemetry: telemetry,
+      softwareRenderCatalog: const StubSoftwareRenderCatalog(),
     );
 
     final result = await pipeline.resolveVisual(
       trigger: const LessonVisualTrigger(
         needsImage: true,
         pedagogicalNeed: 'important',
-        topic: 'diagrama visual que pode entregar a resposta',
+        topic: 'fluxograma visual que pode entregar a resposta',
         visualType: 'diagram',
-        imagePrompt: 'diagrama ambíguo com risco pedagógico',
+        imagePrompt:
+            'desenhar caixas conectadas por setas com risco pedagógico',
       ),
       lessonKey: 'n3-no-image',
       allowPaidImages: true,
@@ -2951,6 +2951,99 @@ void main() {
       expect(result.source, 'local_software');
       expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
       expect(Uri.decodeFull(result.displayUrl!), contains('x²'));
+      expect(client.calls, 0);
+    },
+  );
+
+  test(
+    'poor but recoverable math visual trigger renders local graph before paid offer',
+    () async {
+      final client = FakeImageClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: const ThrowingVisualRouterClient(),
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'important',
+          topic: 'apoio visual',
+          visualType: 'diagram',
+          imagePrompt:
+              'Para f(x)=2x^2-3x+1, desenhar plano cartesiano com parábola, eixo x, eixo y e vértice.',
+        ),
+        lessonKey: 'recovered-poor-math-trigger',
+        allowPaidImages: true,
+        acceptedOfferId: null,
+      );
+
+      expect(result.source, 'local_software');
+      expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+      expect(Uri.decodeFull(result.displayUrl!), contains('<svg'));
+      expect(client.calls, 0);
+    },
+  );
+
+  test(
+    'poor but recoverable physics force trigger renders local SVG before paid offer',
+    () async {
+      final client = FakeImageClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: const ThrowingVisualRouterClient(),
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'important',
+          topic: 'apoio visual',
+          visualType: 'diagram',
+          imagePrompt:
+              'Um bloco recebe peso, normal, atrito e força aplicada; mostrar vetores e força resultante.',
+        ),
+        lessonKey: 'recovered-poor-force-trigger',
+        allowPaidImages: true,
+        acceptedOfferId: null,
+      );
+
+      expect(result.source, 'local_software');
+      final svg = Uri.decodeFull(result.displayUrl!);
+      expect(svg, contains('peso'));
+      expect(svg, contains('normal'));
+      expect(svg, contains('resultante'));
+      expect(client.calls, 0);
+    },
+  );
+
+  test(
+    'poor but recoverable chemistry trigger renders local SVG before paid offer',
+    () async {
+      final client = FakeImageClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: const ThrowingVisualRouterClient(),
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'important',
+          topic: 'apoio visual',
+          visualType: 'diagram',
+          imagePrompt:
+              'Reação química com reagentes, seta de reação, produtos e conservação dos átomos.',
+        ),
+        lessonKey: 'recovered-poor-chemistry-trigger',
+        allowPaidImages: true,
+        acceptedOfferId: null,
+      );
+
+      expect(result.source, 'local_software');
+      final svg = Uri.decodeFull(result.displayUrl!);
+      expect(svg, contains('Reação'));
+      expect(svg, contains('reagentes'));
       expect(client.calls, 0);
     },
   );

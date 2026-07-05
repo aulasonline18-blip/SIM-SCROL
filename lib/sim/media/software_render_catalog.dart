@@ -207,10 +207,11 @@ class SoftwareVisualRequest {
   final String? academicLevel;
   final String? pedagogicalGoal;
 
-  String get text => [topic, visualType, imagePrompt]
-      .where((value) => value != null && value.trim().isNotEmpty)
-      .join(' ')
-      .toLowerCase();
+  String get text =>
+      [topic, visualType, imagePrompt, highlightFocus, ...keyElements]
+          .where((value) => value != null && value.trim().isNotEmpty)
+          .join(' ')
+          .toLowerCase();
 
   String get domainText =>
       [
@@ -231,11 +232,47 @@ class SoftwareVisualRequest {
 
   _VisualKnowledgeDomain get _domain => _inferKnowledgeDomain(domainText);
 
+  bool get _hasLockedSoftwareDomain {
+    final domain = _domain;
+    return domain == _VisualKnowledgeDomain.mathematics ||
+        domain == _VisualKnowledgeDomain.physics ||
+        domain == _VisualKnowledgeDomain.chemistry ||
+        domain == _VisualKnowledgeDomain.logic;
+  }
+
   VisualPedagogicalRole get role => inferVisualPedagogicalRole(
     topic: topic,
     visualType: visualType,
     imagePrompt: imagePrompt,
   );
+
+  SoftwareVisualRequest copyWith({
+    VisualN2Result? n2,
+    String? topic,
+    String? visualType,
+    String? imagePrompt,
+    List<BlueprintColorLegendItem>? colorLegend,
+    List<String>? keyElements,
+    String? highlightFocus,
+    String? complexity,
+    String? pedagogicalNeed,
+    String? academicLevel,
+    String? pedagogicalGoal,
+  }) {
+    return SoftwareVisualRequest(
+      n2: n2 ?? this.n2,
+      topic: topic ?? this.topic,
+      visualType: visualType ?? this.visualType,
+      imagePrompt: imagePrompt ?? this.imagePrompt,
+      colorLegend: colorLegend ?? this.colorLegend,
+      keyElements: keyElements ?? this.keyElements,
+      highlightFocus: highlightFocus ?? this.highlightFocus,
+      complexity: complexity ?? this.complexity,
+      pedagogicalNeed: pedagogicalNeed ?? this.pedagogicalNeed,
+      academicLevel: academicLevel ?? this.academicLevel,
+      pedagogicalGoal: pedagogicalGoal ?? this.pedagogicalGoal,
+    );
+  }
 }
 
 class SoftwareRenderResult {
@@ -266,8 +303,12 @@ class SoftwareRenderCatalog {
     _QuadraticRenderer(),
     _LinearRenderer(),
     _UnitCircleRenderer(),
+    _KinematicsGraphRenderer(),
+    _NumberLineRenderer(),
     _ForceDiagramRenderer(),
     _CircuitRenderer(),
+    _PHScaleRenderer(),
+    _ChemicalEquationBalanceRenderer(),
     _SyntaxTreeRenderer(),
     _FoodChainRenderer(),
     _TimelineRenderer(),
@@ -284,25 +325,30 @@ class SoftwareRenderCatalog {
   ];
 
   SoftwareRenderResult? render(SoftwareVisualRequest request) {
-    final text = request.text.trim();
+    final resolved = const VisualIntentResolver().resolve(request);
+    final text = resolved.text.trim();
     if (text.isEmpty) return null;
-    if (request.n2.verdict == VisualVerdict.ai ||
-        request.n2.verdict == VisualVerdict.noImage) {
+    if (resolved.n2.verdict == VisualVerdict.noImage) {
       return null;
     }
-    if (request.n2.verdict == VisualVerdict.ambiguous &&
-        request.n2.reason == 'N2_KEYWORDS_BOTH') {
+    if (resolved.n2.verdict == VisualVerdict.ai &&
+        !resolved._hasLockedSoftwareDomain) {
+      return null;
+    }
+    if (resolved.n2.verdict == VisualVerdict.ambiguous &&
+        resolved.n2.reason == 'N2_KEYWORDS_BOTH' &&
+        !resolved._hasLockedSoftwareDomain) {
       return null;
     }
 
     for (final renderer in _renderers) {
-      if (!renderer.accepts(request)) continue;
-      final dataUrl = renderer.render(request);
+      if (!renderer.accepts(resolved)) continue;
+      final dataUrl = renderer.render(resolved);
       if (dataUrl == null) continue;
       if (kDebugMode) {
         debugPrint(
           '[SOFTWARE_RENDER] renderer=${renderer.name} '
-          'role=${renderer.role.id} n2=${request.n2.verdict.name}/${request.n2.reason}',
+          'role=${renderer.role.id} n2=${resolved.n2.verdict.name}/${resolved.n2.reason}',
         );
       }
       return SoftwareRenderResult(
@@ -311,7 +357,248 @@ class SoftwareRenderCatalog {
         role: renderer.role,
       );
     }
+    final fallback = const _DomainFallbackRenderer();
+    if (fallback.accepts(resolved)) {
+      final dataUrl = fallback.render(resolved);
+      if (dataUrl != null) {
+        if (kDebugMode) {
+          debugPrint(
+            '[SOFTWARE_RENDER] renderer=${fallback.name} '
+            'role=${fallback.role.id} n2=${resolved.n2.verdict.name}/${resolved.n2.reason}',
+          );
+        }
+        return SoftwareRenderResult(
+          dataUrl: dataUrl,
+          renderer: fallback.name,
+          role: fallback.role,
+        );
+      }
+    }
     return null;
+  }
+}
+
+class VisualIntentResolver {
+  const VisualIntentResolver();
+
+  SoftwareVisualRequest resolve(SoftwareVisualRequest request) {
+    final domain = request._domain;
+    final inferredType = _inferVisualType(request, domain);
+    final elements = _mergeElements(
+      request.keyElements,
+      _defaultElements(domain, inferredType),
+    );
+    final prompt = _isGeneric(request.imagePrompt)
+        ? _defaultPrompt(domain, inferredType)
+        : request.imagePrompt;
+    final focus = _isGeneric(request.highlightFocus)
+        ? _defaultFocus(domain, inferredType, elements)
+        : request.highlightFocus;
+    final topic = _isGeneric(request.topic)
+        ? _bestTopicSeed(request, domain, inferredType)
+        : request.topic;
+    return request.copyWith(
+      topic: topic,
+      visualType: inferredType ?? request.visualType,
+      imagePrompt: prompt,
+      keyElements: elements,
+      highlightFocus: focus,
+    );
+  }
+
+  String? _inferVisualType(
+    SoftwareVisualRequest request,
+    _VisualKnowledgeDomain domain,
+  ) {
+    final current = _norm(request.visualType);
+    final generic =
+        current.isEmpty ||
+        const {
+          'diagram',
+          'process',
+          'spatial',
+          'structure',
+          'none',
+        }.contains(current);
+    if (!generic) return request.visualType;
+    final text = request.domainText;
+    if (_containsAny(text, const ['circuito', 'circuit', 'ohm', 'resistor'])) {
+      return 'circuit';
+    }
+    if (_containsAny(text, const [
+      'força',
+      'forca',
+      'force',
+      'vetor',
+      'normal',
+      'atrito',
+    ])) {
+      return 'force';
+    }
+    if (_containsAny(text, const [
+      'linha do tempo',
+      'timeline',
+      'cronologia',
+    ])) {
+      return 'timeline';
+    }
+    if (_containsAny(text, const ['tabela', 'coluna', 'linha'])) return 'table';
+    if (_containsAny(text, const [
+      'fluxograma',
+      'processo',
+      'etapa',
+      'passo',
+    ])) {
+      return 'flowchart';
+    }
+    if (_containsAny(text, const [
+      'comparação',
+      'comparacao',
+      'versus',
+      ' vs ',
+    ])) {
+      return 'comparison';
+    }
+    if (domain == _VisualKnowledgeDomain.mathematics) return 'graph';
+    if (domain == _VisualKnowledgeDomain.chemistry) return 'structure';
+    return request.visualType;
+  }
+
+  List<String> _defaultElements(_VisualKnowledgeDomain domain, String? type) {
+    final normalizedType = _norm(type);
+    if (normalizedType == 'graph') {
+      return const ['eixo x', 'eixo y', 'curva', 'ponto importante'];
+    }
+    if (normalizedType == 'force') {
+      return const ['corpo', 'peso', 'normal', 'força resultante'];
+    }
+    if (normalizedType == 'circuit') {
+      return const ['fonte', 'resistor', 'corrente', 'conexões'];
+    }
+    if (normalizedType == 'timeline') {
+      return const ['início', 'evento central', 'resultado'];
+    }
+    if (normalizedType == 'table') {
+      return const ['colunas', 'linhas', 'critérios', 'exemplos'];
+    }
+    if (normalizedType == 'flowchart') {
+      return const ['observar', 'decidir', 'aplicar'];
+    }
+    if (normalizedType == 'comparison') {
+      return const ['lado A', 'lado B', 'diferenças', 'semelhanças'];
+    }
+    switch (domain) {
+      case _VisualKnowledgeDomain.chemistry:
+        return const ['reagentes', 'seta de reação', 'produtos', 'partículas'];
+      case _VisualKnowledgeDomain.physics:
+        return const ['sistema', 'grandezas', 'setas', 'resultado'];
+      case _VisualKnowledgeDomain.mathematics:
+        return const ['expressão', 'representação', 'relação', 'resultado'];
+      default:
+        return const ['conceito principal', 'relação', 'exemplo', 'conclusão'];
+    }
+  }
+
+  String _defaultPrompt(_VisualKnowledgeDomain domain, String? type) {
+    final normalizedType = _norm(type);
+    if (normalizedType == 'graph') {
+      return 'desenhar representação matemática com eixo x, eixo y, curva, pontos importantes e rótulos';
+    }
+    if (normalizedType == 'force') {
+      return 'desenhar diagrama de forças com corpo, vetores, setas, direção, sentido e rótulos';
+    }
+    if (normalizedType == 'circuit') {
+      return 'desenhar circuito esquemático com fonte, resistor, conexões, corrente e rótulos';
+    }
+    if (normalizedType == 'flowchart') {
+      return 'desenhar fluxograma com caixas, setas, etapas, decisão e resultado';
+    }
+    if (normalizedType == 'timeline') {
+      return 'desenhar linha do tempo com eventos em ordem, datas ou etapas e rótulos';
+    }
+    if (normalizedType == 'table') {
+      return 'desenhar tabela organizada com colunas, linhas, critérios e exemplos';
+    }
+    if (normalizedType == 'comparison') {
+      return 'desenhar comparação lado a lado com diferenças, semelhanças e rótulos';
+    }
+    if (domain == _VisualKnowledgeDomain.chemistry) {
+      return 'desenhar esquema químico com reagentes, seta de reação, produtos, partículas e rótulos';
+    }
+    return 'desenhar diagrama estrutural com blocos, setas, relações e rótulos';
+  }
+
+  String _defaultFocus(
+    _VisualKnowledgeDomain domain,
+    String? type,
+    List<String> elements,
+  ) {
+    final visible = elements.take(3).join(', ');
+    if (visible.isNotEmpty) return 'mostrar $visible no item';
+    return 'mostrar a relação principal de ${_domainBadge(domain)}';
+  }
+
+  String? _bestTopicSeed(
+    SoftwareVisualRequest request,
+    _VisualKnowledgeDomain domain,
+    String? type,
+  ) {
+    final fromPrompt = _firstUsefulClause(request.imagePrompt);
+    if (fromPrompt != null) return fromPrompt;
+    final fromFocus = _firstUsefulClause(request.highlightFocus);
+    if (fromFocus != null) return fromFocus;
+    if (domain != _VisualKnowledgeDomain.unknown) return _domainBadge(domain);
+    return type;
+  }
+
+  List<String> _mergeElements(List<String> existing, List<String> inferred) {
+    const maxElements = 12;
+    final out = <String>[];
+    for (final value in existing) {
+      final clean = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (clean.isEmpty) continue;
+      final exists = out.any(
+        (item) => item.toLowerCase() == clean.toLowerCase(),
+      );
+      if (!exists) out.add(clean);
+      if (out.length >= maxElements) break;
+    }
+    if (out.length >= 3) return out;
+    for (final value in inferred) {
+      final clean = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (clean.isEmpty) continue;
+      final exists = out.any(
+        (item) => item.toLowerCase() == clean.toLowerCase(),
+      );
+      if (!exists) out.add(clean);
+      if (out.length >= maxElements) break;
+    }
+    return out;
+  }
+
+  bool _isGeneric(String? value) {
+    final text = _norm(value);
+    if (text.isEmpty) return true;
+    return const {
+      'apoio visual',
+      'imagem da aula',
+      'imagem de apoio',
+      'criar imagem',
+      'criar imagem de apoio',
+      'visual aid',
+      'lesson image',
+    }.contains(text);
+  }
+
+  String? _firstUsefulClause(String? value) {
+    final text = (value ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (text.length < 8 || _isGeneric(text)) return null;
+    final parts = text.split(RegExp(r'[|.;]'));
+    for (final part in parts) {
+      final clean = part.trim();
+      if (clean.length >= 8 && !_isGeneric(clean)) return clean;
+    }
+    return text.length > 120 ? text.substring(0, 120) : text;
   }
 }
 
@@ -643,6 +930,11 @@ class _LinearRenderer extends SoftwareVisualRenderer {
 
   @override
   bool accepts(SoftwareVisualRequest request) {
+    final visualType = _norm(request.visualType);
+    final graphish =
+        request._domain == _VisualKnowledgeDomain.mathematics ||
+        visualType == 'graph';
+    if (!graphish) return false;
     return _containsAny(request.text, const [
       'linear',
       'reta',
@@ -650,6 +942,10 @@ class _LinearRenderer extends SoftwareVisualRenderer {
       'linear function',
       'função linear',
       'funcao linear',
+      'função afim',
+      'funcao afim',
+      'y =',
+      'f(x)',
     ]);
   }
 
@@ -707,6 +1003,132 @@ class _UnitCircleRenderer extends SoftwareVisualRenderer {
         },
       },
     });
+  }
+}
+
+class _KinematicsGraphRenderer extends SoftwareVisualRenderer {
+  const _KinematicsGraphRenderer();
+
+  @override
+  String get name => 'KinematicsGraphRenderer';
+
+  @override
+  VisualPedagogicalRole get role => VisualPedagogicalRole.graphReasoning;
+
+  @override
+  bool accepts(SoftwareVisualRequest request) {
+    return request._domain == _VisualKnowledgeDomain.physics &&
+        _containsAny(request.domainText, const [
+          'mru',
+          'mruv',
+          'cinemática',
+          'cinematica',
+          'velocidade',
+          'aceleração',
+          'aceleracao',
+          'posição',
+          'posicao',
+          'tempo',
+          'v(t)',
+          's(t)',
+        ]);
+  }
+
+  @override
+  String? render(SoftwareVisualRequest request) {
+    final text = request.domainText;
+    final palette = PedagogicalVisualPalette.fromColorLegend(
+      request.colorLegend,
+    );
+    final isPosition = _containsAny(text, const [
+      'posição',
+      'posicao',
+      's(t)',
+      'deslocamento',
+    ]);
+    return tryRenderMathTemplate({
+      'math_template': {
+        'name': isPosition ? 'kinematics_st' : 'kinematics_vt',
+        'params': {
+          if (isPosition) 's0': 0,
+          'v0': _containsAny(text, const ['negativa', 'sentido contrário'])
+              ? -2
+              : 2,
+          'a': _containsAny(text, const ['mruv', 'aceleração', 'aceleracao'])
+              ? 1
+              : 0,
+          't_max': 6,
+          'labels': {
+            'title': isPosition ? 'Posição x tempo' : 'Velocidade x tempo',
+            'x': 't',
+            'y': isPosition ? 's' : 'v',
+          },
+          'visual_palette': _mathVisualPaletteParams(palette),
+          'visual_hierarchy': _mathVisualHierarchyParams(),
+        },
+      },
+    });
+  }
+}
+
+class _NumberLineRenderer extends SoftwareVisualRenderer {
+  const _NumberLineRenderer();
+
+  @override
+  String get name => 'NumberLineRenderer';
+
+  @override
+  VisualPedagogicalRole get role => VisualPedagogicalRole.spatialReasoning;
+
+  @override
+  bool accepts(SoftwareVisualRequest request) {
+    return request._domain == _VisualKnowledgeDomain.mathematics &&
+        _containsAny(request.domainText, const [
+          'reta numérica',
+          'reta numerica',
+          'number line',
+          'inequação',
+          'inequacao',
+          'intervalo',
+          'maior que',
+          'menor que',
+        ]);
+  }
+
+  @override
+  String? render(SoftwareVisualRequest request) {
+    final palette = PedagogicalVisualPalette.fromColorLegend(
+      request.colorLegend,
+    );
+    final title = _bestTitle(request.topic, 'Reta numérica');
+    final labels = _contextLabels(request, const [
+      'menor',
+      '0',
+      'referência',
+      'maior',
+    ], count: 4);
+    final caption = _contextCaption(
+      request,
+      'a posição na reta mostra ordem, intervalo e sentido da comparação',
+    );
+    return sanitizeAndEncodeSvg('''
+<svg width="900" height="420" viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+  ${_canvasBackground(palette, height: 420)}
+  ${_titleText(title, palette)}
+  <defs>${_arrowMarker(palette)}</defs>
+  <line x1="120" y1="220" x2="780" y2="220" stroke="${palette.connector}" ${_vhStroke(PedagogicalVisualHierarchyRole.connector)} stroke-linecap="round" marker-end="url(#arrow)"/>
+  <g ${_fontGroup(palette)}>
+    <line x1="230" y1="190" x2="230" y2="250" stroke="${palette.border}" ${_vhStroke(PedagogicalVisualHierarchyRole.secondary)}/>
+    <line x1="450" y1="180" x2="450" y2="260" stroke="${palette.strokeFor(PedagogicalVisualRole.primaryConcept)}" ${_vhStroke(PedagogicalVisualHierarchyRole.primary)}/>
+    <line x1="670" y1="190" x2="670" y2="250" stroke="${palette.border}" ${_vhStroke(PedagogicalVisualHierarchyRole.secondary)}/>
+    <circle cx="450" cy="220" r="18" fill="${palette.fillFor(PedagogicalVisualRole.primaryConcept)}" stroke="${palette.strokeFor(PedagogicalVisualRole.primaryConcept)}" ${_vhStroke(PedagogicalVisualHierarchyRole.primary)}/>
+    ${_layoutText(230, 292, labels[0], PedagogicalVisualHierarchyRole.secondary, maxCharsPerLine: 12)}
+    ${_layoutText(450, 315, labels[1], PedagogicalVisualHierarchyRole.primary, maxCharsPerLine: 12)}
+    ${_layoutText(450, 160, labels[2], PedagogicalVisualHierarchyRole.attention, maxCharsPerLine: 16)}
+    ${_layoutText(670, 292, labels[3], PedagogicalVisualHierarchyRole.secondary, maxCharsPerLine: 12)}
+  </g>
+  ${_captionText(450, 372, caption, palette)}
+</svg>''');
   }
 }
 
@@ -923,6 +1345,136 @@ class _ChemistryReactionRenderer extends SoftwareVisualRenderer {
   </g>
   ${_captionText(450, 448, labels[3], palette)}
   ${_captionText(450, 500, caption, palette)}
+</svg>''');
+  }
+}
+
+class _PHScaleRenderer extends SoftwareVisualRenderer {
+  const _PHScaleRenderer();
+
+  @override
+  String get name => 'PHScaleRenderer';
+
+  @override
+  VisualPedagogicalRole get role => VisualPedagogicalRole.comparison;
+
+  @override
+  bool accepts(SoftwareVisualRequest request) {
+    return request._domain == _VisualKnowledgeDomain.chemistry &&
+        (_containsToken(request.domainText, 'ph') ||
+            _containsAny(request.domainText, const [
+              'ácido',
+              'acido',
+              'alcalino',
+              'alcalina',
+              'neutralização',
+              'neutralizacao',
+            ]) ||
+            _containsToken(request.domainText, 'base'));
+  }
+
+  @override
+  String? render(SoftwareVisualRequest request) {
+    final palette = PedagogicalVisualPalette.fromColorLegend(
+      request.colorLegend,
+    );
+    final title = _bestTitle(request.topic, 'Escala de pH');
+    final labels = _contextLabels(request, const [
+      'ácido',
+      'neutro',
+      'básico',
+      'pH baixo',
+      'pH alto',
+    ], count: 5);
+    final caption = _contextCaption(
+      request,
+      'a escala organiza acidez, neutralidade e basicidade',
+    );
+    return sanitizeAndEncodeSvg('''
+<svg width="900" height="420" viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+  ${_canvasBackground(palette, height: 420)}
+  ${_titleText(title, palette)}
+  <defs>
+    <linearGradient id="ph" x1="0" x2="1">
+      <stop offset="0%" stop-color="${palette.critical}"/>
+      <stop offset="50%" stop-color="${palette.attention}"/>
+      <stop offset="100%" stop-color="${palette.primaryConcept}"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="190" width="700" height="70" rx="${_vhRadius(PedagogicalVisualHierarchyRole.primary)}" fill="url(#ph)" stroke="${palette.border}" ${_vhStroke(PedagogicalVisualHierarchyRole.primary)}/>
+  <g ${_fontGroup(palette)}>
+    ${_layoutText(155, 155, labels[0], PedagogicalVisualHierarchyRole.critical, maxCharsPerLine: 13)}
+    ${_layoutText(450, 155, labels[1], PedagogicalVisualHierarchyRole.attention, maxCharsPerLine: 13)}
+    ${_layoutText(745, 155, labels[2], PedagogicalVisualHierarchyRole.primary, maxCharsPerLine: 13)}
+    ${_layoutText(155, 300, labels[3], PedagogicalVisualHierarchyRole.example, maxCharsPerLine: 13)}
+    ${_layoutText(745, 300, labels[4], PedagogicalVisualHierarchyRole.example, maxCharsPerLine: 13)}
+    <line x1="450" y1="180" x2="450" y2="275" stroke="${palette.border}" ${_vhStroke(PedagogicalVisualHierarchyRole.connector)}/>
+    ${_layoutText(450, 232, '7', PedagogicalVisualHierarchyRole.primary, maxCharsPerLine: 4)}
+  </g>
+  ${_captionText(450, 372, caption, palette)}
+</svg>''');
+  }
+}
+
+class _ChemicalEquationBalanceRenderer extends SoftwareVisualRenderer {
+  const _ChemicalEquationBalanceRenderer();
+
+  @override
+  String get name => 'ChemicalEquationBalanceRenderer';
+
+  @override
+  VisualPedagogicalRole get role => VisualPedagogicalRole.structureMap;
+
+  @override
+  bool accepts(SoftwareVisualRequest request) {
+    return request._domain == _VisualKnowledgeDomain.chemistry &&
+        _containsAny(request.domainText, const [
+          'balanceamento',
+          'balancear',
+          'coeficiente',
+          'conservação',
+          'conservacao',
+          'equação química',
+          'equacao quimica',
+        ]);
+  }
+
+  @override
+  String? render(SoftwareVisualRequest request) {
+    final palette = PedagogicalVisualPalette.fromColorLegend(
+      request.colorLegend,
+    );
+    final title = _bestTitle(request.topic, 'Balanceamento');
+    final labels = _contextLabels(request, const [
+      'reagentes',
+      'coeficientes',
+      'produtos',
+      'átomos conservados',
+    ], count: 4);
+    final caption = _contextCaption(
+      request,
+      'coeficientes ajustam quantidades sem mudar as substâncias',
+    );
+    return sanitizeAndEncodeSvg('''
+<svg width="900" height="500" viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
+  ${_canvasBackground(palette, height: 500)}
+  ${_titleText(title, palette)}
+  <defs>${_arrowMarker(palette)}</defs>
+  <g stroke="${palette.connector}" ${_vhStroke(PedagogicalVisualHierarchyRole.connector)} fill="none" marker-end="url(#arrow)">
+    <path d="M350 245 H550"/>
+    <path d="M450 305 V365"/>
+  </g>
+  <g ${_fontGroup(palette)}>
+    ${_roleBox(x: 80, y: 180, width: 260, height: 130, palette: palette, fillRole: PedagogicalVisualRole.supportingContext, hierarchyRole: PedagogicalVisualHierarchyRole.secondary)}
+    ${_layoutText(210, 252, labels[0], PedagogicalVisualHierarchyRole.secondary, maxCharsPerLine: 16)}
+    ${_roleBox(x: 365, y: 190, width: 170, height: 110, palette: palette, fillRole: PedagogicalVisualRole.attention, hierarchyRole: PedagogicalVisualHierarchyRole.attention)}
+    ${_layoutText(450, 252, labels[1], PedagogicalVisualHierarchyRole.attention, maxCharsPerLine: 13)}
+    ${_roleBox(x: 560, y: 180, width: 260, height: 130, palette: palette, fillRole: PedagogicalVisualRole.primaryConcept, hierarchyRole: PedagogicalVisualHierarchyRole.primary)}
+    ${_layoutText(690, 252, labels[2], PedagogicalVisualHierarchyRole.primary, maxCharsPerLine: 16)}
+    ${_roleBox(x: 285, y: 365, width: 330, height: 70, palette: palette, fillRole: PedagogicalVisualRole.definition, hierarchyRole: PedagogicalVisualHierarchyRole.conclusion)}
+    ${_layoutText(450, 408, labels[3], PedagogicalVisualHierarchyRole.conclusion, maxCharsPerLine: 24)}
+  </g>
+  ${_captionText(450, 468, caption, palette)}
 </svg>''');
   }
 }
@@ -1740,8 +2292,87 @@ class _FoodChainRenderer extends SoftwareVisualRenderer {
   }
 }
 
+class _DomainFallbackRenderer extends SoftwareVisualRenderer {
+  const _DomainFallbackRenderer();
+
+  @override
+  String get name => 'DomainFallbackRenderer';
+
+  @override
+  VisualPedagogicalRole get role => VisualPedagogicalRole.structureMap;
+
+  @override
+  bool accepts(SoftwareVisualRequest request) {
+    if (request._domain == _VisualKnowledgeDomain.unknown) return false;
+    if (request._domain == _VisualKnowledgeDomain.biology &&
+        _containsAny(request.domainText, const [
+          'célula',
+          'celula',
+          'órgão',
+          'orgao',
+          'tecido',
+          'histologia',
+        ])) {
+      return false;
+    }
+    return request.keyElements.length >= 2 || request._hasLockedSoftwareDomain;
+  }
+
+  @override
+  String? render(SoftwareVisualRequest request) {
+    final palette = PedagogicalVisualPalette.fromColorLegend(
+      request.colorLegend,
+    );
+    final title = _bestTitle(request.topic, _domainBadge(request._domain));
+    final labels = _contextLabels(request, const [
+      'conceito',
+      'relação',
+      'exemplo',
+      'resultado',
+    ], count: 4);
+    final caption = _contextCaption(
+      request,
+      'estrutura mínima para orientar o raciocínio antes de qualquer imagem realista',
+    );
+    return sanitizeAndEncodeSvg('''
+<svg width="900" height="540" viewBox="0 0 900 540" xmlns="http://www.w3.org/2000/svg">
+  ${_canvasBackground(palette, height: 540)}
+  ${_titleText(title, palette)}
+  <defs>${_arrowMarker(palette)}</defs>
+  ${_domainBadgeText(request._domain, palette)}
+  <g stroke="${palette.connector}" ${_vhStroke(PedagogicalVisualHierarchyRole.connector)} fill="none" marker-end="url(#arrow)">
+    <path d="M285 255 H365"/>
+    <path d="M535 255 H615"/>
+    <path d="M450 325 V385"/>
+  </g>
+  <g ${_fontGroup(palette)}>
+    ${_roleBox(x: 75, y: 190, width: 220, height: 130, palette: palette, fillRole: PedagogicalVisualRole.supportingContext, hierarchyRole: PedagogicalVisualHierarchyRole.secondary)}
+    ${_layoutText(185, 263, labels[0], PedagogicalVisualHierarchyRole.secondary, maxCharsPerLine: 15)}
+    ${_roleBox(x: 365, y: 175, width: 170, height: 160, palette: palette, fillRole: PedagogicalVisualRole.primaryConcept, hierarchyRole: PedagogicalVisualHierarchyRole.primary)}
+    ${_layoutText(450, 263, labels[1], PedagogicalVisualHierarchyRole.primary, maxCharsPerLine: 14)}
+    ${_roleBox(x: 615, y: 190, width: 220, height: 130, palette: palette, fillRole: PedagogicalVisualRole.attention, hierarchyRole: PedagogicalVisualHierarchyRole.attention)}
+    ${_layoutText(725, 263, labels[2], PedagogicalVisualHierarchyRole.attention, maxCharsPerLine: 15)}
+    ${_roleBox(x: 315, y: 385, width: 270, height: 75, palette: palette, fillRole: PedagogicalVisualRole.definition, hierarchyRole: PedagogicalVisualHierarchyRole.conclusion)}
+    ${_layoutText(450, 430, labels[3], PedagogicalVisualHierarchyRole.conclusion, maxCharsPerLine: 20)}
+  </g>
+  ${_captionText(450, 505, caption, palette)}
+</svg>''');
+  }
+}
+
 bool _containsAny(String text, List<String> values) {
   return values.any((value) => text.contains(value));
+}
+
+bool _containsToken(String text, String token) {
+  return RegExp(
+    '(^|[^a-z0-9áàâãéêíóôõúüç])${RegExp.escape(token)}([^a-z0-9áàâãéêíóôõúüç]|\$)',
+    caseSensitive: false,
+  ).hasMatch(text);
+}
+
+String _norm(String? value) {
+  return (value ?? '').toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 num? _extractYIntercept(String text) {

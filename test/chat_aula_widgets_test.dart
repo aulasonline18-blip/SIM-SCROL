@@ -91,6 +91,89 @@ void main() {
     expect(chosen, AnswerLetter.B);
   });
 
+  testWidgets('chat options open signals inline under selected answer', (
+    tester,
+  ) async {
+    var signal = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            messages: const [
+              ChatLessonMessage(
+                id: 'options',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.options,
+                selectedAnswer: AnswerLetter.B,
+                options: [
+                  ChatLessonOption(
+                    letter: AnswerLetter.A,
+                    text: 'Alternativa A',
+                    selected: false,
+                    enabled: true,
+                  ),
+                  ChatLessonOption(
+                    letter: AnswerLetter.B,
+                    text: 'Alternativa B',
+                    selected: true,
+                    enabled: true,
+                  ),
+                  ChatLessonOption(
+                    letter: AnswerLetter.C,
+                    text: 'Alternativa C',
+                    selected: false,
+                    enabled: true,
+                  ),
+                ],
+                signals: [
+                  ChatLessonSignal(
+                    value: 1,
+                    labelKey: 'aula_sig_certeza',
+                    enabled: true,
+                  ),
+                  ChatLessonSignal(
+                    value: 2,
+                    labelKey: 'aula_sig_revisar',
+                    enabled: true,
+                  ),
+                  ChatLessonSignal(
+                    value: 3,
+                    labelKey: 'aula_sig_nao_sei',
+                    enabled: true,
+                  ),
+                ],
+              ),
+            ],
+            onChooseAnswer: (_) {},
+            onSignal: (value) => signal = value,
+            onRetry: () {},
+            onNext: () {},
+            onOpenDoubt: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('inline-signal-choices')), findsOneWidget);
+    expect(find.text('Como voce se sente?'), findsNothing);
+    expect(
+      find.text(t('aula_sig_certeza'), skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(
+      find.text(t('aula_sig_revisar'), skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(
+      find.text(t('aula_sig_nao_sei'), skipOffstage: false),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('2'));
+    expect(signal, 2);
+  });
+
   testWidgets('chat timeline renders signal callbacks and retry action', (
     tester,
   ) async {
@@ -190,9 +273,9 @@ void main() {
     },
   );
 
-  testWidgets('chat timeline renders feedback advance action', (tester) async {
-    var advances = 0;
-
+  testWidgets('chat timeline renders feedback without manual advance action', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -202,7 +285,7 @@ void main() {
                 id: 'feedback',
                 role: ChatLessonMessageRole.sim,
                 kind: ChatLessonMessageKind.feedback,
-                text: 'Exato! Você domina este ponto.',
+                text: '✅ Exato. Você domina este ponto.',
                 isCorrect: true,
                 actionKey: 'aula_next_item',
               ),
@@ -210,18 +293,50 @@ void main() {
             onChooseAnswer: (_) {},
             onSignal: (_) {},
             onRetry: () {},
-            onNext: () => advances++,
+            onNext: () {},
             onOpenDoubt: () {},
           ),
         ),
       ),
     );
 
-    expect(find.text('Exato! Você domina este ponto.'), findsOneWidget);
-    await tester.tap(
-      _textAny(['Próximo tópico', 'Next topic', 'Sujet suivant']),
+    expect(find.text('✅ Exato. Você domina este ponto.'), findsOneWidget);
+    expect(
+      _textAny(['Próximo tópico >>', 'Next topic >>', 'Sujet suivant >>']),
+      findsNothing,
     );
-    expect(advances, 1);
+  });
+
+  testWidgets('chat aula auto advances 1500ms after feedback', (tester) async {
+    final session = _AutoAdvanceSession()
+      ..authed = true
+      ..authReady = true
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'Portuguese'
+      ..route = '/cyber/aula'
+      ..lessonLocalId = 'lesson-chat-auto'
+      ..aulaSnapshot = _chatSnapshot(
+        phase: const ClassroomPhase.completed(
+          message: 'aula_fb_correct',
+          wasCorrect: true,
+          signal: DecisionSignal.one,
+        ),
+      );
+
+    await tester.pumpWidget(MaterialApp(home: ChatAulaScreen(session: session)));
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+      find.text('✅ Exato. Você domina este ponto.', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(session.autoAdvances, 0);
+
+    await tester.pump(const Duration(milliseconds: 1379));
+    expect(session.autoAdvances, 0);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(session.autoAdvances, 1);
   });
 
   testWidgets(
@@ -650,10 +765,9 @@ void main() {
     expect(texts, contains('Segunda resposta da dúvida.'));
   });
 
-  testWidgets('chat feedback advance is disabled while doubt is processing', (
+  testWidgets('chat feedback keeps manual advance hidden while doubt processes', (
     tester,
   ) async {
-    var advances = 0;
     final session = LabSession()
       ..setDoubt(
         const DoubtState(status: DoubtStatus.processing, progress: 40),
@@ -677,19 +791,17 @@ void main() {
             onChooseAnswer: (_) {},
             onSignal: (_) {},
             onRetry: () {},
-            onNext: () => advances++,
+            onNext: () {},
             onOpenDoubt: () {},
           ),
         ),
       ),
     );
 
-    await tester.tap(
-      _textAny(['Próximo tópico', 'Next topic', 'Sujet suivant']),
+    expect(
+      _textAny(['Próximo tópico >>', 'Next topic >>', 'Sujet suivant >>']),
+      findsNothing,
     );
-    await tester.pump();
-
-    expect(advances, 0);
   });
 
   testWidgets('chat classroom shows audio bubble and stops audio on tap', (
@@ -865,19 +977,25 @@ void main() {
 
     await tester.tap(optionB);
     await tester.pump(const Duration(milliseconds: 120));
-    expect(find.text('B', skipOffstage: false), findsWidgets);
-    final signalPrompt = find.text('Como voce se sente?', skipOffstage: false);
-    expect(signalPrompt, findsOneWidget);
+    expect(find.byKey(const Key('inline-signal-choices')), findsOneWidget);
+    expect(find.text('Como voce se sente?', skipOffstage: false), findsNothing);
+    expect(
+      find.text(t('aula_sig_revisar'), skipOffstage: false),
+      findsOneWidget,
+    );
 
     final signal2 = find.text('2', skipOffstage: false);
     await tester.ensureVisible(signal2);
     await tester.tap(signal2);
     await tester.pump(const Duration(milliseconds: 120));
     expect(
-      find.text('Exato! Você domina este ponto.', skipOffstage: false),
+      find.text(t('aula_fb_correct'), skipOffstage: false),
       findsOneWidget,
     );
-    expect(find.text(t('aula_next'), skipOffstage: false), findsOneWidget);
+    expect(
+      find.text('${t('aula_next')} >>', skipOffstage: false),
+      findsNothing,
+    );
   });
 
   testWidgets(
@@ -1068,5 +1186,14 @@ class _ChatTimelineHarnessState extends State<_ChatTimelineHarness> {
       onNext: () {},
       onOpenDoubt: () {},
     );
+  }
+}
+
+class _AutoAdvanceSession extends LabSession {
+  int autoAdvances = 0;
+
+  @override
+  Future<void> advanceAula() async {
+    autoAdvances++;
   }
 }

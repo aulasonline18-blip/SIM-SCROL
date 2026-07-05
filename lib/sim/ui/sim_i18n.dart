@@ -98,13 +98,23 @@ const Map<String, String> _simStrings = {
   'aula_consolidate': 'Consolidar',
   'aula_layer_label': 'Camada {n}',
   'aula_sig_certeza': 'Certeza',
-  'aula_sig_revisar': 'Revisar',
+  'aula_sig_revisar': 'Em dúvida',
   'aula_sig_nao_sei': 'Não sei',
-  'aula_fb_correct': '✅ Correto. Próxima.',
+  'aula_fb_correct': '✅ Exato. Você domina este ponto.',
   'aula_fb_correct_rev':
-      '✅ Correto. Vou retomar este conceito mais à frente para fixar.',
-  'aula_fb_dont_know': '↻ Anotado. Explico de outra forma mais à frente.',
-  'aula_fb_redo': '↻ Vamos refazer este ponto mais à frente.',
+      '✅ Você acertou, mas ainda há dúvida. Vou reforçar isso mais à frente.',
+  'aula_fb_correct_dont_know':
+      '✅ Você acertou, mas foi inseguro. Vou voltar nesse ponto para consolidar.',
+  'aula_fb_wrong_confident':
+      '↻ Essa parecia certa, mas tem um detalhe importante aqui. Vou te apoiar nesse ponto.',
+  'aula_fb_wrong_uncertain':
+      '↻ Boa leitura: esse ponto ainda precisa de ajuste. Vamos reforçar.',
+  'aula_fb_wrong_dont_know':
+      '↻ Tudo bem. Esse ponto ainda não está pronto; vou reconstruir com você.',
+  'aula_fb_dont_know':
+      '↻ Tudo bem. Esse ponto ainda não está pronto; vou reconstruir com você.',
+  'aula_fb_redo':
+      '↻ Essa parecia certa, mas tem um detalhe importante aqui. Vou te apoiar nesse ponto.',
   'aula_fb_review_none': '✅ Reforço fechado. Esse conceito sai da fila.',
   'aula_fb_review_light': '↻ Quase. Vou trazer este conceito mais à frente.',
   'aula_fb_review_heavy': '↻ Sem stress. Volto a este ponto mais à frente.',
@@ -396,8 +406,23 @@ const Map<String, String> _enStrings = {
   'aula_advance': 'Advance',
   'aula_layer_label': 'Layer {n}',
   'aula_sig_certeza': 'Sure',
-  'aula_sig_revisar': 'Review',
+  'aula_sig_revisar': 'Unsure',
   'aula_sig_nao_sei': 'I do not know',
+  'aula_fb_correct': '✅ Exactly. You own this point.',
+  'aula_fb_correct_rev':
+      '✅ You got it right, but there is still some doubt. I will reinforce this later.',
+  'aula_fb_correct_dont_know':
+      '✅ You got it right, but felt unsure. I will return to this point to consolidate it.',
+  'aula_fb_wrong_confident':
+      '↻ That looked right, but there is an important detail here. I will support you on this point.',
+  'aula_fb_wrong_uncertain':
+      '↻ Good read: this point still needs adjustment. We will reinforce it.',
+  'aula_fb_wrong_dont_know':
+      '↻ That is okay. This point is not ready yet; I will rebuild it with you.',
+  'aula_fb_dont_know':
+      '↻ That is okay. This point is not ready yet; I will rebuild it with you.',
+  'aula_fb_redo':
+      '↻ That looked right, but there is an important detail here. I will support you on this point.',
   'preparing_lesson': 'Preparing lesson...',
 };
 
@@ -538,6 +563,24 @@ const Map<String, String> _ptStrings = {
   'aula_next_layer': 'Próxima camada',
   'aula_final_layer': 'Camada final',
   'aula_advance': 'Avançar',
+  'aula_sig_certeza': 'Certeza',
+  'aula_sig_revisar': 'Em dúvida',
+  'aula_sig_nao_sei': 'Não sei',
+  'aula_fb_correct': '✅ Exato. Você domina este ponto.',
+  'aula_fb_correct_rev':
+      '✅ Você acertou, mas ainda há dúvida. Vou reforçar isso mais à frente.',
+  'aula_fb_correct_dont_know':
+      '✅ Você acertou, mas foi inseguro. Vou voltar nesse ponto para consolidar.',
+  'aula_fb_wrong_confident':
+      '↻ Essa parecia certa, mas tem um detalhe importante aqui. Vou te apoiar nesse ponto.',
+  'aula_fb_wrong_uncertain':
+      '↻ Boa leitura: esse ponto ainda precisa de ajuste. Vamos reforçar.',
+  'aula_fb_wrong_dont_know':
+      '↻ Tudo bem. Esse ponto ainda não está pronto; vou reconstruir com você.',
+  'aula_fb_dont_know':
+      '↻ Tudo bem. Esse ponto ainda não está pronto; vou reconstruir com você.',
+  'aula_fb_redo':
+      '↻ Essa parecia certa, mas tem um detalhe importante aqui. Vou te apoiar nesse ponto.',
 };
 
 const Map<String, String> _frStrings = {
@@ -685,8 +728,23 @@ const Map<String, String> _frStrings = {
   'aula_advance': 'Avancer',
   'aula_layer_label': 'Couche {n}',
   'aula_sig_certeza': 'Sûr',
-  'aula_sig_revisar': 'Réviser',
+  'aula_sig_revisar': 'Pas sûr',
   'aula_sig_nao_sei': 'Je ne sais pas',
+  'aula_fb_correct': '✅ Exact. Vous maîtrisez ce point.',
+  'aula_fb_correct_rev':
+      '✅ Vous avez juste, mais il reste un doute. Je renforcerai cela plus tard.',
+  'aula_fb_correct_dont_know':
+      '✅ Vous avez juste, mais avec hésitation. Je reviendrai sur ce point pour le consolider.',
+  'aula_fb_wrong_confident':
+      '↻ Cela semblait juste, mais il y a un détail important ici. Je vais vous aider sur ce point.',
+  'aula_fb_wrong_uncertain':
+      '↻ Bonne lecture : ce point doit encore être ajusté. Nous allons le renforcer.',
+  'aula_fb_wrong_dont_know':
+      '↻ Aucun problème. Ce point n’est pas encore prêt ; je vais le reconstruire avec vous.',
+  'aula_fb_dont_know':
+      '↻ Aucun problème. Ce point n’est pas encore prêt ; je vais le reconstruire avec vous.',
+  'aula_fb_redo':
+      '↻ Cela semblait juste, mais il y a un détail important ici. Je vais vous aider sur ce point.',
   'preparing_lesson': 'Préparation de la leçon...',
 };
 
@@ -832,8 +890,23 @@ const Map<String, String> _esStrings = {
   'aula_advance': 'Avanzar',
   'aula_layer_label': 'Capa {n}',
   'aula_sig_certeza': 'Seguro',
-  'aula_sig_revisar': 'Revisar',
+  'aula_sig_revisar': 'Con duda',
   'aula_sig_nao_sei': 'No sé',
+  'aula_fb_correct': '✅ Exacto. Dominas este punto.',
+  'aula_fb_correct_rev':
+      '✅ Acertaste, pero todavía hay duda. Lo reforzaré más adelante.',
+  'aula_fb_correct_dont_know':
+      '✅ Acertaste, pero con inseguridad. Volveré a este punto para consolidarlo.',
+  'aula_fb_wrong_confident':
+      '↻ Parecía correcto, pero hay un detalle importante aquí. Te apoyaré en este punto.',
+  'aula_fb_wrong_uncertain':
+      '↻ Buena lectura: este punto todavía necesita ajuste. Lo reforzaremos.',
+  'aula_fb_wrong_dont_know':
+      '↻ Está bien. Este punto aún no está listo; lo reconstruiré contigo.',
+  'aula_fb_dont_know':
+      '↻ Está bien. Este punto aún no está listo; lo reconstruiré contigo.',
+  'aula_fb_redo':
+      '↻ Parecía correcto, pero hay un detalle importante aquí. Te apoyaré en este punto.',
   'preparing_lesson': 'Preparando clase...',
 };
 
@@ -970,8 +1043,16 @@ const Map<String, String> _jaStrings = {
   'aula_advance': '進む',
   'aula_layer_label': 'レイヤー {n}',
   'aula_sig_certeza': '確信あり',
-  'aula_sig_revisar': '復習する',
+  'aula_sig_revisar': '迷いあり',
   'aula_sig_nao_sei': 'わからない',
+  'aula_fb_correct': '✅ その通りです。このポイントは身についています。',
+  'aula_fb_correct_rev': '✅ 正解ですが、まだ迷いがあります。あとで補強します。',
+  'aula_fb_correct_dont_know': '✅ 正解ですが、不安がありました。定着のためにあとで戻ります。',
+  'aula_fb_wrong_confident': '↻ 正しそうに見えますが、大事な細部があります。ここをサポートします。',
+  'aula_fb_wrong_uncertain': '↻ よい判断です。このポイントはまだ調整が必要です。補強します。',
+  'aula_fb_wrong_dont_know': '↻ 大丈夫です。このポイントはまだ準備中です。一緒に組み立て直します。',
+  'aula_fb_dont_know': '↻ 大丈夫です。このポイントはまだ準備中です。一緒に組み立て直します。',
+  'aula_fb_redo': '↻ 正しそうに見えますが、大事な細部があります。ここをサポートします。',
   'preparing_lesson': '授業を準備中...',
 };
 

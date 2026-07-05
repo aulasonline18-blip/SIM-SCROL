@@ -529,13 +529,17 @@ class _PlacementResult extends StatelessWidget {
 };
 
 String feedbackText(String key) => switch (key) {
-  'aula_fb_correct' => 'Exato! Você domina este ponto.',
-  'aula_fb_correct_rev' => 'Certo, mas vamos reforçar.',
-  'aula_fb_dont_know' => 'Acertou no chute. Vamos revisar com cuidado.',
-  'aula_fb_redo' => 'Não foi dessa vez. Vamos tentar de novo.',
-  'aula_fb_review_none' => 'Ótimo! Revisão concluída.',
-  'aula_fb_review_light' => 'Quase lá. Mais um reforço.',
-  'aula_fb_review_heavy' => 'Precisa de mais prática neste ponto.',
+  'aula_fb_correct' ||
+  'aula_fb_correct_rev' ||
+  'aula_fb_correct_dont_know' ||
+  'aula_fb_wrong_confident' ||
+  'aula_fb_wrong_uncertain' ||
+  'aula_fb_wrong_dont_know' ||
+  'aula_fb_dont_know' ||
+  'aula_fb_redo' ||
+  'aula_fb_review_none' ||
+  'aula_fb_review_light' ||
+  'aula_fb_review_heavy' => t(key),
   _ => key,
 };
 

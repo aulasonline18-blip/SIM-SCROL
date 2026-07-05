@@ -3,13 +3,11 @@ import 'package:flutter/rendering.dart';
 
 import '../../core/utils/sim_constants.dart';
 import '../../shared/widgets/shared_widgets.dart';
-import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/doubt_progress_bar.dart';
-import '../onboarding/preparation_and_placement.dart';
 import '../session/lab_session.dart';
 import 'aula_widgets.dart';
 import 'chat_aula_messages.dart';
@@ -174,6 +172,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     if (widget.messages.isEmpty) return null;
     final preferred = widget.messages.lastWhere(
       (message) =>
+          message.kind == ChatLessonMessageKind.options ||
           message.kind == ChatLessonMessageKind.signals ||
           message.kind == ChatLessonMessageKind.feedback ||
           message.kind == ChatLessonMessageKind.error ||
@@ -387,7 +386,6 @@ class ChatAulaMessageBubble extends StatelessWidget {
             onChooseAnswer: onChooseAnswer,
             onSignal: onSignal,
             onRetry: onRetry,
-            onNext: onNext,
             onOpenDoubt: onOpenDoubt,
             onImageSettled: onImageSettled,
           ),
@@ -451,7 +449,6 @@ class _ChatAulaMessageBody extends StatelessWidget {
     required this.onChooseAnswer,
     required this.onSignal,
     required this.onRetry,
-    required this.onNext,
     required this.onOpenDoubt,
     this.session,
     this.onImageSettled,
@@ -462,7 +459,6 @@ class _ChatAulaMessageBody extends StatelessWidget {
   final void Function(AnswerLetter letter) onChooseAnswer;
   final void Function(int value) onSignal;
   final VoidCallback onRetry;
-  final VoidCallback onNext;
   final VoidCallback onOpenDoubt;
   final VoidCallback? onImageSettled;
 
@@ -473,6 +469,7 @@ class _ChatAulaMessageBody extends StatelessWidget {
       ChatLessonMessageKind.options => _ChatOptions(
         message: message,
         onChooseAnswer: onChooseAnswer,
+        onSignal: onSignal,
       ),
       ChatLessonMessageKind.signals => _ChatSignals(
         message: message,
@@ -519,14 +516,6 @@ class _ChatAulaMessageBody extends StatelessWidget {
               Expanded(child: _TextMessage(message.text ?? '')),
             ],
           ),
-          if ((message.actionKey ?? '').isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _ChatActionButton(
-              label: nextBtnText(message.actionKey ?? ''),
-              onPressed: onNext,
-              enabled: session?.doubt.status != DoubtStatus.processing,
-            ),
-          ],
         ],
       ),
       ChatLessonMessageKind.doubtAction => _ChatActionButton(
@@ -776,10 +765,15 @@ class _StudentShortMessage extends StatelessWidget {
 }
 
 class _ChatOptions extends StatelessWidget {
-  const _ChatOptions({required this.message, required this.onChooseAnswer});
+  const _ChatOptions({
+    required this.message,
+    required this.onChooseAnswer,
+    required this.onSignal,
+  });
 
   final ChatLessonMessage message;
   final void Function(AnswerLetter letter) onChooseAnswer;
+  final void Function(int value) onSignal;
 
   @override
   Widget build(BuildContext context) {
@@ -787,14 +781,57 @@ class _ChatOptions extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final option in message.options)
-          AnswerButton(
-            label: option.letter.name,
-            text: option.text,
-            active: option.selected,
-            enabled: option.enabled,
-            onTap: () => onChooseAnswer(option.letter),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AnswerButton(
+                label: option.letter.name,
+                text: option.text,
+                active: option.selected,
+                enabled: option.enabled,
+                onTap: () => onChooseAnswer(option.letter),
+              ),
+              if (option.selected && message.signals.isNotEmpty)
+                _InlineSignalChoices(
+                  signals: message.signals,
+                  onSignal: onSignal,
+                ),
+            ],
           ),
       ],
+    );
+  }
+}
+
+class _InlineSignalChoices extends StatelessWidget {
+  const _InlineSignalChoices({required this.signals, required this.onSignal});
+
+  final List<ChatLessonSignal> signals;
+  final void Function(int value) onSignal;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Container(
+      key: const Key('inline-signal-choices'),
+      margin: const EdgeInsets.only(top: 8, left: 12, bottom: 10),
+      padding: const EdgeInsets.only(left: 12),
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: palette.primary, width: 1)),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < signals.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            Expanded(
+              child: _SignalButton(
+                signal: signals[i],
+                onPressed: () => onSignal(signals[i].value),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -807,18 +844,9 @@ class _ChatSignals extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = SimThemeScope.paletteOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Como voce se sente?',
-          style: SimTypography.lessonBody.copyWith(
-            color: palette.text,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 10),
         Row(
           children: [
             for (var i = 0; i < message.signals.length; i++) ...[
@@ -954,25 +982,22 @@ class _ChatActionButton extends StatelessWidget {
   const _ChatActionButton({
     required this.label,
     required this.onPressed,
-    this.enabled = true,
     super.key,
   });
 
   final String label;
   final VoidCallback onPressed;
-  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
     return Semantics(
       button: true,
-      enabled: enabled,
       child: Material(
-        color: enabled ? palette.text : palette.muted,
+        color: palette.text,
         borderRadius: BorderRadius.circular(SimRadius.md),
         child: InkWell(
-          onTap: enabled ? onPressed : null,
+          onTap: onPressed,
           borderRadius: BorderRadius.circular(SimRadius.md),
           child: Container(
             constraints: const BoxConstraints(minHeight: SimTouch.min),
@@ -981,9 +1006,7 @@ class _ChatActionButton extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: enabled
-                    ? palette.surface
-                    : palette.surface.withValues(alpha: 0.56),
+                color: palette.surface,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),

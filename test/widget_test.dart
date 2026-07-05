@@ -272,7 +272,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('2'));
     await tester.pumpAndSettle();
-    expect(find.text('Exato! Você domina este ponto.'), findsOneWidget);
+    expect(find.text(t('aula_fb_correct')), findsOneWidget);
     await tester.binding.setSurfaceSize(null);
   });
 
@@ -422,7 +422,7 @@ void main() {
     await tester.tap(find.text('2'));
     await tester.pumpAndSettle();
     final feedbackRect = tester.getRect(
-      find.text('Exato! Você domina este ponto.'),
+      find.text(t('aula_fb_correct')),
     );
     expect(feedbackRect.top, greaterThanOrEqualTo(0));
     expect(feedbackRect.bottom, lessThanOrEqualTo(520));

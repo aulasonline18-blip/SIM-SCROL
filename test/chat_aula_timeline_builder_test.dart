@@ -40,7 +40,7 @@ void main() {
     expect(options.options.every((option) => option.enabled), isTrue);
   });
 
-  test('expanded phase adds student answer and signal choices', () {
+  test('expanded phase opens signal choices under the selected option', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(
         snapshot: _snapshot(phase: ClassroomPhase.expanded(AnswerLetter.B)),
@@ -49,23 +49,32 @@ void main() {
 
     expect(
       messages.map((message) => message.kind),
-      containsAllInOrder([
-        ChatLessonMessageKind.options,
-        ChatLessonMessageKind.studentAnswer,
-        ChatLessonMessageKind.signals,
-      ]),
+      containsAllInOrder([ChatLessonMessageKind.options]),
     );
-    final answer = messages.singleWhere(
-      (message) => message.kind == ChatLessonMessageKind.studentAnswer,
+    expect(
+      messages.where(
+        (message) => message.kind == ChatLessonMessageKind.signals,
+      ),
+      isEmpty,
     );
-    expect(answer.selectedAnswer, AnswerLetter.B);
-    final signals = messages.singleWhere(
-      (message) => message.kind == ChatLessonMessageKind.signals,
+    expect(
+      messages.where(
+        (message) => message.kind == ChatLessonMessageKind.studentAnswer,
+      ),
+      isEmpty,
     );
-    expect(signals.signals.map((signal) => signal.value), [1, 2, 3]);
+    final options = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.options,
+    );
+    expect(options.selectedAnswer, AnswerLetter.B);
+    expect(
+      options.options.singleWhere((option) => option.selected).letter,
+      AnswerLetter.B,
+    );
+    expect(options.signals.map((signal) => signal.value), [1, 2, 3]);
   });
 
-  test('completed phase adds signal and feedback without changing state', () {
+  test('completed phase adds feedback without student signal echo', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(
         snapshot: _snapshot(
@@ -81,10 +90,15 @@ void main() {
     expect(
       messages.map((message) => message.kind),
       containsAllInOrder([
-        ChatLessonMessageKind.studentSignal,
         ChatLessonMessageKind.doubtAction,
         ChatLessonMessageKind.feedback,
       ]),
+    );
+    expect(
+      messages.where(
+        (message) => message.kind == ChatLessonMessageKind.studentSignal,
+      ),
+      isEmpty,
     );
     expect(
       messages
@@ -99,6 +113,30 @@ void main() {
     );
     expect(feedback.isCorrect, isTrue);
     expect(feedback.actionKey, 'aula_next');
+  });
+
+  test('processing phase does not add student signal echo', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.processing(
+            AnswerLetter.B,
+            DecisionSignal.two,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      messages.where(
+        (message) => message.kind == ChatLessonMessageKind.studentSignal,
+      ),
+      isEmpty,
+    );
+    expect(
+      messages.map((message) => message.kind),
+      contains(ChatLessonMessageKind.processing),
+    );
   });
 
   test('history is represented as old sim and student messages', () {
@@ -232,10 +270,10 @@ void main() {
     expect(
       messages
           .singleWhere(
-            (message) => message.kind == ChatLessonMessageKind.studentSignal,
+            (message) => message.kind == ChatLessonMessageKind.doubtAction,
           )
           .deliveryStatus,
-      ChatLessonDeliveryStatus.sent,
+      ChatLessonDeliveryStatus.delivered,
     );
     expect(
       messages
