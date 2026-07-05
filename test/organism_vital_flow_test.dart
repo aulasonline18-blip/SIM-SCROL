@@ -213,6 +213,8 @@ void main() {
       expect(firstT02.profile['academic_level'], 'fundamental');
       expect(firstT02.profile['preferred_name'], 'Ana');
 
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
       var state = h.service.read(lessonLocalId);
       expect(state?.curriculum?.items.first.marker, 'M1');
       expect(state?.currentLessonMaterial?['text_status'], 'ready');

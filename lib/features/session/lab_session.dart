@@ -762,6 +762,8 @@ class LabSession extends ChangeNotifier {
         }
       }
       debugPrint('[SIM] T00_STARTED lessonLocalId=$id');
+      final guidedProfile = _guidedProfileFields(freeText.trim());
+      final academic = _academicFromOnboarding(guidedProfile);
       final onboarding = <String, dynamic>{
         'objetivo': freeText.trim(),
         'free_text': freeText.trim(),
@@ -769,12 +771,12 @@ class LabSession extends ChangeNotifier {
         'language': selectedLanguageCode ?? stableLang ?? 'pt-BR',
         'stableLang': stableLang ?? 'pt-BR',
         'STABLE_LANG': stableLang ?? 'pt-BR',
-        'ACADEMIC_LEVEL': 'incerto',
-        'academic_level': 'incerto',
-        'nivel': 'incerto',
+        'ACADEMIC_LEVEL': academic,
+        'academic_level': academic,
+        'nivel': academic,
         'target_topic': freeText.trim(),
         'TARGET_TOPIC': freeText.trim(),
-        ..._guidedProfileFields(freeText.trim()),
+        ...guidedProfile,
         if (preferredName.trim().isNotEmpty)
           'preferred_name': preferredName.trim(),
         if (studentProfileNotes.isNotEmpty)
@@ -782,7 +784,7 @@ class LabSession extends ChangeNotifier {
         if (attachmentsText.isNotEmpty) 'attachments_text': attachmentsText,
       };
       final args = StudentExperienceArgs(
-        academic: 'incerto',
+        academic: academic,
         idioma: stableLang ?? 'pt-BR',
         lessonLocalId: id,
         onboarding: onboarding,
@@ -1009,6 +1011,14 @@ class LabSession extends ChangeNotifier {
     if (start != null) fields['prior_knowledge'] = start;
     if (answers.isNotEmpty) fields['guided_answers'] = JsonMap.from(answers);
     return fields;
+  }
+
+  String _academicFromOnboarding(JsonMap guidedProfile) {
+    for (final key in const ['academic_level', 'ACADEMIC_LEVEL', 'nivel']) {
+      final value = guidedProfile[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+    return 'incerto';
   }
 
   String _studentProfileNotes({

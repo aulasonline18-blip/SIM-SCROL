@@ -21,18 +21,21 @@ class StudentExperienceT02Adapter {
   Future<void> prepareFirstMinimumLesson({
     required StudentExperienceArgs args,
     required FirstCurriculumItem first,
+    bool shellAlreadyOpen = false,
   }) async {
     final topic = (args.onboarding['objetivo'] ?? first.curriculum.topic)
         .toString()
         .trim();
-    args.onStage?.call(StudentExperienceRouteStage.lesson);
-    writeStudentExperienceSnapshot(
-      service,
-      lessonLocalId: args.lessonLocalId,
-      state: StudentExperienceState.t02PrimeiraAulaStreaming,
-      startMarker: first.marker,
-      startItemIndex: first.itemIndex,
-    );
+    if (!shellAlreadyOpen) {
+      args.onStage?.call(StudentExperienceRouteStage.lesson);
+      writeStudentExperienceSnapshot(
+        service,
+        lessonLocalId: args.lessonLocalId,
+        state: StudentExperienceState.t02PrimeiraAulaStreaming,
+        startMarker: first.marker,
+        startItemIndex: first.itemIndex,
+      );
+    }
     debugPrint('[SIM] T02_FIRST_LESSON_STARTED marker=${first.marker}');
     publishStudentExperienceEvent(
       service,
@@ -133,6 +136,16 @@ class StudentExperienceT02Adapter {
         'itemIdx': first.itemIndex,
         'materialKey': entryLessonMaterialKey(first.itemIndex, first.marker),
         'source': material.source.name,
+        'waitedMs': material.waitedMs,
+      },
+    );
+    publishStudentExperienceEvent(
+      service,
+      args.lessonLocalId,
+      StudentExperienceEventType.timeToFirstQuestion,
+      {
+        'marker': first.marker,
+        'itemIdx': first.itemIndex,
         'waitedMs': material.waitedMs,
       },
     );

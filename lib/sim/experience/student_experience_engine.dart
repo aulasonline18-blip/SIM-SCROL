@@ -1,6 +1,8 @@
+import 'dart:async';
+
+import '../placement/placement_state.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
-import '../placement/placement_state.dart';
 import 'student_experience_placement_adapter.dart';
 import 'student_experience_guards.dart';
 import 'student_experience_store.dart';
@@ -108,39 +110,30 @@ class StudentExperienceEngine {
       );
 
       final firstLessonPreparer = t02;
-      if (firstLessonPreparer != null) {
-        await firstLessonPreparer.prepareFirstMinimumLesson(
-          args: args,
-          first: first,
-        );
-      }
-
-      if (!placement.settled) {
-        args.onStage?.call(StudentExperienceRouteStage.placement);
-        writeStudentExperienceSnapshot(
-          service,
-          lessonLocalId: args.lessonLocalId,
-          state: StudentExperienceState.nivelamentoNecessario,
-          destination: '/cyber/placement',
-          startMarker: first.marker,
-          startItemIndex: first.itemIndex,
-        );
+      final placementIsSettled = placement.settled;
+      if (!placementIsSettled) {
         publishStudentExperienceEvent(
           service,
           args.lessonLocalId,
-          StudentExperienceEventType.placementRequired,
-          {'marker': first.marker},
-        );
-        return StudentExperienceResult(
-          destination: '/cyber/placement',
-          curriculum: first.curriculum,
-          startMarker: null,
-          startItemIndex: 0,
+          StudentExperienceEventType.placementDeferredUntilAfterFirstLesson,
+          {'marker': first.marker, 'reason': 'first_lesson_shell_has_priority'},
         );
       }
 
-      final decision = placement.readPlacementDecision();
-      final target = placement.resolveStartPosition(first.curriculum, decision);
+      final decision = placementIsSettled
+          ? placement.readPlacementDecision()
+          : PlacementDecision(
+              enabled: false,
+              placement: PlacementState.empty(),
+              settled: false,
+            );
+      final target = placementIsSettled
+          ? placement.resolveStartPosition(first.curriculum, decision)
+          : StartPosition(
+              itemIndex: first.itemIndex,
+              marker: first.marker,
+              item: first.item,
+            );
       if (target.item == null) {
         throw Exception('Nao encontrei o primeiro item da aula.');
       }
@@ -165,23 +158,41 @@ class StudentExperienceEngine {
             'source': 'placement_result',
           },
         );
-        await firstLessonPreparer.prepareFirstMinimumLesson(
-          args: args,
-          first: selected,
-        );
       }
       if (firstLessonPreparer == null) {
         throw Exception('T02 obrigatorio para abrir a primeira aula.');
       }
 
-      args.onStage?.call(StudentExperienceRouteStage.ready);
-      writeStudentExperienceSnapshot(
-        service,
-        lessonLocalId: args.lessonLocalId,
-        state: StudentExperienceState.salaAberta,
-        destination: '/cyber/aula',
-        startMarker: selected.marker,
-        startItemIndex: selected.itemIndex,
+      _openFirstLessonShell(args, selected);
+      unawaited(
+        firstLessonPreparer
+            .prepareFirstMinimumLesson(
+              args: args,
+              first: selected,
+              shellAlreadyOpen: true,
+            )
+            .catchError((Object error) {
+              final info = classifyStudentExperienceError(error);
+              writeStudentExperienceSnapshot(
+                service,
+                lessonLocalId: args.lessonLocalId,
+                state: info.kind == StudentExperienceErrorKind.timeout
+                    ? StudentExperienceState.erroRecuperavel
+                    : StudentExperienceState.erroBloqueante,
+                destination: '/cyber/aula',
+                startMarker: selected.marker,
+                startItemIndex: selected.itemIndex,
+                error: info,
+              );
+              publishStudentExperienceEvent(
+                service,
+                args.lessonLocalId,
+                info.kind == StudentExperienceErrorKind.timeout
+                    ? StudentExperienceEventType.recoverableError
+                    : StudentExperienceEventType.blockingError,
+                {'error': info.message, 'phase': 'background_first_t02'},
+              );
+            }),
       );
       return StudentExperienceResult(
         destination: '/cyber/aula',
@@ -209,5 +220,58 @@ class StudentExperienceEngine {
       );
       throw StudentExperienceEngineException(info);
     }
+  }
+
+  void _openFirstLessonShell(
+    StudentExperienceArgs args,
+    FirstCurriculumItem first,
+  ) {
+    service.mutate(args.lessonLocalId, (state) {
+      return state.copyWith(
+        current: LessonCurrent(
+          itemIdx: first.itemIndex,
+          marker: first.marker,
+          layer: LessonLayer.l1,
+          amparoLvl: 0,
+        ),
+        progress: LessonProgress(
+          itemIdx: first.itemIndex,
+          layer: LessonLayer.l1,
+          erros: 0,
+          amparoLvl: 0,
+          historia: const [],
+          mainAdvances: first.itemIndex,
+          concluidos: const [],
+          pendentesMarkers: const [],
+          totalItems: first.curriculum.items.length,
+          pctAvanco: first.curriculum.items.isEmpty
+              ? 0
+              : ((first.itemIndex / first.curriculum.items.length) * 100)
+                    .round(),
+        ),
+      );
+    });
+    args.onStage?.call(StudentExperienceRouteStage.ready);
+    writeStudentExperienceSnapshot(
+      service,
+      lessonLocalId: args.lessonLocalId,
+      state: StudentExperienceState.salaAberta,
+      destination: '/cyber/aula',
+      startMarker: first.marker,
+      startItemIndex: first.itemIndex,
+    );
+    final now = DateTime.now().millisecondsSinceEpoch;
+    publishStudentExperienceEvent(
+      service,
+      args.lessonLocalId,
+      StudentExperienceEventType.firstLessonShellOpened,
+      {'at': now, 'marker': first.marker, 'itemIdx': first.itemIndex},
+    );
+    publishStudentExperienceEvent(
+      service,
+      args.lessonLocalId,
+      StudentExperienceEventType.timeToClassroom,
+      {'at': now, 'marker': first.marker, 'itemIdx': first.itemIndex},
+    );
   }
 }

@@ -1,9 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'helpers/fake_visual_pipeline.dart';
 import 'package:sim_mobile/sim/experience/bootstrap_payload.dart';
 import 'package:sim_mobile/sim/experience/partial_curriculum_writer.dart';
 import 'package:sim_mobile/sim/experience/student_experience_engine.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t00_adapter.dart';
+import 'package:sim_mobile/sim/experience/student_experience_t02_adapter.dart';
 import 'package:sim_mobile/sim/experience/student_experience_types.dart';
+import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
+import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
+import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
+import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
+import 'package:sim_mobile/sim/lesson/student_lesson_material_service.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
@@ -42,6 +49,41 @@ class FakeT00Client implements T00BootstrapClient {
     );
     yield const T00BootstrapChunk(type: 'done', payload: {'ok': true});
   }
+}
+
+class FakeT02Client implements T02LessonClient {
+  final requests = <T02LessonRequest>[];
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) async {
+    requests.add(request);
+    return T02LessonMaterial(
+      explanation: 'Explicacao ${request.item}',
+      question: 'Pergunta?',
+      options: const {
+        AnswerLetter.A: 'A certa',
+        AnswerLetter.B: 'B errada',
+        AnswerLetter.C: 'C errada',
+      },
+      correctAnswer: AnswerLetter.A,
+      whyCorrect: 'Porque sim.',
+      whyWrong: const {'B': 'nao', 'C': 'nao'},
+      generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
+      source: 'fake-t02',
+    );
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
 }
 
 void main() {
@@ -99,16 +141,35 @@ void main() {
   });
 
   test(
-    'StudentExperienceEngine releases first item and routes to placement',
+    'StudentExperienceEngine releases first item and opens aula before placement',
     () async {
       final service = StudentLearningStateService();
       final t00 = StudentExperienceT00Adapter(
         service: service,
         client: FakeT00Client(),
       );
+      final t02Client = FakeT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02Client,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+        visualPipeline: fakeVisualPipeline(),
+      );
+      final materialService = StudentLessonMaterialService(
+        stateService: service,
+        orchestrator: orchestrator,
+        readyWindowEngine: DopamineReadyWindowEngine(
+          service: service,
+          orchestrator: orchestrator,
+        ),
+      );
       final engine = StudentExperienceEngine(
         service: service,
         t00: t00,
+        t02: StudentExperienceT02Adapter(
+          service: service,
+          materialService: materialService,
+        ),
         placement: const SettledPlacementReader(settled: false),
       );
 
@@ -121,8 +182,9 @@ void main() {
         ),
       );
 
-      expect(result.destination, '/cyber/placement');
+      expect(result.destination, '/cyber/aula');
       expect(result.curriculum.items.first.marker, 'M1');
+      expect(t02Client.requests, isNotEmpty);
       final state = service.read('cyber-fractions');
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -139,6 +201,11 @@ void main() {
       expect(progressEvents, contains('t00FallbackGatewayStarted'));
       expect(progressEvents, contains('t00PartialReady'));
       expect(progressEvents, contains('t00QualityCheckReceived'));
+      expect(
+        progressEvents,
+        contains('placementDeferredUntilAfterFirstLesson'),
+      );
+      expect(progressEvents, contains('firstLessonShellOpened'));
       expect(settledState?.curriculum?.items, hasLength(1));
     },
   );
