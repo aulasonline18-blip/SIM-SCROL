@@ -295,7 +295,12 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       _conversationArchiveSeq = 0;
     }
 
-    for (final message in incoming) {
+    for (
+      var incomingIndex = 0;
+      incomingIndex < incoming.length;
+      incomingIndex++
+    ) {
+      final message = incoming[incomingIndex];
       final index = _conversationMessages.indexWhere(
         (current) => current.id == message.id,
       );
@@ -312,10 +317,28 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         continue;
       }
       if (_isDuplicateHistoryMessage(message)) continue;
-      _conversationMessages.add(message);
+      _insertConversationMessage(message, incoming, incomingIndex);
     }
 
     return List.unmodifiable(_conversationMessages);
+  }
+
+  void _insertConversationMessage(
+    ChatLessonMessage message,
+    List<ChatLessonMessage> incoming,
+    int incomingIndex,
+  ) {
+    for (var i = incomingIndex + 1; i < incoming.length; i++) {
+      final nextIncomingId = incoming[i].id;
+      final nextCurrentIndex = _conversationMessages.indexWhere(
+        (current) => current.id == nextIncomingId,
+      );
+      if (nextCurrentIndex >= 0) {
+        _conversationMessages.insert(nextCurrentIndex, message);
+        return;
+      }
+    }
+    _conversationMessages.add(message);
   }
 
   String _conversationKeyFor(LabSession session) {

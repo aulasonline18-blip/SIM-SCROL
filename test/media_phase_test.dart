@@ -3018,6 +3018,45 @@ void main() {
   );
 
   test(
+    'physics position function lesson renders local kinematics SVG before paid offer',
+    () async {
+      final client = FakeImageClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: const ThrowingVisualRouterClient(),
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'important',
+          topic: 'função horária da posição no movimento uniforme',
+          visualType: 'graph',
+          keyElements: [
+            'posição inicial 15 km',
+            'velocidade constante 25 km/h',
+            's = 15 + 25t',
+          ],
+          highlightFocus:
+              'mostrar que a posição inicial soma com a velocidade vezes o tempo',
+          imagePrompt:
+              'Um ciclista inicia no marco de 15 km e mantém velocidade constante de 25 km/h; desenhar gráfico posição x tempo e a equação s = 15 + 25t.',
+        ),
+        lessonKey: 'physics-position-function',
+        allowPaidImages: true,
+        acceptedOfferId: null,
+      );
+
+      expect(result.source, 'local_software');
+      final svg = Uri.decodeFull(result.displayUrl!);
+      expect(svg, contains('15'));
+      expect(svg, contains('25'));
+      expect(svg, contains('s(t)'));
+      expect(client.calls, 0);
+    },
+  );
+
+  test(
     'poor but recoverable chemistry trigger renders local SVG before paid offer',
     () async {
       final client = FakeImageClient();

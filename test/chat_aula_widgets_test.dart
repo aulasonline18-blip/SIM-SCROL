@@ -323,7 +323,9 @@ void main() {
         ),
       );
 
-    await tester.pumpWidget(MaterialApp(home: ChatAulaScreen(session: session)));
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(
@@ -619,6 +621,51 @@ void main() {
   });
 
   testWidgets(
+    'chat classroom inserts late image panel between explanation and question',
+    (tester) async {
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..lessonLocalId = 'lesson-chat-late-image'
+        ..route = '/cyber/aula'
+        ..aulaSnapshot = _chatSnapshot(phase: const ClassroomPhase.reading());
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: session)),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+
+      var timeline = tester.widget<ChatAulaTimeline>(
+        find.byType(ChatAulaTimeline),
+      );
+      var kinds = timeline.messages.map((message) => message.kind).toList();
+      expect(kinds.indexOf(ChatLessonMessageKind.image), -1);
+      final initialQuestionIndex = kinds.indexOf(
+        ChatLessonMessageKind.question,
+      );
+      final initialOptionsIndex = kinds.indexOf(ChatLessonMessageKind.options);
+      expect(initialOptionsIndex, greaterThan(initialQuestionIndex));
+
+      session.aulaRuntimeLoading = true;
+      session.notifyListeners();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      timeline = tester.widget<ChatAulaTimeline>(find.byType(ChatAulaTimeline));
+      kinds = timeline.messages.map((message) => message.kind).toList();
+      final explanationIndex = kinds.indexOf(ChatLessonMessageKind.explanation);
+      final imageIndex = kinds.indexOf(ChatLessonMessageKind.image);
+      final questionIndex = kinds.indexOf(ChatLessonMessageKind.question);
+      final optionsIndex = kinds.indexOf(ChatLessonMessageKind.options);
+
+      expect(imageIndex, greaterThan(explanationIndex));
+      expect(questionIndex, greaterThan(imageIndex));
+      expect(optionsIndex, greaterThan(questionIndex));
+    },
+  );
+
+  testWidgets(
     'chat classroom preserves previous lesson messages as transcript',
     (tester) async {
       final session = LabSession()
@@ -765,44 +812,45 @@ void main() {
     expect(texts, contains('Segunda resposta da dúvida.'));
   });
 
-  testWidgets('chat feedback keeps manual advance hidden while doubt processes', (
-    tester,
-  ) async {
-    final session = LabSession()
-      ..setDoubt(
-        const DoubtState(status: DoubtStatus.processing, progress: 40),
-      );
+  testWidgets(
+    'chat feedback keeps manual advance hidden while doubt processes',
+    (tester) async {
+      final session = LabSession()
+        ..setDoubt(
+          const DoubtState(status: DoubtStatus.processing, progress: 40),
+        );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ChatAulaTimeline(
-            session: session,
-            messages: const [
-              ChatLessonMessage(
-                id: 'feedback',
-                role: ChatLessonMessageRole.sim,
-                kind: ChatLessonMessageKind.feedback,
-                text: 'Feedback pronto.',
-                isCorrect: true,
-                actionKey: 'aula_next_item',
-              ),
-            ],
-            onChooseAnswer: (_) {},
-            onSignal: (_) {},
-            onRetry: () {},
-            onNext: () {},
-            onOpenDoubt: () {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChatAulaTimeline(
+              session: session,
+              messages: const [
+                ChatLessonMessage(
+                  id: 'feedback',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.feedback,
+                  text: 'Feedback pronto.',
+                  isCorrect: true,
+                  actionKey: 'aula_next_item',
+                ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(
-      _textAny(['Próximo tópico >>', 'Next topic >>', 'Sujet suivant >>']),
-      findsNothing,
-    );
-  });
+      expect(
+        _textAny(['Próximo tópico >>', 'Next topic >>', 'Sujet suivant >>']),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('chat classroom shows audio bubble and stops audio on tap', (
     tester,

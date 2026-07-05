@@ -68,6 +68,48 @@ String _captionText(
   );
 }
 
+String? _appendSvgContextStrip(
+  String? dataUrl,
+  SoftwareVisualRequest request,
+  PedagogicalVisualPalette palette,
+) {
+  const prefix = 'data:image/svg+xml;utf8,';
+  if (dataUrl == null || !dataUrl.startsWith(prefix)) return dataUrl;
+
+  final details = <String>[];
+  void add(String? value) {
+    final clean = _cleanContextLabel(value, maxLength: 42);
+    if (clean == null) return;
+    final key = clean.toLowerCase();
+    if (details.any((existing) => existing.toLowerCase() == key)) return;
+    details.add(clean);
+  }
+
+  for (final value in request.keyElements) {
+    add(value);
+    if (details.length >= 3) break;
+  }
+  if (details.length < 3) {
+    for (final value in _splitContextPhrases(request.imagePrompt)) {
+      add(value);
+      if (details.length >= 3) break;
+    }
+  }
+  if (details.isEmpty) return dataUrl;
+
+  final svg = Uri.decodeComponent(dataUrl.substring(prefix.length));
+  final context = details.map(_escapeXml).join(' | ');
+  final strip =
+      '''
+  <g font-family="Inter, Arial, sans-serif" data-sim-context="lesson-key-elements">
+    <rect x="56" y="440" width="688" height="38" rx="10" fill="${palette.surface}" stroke="${palette.border}" stroke-width="1.2" opacity="0.96"/>
+    <text x="400" y="464" text-anchor="middle" fill="${palette.text}" font-size="13" font-weight="700">$context</text>
+  </g>
+''';
+  final enriched = svg.replaceFirst('</svg>', '$strip</svg>');
+  return sanitizeAndEncodeSvg(enriched) ?? dataUrl;
+}
+
 String _arrowMarker(
   PedagogicalVisualPalette palette, {
   int? markerWidth,
@@ -301,9 +343,9 @@ class SoftwareRenderCatalog {
 
   static const List<SoftwareVisualRenderer> _renderers = [
     _QuadraticRenderer(),
+    _KinematicsGraphRenderer(),
     _LinearRenderer(),
     _UnitCircleRenderer(),
-    _KinematicsGraphRenderer(),
     _NumberLineRenderer(),
     _ForceDiagramRenderer(),
     _CircuitRenderer(),
@@ -666,28 +708,30 @@ _VisualKnowledgeDomain _inferKnowledgeDomain(String text) {
   ])) {
     return _VisualKnowledgeDomain.logic;
   }
-  if (_containsAny(text, const [
-    'química',
-    'quimica',
-    'chemistry',
-    'reação',
-    'reacao',
-    'reaction',
-    'molécula',
-    'molecula',
-    'molecule',
-    'átomo',
-    'atomo',
-    'atom',
-    'ligação',
-    'ligacao',
-    'reagente',
-    'produto',
-    'ácido',
-    'acido',
-    'base',
-    'ph',
-  ])) {
+  final hasChemistryEvidence =
+      _containsAny(text, const [
+        'química',
+        'quimica',
+        'chemistry',
+        'reação',
+        'reacao',
+        'reaction',
+        'molécula',
+        'molecula',
+        'molecule',
+        'átomo',
+        'atomo',
+        'atom',
+        'ligação',
+        'ligacao',
+        'reagente',
+        'produto',
+        'ácido',
+        'acido',
+        'base',
+      ]) ||
+      RegExp(r'(^|[^a-z])p\s*h([^a-z]|$)', caseSensitive: false).hasMatch(text);
+  if (hasChemistryEvidence) {
     return _VisualKnowledgeDomain.chemistry;
   }
   if (_containsAny(text, const [
@@ -933,7 +977,8 @@ class _LinearRenderer extends SoftwareVisualRenderer {
     final visualType = _norm(request.visualType);
     final graphish =
         request._domain == _VisualKnowledgeDomain.mathematics ||
-        visualType == 'graph';
+        (visualType == 'graph' &&
+            request._domain != _VisualKnowledgeDomain.physics);
     if (!graphish) return false;
     return _containsAny(request.text, const [
       'linear',
@@ -1046,28 +1091,37 @@ class _KinematicsGraphRenderer extends SoftwareVisualRenderer {
       's(t)',
       'deslocamento',
     ]);
-    return tryRenderMathTemplate({
+    final dataUrl = tryRenderMathTemplate({
       'math_template': {
         'name': isPosition ? 'kinematics_st' : 'kinematics_vt',
         'params': {
-          if (isPosition) 's0': 0,
-          'v0': _containsAny(text, const ['negativa', 'sentido contrário'])
-              ? -2
-              : 2,
+          if (isPosition) 's0': _extractInitialPosition(text) ?? 0,
+          'v0':
+              _extractVelocity(text) ??
+              (_containsAny(text, const ['negativa', 'sentido contrário'])
+                  ? -2
+                  : 2),
           'a': _containsAny(text, const ['mruv', 'aceleração', 'aceleracao'])
               ? 1
               : 0,
           't_max': 6,
           'labels': {
-            'title': isPosition ? 'Posição x tempo' : 'Velocidade x tempo',
-            'x': 't',
-            'y': isPosition ? 's' : 'v',
+            'title': _bestTitle(
+              request.topic,
+              isPosition ? 'Função horária da posição' : 'Velocidade x tempo',
+            ),
+            'time': 't',
+            if (isPosition) 'position': 's',
+            if (!isPosition) 'velocity': 'v',
+            if (isPosition) 's_initial': 's₀',
+            if (!isPosition) 'v_initial': 'v',
           },
           'visual_palette': _mathVisualPaletteParams(palette),
           'visual_hierarchy': _mathVisualHierarchyParams(),
         },
       },
     });
+    return _appendSvgContextStrip(dataUrl, request, palette);
   }
 }
 
@@ -2407,6 +2461,41 @@ num? _extractAngle(String text) {
   return match == null ? null : _parseNum(match.group(1));
 }
 
+num? _extractInitialPosition(String text) {
+  final patterns = [
+    RegExp(
+      r'(?:s0|s₀|posição inicial|posicao inicial|marco|posição|posicao)[^\d-]{0,24}(-?\d+(?:[\.,]\d+)?)\s*(?:km|m)?',
+      caseSensitive: false,
+    ),
+    RegExp(r's\s*=\s*(-?\d+(?:[\.,]\d+)?)\s*[+−-]', caseSensitive: false),
+  ];
+  for (final pattern in patterns) {
+    final match = pattern.firstMatch(text);
+    final value = _parseNum(match?.group(1));
+    if (value != null) return value;
+  }
+  return null;
+}
+
+num? _extractVelocity(String text) {
+  final patterns = [
+    RegExp(
+      r'(?:velocidade(?: constante)?|v0|v₀|v\s*=)[^\d-]{0,24}(-?\d+(?:[\.,]\d+)?)\s*(?:km\/h|m\/s)?',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r's\s*=\s*-?\d+(?:[\.,]\d+)?\s*[+]\s*(-?\d+(?:[\.,]\d+)?)\s*t',
+      caseSensitive: false,
+    ),
+  ];
+  for (final pattern in patterns) {
+    final match = pattern.firstMatch(text);
+    final value = _parseNum(match?.group(1));
+    if (value != null) return value;
+  }
+  return null;
+}
+
 num? _parseNum(String? value) {
   if (value == null) return null;
   return num.tryParse(value.replaceAll(',', '.'));
@@ -2563,6 +2652,15 @@ String? _cleanContextLabel(String? value, {int maxLength = 28}) {
   if (_genericVisualLabelWords.contains(clean.toLowerCase())) return null;
   if (clean.length <= maxLength) return clean;
   return '${clean.substring(0, maxLength - 3).trimRight()}...';
+}
+
+String _escapeXml(String value) {
+  return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
 }
 
 const _genericVisualLabelWords = {
