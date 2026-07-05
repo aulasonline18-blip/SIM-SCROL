@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sim_mobile/features/portal/portal_flow.dart';
 import 'package:sim_mobile/shared/widgets/shared_widgets.dart';
 import 'package:sim_mobile/sim/classroom/classroom_text_scale.dart';
 import 'package:sim_mobile/sim/ui/sim_design_system.dart';
+import 'package:sim_mobile/sim/ui/sim_theme.dart';
 import 'package:sim_mobile/sim/ui/widgets/cyber_step_shell.dart';
 
 void main() {
@@ -73,4 +75,81 @@ void main() {
 
     await tester.binding.setSurfaceSize(null);
   });
+
+  testWidgets('SimFrame protects global content from physical safe areas', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(
+          size: Size(430, 900),
+          padding: EdgeInsets.fromLTRB(0, 47, 0, 34),
+          viewPadding: EdgeInsets.fromLTRB(0, 47, 0, 34),
+        ),
+        child: MaterialApp(
+          home: SimThemeScope(
+            darkMode: false,
+            onToggleDarkMode: _noop,
+            child: const SimFrame(
+              child: ColoredBox(
+                key: Key('safe-content'),
+                color: Colors.white,
+                child: SizedBox.expand(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final rect = tester.getRect(find.byKey(const Key('safe-content')));
+    expect(rect.top, 47);
+    expect(rect.bottom, 900 - 34);
+    expect(rect.left, 0);
+    expect(rect.right, 430);
+  });
+
+  testWidgets(
+    'SimFrame respects landscape side cutouts and bottom gesture bar',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(900, 430));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(
+            size: Size(900, 430),
+            padding: EdgeInsets.fromLTRB(44, 0, 44, 21),
+            viewPadding: EdgeInsets.fromLTRB(44, 0, 44, 21),
+          ),
+          child: MaterialApp(
+            home: SimThemeScope(
+              darkMode: false,
+              onToggleDarkMode: _noop,
+              child: const SimFrame(
+                child: ColoredBox(
+                  key: Key('landscape-safe-content'),
+                  color: Colors.white,
+                  child: SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final rect = tester.getRect(
+        find.byKey(const Key('landscape-safe-content')),
+      );
+      expect(rect.left, 44);
+      expect(rect.right, 900 - 44);
+      expect(rect.top, 0);
+      expect(rect.bottom, 430 - 21);
+    },
+  );
 }
+
+void _noop() {}

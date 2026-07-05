@@ -65,12 +65,14 @@ class SimFrame extends StatelessWidget {
     final palette = SimThemeScope.paletteOf(context);
     return ColoredBox(
       color: palette.frame,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: SimBreakpoints.frameMaxWidth(width),
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: SimBreakpoints.frameMaxWidth(width),
+            ),
+            child: child,
           ),
-          child: child,
         ),
       ),
     );
