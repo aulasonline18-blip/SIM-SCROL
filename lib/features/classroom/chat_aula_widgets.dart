@@ -47,7 +47,7 @@ class ChatAulaTimeline extends StatefulWidget {
 }
 
 class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
-  static const _scrollDuration = Duration(milliseconds: 420);
+  static const _scrollDuration = Duration(milliseconds: 840);
 
   late final ScrollController _scrollController =
       widget.scrollController ?? ScrollController();
