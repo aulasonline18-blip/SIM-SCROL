@@ -125,6 +125,32 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
   }
 }
 
+class SequenceVisualRouterClient implements LessonVisualRouterClient {
+  SequenceVisualRouterClient(this.results);
+
+  final List<VisualN3Result> results;
+  final prompts = <String?>[];
+  int calls = 0;
+
+  @override
+  Future<VisualN3Result> routeVisual({
+    required VisualN2Result n2,
+    String? topic,
+    String? visualType,
+    String? imagePrompt,
+    List<String> keyElements = const [],
+    String? pedagogicalNeed,
+    String? highlightFocus,
+    String? complexity,
+    String? stableLang,
+  }) async {
+    prompts.add(imagePrompt);
+    final index = calls < results.length ? calls : results.length - 1;
+    calls += 1;
+    return results[index];
+  }
+}
+
 class StubSoftwareRenderCatalog extends SoftwareRenderCatalog {
   const StubSoftwareRenderCatalog({this.result});
 
@@ -879,10 +905,10 @@ void main() {
       }).join(),
     );
     final usefulLegend = dataUrl(
-      '<rect x="40" y="40" width="180" height="70" fill="#DCFCE7"/>'
-      '<text x="60" y="82" fill="#0F172A" font-size="16">verde: conceito principal</text>'
-      '<rect x="40" y="130" width="180" height="70" fill="#FEF3C7"/>'
-      '<text x="60" y="172" fill="#0F172A" font-size="16">amarelo: foco de atenção</text>',
+      '<rect x="120" y="90" width="660" height="150" fill="#DCFCE7"/>'
+      '<text x="160" y="175" fill="#0F172A" font-size="24">verde: conceito principal</text>'
+      '<rect x="120" y="280" width="660" height="150" fill="#FEF3C7"/>'
+      '<text x="160" y="365" fill="#0F172A" font-size="24">amarelo: foco de atenção</text>',
     );
     final smallClean = dataUrl(
       '<circle cx="120" cy="120" r="48" fill="#DCFCE7" stroke="#16A34A"/>'
@@ -892,7 +918,11 @@ void main() {
     expect(critic.evaluateSvgDataUrl(richOrganized).accepted, isTrue);
     expect(critic.evaluateSvgDataUrl(richManyConcepts).accepted, isTrue);
     expect(critic.evaluateSvgDataUrl(usefulLegend).accepted, isTrue);
-    expect(critic.evaluateSvgDataUrl(smallClean).accepted, isTrue);
+    expect(critic.evaluateSvgDataUrl(smallClean).accepted, isFalse);
+    expect(
+      critic.evaluateSvgDataUrl(smallClean).reason,
+      'critic_tiny_visual_footprint',
+    );
 
     expect(
       critic
@@ -918,9 +948,10 @@ void main() {
       critic
           .evaluateSvgDataUrl(
             dataUrl(
-              '<rect x="20" y="20" width="100" height="40"/>'
-              '<text x="40" y="40">eco</text><text x="160" y="40">eco</text>'
-              '<text x="280" y="40">eco</text>',
+              '<rect x="120" y="90" width="660" height="350"/>'
+              '<text x="200" y="210" font-size="22">eco</text>'
+              '<text x="420" y="280" font-size="22">eco</text>'
+              '<text x="640" y="350" font-size="22">eco</text>',
             ),
           )
           .reason,
@@ -930,8 +961,10 @@ void main() {
       critic
           .evaluateSvgDataUrl(
             dataUrl(
-              '<text x="1" y="1">1</text><text x="1" y="2">2</text>'
-              '<text x="1" y="3">3</text><text x="1" y="4">4</text>',
+              '<text x="220" y="180" font-size="22">1</text>'
+              '<text x="360" y="240" font-size="22">2</text>'
+              '<text x="500" y="300" font-size="22">3</text>'
+              '<text x="640" y="360" font-size="22">4</text>',
             ),
           )
           .reason,
@@ -991,8 +1024,8 @@ void main() {
     const evaluator = VisualFinalQualityEvaluator.standard;
     final svg = sanitizeAndEncodeSvg(
       '<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">'
-      '<rect x="40" y="40" width="220" height="120" fill="#DCFCE7"/>'
-      '<text x="70" y="88" fill="#0F172A" font-size="18">modelo genérico</text>'
+      '<rect x="120" y="90" width="660" height="350" rx="28" fill="#DCFCE7" stroke="#16A34A"/>'
+      '<text x="450" y="275" text-anchor="middle" fill="#0F172A" font-size="26">modelo genérico</text>'
       '</svg>',
     )!;
     const request = SoftwareVisualRequest(
@@ -1025,9 +1058,11 @@ void main() {
     const evaluator = VisualFinalQualityEvaluator.standard;
     final svg = sanitizeAndEncodeSvg(
       '<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">'
-      '<circle cx="120" cy="120" r="48" fill="#DCFCE7" stroke="#16A34A"/>'
-      '<text x="92" y="126" fill="#0F172A" font-size="18">luz</text>'
-      '<text x="190" y="126" fill="#0F172A" font-size="18">planta</text>'
+      '<circle cx="330" cy="270" r="120" fill="#DCFCE7" stroke="#16A34A"/>'
+      '<circle cx="570" cy="270" r="120" fill="#FEF3C7" stroke="#CA8A04"/>'
+      '<path d="M450 270 L450 270" stroke="#0F172A" stroke-width="5"/>'
+      '<text x="330" y="278" text-anchor="middle" fill="#0F172A" font-size="28">luz</text>'
+      '<text x="570" y="278" text-anchor="middle" fill="#0F172A" font-size="28">planta</text>'
       '</svg>',
     )!;
     const request = SoftwareVisualRequest(
@@ -2768,6 +2803,63 @@ void main() {
 
     expect(result.displayUrl, isNot(noisySvg));
     expect(client.calls, 0);
+  });
+
+  test('visual pipeline retries N3 when SVG has tiny footprint', () async {
+    final tinySvg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">'
+      '<circle cx="430" cy="280" r="30" fill="#DCFCE7" stroke="#16A34A"/>'
+      '<text x="430" y="286" text-anchor="middle" fill="#0F172A" font-size="16">ATP</text>'
+      '</svg>',
+    )!;
+    final correctedSvg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">'
+      '<rect x="120" y="90" width="660" height="350" rx="28" fill="#DCFCE7" stroke="#16A34A"/>'
+      '<circle cx="270" cy="260" r="72" fill="#E0F2FE" stroke="#0284C7"/>'
+      '<circle cx="450" cy="260" r="72" fill="#FEF3C7" stroke="#CA8A04"/>'
+      '<circle cx="630" cy="260" r="72" fill="#FCE7F3" stroke="#BE185D"/>'
+      '<path d="M342 260 L378 260 M522 260 L558 260" stroke="#0F172A" stroke-width="5"/>'
+      '<text x="270" y="266" text-anchor="middle" fill="#0F172A" font-size="22">entrada</text>'
+      '<text x="450" y="266" text-anchor="middle" fill="#0F172A" font-size="22">transformação</text>'
+      '<text x="630" y="266" text-anchor="middle" fill="#0F172A" font-size="22">saída</text>'
+      '</svg>',
+    )!;
+    final router = SequenceVisualRouterClient([
+      VisualN3Result(
+        verdict: VisualVerdict.svg,
+        reason: 'TEST_TINY_SVG',
+        svgDataUrl: tinySvg,
+      ),
+      VisualN3Result(
+        verdict: VisualVerdict.svg,
+        reason: 'TEST_STRICT_SVG',
+        svgDataUrl: correctedSvg,
+      ),
+    ]);
+    final pipeline = LessonVisualPipeline(
+      imageClient: FakeImageClient()..next = null,
+      visualRouterClient: router,
+      softwareRenderCatalog: const StubSoftwareRenderCatalog(),
+    );
+
+    final result = await pipeline.resolveVisual(
+      trigger: const LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'important',
+        topic: 'fluxograma de entrada e saída de energia',
+        visualType: 'diagram',
+        imagePrompt: 'mostre entrada, transformação e saída de energia',
+        keyElements: ['entrada', 'transformação', 'saída'],
+      ),
+      lessonKey: 'retry-tiny-svg',
+      stableLang: 'pt-BR',
+      allowPaidImages: false,
+    );
+
+    expect(router.calls, 2);
+    expect(router.prompts.last, contains('Hard visual contract'));
+    expect(result.displayUrl, correctedSvg);
+    expect(result.source, 'n3_software_strict_retry');
   });
 
   test(

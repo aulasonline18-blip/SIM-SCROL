@@ -393,6 +393,15 @@ class LessonVisualPipeline {
             n2Reason: n2.reason,
           );
         }
+        final strictN3Result = await _retryN3WithStrictSvgContract(
+          lessonKey: lessonKey,
+          n2: n2,
+          trigger: trigger,
+          softwareRequest: softwareRequest,
+          stableLang: stableLang,
+          reason: n3.reason,
+        );
+        if (strictN3Result != null) return strictN3Result;
         if (localSoftware != null &&
             localAccepted &&
             escalationDecision.allowLocalAfterN3Failure) {
@@ -559,6 +568,83 @@ class LessonVisualPipeline {
       academicLevel: academicLevel,
       pedagogicalGoal: trigger.highlightFocus,
     );
+  }
+
+  Future<LessonVisualResult?> _retryN3WithStrictSvgContract({
+    required String lessonKey,
+    required VisualN2Result n2,
+    required LessonVisualTrigger trigger,
+    required SoftwareVisualRequest softwareRequest,
+    required String? stableLang,
+    required String reason,
+  }) async {
+    final strictPrompt = _strictSvgRetryPrompt(trigger, reason);
+    _visualLog(
+      lessonKey,
+      'n3_strict_retry',
+      'reason=${_shortVisualText(reason)} promptLen=${strictPrompt.length}',
+    );
+    final retry = await routeVisualCheapN3(
+      client: visualRouterClient,
+      n2: n2,
+      topic: trigger.topic,
+      visualType: trigger.visualType,
+      imagePrompt: strictPrompt,
+      keyElements: trigger.keyElements,
+      pedagogicalNeed: trigger.pedagogicalNeed,
+      highlightFocus: trigger.highlightFocus,
+      complexity: trigger.complexity,
+      stableLang: stableLang,
+    );
+    _visualLog(
+      lessonKey,
+      'n3_strict_retry_result',
+      'verdict=${retry.verdict.name} reason=${_shortVisualText(retry.reason)} hasSvg=${retry.svgDataUrl != null}',
+    );
+    if (retry.verdict != VisualVerdict.svg || retry.svgDataUrl == null) {
+      return null;
+    }
+    final accepted = _acceptFinalSoftwareSvg(
+      lessonKey,
+      'n3_software_strict_retry',
+      retry.svgDataUrl!,
+      softwareRequest,
+    );
+    if (!accepted) return null;
+    _recordOutcome(
+      lessonKey,
+      'software',
+      'n3_software_strict_retry',
+      n2.reason,
+    );
+    return LessonVisualResult(
+      svg: retry.svgDataUrl,
+      dataUrl: null,
+      source: 'n3_software_strict_retry',
+      n2Reason: n2.reason,
+    );
+  }
+
+  String _strictSvgRetryPrompt(LessonVisualTrigger trigger, String reason) {
+    final base = [
+      trigger.imagePrompt,
+      trigger.topic,
+      trigger.highlightFocus,
+      ...trigger.keyElements,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join('\n');
+    return '''
+$base
+
+Regenerate the visual as a complete didactic SVG. Previous SVG was rejected: ${_shortVisualText(reason)}.
+Hard visual contract:
+- SVG viewBox must be exactly "0 0 900 560".
+- Main drawing must be centered and occupy 65% to 85% of the canvas width and at least 45% of canvas height.
+- Do not leave a large blank white area around the drawing.
+- Use visible shapes, arrows or diagram structure, not text alone.
+- Use readable labels with font-size 14 or larger and high contrast.
+- Keep all elements inside the viewBox with generous margins.
+- Return a valid data:image/svg+xml data URL only.
+''';
   }
 
   bool _acceptFinalSoftwareSvg(
