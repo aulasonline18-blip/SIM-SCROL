@@ -128,6 +128,14 @@ void main() {
                   kind: ChatLessonMessageKind.explanation,
                   text: 'Sem animacao obrigatoria.',
                 ),
+                ChatLessonMessage(
+                  id: 'reduced-motion-feedback',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.feedback,
+                  text: 'Feedback sem depender de animacao.',
+                  isCorrect: true,
+                  actionKey: 'aula_next_item',
+                ),
               ],
               onChooseAnswer: (_) {},
               onSignal: (_) {},
@@ -141,6 +149,8 @@ void main() {
     );
 
     expect(find.text('Sem animacao obrigatoria.'), findsOneWidget);
+    expect(find.text('Feedback sem depender de animacao.'), findsOneWidget);
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsOneWidget);
     expect(find.byType(TweenAnimationBuilder<double>), findsNothing);
   });
 
@@ -404,6 +414,7 @@ void main() {
   testWidgets('chat timeline renders feedback with doubt and advance actions', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     var openedDoubt = false;
     var advanced = false;
     await tester.pumpWidget(
@@ -431,6 +442,7 @@ void main() {
     );
 
     expect(find.text('✅ Exato. Você domina este ponto.'), findsOneWidget);
+    expect(find.byType(TweenAnimationBuilder<double>), findsOneWidget);
     expect(find.text('Tenho dúvida sobre essa questão'), findsOneWidget);
     final nextItem = _textAny([
       'Próximo item',
@@ -439,12 +451,21 @@ void main() {
       'Siguiente tema',
     ]);
     expect(nextItem, findsOneWidget);
+    final nextSemantics = tester.getSemantics(
+      find.byKey(const Key('chat-feedback-next-button')),
+    );
+    expect(nextSemantics.flagsCollection.isButton, isTrue);
+    expect(
+      nextSemantics.flagsCollection.isEnabled.toString(),
+      contains('isTrue'),
+    );
 
     await tester.tap(find.text('Tenho dúvida sobre essa questão'));
     expect(openedDoubt, isTrue);
 
     await tester.tap(nextItem);
     expect(advanced, isTrue);
+    semantics.dispose();
   });
 
   testWidgets('chat feedback actions become dead when feedback is archived', (
