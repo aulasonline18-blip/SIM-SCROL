@@ -6,16 +6,13 @@ import 'blueprint_prompt.dart';
 import 'image_pedagogical_critic.dart';
 import 'lesson_image_api_contract.dart';
 import 'lesson_visual_models.dart';
-import 's12_visual_pipeline.dart';
 import 'software_render_catalog.dart';
-import 'visual_pedagogical_role.dart';
 import 'visual_router_n2.dart';
 import 'visual_router_n3.dart';
 import 'visual_funnel_telemetry.dart';
 import 'visual_escalation_policy.dart';
 import 'visual_final_quality_evaluator.dart';
 import 'image_data_url_compression.dart';
-import 'math_templates/math_templates.dart';
 
 export 's12_visual_pipeline.dart'
     show
@@ -194,34 +191,15 @@ class LessonVisualPipeline {
     SoftwareRenderCatalog? softwareRenderCatalog,
     this.telemetry,
     VisualEscalationPolicy? escalationPolicy,
-  }) : imageCritic = imageCritic ?? const ImagePedagogicalCritic(),
-       finalQualityEvaluator =
-           finalQualityEvaluator ?? VisualFinalQualityEvaluator.standard,
-       softwareRenderCatalog =
-           softwareRenderCatalog ?? const SoftwareRenderCatalog(),
-       escalationPolicy = escalationPolicy ?? VisualEscalationPolicy.standard;
+  });
 
   final LessonImageClient imageClient;
   final LessonVisualRouterClient visualRouterClient;
-  final ImagePedagogicalCritic imageCritic;
-  final VisualFinalQualityEvaluator finalQualityEvaluator;
-  final SoftwareRenderCatalog softwareRenderCatalog;
   final VisualFunnelTelemetry? telemetry;
-  final VisualEscalationPolicy escalationPolicy;
 
-  /// Tenta renderizar usando math template SVG (custo zero).
-  /// Retorna data URL do SVG ou null → chamador usa fallback IA.
-  String? tryMathTemplate(Object? visualTrigger) {
-    return tryRenderMathTemplate(visualTrigger);
-  }
-
-  /// Ponto de entrada principal: decide e executa o melhor caminho visual.
-  ///
-  /// Ordem de prioridade (fiel ao SIM Web):
-  ///  1. render_strategy="software" + svg_payload → SVG inline (grátis)
-  ///  2. math_template → SVG calculado (grátis)
-  ///  3. N2 keyword router → se "svg" → N3 (AI judge) → SVG (grátis)
-  ///  4. Oferta paga; a imagem só é gerada após aceite explícito.
+  /// Ponto de entrada principal: o app só encaminha o visual_trigger ao
+  /// servidor e recebe foto raster pronta. Desenho, decisão, SVG, N2/N3 e
+  /// oferta paga pertencem ao servidor.
   Future<LessonVisualResult> resolveVisual({
     required LessonVisualTrigger trigger,
     required String lessonKey,
@@ -241,164 +219,29 @@ class LessonVisualPipeline {
       return const LessonVisualResult(svg: null, dataUrl: null, source: 'skip');
     }
 
-    if (_prefersServerSideVisuals(visualRouterClient)) {
-      return _resolveServerOnlyVisual(
-        trigger: trigger,
-        lessonKey: lessonKey,
-        stableLang: stableLang,
-        academicLevel: academicLevel,
-      );
-    }
-
-    // 1. SVG inline do próprio T02 (render_strategy=software + svg_payload)
-    if (trigger.renderStrategy == 'software' && trigger.svgPayload != null) {
-      final svgDataUrl = sanitizeAndEncodeSvg(trigger.svgPayload);
-      if (svgDataUrl != null) {
-        if (_acceptFinalSoftwareSvg(
-          lessonKey,
-          'svg_inline',
-          svgDataUrl,
-          _requestFromTrigger(trigger, academicLevel: academicLevel),
-        )) {
-          _visualLog(
-            lessonKey,
-            'svg_inline',
-            'accepted len=${trigger.svgPayload?.length ?? 0}',
-          );
-          _recordOutcome(lessonKey, 'software', 'svg_inline');
-          return LessonVisualResult(
-            svg: svgDataUrl,
-            dataUrl: null,
-            source: 'svg_inline',
-          );
-        }
-      }
-      _visualLog(
-        lessonKey,
-        'svg_inline',
-        'rejected len=${trigger.svgPayload?.length ?? 0}',
-      );
-    }
-
-    // 2. N2 router — classifica por palavras-chave (custo zero)
-    final n2 = classifyVisualByKeywords(
-      topic: trigger.topic,
-      visualType: trigger.visualType,
-      imagePrompt: trigger.imagePrompt,
-    );
-    _visualLog(
-      lessonKey,
-      'n2',
-      'verdict=${n2.verdict.name} reason=${n2.reason} matched=${n2.matched.take(8).join('|')}',
-    );
-
-    final softwareRequest = SoftwareVisualRequest(
-      n2: n2,
-      topic: trigger.topic,
-      visualType: trigger.visualType,
-      imagePrompt: trigger.imagePrompt,
-      colorLegend: trigger.colorLegend,
-      keyElements: trigger.keyElements,
-      highlightFocus: trigger.highlightFocus,
-      complexity: trigger.complexity,
-      pedagogicalNeed: trigger.pedagogicalNeed,
+    return _resolveServerOnlyVisual(
+      trigger: trigger,
+      lessonKey: lessonKey,
+      stableLang: stableLang,
       academicLevel: academicLevel,
-      pedagogicalGoal: trigger.highlightFocus,
     );
+  }
 
-    final canUseFreeSoftware = n2.verdict != VisualVerdict.ai;
-
-    // 3. Math template SVG.
-    if (canUseFreeSoftware && trigger.mathTemplate != null) {
-      final mathSvg = tryRenderMathTemplate(trigger.toVisualTriggerMap());
-      if (mathSvg != null) {
-        if (_acceptFinalSoftwareSvg(
-          lessonKey,
-          'math_template',
-          mathSvg,
-          softwareRequest,
-        )) {
-          _visualLog(
-            lessonKey,
-            'math_template',
-            'accepted name=${_mathTemplateName(trigger.mathTemplate)}',
-          );
-          _recordOutcome(lessonKey, 'software', 'math_template');
-          return LessonVisualResult(
-            svg: mathSvg,
-            dataUrl: null,
-            source: 'math_template',
-          );
-        }
-      }
-      _visualLog(
-        lessonKey,
-        'math_template',
-        'rejected name=${_mathTemplateName(trigger.mathTemplate)}',
-      );
-    }
-
-    final localSoftware = canUseFreeSoftware
-        ? softwareRenderCatalog.render(softwareRequest)
-        : null;
-    var localAccepted = false;
-    if (localSoftware != null) {
-      localAccepted = _acceptFinalSoftwareSvg(
-        lessonKey,
-        'local_software:${localSoftware.renderer}',
-        localSoftware.dataUrl,
-        softwareRequest,
-      );
-      final localDecision = escalationPolicy.decide(
-        request: softwareRequest,
-        localResult: localSoftware,
-        localAccepted: localAccepted,
-      );
-      if (localDecision.acceptLocalBeforeN3) {
-        _visualLog(
-          lessonKey,
-          'local_software',
-          'renderer=${localSoftware.renderer} role=${localSoftware.role.id} policy=${localDecision.reason}',
-        );
-        _recordOutcome(
-          lessonKey,
-          'software',
-          'local_software',
-          n2.reason,
-          localSoftware.renderer,
-        );
-        return LessonVisualResult(
-          svg: localSoftware.dataUrl,
-          dataUrl: null,
-          source: 'local_software',
-          n2Reason: n2.reason,
-        );
-      }
-      if (localAccepted && localDecision.shouldCallN3) {
-        _visualLog(
-          lessonKey,
-          'local_software_escalated',
-          'renderer=${localSoftware.renderer} policy=${localDecision.reason}',
-        );
-      }
-      if (!localAccepted) {
-        _visualLog(
-          lessonKey,
-          'local_software',
-          'rejected renderer=${localSoftware.renderer}',
-        );
-      }
-    }
-    final escalationDecision = escalationPolicy.decide(
-      request: softwareRequest,
-      localResult: localSoftware,
-      localAccepted: localAccepted,
-    );
-
-    if (canUseFreeSoftware && escalationDecision.shouldCallN3) {
-      final n3 = await routeVisualCheapN3(
-        client: visualRouterClient,
-        n2: n2,
+  Future<LessonVisualResult> _resolveServerOnlyVisual({
+    required LessonVisualTrigger trigger,
+    required String lessonKey,
+    required String? stableLang,
+    required String? academicLevel,
+  }) async {
+    final VisualN3Result serverImage;
+    try {
+      serverImage = await visualRouterClient.routeVisual(
+        n2: const VisualN2Result(
+          verdict: VisualVerdict.ambiguous,
+          matched: ['server_ready_image'],
+          reason: 'SERVER_READY_IMAGE_REQUEST',
+          confidence: 1,
+        ),
         topic: trigger.topic,
         visualType: trigger.visualType,
         imagePrompt: trigger.imagePrompt,
@@ -409,475 +252,74 @@ class LessonVisualPipeline {
         stableLang: stableLang,
         svgPayload: trigger.svgPayload,
         mathTemplate: trigger.mathTemplate,
+        visualTrigger: trigger.toVisualTriggerMap(),
       );
-      _visualLog(
-        lessonKey,
-        'n3',
-        'verdict=${n3.verdict.name} reason=${_shortVisualText(n3.reason)} confidence=${n3.confidence?.toStringAsFixed(2) ?? 'n/a'} role=${n3.pedagogicalRole ?? 'n/a'} hasSvg=${n3.svgDataUrl != null}',
-      );
-      if (n3.verdict == VisualVerdict.svg && n3.svgDataUrl != null) {
-        final n3Accepted = _acceptFinalSoftwareSvg(
-          lessonKey,
-          'n3_software',
-          n3.svgDataUrl!,
-          softwareRequest,
-        );
-        if (n3Accepted) {
-          _recordOutcome(lessonKey, 'software', 'n3_software', n2.reason);
-          if (n3.displayDataUrl != null) {
-            return LessonVisualResult(
-              svg: null,
-              dataUrl: n3.displayDataUrl,
-              source: 'n3_software',
-              n2Reason: n2.reason,
-            );
-          }
-          return LessonVisualResult(
-            svg: n3.svgDataUrl,
-            dataUrl: null,
-            source: 'n3_software',
-            n2Reason: n2.reason,
-          );
-        }
-        final strictN3Result = await _retryN3WithStrictSvgContract(
-          lessonKey: lessonKey,
-          n2: n2,
-          trigger: trigger,
-          softwareRequest: softwareRequest,
-          stableLang: stableLang,
-          reason: n3.reason,
-        );
-        if (strictN3Result != null) return strictN3Result;
-        if (localSoftware != null &&
-            localAccepted &&
-            escalationDecision.allowLocalAfterN3Failure) {
-          _visualLog(
-            lessonKey,
-            'local_software_after_n3_quality',
-            'renderer=${localSoftware.renderer} n3=${_shortVisualText(n3.reason)} policy=${escalationDecision.reason}',
-          );
-          _recordOutcome(
-            lessonKey,
-            'software',
-            'local_software',
-            n2.reason,
-            localSoftware.renderer,
-          );
-          return LessonVisualResult(
-            svg: localSoftware.dataUrl,
-            dataUrl: null,
-            source: 'local_software',
-            n2Reason: n2.reason,
-          );
-        }
-      }
-      if (n3.transportFailed &&
-          localSoftware != null &&
-          localAccepted &&
-          escalationDecision.allowLocalAfterN3Failure) {
-        _visualLog(
-          lessonKey,
-          'local_software_after_n3_failure',
-          'renderer=${localSoftware.renderer} n3=${_shortVisualText(n3.reason)} policy=${escalationDecision.reason}',
-        );
-        _recordOutcome(
-          lessonKey,
-          'software',
-          'local_software',
-          n2.reason,
-          localSoftware.renderer,
-        );
-        return LessonVisualResult(
-          svg: localSoftware.dataUrl,
-          dataUrl: null,
-          source: 'local_software',
-          n2Reason: n2.reason,
-        );
-      }
-      if (n3.verdict == VisualVerdict.noImage) {
-        _recordOutcome(lessonKey, 'no_image', 'n3_no_image', n2.reason);
-        return LessonVisualResult(
-          svg: null,
-          dataUrl: null,
-          source: 'n3_no_image',
-          n2Reason: n2.reason,
-        );
-      }
-    }
-
-    if (!allowPaidImages) {
-      _visualLog(
-        lessonKey,
-        'skip_no_paid',
-        'n2=${n2.verdict.name}/${n2.reason} allowPaidImages=false topic=${_shortVisualText(trigger.topic)}',
-      );
-      _recordOutcome(lessonKey, 'paid_offer', 'skip_no_paid', n2.reason);
-      return const LessonVisualResult(
-        svg: null,
-        dataUrl: null,
-        source: 'skip_no_paid',
-      );
-    }
-    if (acceptedOfferId == null || acceptedOfferId.trim().isEmpty) {
-      _visualLog(
-        lessonKey,
-        'skip_no_offer',
-        'n2=${n2.verdict.name}/${n2.reason} acceptedOfferId=missing topic=${_shortVisualText(trigger.topic)}',
-      );
-      _recordOutcome(lessonKey, 'paid_offer', 'skip_no_offer', n2.reason);
-      return const LessonVisualResult(
-        svg: null,
-        dataUrl: null,
-        source: 'skip_no_offer',
-      );
-    }
-
-    // 4. AI Blueprint (pago)
-    final prompt = buildPromptForTrigger(
-      topic: trigger.topic ?? '',
-      trigger: trigger,
-      lang: stableLang,
-    );
-    if (prompt.isEmpty) {
-      _visualLog(lessonKey, 'skip_no_prompt', 'paid prompt empty');
-      _recordOutcome(lessonKey, 'failed', 'skip_no_prompt', n2.reason);
-      return const LessonVisualResult(
-        svg: null,
-        dataUrl: null,
-        source: 'skip_no_prompt',
-      );
-    }
-
-    final paidImage = await fetchPaidLessonImageResponse(
-      prompt,
-      lessonKey,
-      aspectRatio: normalizedLessonImageAspectRatio(trigger.aspectRatio),
-      acceptedOfferId: acceptedOfferId,
-      idempotencyKey: idempotencyKey ?? acceptedOfferId,
-      visualTrigger: trigger.toVisualTriggerMap(),
-      lessonContext: {
-        'stableLang': stableLang,
-        'topic': trigger.topic,
-        'visualType': trigger.visualType,
-        'pedagogicalNeed': trigger.pedagogicalNeed,
-        'source': 'sim_app_flutter',
-      },
-    );
-    if (paidImage == null) {
-      _visualLog(
-        lessonKey,
-        'ai_failed',
-        'n2=${n2.verdict.name}/${n2.reason} promptLen=${prompt.length}',
-      );
-      _recordOutcome(lessonKey, 'failed', 'ai_failed', n2.reason);
-      return LessonVisualResult(
-        svg: null,
-        dataUrl: null,
-        source: 'ai_failed',
-        n2Reason: n2.reason,
-      );
-    }
-    _visualLog(
-      lessonKey,
-      'ai_blueprint',
-      'promptLen=${prompt.length} n2=${n2.verdict.name}/${n2.reason}',
-    );
-    _recordOutcome(lessonKey, 'paid_ready', 'ai_blueprint', n2.reason);
-    return LessonVisualResult(
-      svg: null,
-      dataUrl: paidImage.dataUrl,
-      source: 'ai_blueprint',
-      n2Reason: n2.reason,
-      imageMetadata: paidImage.toMetadata(),
-    );
-  }
-
-  Future<LessonVisualResult> _resolveServerOnlyVisual({
-    required LessonVisualTrigger trigger,
-    required String lessonKey,
-    required String? stableLang,
-    required String? academicLevel,
-  }) async {
-    final n3 = await routeVisualCheapN3(
-      client: visualRouterClient,
-      n2: const VisualN2Result(
-        verdict: VisualVerdict.ambiguous,
-        matched: ['server_image_pipeline'],
-        reason: 'SERVER_IMAGE_PIPELINE',
-        confidence: 1,
-      ),
-      topic: trigger.topic,
-      visualType: trigger.visualType,
-      imagePrompt: trigger.imagePrompt,
-      keyElements: trigger.keyElements,
-      pedagogicalNeed: trigger.pedagogicalNeed,
-      highlightFocus: trigger.highlightFocus,
-      complexity: trigger.complexity,
-      stableLang: stableLang,
-      svgPayload: trigger.svgPayload,
-      mathTemplate: trigger.mathTemplate,
-    );
-    _visualLog(
-      lessonKey,
-      'server_only',
-      'verdict=${n3.verdict.name} reason=${_shortVisualText(n3.reason)} hasSvg=${n3.svgDataUrl != null} hasRaster=${n3.displayDataUrl != null} hasPaidOffer=${n3.paidOfferPrompt != null}',
-    );
-    if (n3.transportFailed) {
-      _recordOutcome(lessonKey, 'failed', 'server_failed', n3.reason);
+    } catch (error) {
+      final reason =
+          'SERVER_IMAGE_TRANSPORT_FAILED: ${_shortVisualText(error)}';
+      _visualLog(lessonKey, 'server_photo', reason);
+      _recordOutcome(lessonKey, 'failed', 'server_failed', reason);
       return LessonVisualResult(
         svg: null,
         dataUrl: null,
         source: 'server_failed',
-        n2Reason: n3.reason,
+        n2Reason: reason,
       );
     }
-    if (n3.verdict == VisualVerdict.noImage) {
-      _recordOutcome(lessonKey, 'no_image', 'server_no_image', n3.reason);
+    _visualLog(
+      lessonKey,
+      'server_photo',
+      'verdict=${serverImage.verdict.name} reason=${_shortVisualText(serverImage.reason)} hasRaster=${serverImage.displayDataUrl != null}',
+    );
+    if (serverImage.transportFailed) {
+      _recordOutcome(lessonKey, 'failed', 'server_failed', serverImage.reason);
+      return LessonVisualResult(
+        svg: null,
+        dataUrl: null,
+        source: 'server_failed',
+        n2Reason: serverImage.reason,
+      );
+    }
+    if (serverImage.verdict == VisualVerdict.noImage) {
+      _recordOutcome(
+        lessonKey,
+        'no_image',
+        'server_no_image',
+        serverImage.reason,
+      );
       return LessonVisualResult(
         svg: null,
         dataUrl: null,
         source: 'server_no_image',
-        n2Reason: n3.reason,
+        n2Reason: serverImage.reason,
       );
     }
-    if (n3.displayDataUrl != null) {
-      _recordOutcome(lessonKey, 'software', 'server_raster', n3.reason);
+    if (serverImage.displayDataUrl != null) {
+      _recordOutcome(
+        lessonKey,
+        'software',
+        'server_raster',
+        serverImage.reason,
+      );
       return LessonVisualResult(
         svg: null,
-        dataUrl: n3.displayDataUrl,
+        dataUrl: serverImage.displayDataUrl,
         source: 'server_raster',
-        n2Reason: n3.reason,
+        n2Reason: serverImage.reason,
       );
     }
-    _recordOutcome(lessonKey, 'failed', 'server_missing_raster', n3.reason);
+    _recordOutcome(
+      lessonKey,
+      'failed',
+      'server_missing_raster',
+      serverImage.reason,
+    );
     return LessonVisualResult(
       svg: null,
       dataUrl: null,
       source: 'server_missing_raster',
-      n2Reason: n3.reason,
+      n2Reason: serverImage.reason,
     );
-  }
-
-  SoftwareVisualRequest _requestFromTrigger(
-    LessonVisualTrigger trigger, {
-    String? academicLevel,
-    VisualN2Result? n2,
-  }) {
-    return SoftwareVisualRequest(
-      n2:
-          n2 ??
-          const VisualN2Result(
-            verdict: VisualVerdict.svg,
-            matched: ['software'],
-            reason: 'PRE_N2_SOFTWARE',
-          ),
-      topic: trigger.topic,
-      visualType: trigger.visualType,
-      imagePrompt: trigger.imagePrompt,
-      colorLegend: trigger.colorLegend,
-      keyElements: trigger.keyElements,
-      highlightFocus: trigger.highlightFocus,
-      complexity: trigger.complexity,
-      pedagogicalNeed: trigger.pedagogicalNeed,
-      academicLevel: academicLevel,
-      pedagogicalGoal: trigger.highlightFocus,
-    );
-  }
-
-  // ignore: unused_element
-  Future<_N3VisualAttempt> _tryN3SoftwareVisual({
-    required String lessonKey,
-    required VisualN2Result n2,
-    required LessonVisualTrigger trigger,
-    required SoftwareVisualRequest softwareRequest,
-    required String? stableLang,
-    required String stage,
-  }) async {
-    final n3 = await routeVisualCheapN3(
-      client: visualRouterClient,
-      n2: n2,
-      topic: trigger.topic,
-      visualType: trigger.visualType,
-      imagePrompt: trigger.imagePrompt,
-      keyElements: trigger.keyElements,
-      pedagogicalNeed: trigger.pedagogicalNeed,
-      highlightFocus: trigger.highlightFocus,
-      complexity: trigger.complexity,
-      stableLang: stableLang,
-      svgPayload: trigger.svgPayload,
-      mathTemplate: trigger.mathTemplate,
-    );
-    _visualLog(
-      lessonKey,
-      stage,
-      'verdict=${n3.verdict.name} reason=${_shortVisualText(n3.reason)} confidence=${n3.confidence?.toStringAsFixed(2) ?? 'n/a'} role=${n3.pedagogicalRole ?? 'n/a'} hasSvg=${n3.svgDataUrl != null} hasRaster=${n3.displayDataUrl != null}',
-    );
-    if (n3.transportFailed) {
-      return const _N3VisualAttempt(transportFailed: true);
-    }
-    if (n3.verdict == VisualVerdict.noImage) {
-      _recordOutcome(lessonKey, 'no_image', 'n3_no_image', n2.reason);
-      return _N3VisualAttempt(
-        result: LessonVisualResult(
-          svg: null,
-          dataUrl: null,
-          source: 'n3_no_image',
-          n2Reason: n2.reason,
-        ),
-      );
-    }
-    if (n3.verdict == VisualVerdict.svg && n3.svgDataUrl != null) {
-      final n3Accepted = _acceptFinalSoftwareSvg(
-        lessonKey,
-        'n3_software',
-        n3.svgDataUrl!,
-        softwareRequest,
-      );
-      if (n3Accepted) {
-        _recordOutcome(lessonKey, 'software', 'n3_software', n2.reason);
-        final result = n3.displayDataUrl != null
-            ? LessonVisualResult(
-                svg: null,
-                dataUrl: n3.displayDataUrl,
-                source: 'n3_software',
-                n2Reason: n2.reason,
-              )
-            : LessonVisualResult(
-                svg: n3.svgDataUrl,
-                dataUrl: null,
-                source: 'n3_software',
-                n2Reason: n2.reason,
-              );
-        return _N3VisualAttempt(result: result);
-      }
-      final strictN3Result = await _retryN3WithStrictSvgContract(
-        lessonKey: lessonKey,
-        n2: n2,
-        trigger: trigger,
-        softwareRequest: softwareRequest,
-        stableLang: stableLang,
-        reason: n3.reason,
-      );
-      if (strictN3Result != null) {
-        return _N3VisualAttempt(result: strictN3Result);
-      }
-    }
-    return const _N3VisualAttempt();
-  }
-
-  Future<LessonVisualResult?> _retryN3WithStrictSvgContract({
-    required String lessonKey,
-    required VisualN2Result n2,
-    required LessonVisualTrigger trigger,
-    required SoftwareVisualRequest softwareRequest,
-    required String? stableLang,
-    required String reason,
-  }) async {
-    final strictPrompt = _strictSvgRetryPrompt(trigger, reason);
-    _visualLog(
-      lessonKey,
-      'n3_strict_retry',
-      'reason=${_shortVisualText(reason)} promptLen=${strictPrompt.length}',
-    );
-    final retry = await routeVisualCheapN3(
-      client: visualRouterClient,
-      n2: n2,
-      topic: trigger.topic,
-      visualType: trigger.visualType,
-      imagePrompt: strictPrompt,
-      keyElements: trigger.keyElements,
-      pedagogicalNeed: trigger.pedagogicalNeed,
-      highlightFocus: trigger.highlightFocus,
-      complexity: trigger.complexity,
-      stableLang: stableLang,
-      svgPayload: trigger.svgPayload,
-      mathTemplate: trigger.mathTemplate,
-    );
-    _visualLog(
-      lessonKey,
-      'n3_strict_retry_result',
-      'verdict=${retry.verdict.name} reason=${_shortVisualText(retry.reason)} hasSvg=${retry.svgDataUrl != null}',
-    );
-    if (retry.verdict != VisualVerdict.svg || retry.svgDataUrl == null) {
-      return null;
-    }
-    final accepted = _acceptFinalSoftwareSvg(
-      lessonKey,
-      'n3_software_strict_retry',
-      retry.svgDataUrl!,
-      softwareRequest,
-    );
-    if (!accepted) return null;
-    _recordOutcome(
-      lessonKey,
-      'software',
-      'n3_software_strict_retry',
-      n2.reason,
-    );
-    if (retry.displayDataUrl != null) {
-      return LessonVisualResult(
-        svg: null,
-        dataUrl: retry.displayDataUrl,
-        source: 'n3_software_strict_retry',
-        n2Reason: n2.reason,
-      );
-    }
-    return LessonVisualResult(
-      svg: retry.svgDataUrl,
-      dataUrl: null,
-      source: 'n3_software_strict_retry',
-      n2Reason: n2.reason,
-    );
-  }
-
-  String _strictSvgRetryPrompt(LessonVisualTrigger trigger, String reason) {
-    final base = [
-      trigger.imagePrompt,
-      trigger.topic,
-      trigger.highlightFocus,
-      ...trigger.keyElements,
-    ].whereType<String>().where((value) => value.trim().isNotEmpty).join('\n');
-    return '''
-$base
-
-Regenerate the visual as a complete didactic SVG. Previous SVG was rejected: ${_shortVisualText(reason)}.
-Hard visual contract:
-- SVG viewBox must be exactly "0 0 900 560".
-- Main drawing must be centered and occupy 65% to 85% of the canvas width and at least 45% of canvas height.
-- Do not leave a large blank white area around the drawing.
-- Use visible shapes, arrows or diagram structure, not text alone.
-- Use readable labels with font-size 14 or larger and high contrast.
-- Keep all elements inside the viewBox with generous margins.
-- Return a valid data:image/svg+xml data URL only.
-''';
-  }
-
-  bool _acceptFinalSoftwareSvg(
-    String lessonKey,
-    String stage,
-    String dataUrl,
-    SoftwareVisualRequest request,
-  ) {
-    final critique = imageCritic.evaluateSvgDataUrl(dataUrl);
-    _visualLog(
-      lessonKey,
-      'image_critic',
-      'stage=$stage accepted=${critique.accepted} reason=${critique.reason} textNodes=${critique.textNodeCount}',
-    );
-    if (!critique.accepted) return false;
-
-    final finalQuality = finalQualityEvaluator.evaluateSvg(
-      dataUrl: dataUrl,
-      request: request,
-      critique: critique,
-      source: stage,
-    );
-    _visualLog(
-      lessonKey,
-      'image_final_quality',
-      'stage=$stage action=${finalQuality.action.name} reason=${finalQuality.reason} keyCoverage=${finalQuality.coveredKeyElements}/${finalQuality.requiredKeyElements} focus=${finalQuality.focusCovered}',
-    );
-    return finalQuality.accepted;
   }
 
   void _recordOutcome(
@@ -1005,32 +447,10 @@ void _visualLog(String lessonKey, String stage, String detail) {
   }
 }
 
-String _mathTemplateName(Object? mathTemplate) {
-  if (mathTemplate is Map) {
-    return mathTemplate['name']?.toString() ?? '<missing>';
-  }
-  return mathTemplate == null ? '<null>' : mathTemplate.runtimeType.toString();
-}
-
 String _shortVisualText(Object? value) {
   final text = (value ?? '').toString().replaceAll(RegExp(r'\s+'), ' ').trim();
   if (text.length <= 160) return text;
   return text.substring(0, 160);
-}
-
-bool _prefersServerSideVisuals(LessonVisualRouterClient client) {
-  try {
-    return (client as dynamic).prefersServerSideVisuals == true;
-  } catch (_) {
-    return false;
-  }
-}
-
-class _N3VisualAttempt {
-  const _N3VisualAttempt({this.result, this.transportFailed = false});
-
-  final LessonVisualResult? result;
-  final bool transportFailed;
 }
 
 class LessonVisualResult {

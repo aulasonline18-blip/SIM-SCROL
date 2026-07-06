@@ -298,9 +298,8 @@ void main() {
     tester,
   ) async {
     var settled = 0;
-    final svg = Uri.encodeComponent(
-      '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
-    );
+    const png =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3QMgAAAABJRU5ErkJggg==';
     final session = LabSession()
       ..aulaSnapshot = LessonRuntimeSnapshot(
         authReady: true,
@@ -332,7 +331,7 @@ void main() {
             'key_elements': ['coração', 'artérias'],
           },
         ),
-        imagem: 'data:image/svg+xml;utf8,$svg',
+        imagem: 'data:image/png;base64,$png',
         itemMarker: 'M1',
         itemText: 'Sistema circulatório',
       );
@@ -352,6 +351,7 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Imagem da aula pronta'), findsNothing);
     expect(find.byType(LessonImageStudySurface), findsOneWidget);
@@ -361,15 +361,14 @@ void main() {
   });
 
   testWidgets('imagem pronta abre inspeção com zoom e fecha', (tester) async {
-    final svg = Uri.encodeComponent(
-      '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>',
-    );
+    const png =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3QMgAAAABJRU5ErkJggg==';
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: LessonImageStudySurface(
-            data: 'data:image/svg+xml;utf8,$svg',
+            data: 'data:image/png;base64,$png',
             height: 180,
             caption: 'parábola com eixo e intercepto',
           ),
@@ -446,7 +445,7 @@ void main() {
     tester,
   ) async {
     const png =
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3QMgAAAABJRU5ErkJggg==';
     var settled = 0;
     await tester.pumpWidget(
       MaterialApp(
@@ -474,7 +473,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.binding.setSurfaceSize(const Size(390, 820));
     const png =
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3QMgAAAABJRU5ErkJggg==';
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

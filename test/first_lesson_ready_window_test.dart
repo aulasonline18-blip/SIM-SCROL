@@ -21,6 +21,8 @@ import 'package:sim_mobile/sim/state/live_entry_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
 
+const _serverRasterDataUrl = 'data:image/png;base64,AAAA';
+
 class FakeT02Client implements T02LessonClient {
   FakeT02Client({
     this.visualTrigger,
@@ -72,8 +74,8 @@ class FakeT02Client implements T02LessonClient {
       completeLesson(request);
 }
 
-class _StaleThenSvgVisualPipeline extends LessonVisualPipeline {
-  _StaleThenSvgVisualPipeline({required this.releaseFirst})
+class _StaleThenRasterVisualPipeline extends LessonVisualPipeline {
+  _StaleThenRasterVisualPipeline({required this.releaseFirst})
     : super(
         imageClient: const FakeNoopImageClient(),
         visualRouterClient: const FakeVisualRouterClient(),
@@ -104,10 +106,9 @@ class _StaleThenSvgVisualPipeline extends LessonVisualPipeline {
       );
     }
     return const LessonVisualResult(
-      svg:
-          'data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%2010%2010%22%3E%3Ctext%3Equadratic%3C%2Ftext%3E%3C%2Fsvg%3E',
-      dataUrl: null,
-      source: 'local_software',
+      svg: null,
+      dataUrl: _serverRasterDataUrl,
+      source: 'server_raster',
     );
   }
 }
@@ -299,7 +300,7 @@ void main() {
   });
 
   test(
-    'LessonOrchestrator carries T02 visual_trigger into free SVG image',
+    'LessonOrchestrator carries T02 visual_trigger into server raster image',
     () async {
       final trigger = <String, dynamic>{
         'needs_image': true,
@@ -314,7 +315,9 @@ void main() {
         t02Client: FakeT02Client(visualTrigger: trigger),
         cache: cache,
         bus: bus,
-        visualPipeline: fakeVisualPipeline(),
+        visualPipeline: fakeVisualPipeline(
+          displayDataUrl: _serverRasterDataUrl,
+        ),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-visual',
@@ -339,13 +342,12 @@ void main() {
       expect(textLesson.conteudo.visualTrigger, trigger);
       expect(updates.first.conteudo.visualTrigger, trigger);
       final rendered = updates.last.imagem;
-      expect(rendered, startsWith('data:image/svg+xml;utf8,'));
-      expect(rendered, contains('%3Csvg'));
+      expect(rendered, _serverRasterDataUrl);
     },
   );
 
   test(
-    'LessonOrchestrator uses local software before paid offer for quadratic lesson',
+    'LessonOrchestrator uses server raster before any app paid offer',
     () async {
       final trigger = <String, dynamic>{
         'needs_image': true,
@@ -372,7 +374,9 @@ void main() {
         ),
         cache: cache,
         bus: bus,
-        visualPipeline: fakeVisualPipeline(),
+        visualPipeline: fakeVisualPipeline(
+          displayDataUrl: _serverRasterDataUrl,
+        ),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-poor-trigger-quadratic',
@@ -395,14 +399,14 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final rendered = updates.last.imagem;
-      expect(rendered, startsWith('data:image/svg+xml;utf8,'));
+      expect(rendered, _serverRasterDataUrl);
       expect(cache.peek(key)?.imagem, rendered);
       expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
     },
   );
 
   test(
-    'LessonOrchestrator uses lesson text over stale prompt for h(t) physics graph',
+    'LessonOrchestrator stores server raster for h(t) visual trigger',
     () async {
       final stalePrompt = List.filled(
         90,
@@ -437,7 +441,9 @@ void main() {
         ),
         cache: cache,
         bus: bus,
-        visualPipeline: fakeVisualPipeline(),
+        visualPipeline: fakeVisualPipeline(
+          displayDataUrl: _serverRasterDataUrl,
+        ),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-ht-physics-graph',
@@ -460,8 +466,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final rendered = updates.last.imagem;
-      expect(rendered, startsWith('data:image/svg+xml;utf8,'));
-      expect(rendered, contains('Par%C3%A1bola'));
+      expect(rendered, _serverRasterDataUrl);
       expect(cache.peek(key)?.imagem, rendered);
       expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
     },
@@ -514,7 +519,9 @@ void main() {
       );
       final bus = LessonEventBus();
       final releaseFirst = Completer<void>();
-      final pipeline = _StaleThenSvgVisualPipeline(releaseFirst: releaseFirst);
+      final pipeline = _StaleThenRasterVisualPipeline(
+        releaseFirst: releaseFirst,
+      );
       final t02 = FakeT02Client(
         visualTrigger: freshTrigger,
         explanation:
@@ -558,7 +565,7 @@ void main() {
       expect(pipeline.calls, 2);
       expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
       expect(cache.peek(key)?.conteudo.question, contains('função quadrática'));
-      expect(cache.peek(key)?.imagem, startsWith('data:image/svg+xml;utf8,'));
+      expect(cache.peek(key)?.imagem, _serverRasterDataUrl);
       expect(updates.last.imagem, cache.peek(key)?.imagem);
       expect(pipeline.prompts.first, contains('Pergunta antiga'));
       expect(pipeline.prompts.last, contains('função quadrática'));
@@ -582,7 +589,9 @@ void main() {
         t02Client: t02,
         cache: cache,
         bus: bus,
-        visualPipeline: fakeVisualPipeline(),
+        visualPipeline: fakeVisualPipeline(
+          displayDataUrl: _serverRasterDataUrl,
+        ),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-cache-linear',
@@ -626,14 +635,14 @@ void main() {
 
       final rendered = updates.last.imagem;
       expect(t02.calls, 0);
-      expect(rendered, startsWith('data:image/svg+xml;utf8,'));
+      expect(rendered, _serverRasterDataUrl);
       expect(cache.peek(key)?.imagem, rendered);
       expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
     },
   );
 
   test(
-    'LessonOrchestrator renders math_template from visual_trigger',
+    'LessonOrchestrator sends math_template trigger and stores server raster',
     () async {
       final trigger = <String, dynamic>{
         'needs_image': true,
@@ -657,7 +666,9 @@ void main() {
         t02Client: FakeT02Client(visualTrigger: trigger),
         cache: cache,
         bus: bus,
-        visualPipeline: fakeVisualPipeline(),
+        visualPipeline: fakeVisualPipeline(
+          displayDataUrl: _serverRasterDataUrl,
+        ),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-math-template',
@@ -677,13 +688,12 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final rendered = updates.last.imagem;
-      expect(rendered, startsWith('data:image/svg+xml;utf8,'));
-      expect(Uri.decodeComponent(rendered!), contains('y = 2'));
+      expect(rendered, _serverRasterDataUrl);
     },
   );
 
   test(
-    'LessonOrchestrator publishes paid image offer by key after software funnel',
+    'LessonOrchestrator does not publish paid image offer from app',
     () async {
       final trigger = <String, dynamic>{
         'needs_image': true,
@@ -722,16 +732,12 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(cache.peek(key)?.imagem, isNull);
-      expect(offers, isNotEmpty);
-      expect(offers.last?.lessonKey, key);
-      expect(offers.last?.offerId, startsWith('img_offer_'));
-      expect(offers.last?.creditCost, 10);
-      expect(offers.last?.prompt, contains('coracao humano'));
+      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
     },
   );
 
   test(
-    'LessonOrchestrator can reset declined paid image offer by lesson key',
+    'LessonOrchestrator does not reset app-created paid image offer',
     () async {
       final trigger = <String, dynamic>{
         'needs_image': true,
@@ -774,7 +780,7 @@ void main() {
 
       await orchestrator.prefetchCompleteLesson(params, priority: 'active');
       await Future<void>.delayed(Duration.zero);
-      expect(offers.whereType<LessonPaidImageOffer>(), hasLength(1));
+      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
 
       orchestrator.declinePaidImageOffer(key);
       await orchestrator.prefetchCompleteLesson(
@@ -783,21 +789,14 @@ void main() {
         forceRefresh: true,
       );
       await Future<void>.delayed(Duration.zero);
-      expect(offers.whereType<LessonPaidImageOffer>(), hasLength(1));
+      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
 
       orchestrator.resetDeclinedPaidImageOffer(key);
       await Future<void>.delayed(Duration.zero);
-      expect(offers.whereType<LessonPaidImageOffer>(), hasLength(2));
-
-      final metadata = await orchestrator.acceptPaidImageOffer(key);
-      expect(paidCalls, 1);
-      expect(updates.last.imagem, startsWith('data:image/jpeg;base64,'));
-      expect(cache.peek(key)?.imagem, updates.last.imagem);
-
-      final replayMetadata = await orchestrator.acceptPaidImageOffer(key);
-      expect(paidCalls, 1);
-      expect(replayMetadata, metadata);
-      expect(updates.last.imagem, cache.peek(key)?.imagem);
+      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
+      expect(paidCalls, 0);
+      expect(updates.last.imagem, isNull);
+      expect(cache.peek(key)?.imagem, isNull);
     },
   );
 
@@ -841,8 +840,7 @@ void main() {
           },
           correctAnswer: AnswerLetter.A,
         ),
-        imagem:
-            'data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%201%201%22%3E%3C/svg%3E',
+        imagem: _serverRasterDataUrl,
         audioText: 'Explicacao. Pergunta',
       );
 
@@ -854,7 +852,7 @@ void main() {
       final unsubscribe = bus.subscribe('lesson-key', received.add);
       addTearDown(unsubscribe);
 
-      expect(live.single.imagem, startsWith('data:image/svg+xml;utf8,'));
+      expect(live.single.imagem, _serverRasterDataUrl);
       expect(received.single.imagem, lesson.imagem);
       expect(received.single.conteudo.question, lesson.conteudo.question);
     },
@@ -1156,84 +1154,81 @@ void main() {
     expect(cache.peek('bad'), isNull);
   });
 
-  test(
-    'ready state material schedules free software visual like SimWeb',
-    () async {
-      final trigger = {
-        'needs_image': true,
-        'pedagogical_need': 'helpful',
-        'render_strategy': 'software',
-        'visual_type': 'graph',
-        'svg_payload':
-            '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
-      };
-      final params = const CompleteLessonParams(
-        lessonLocalId: 'cyber-ready',
-        item: 'Plano cartesiano',
-        lang: 'pt-BR',
-        academic: 'fundamental',
-        layer: LessonLayer.l1,
-        mode: LessonMode.session,
-        marker: 'M1',
-      );
-      final service = StudentLearningStateService(
-        seed: {
-          'cyber-ready': _stateWithCurriculum().copyWith(
-            readyLessonMaterials: {
-              preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): {
-                'text_status': 'ready',
-                'explanation': 'Observe o eixo x e o eixo y.',
-                'question': 'Onde fica a origem?',
-                'options': {'A': 'No zero', 'B': 'No topo', 'C': 'Na borda'},
-                'correct_answer': 'A',
-                'visual_trigger': trigger,
-                'for_itemIdx': 0,
-                'for_marker': 'M1',
-                'for_layer': LessonLayer.l1.name,
-              },
+  test('ready state material schedules server raster visual', () async {
+    final trigger = {
+      'needs_image': true,
+      'pedagogical_need': 'helpful',
+      'render_strategy': 'software',
+      'visual_type': 'graph',
+      'svg_payload':
+          '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+    };
+    final params = const CompleteLessonParams(
+      lessonLocalId: 'cyber-ready',
+      item: 'Plano cartesiano',
+      lang: 'pt-BR',
+      academic: 'fundamental',
+      layer: LessonLayer.l1,
+      mode: LessonMode.session,
+      marker: 'M1',
+    );
+    final service = StudentLearningStateService(
+      seed: {
+        'cyber-ready': _stateWithCurriculum().copyWith(
+          readyLessonMaterials: {
+            preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): {
+              'text_status': 'ready',
+              'explanation': 'Observe o eixo x e o eixo y.',
+              'question': 'Onde fica a origem?',
+              'options': {'A': 'No zero', 'B': 'No topo', 'C': 'Na borda'},
+              'correct_answer': 'A',
+              'visual_trigger': trigger,
+              'for_itemIdx': 0,
+              'for_marker': 'M1',
+              'for_layer': LessonLayer.l1.name,
             },
-          ),
-        },
-      );
-      final cache = LessonMaterialCache();
-      final bus = LessonEventBus();
-      final updates = <CompleteLesson>[];
-      final unsubscribe = bus.subscribe(lessonKeyFor(params), updates.add);
-      addTearDown(unsubscribe);
-      final orchestrator = LessonOrchestrator(
-        t02Client: FakeT02Client(),
-        cache: cache,
-        bus: bus,
-        visualPipeline: fakeVisualPipeline(),
-      );
-      final materialService = StudentLessonMaterialService(
-        stateService: service,
+          },
+        ),
+      },
+    );
+    final cache = LessonMaterialCache();
+    final bus = LessonEventBus();
+    final updates = <CompleteLesson>[];
+    final unsubscribe = bus.subscribe(lessonKeyFor(params), updates.add);
+    addTearDown(unsubscribe);
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: cache,
+      bus: bus,
+      visualPipeline: fakeVisualPipeline(displayDataUrl: _serverRasterDataUrl),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
         orchestrator: orchestrator,
-        readyWindowEngine: DopamineReadyWindowEngine(
-          service: service,
-          orchestrator: orchestrator,
-        ),
-      );
+      ),
+    );
 
-      final result = materialService.resolveFastLessonMaterialFromStateOrCache(
-        ResolveLessonMaterialInput(
-          lessonLocalId: 'cyber-ready',
-          topic: 'Objetivo',
-          itemIdx: 0,
-          marker: 'M1',
-          layer: LessonLayer.l1,
-          params: params,
-        ),
-      );
+    final result = materialService.resolveFastLessonMaterialFromStateOrCache(
+      ResolveLessonMaterialInput(
+        lessonLocalId: 'cyber-ready',
+        topic: 'Objetivo',
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l1,
+        params: params,
+      ),
+    );
 
-      expect(result?.conteudo.question, 'Onde fica a origem?');
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(updates.last.imagem, startsWith('data:'));
-      expect(cache.peek(lessonKeyFor(params))?.imagem, updates.last.imagem);
-    },
-  );
+    expect(result?.conteudo.question, 'Onde fica a origem?');
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(updates.last.imagem, _serverRasterDataUrl);
+    expect(cache.peek(lessonKeyFor(params))?.imagem, updates.last.imagem);
+  });
 
-  test('cached text-only material schedules free software visual', () async {
+  test('cached text-only material schedules server raster visual', () async {
     final trigger = {
       'needs_image': true,
       'pedagogical_need': 'helpful',
@@ -1281,7 +1276,7 @@ void main() {
       t02Client: FakeT02Client(),
       cache: cache,
       bus: bus,
-      visualPipeline: fakeVisualPipeline(),
+      visualPipeline: fakeVisualPipeline(displayDataUrl: _serverRasterDataUrl),
     );
     final materialService = StudentLessonMaterialService(
       stateService: service,
@@ -1305,7 +1300,7 @@ void main() {
 
     expect(result?.imagem, isNull);
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(updates.last.imagem, startsWith('data:'));
+    expect(updates.last.imagem, _serverRasterDataUrl);
     expect(cache.peek(lessonKeyFor(params))?.imagem, updates.last.imagem);
     expect(
       service.read('cyber-cache')?.currentLessonMaterial?['imagem'],

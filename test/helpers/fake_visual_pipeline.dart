@@ -22,9 +22,10 @@ class FakeNoopImageClient implements LessonImageClient {
 }
 
 class FakeVisualRouterClient implements LessonVisualRouterClient {
-  const FakeVisualRouterClient({this.svgDataUrl});
+  const FakeVisualRouterClient({this.svgDataUrl, this.displayDataUrl});
 
   final String? svgDataUrl;
+  final String? displayDataUrl;
 
   @override
   Future<VisualN3Result> routeVisual({
@@ -39,12 +40,14 @@ class FakeVisualRouterClient implements LessonVisualRouterClient {
     String? stableLang,
     String? svgPayload,
     Object? mathTemplate,
+    Map<String, dynamic>? visualTrigger,
   }) async {
-    if (svgDataUrl != null) {
+    if (svgDataUrl != null || displayDataUrl != null) {
       return VisualN3Result(
         verdict: VisualVerdict.svg,
         reason: 'TEST_N3_SVG',
         svgDataUrl: svgDataUrl,
+        displayDataUrl: displayDataUrl,
       );
     }
     return const VisualN3Result(
@@ -56,6 +59,7 @@ class FakeVisualRouterClient implements LessonVisualRouterClient {
 
 LessonVisualPipeline fakeVisualPipeline({
   String? svgDataUrl,
+  String? displayDataUrl,
   String? paidImageDataUrl,
   void Function()? onPaidImageGenerate,
 }) {
@@ -64,6 +68,9 @@ LessonVisualPipeline fakeVisualPipeline({
       imageDataUrl: paidImageDataUrl,
       onGenerate: onPaidImageGenerate,
     ),
-    visualRouterClient: FakeVisualRouterClient(svgDataUrl: svgDataUrl),
+    visualRouterClient: FakeVisualRouterClient(
+      svgDataUrl: svgDataUrl,
+      displayDataUrl: displayDataUrl,
+    ),
   );
 }

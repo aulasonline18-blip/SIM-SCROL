@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -878,21 +877,6 @@ class _LessonMediaImageViewState extends State<LessonMediaImageView> {
   Widget build(BuildContext context) {
     final trimmed = widget.data.trim();
     if (trimmed.startsWith('data:image/svg+xml')) {
-      final svg = _decodeSvgDataUrl(trimmed);
-      final translatedSvg = svg == null
-          ? null
-          : translateLessonSvgForFlutter(svg);
-      if (translatedSvg != null) {
-        _notifySettled();
-        return SvgPicture.string(
-          translatedSvg,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            _notifySettled();
-            return LessonImageErrorView(compact: widget.compact);
-          },
-        );
-      }
       _notifySettled();
       return LessonImageErrorView(compact: widget.compact);
     }
@@ -900,8 +884,10 @@ class _LessonMediaImageViewState extends State<LessonMediaImageView> {
       final comma = trimmed.indexOf(',');
       if (comma > 0 && trimmed.substring(0, comma).contains(';base64')) {
         try {
+          final bytes = base64Decode(trimmed.substring(comma + 1));
+          _notifySettled();
           return Image.memory(
-            base64Decode(trimmed.substring(comma + 1)),
+            bytes,
             fit: BoxFit.contain,
             gaplessPlayback: true,
             frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
@@ -935,21 +921,6 @@ class _LessonMediaImageViewState extends State<LessonMediaImageView> {
     }
     _notifySettled();
     return LessonImageErrorView(compact: widget.compact);
-  }
-
-  String? _decodeSvgDataUrl(String raw) {
-    final comma = raw.indexOf(',');
-    if (comma <= 0) return null;
-    final header = raw.substring(0, comma);
-    final payload = raw.substring(comma + 1);
-    try {
-      if (header.contains(';base64')) {
-        return utf8.decode(base64Decode(payload));
-      }
-      return Uri.decodeComponent(payload);
-    } catch (_) {
-      return null;
-    }
   }
 }
 

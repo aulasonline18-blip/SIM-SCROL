@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/features/classroom/aula_widgets.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_screen.dart';
@@ -1635,7 +1634,7 @@ void main() {
   );
 
   testWidgets(
-    'chat classroom renders ready local SVG image on the lesson screen without paid offer',
+    'chat classroom renders ready raster image on the lesson screen without paid offer',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 820));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -1645,12 +1644,12 @@ void main() {
         ..authReady = true
         ..selectedLanguageCode = 'pt'
         ..stableLang = 'Portuguese'
-        ..lessonLocalId = 'lesson-chat-ready-svg'
+        ..lessonLocalId = 'lesson-chat-ready-raster'
         ..route = '/cyber/aula'
         ..aulaSnapshot = _chatSnapshot(
           phase: const ClassroomPhase.reading(),
-          imagem: _svgDataUrl(),
-          explanation: 'Explicacao com grafico local pronto.',
+          imagem: _pngDataUrl(),
+          explanation: 'Explicacao com foto pronta do servidor.',
           question: 'Qual ponto o grafico destaca?',
         );
 
@@ -1660,9 +1659,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 120));
 
       expect(find.byType(ChatAulaTimeline), findsOneWidget);
-      expect(find.text('Explicacao com grafico local pronto.'), findsOneWidget);
+      expect(
+        find.text('Explicacao com foto pronta do servidor.'),
+        findsOneWidget,
+      );
       expect(find.byType(LessonMediaImageView), findsOneWidget);
-      expect(find.byType(SvgPicture), findsOneWidget);
+      expect(find.byType(Image), findsWidgets);
       expect(find.text('Qual ponto o grafico destaca?'), findsOneWidget);
       expect(
         find.text(
@@ -2574,6 +2576,12 @@ String _svgDataUrl() {
     '<circle cx="60" cy="40" r="20" fill="#111827"/></svg>',
   );
   return 'data:image/svg+xml;utf8,$svg';
+}
+
+String _pngDataUrl() {
+  const png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3QMgAAAABJRU5ErkJggg==';
+  return 'data:image/png;base64,$png';
 }
 
 String _chatConversationPrefsKey(String lessonKey) {

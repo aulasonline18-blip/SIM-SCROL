@@ -192,6 +192,7 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
     String? stableLang,
     String? svgPayload,
     Object? mathTemplate,
+    Map<String, dynamic>? visualTrigger,
   }) async {
     final requestId = _mediaRequestId(
       'vis',
@@ -229,7 +230,7 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
       },
       if (keyElements.isNotEmpty) 'keyElements': keyElements,
     };
-    final visualTriggerPayload = <String, Object?>{};
+    final visualTriggerPayload = <String, Object?>{...?visualTrigger};
     if (svgPayload != null && svgPayload.trim().isNotEmpty) {
       body['svgPayload'] = svgPayload;
       visualTriggerPayload['svg_payload'] = svgPayload;
@@ -238,6 +239,7 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
       body['mathTemplate'] = mathTemplate;
       visualTriggerPayload['math_template'] = mathTemplate;
     }
+    visualTriggerPayload.removeWhere((_, value) => value == null);
     if (visualTriggerPayload.isNotEmpty) {
       body['visual_trigger'] = visualTriggerPayload;
     }

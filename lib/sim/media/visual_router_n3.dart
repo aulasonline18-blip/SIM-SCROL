@@ -41,6 +41,7 @@ abstract interface class LessonVisualRouterClient {
     String? stableLang,
     String? svgPayload,
     Object? mathTemplate,
+    Map<String, dynamic>? visualTrigger,
   });
 }
 
@@ -57,6 +58,7 @@ Future<VisualN3Result> routeVisualCheapN3({
   String? stableLang,
   String? svgPayload,
   Object? mathTemplate,
+  Map<String, dynamic>? visualTrigger,
 }) async {
   if (n2.verdict == VisualVerdict.ai) {
     return VisualN3Result(verdict: VisualVerdict.ai, reason: n2.reason);
@@ -74,6 +76,7 @@ Future<VisualN3Result> routeVisualCheapN3({
       stableLang: stableLang,
       svgPayload: svgPayload,
       mathTemplate: mathTemplate,
+      visualTrigger: visualTrigger,
     );
   } catch (error, stackTrace) {
     final shortError = _shortVisualN3Error(error);

@@ -326,8 +326,8 @@ void main() {
     final result = await client.routeVisual(
       n2: const VisualN2Result(
         verdict: VisualVerdict.ambiguous,
-        matched: ['server_image_pipeline'],
-        reason: 'SERVER_IMAGE_PIPELINE',
+        matched: ['server_ready_image'],
+        reason: 'SERVER_READY_IMAGE_REQUEST',
       ),
       topic: 'grafico pronto',
       visualType: 'graph',

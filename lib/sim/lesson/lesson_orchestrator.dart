@@ -205,17 +205,6 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       );
       return;
     }
-    if (result.source == 'skip_no_paid' ||
-        result.source == 'skip_no_offer' ||
-        result.source == 'server_paid_offer') {
-      _publishPaidImageOffer(
-        key: key,
-        params: params,
-        trigger: trigger,
-        source: result.source,
-        approvedPrompt: result.paidOfferPrompt,
-      );
-    }
   }
 
   bool _isCurrentImageDecision(String key, String signature, int epoch) {
@@ -284,57 +273,6 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     onImageReady?.call(params, updated);
     bus.clearPaidImageOffer(key);
     bus.notify(key, updated);
-  }
-
-  void _publishPaidImageOffer({
-    required String key,
-    required CompleteLessonParams params,
-    required LessonVisualTrigger trigger,
-    required String source,
-    String? approvedPrompt,
-  }) {
-    final currentSignature = _currentContentSignature(key);
-    if ((currentSignature != null &&
-            _declinedImageSignaturesByKey[key] == currentSignature) ||
-        _paidPending.containsKey(key)) {
-      return;
-    }
-    final prompt = approvedPrompt?.trim().isNotEmpty == true
-        ? approvedPrompt!.trim()
-        : visualPipeline.buildPromptForTrigger(
-            topic: trigger.topic ?? params.item,
-            trigger: trigger,
-            lang: params.lang,
-          );
-    if (prompt.trim().isEmpty) return;
-    final offerId = _stableOfferId(key, prompt);
-    _paidPending[key] = _PaidPending(
-      approvedPrompt: prompt,
-      base:
-          cache.peek(key) ??
-          CompleteLesson(
-            conteudo: LessonContent(
-              explanation: '',
-              question: '',
-              options: const {
-                AnswerLetter.A: '',
-                AnswerLetter.B: '',
-                AnswerLetter.C: '',
-              },
-              correctAnswer: AnswerLetter.A,
-              visualTrigger: trigger.toVisualTriggerMap(),
-            ),
-            imagem: null,
-            audioText: '',
-          ),
-      offerId: offerId,
-      params: params,
-      trigger: trigger,
-      stableLang: params.lang,
-      source: source,
-      signature: currentSignature,
-    );
-    _publishPendingPaidImageOffer(key);
   }
 
   @override
@@ -566,18 +504,6 @@ bool _lessonTextHasGraphEvidence(String text) {
         'grafico',
         'eixo',
       ].any(normalized.contains);
-}
-
-String _stableOfferId(String lessonKey, String prompt) {
-  return 'img_offer_${_stableHash('$lessonKey|${prompt.trim()}')}';
-}
-
-String _stableHash(String input) {
-  var hash = 5381;
-  for (final unit in input.codeUnits) {
-    hash = ((hash << 5) + hash) ^ unit;
-  }
-  return (hash & 0xffffffff).toRadixString(36);
 }
 
 String _lessonContentSignature(CompleteLesson lesson) {

@@ -14,6 +14,7 @@ import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
 import 'package:sim_mobile/sim/media/lesson_image_api_contract.dart';
 import 'package:sim_mobile/sim/media/lesson_visual_pipeline.dart';
+import 'package:sim_mobile/sim/media/software_render_catalog.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
@@ -47,28 +48,41 @@ void main() {
       final result = await client.routeVisual(
         n2: const VisualN2Result(
           verdict: VisualVerdict.ambiguous,
-          matched: ['server_image_pipeline'],
-          reason: 'SERVER_IMAGE_PIPELINE',
+          matched: ['server_ready_image'],
+          reason: 'SERVER_READY_IMAGE_REQUEST',
         ),
         topic: 'grafico pronto',
         visualType: 'graph',
         imagePrompt: 'svg pronto',
         svgPayload: '<svg><circle cx="1" cy="1" r="1"/></svg>',
+        visualTrigger: const {
+          'needs_image': true,
+          'pedagogical_need': 'important',
+          'topic': 'grafico pronto',
+          'visual_type': 'graph',
+          'image_prompt': 'svg pronto',
+          'render_strategy': 'software',
+        },
       );
 
       final body = transport.lastBody as Map;
       expect(body['svgPayload'], '<svg><circle cx="1" cy="1" r="1"/></svg>');
+      expect(body['topic'], 'grafico pronto');
+      expect(body['n2']['reason'], 'SERVER_READY_IMAGE_REQUEST');
       expect(
         (body['visual_trigger'] as Map)['svg_payload'],
         body['svgPayload'],
       );
+      expect((body['visual_trigger'] as Map)['topic'], 'grafico pronto');
+      expect((body['visual_trigger'] as Map)['visual_type'], 'graph');
+      expect((body['visual_trigger'] as Map)['render_strategy'], 'software');
       expect(result.svgDataUrl, _svgDataUrl);
       expect(result.displayDataUrl, _webpDataUrl);
     },
   );
 
   test(
-    'SimServerVisualRouterClient ignora raster invalido e preserva SVG como fallback',
+    'SimServerVisualRouterClient ignora raster invalido e preserva SVG como auditoria',
     () async {
       final transport = _RecordingTransport()
         ..jsonBody = jsonEncode({
@@ -128,6 +142,16 @@ void main() {
       final body = transport.lastBody as Map;
       final visualTrigger = body['visual_trigger'] as Map;
       expect(body['svgPayload'], '<svg><circle cx="1" cy="1" r="1"/></svg>');
+      expect(body['n2']['reason'], 'SERVER_READY_IMAGE_REQUEST');
+      expect(visualTrigger['needs_image'], isTrue);
+      expect(visualTrigger['pedagogical_need'], 'important');
+      expect(visualTrigger['topic'], contains('grafico pronto'));
+      expect(visualTrigger['topic'], contains('Imagem pedagogica'));
+      expect(visualTrigger['visual_type'], 'graph');
+      expect(
+        visualTrigger['image_prompt'],
+        contains('svg pronto para rasterizar'),
+      );
       expect(
         visualTrigger['svg_payload'],
         '<svg><circle cx="1" cy="1" r="1"/></svg>',
@@ -210,10 +234,7 @@ void main() {
         'image_prompt': 'foto realista de anatomia',
       },
     );
-    final cancel = harness.bus.subscribePaidImageOffer(
-      harness.key,
-      offers.add,
-    );
+    final cancel = harness.bus.subscribePaidImageOffer(harness.key, offers.add);
 
     final lesson = await harness.resolveImage(expectImage: false);
     await tester.pump(const Duration(milliseconds: 20));
@@ -257,6 +278,96 @@ void main() {
     expect(harness.cache.peek(harness.key)?.imagem, isNull);
   });
 
+  test('foto pronta fica salva no cache depois de rebuild da aula', () async {
+    final transport = _RecordingTransport()
+      ..jsonBody = jsonEncode({
+        'verdict': 'svg',
+        'reason': 'SERVER_RASTERIZED',
+        'svgDataUrl': _svgDataUrl,
+        'displayDataUrl': _pngDataUrl,
+      });
+    final harness = _buildHarness(
+      visualTransport: transport,
+      visualTrigger: const {
+        'needs_image': true,
+        'pedagogical_need': 'important',
+        'visual_type': 'graph',
+        'topic': 'foto estatica',
+        'image_prompt': 'foto pronta do servidor',
+      },
+    );
+
+    final first = await harness.resolveImage();
+    final rebuilt = await harness.orchestrator.prefetchCompleteLesson(
+      harness.params,
+      priority: 'active',
+    );
+
+    expect(first.imagem, _pngDataUrl);
+    expect(rebuilt.imagem, _pngDataUrl);
+    expect(harness.cache.peek(harness.key)?.imagem, _pngDataUrl);
+    expect(transport.calls, 1);
+  });
+
+  test('foto da aula A nao aparece na aula B', () async {
+    final cache = LessonMaterialCache();
+    final bus = LessonEventBus();
+    final transport = _RecordingTransport()
+      ..jsonBodies = [
+        jsonEncode({
+          'verdict': 'svg',
+          'reason': 'SERVER_A',
+          'svgDataUrl': _svgDataUrl,
+          'displayDataUrl': _webpDataUrl,
+        }),
+        jsonEncode({
+          'verdict': 'svg',
+          'reason': 'SERVER_B',
+          'svgDataUrl': _svgDataUrl,
+          'displayDataUrl': _jpegDataUrl,
+        }),
+      ];
+    final orchestrator = LessonOrchestrator(
+      t02Client: _MapT02Client({
+        'Aula A': const {
+          'needs_image': true,
+          'pedagogical_need': 'important',
+          'topic': 'imagem A',
+          'image_prompt': 'foto A',
+        },
+        'Aula B': const {
+          'needs_image': true,
+          'pedagogical_need': 'important',
+          'topic': 'imagem B',
+          'image_prompt': 'foto B',
+        },
+      }),
+      cache: cache,
+      bus: bus,
+      visualPipeline: LessonVisualPipeline(
+        imageClient: _ThrowingPaidImageClient(),
+        visualRouterClient: SimServerVisualRouterClient(
+          config: _config(),
+          transport: transport,
+        ),
+        softwareRenderCatalog: _ThrowingSoftwareRenderCatalog(),
+      ),
+    );
+    final paramsA = _paramsForItem('Aula A');
+    final paramsB = _paramsForItem('Aula B');
+    final keyA = lessonKeyFor(paramsA);
+    final keyB = lessonKeyFor(paramsB);
+
+    final lessonA = await _resolveImageFor(orchestrator, bus, cache, paramsA);
+    final lessonB = await _resolveImageFor(orchestrator, bus, cache, paramsB);
+
+    expect(lessonA.imagem, _webpDataUrl);
+    expect(lessonB.imagem, _jpegDataUrl);
+    expect(cache.peek(keyA)?.imagem, _webpDataUrl);
+    expect(cache.peek(keyB)?.imagem, _jpegDataUrl);
+    expect(cache.peek(keyA)?.imagem, isNot(cache.peek(keyB)?.imagem));
+  });
+
   testWidgets('base64 invalido mostra erro controlado sem quebrar', (
     tester,
   ) async {
@@ -278,14 +389,7 @@ _FullPathHarness _buildHarness({
   required Map<String, Object?> visualTrigger,
   _FakePaidImageClient? imageClient,
 }) {
-  final params = const CompleteLessonParams(
-    lessonLocalId: 'visual-full-path',
-    item: 'Imagem pedagogica',
-    lang: 'pt-BR',
-    academic: 'ano 6',
-    layer: LessonLayer.l1,
-    mode: LessonMode.session,
-  );
+  final params = _paramsForItem('Imagem pedagogica');
   final cache = LessonMaterialCache();
   final bus = LessonEventBus();
   final visualClient = SimServerVisualRouterClient(
@@ -299,6 +403,7 @@ _FullPathHarness _buildHarness({
     visualPipeline: LessonVisualPipeline(
       imageClient: imageClient ?? _FakePaidImageClient(_jpegDataUrl),
       visualRouterClient: visualClient,
+      softwareRenderCatalog: _ThrowingSoftwareRenderCatalog(),
     ),
   );
   return _FullPathHarness(
@@ -307,6 +412,40 @@ _FullPathHarness _buildHarness({
     bus: bus,
     orchestrator: orchestrator,
   );
+}
+
+CompleteLessonParams _paramsForItem(String item) => CompleteLessonParams(
+  lessonLocalId: 'visual-full-path',
+  item: item,
+  lang: 'pt-BR',
+  academic: 'ano 6',
+  layer: LessonLayer.l1,
+  mode: LessonMode.session,
+);
+
+Future<CompleteLesson> _resolveImageFor(
+  LessonOrchestrator orchestrator,
+  LessonEventBus bus,
+  LessonMaterialCache cache,
+  CompleteLessonParams params,
+) async {
+  final key = lessonKeyFor(params);
+  final completer = Completer<CompleteLesson>();
+  final cancel = bus.subscribe(key, (lesson) {
+    if (!completer.isCompleted && lesson.imagem?.trim().isNotEmpty == true) {
+      completer.complete(lesson);
+    }
+  });
+  await orchestrator.prefetchCompleteLesson(
+    params,
+    priority: 'active',
+    forceRefresh: true,
+  );
+  try {
+    return await completer.future.timeout(const Duration(seconds: 2));
+  } finally {
+    cancel();
+  }
 }
 
 Future<void> _pumpImage(WidgetTester tester, String dataUrl) async {
@@ -424,6 +563,31 @@ class _FakeT02Client implements T02LessonClient {
       completeLesson(request);
 }
 
+class _MapT02Client implements T02LessonClient {
+  const _MapT02Client(this.visualTriggersByItem);
+
+  final Map<String, Map<String, Object?>> visualTriggersByItem;
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) async {
+    return _FakeT02Client(
+      visualTriggersByItem[request.item] ?? const {'needs_image': false},
+    ).completeLesson(request);
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
+}
+
 class _FakePaidImageClient
     implements LessonImageClient, LessonImageResponseClient {
   const _FakePaidImageClient(this.dataUrl);
@@ -457,11 +621,49 @@ class _FakePaidImageClient
   }
 }
 
+class _ThrowingPaidImageClient
+    implements LessonImageClient, LessonImageResponseClient {
+  @override
+  Future<String?> generateLessonImage({
+    required String prompt,
+    required String lessonKey,
+    String aspectRatio = '1:1',
+    String? acceptedOfferId,
+    String? idempotencyKey,
+    Map<String, dynamic>? visualTrigger,
+    Map<String, dynamic>? lessonContext,
+  }) async {
+    throw StateError('paid image client must not run in frame-only app');
+  }
+
+  @override
+  Future<GenerateLessonImageResponse?> generateLessonImageResponse({
+    required String prompt,
+    required String lessonKey,
+    String aspectRatio = '1:1',
+    String? acceptedOfferId,
+    String? idempotencyKey,
+    Map<String, dynamic>? visualTrigger,
+    Map<String, dynamic>? lessonContext,
+  }) async {
+    throw StateError('paid image client must not run in frame-only app');
+  }
+}
+
+class _ThrowingSoftwareRenderCatalog extends SoftwareRenderCatalog {
+  @override
+  SoftwareRenderResult? render(SoftwareVisualRequest request) {
+    throw StateError('local software renderer must not run in frame-only app');
+  }
+}
+
 class _RecordingTransport implements SimHttpTransport {
   Uri? lastUri;
   Map<String, String>? lastHeaders;
   Object? lastBody;
   String jsonBody = '{}';
+  List<String>? jsonBodies;
+  int calls = 0;
 
   @override
   Future<SimHttpResponse> postJson(
@@ -470,10 +672,15 @@ class _RecordingTransport implements SimHttpTransport {
     required Object? body,
     Duration timeout = const Duration(seconds: 45),
   }) async {
+    calls += 1;
     lastUri = uri;
     lastHeaders = headers;
     lastBody = body;
-    return SimHttpResponse(statusCode: 200, body: jsonBody);
+    final bodies = jsonBodies;
+    final bodyText = bodies == null || bodies.isEmpty
+        ? jsonBody
+        : bodies[(calls - 1).clamp(0, bodies.length - 1)];
+    return SimHttpResponse(statusCode: 200, body: bodyText);
   }
 
   @override
