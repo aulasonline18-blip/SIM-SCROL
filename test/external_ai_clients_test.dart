@@ -314,6 +314,37 @@ void main() {
     expect(result.requestId, 'rid-no-image');
   });
 
+  test('rota visual preserva oferta paga decidida pelo servidor', () async {
+    final transport = RecordingTransport()
+      ..jsonBody =
+          '{"verdict":"ai","reason":"SERVER_PAID_AI","paidOfferPrompt":"Prompt aprovado no servidor","paidOffer":{"prompt":"Prompt aprovado no servidor","cost":10},"requestId":"rid-paid"}';
+    final client = SimServerVisualRouterClient(
+      config: config(),
+      transport: transport,
+    );
+
+    final result = await client.routeVisual(
+      n2: const VisualN2Result(
+        verdict: VisualVerdict.ai,
+        matched: ['photo'],
+        reason: 'LOCAL_WOULD_HAVE_STOPPED',
+      ),
+      topic: 'foto realista de laboratorio',
+      visualType: 'photograph',
+      imagePrompt: 'foto realista',
+    );
+
+    expect(transport.lastUri.toString(), endsWith('/api/visual-route'));
+    expect(
+      (transport.lastBody as Map)['n2']['reason'],
+      'LOCAL_WOULD_HAVE_STOPPED',
+    );
+    expect(result.verdict, VisualVerdict.ai);
+    expect(result.reason, 'SERVER_PAID_AI');
+    expect(result.paidOfferPrompt, 'Prompt aprovado no servidor');
+    expect(result.requestId, 'rid-paid');
+  });
+
   test('audio usa /api/generate-lesson-audio e devolve dataUrl', () async {
     final transport = RecordingTransport()
       ..jsonBody =

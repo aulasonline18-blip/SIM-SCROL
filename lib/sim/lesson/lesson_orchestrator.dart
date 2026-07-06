@@ -202,12 +202,15 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       );
       return;
     }
-    if (result.source == 'skip_no_paid' || result.source == 'skip_no_offer') {
+    if (result.source == 'skip_no_paid' ||
+        result.source == 'skip_no_offer' ||
+        result.source == 'server_paid_offer') {
       _publishPaidImageOffer(
         key: key,
         params: params,
         trigger: trigger,
         source: result.source,
+        approvedPrompt: result.paidOfferPrompt,
       );
     }
   }
@@ -283,6 +286,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     required CompleteLessonParams params,
     required LessonVisualTrigger trigger,
     required String source,
+    String? approvedPrompt,
   }) {
     final currentSignature = _currentContentSignature(key);
     if ((currentSignature != null &&
@@ -290,11 +294,13 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
         _paidPending.containsKey(key)) {
       return;
     }
-    final prompt = visualPipeline.buildPromptForTrigger(
-      topic: trigger.topic ?? params.item,
-      trigger: trigger,
-      lang: params.lang,
-    );
+    final prompt = approvedPrompt?.trim().isNotEmpty == true
+        ? approvedPrompt!.trim()
+        : visualPipeline.buildPromptForTrigger(
+            topic: trigger.topic ?? params.item,
+            trigger: trigger,
+            lang: params.lang,
+          );
     if (prompt.trim().isEmpty) return;
     final offerId = _stableOfferId(key, prompt);
     _paidPending[key] = _PaidPending(

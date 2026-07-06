@@ -2668,9 +2668,46 @@ void main() {
         allowPaidImages: false,
       );
 
-      expect(result.source, 'n3_software');
+      expect(result.source, 'server_visual');
       expect(result.displayUrl, raster);
       expect(router.calls, 1);
+      expect(client.calls, 0);
+    },
+  );
+
+  test(
+    'server-side visual client owns paid image decision before local N2',
+    () async {
+      final client = FakeImageClient();
+      final router = CapturingVisualRouterClient(
+        prefersServerSideVisuals: true,
+        result: const VisualN3Result(
+          verdict: VisualVerdict.ai,
+          reason: 'SERVER_DECIDED_PAID_AI',
+          paidOfferPrompt: 'Prompt pago aprovado no servidor',
+        ),
+      );
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: router,
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'essential',
+          topic: 'fotografia realista de experimento de física',
+          visualType: 'photograph',
+          imagePrompt: 'foto realista com equipamentos de laboratório',
+        ),
+        lessonKey: 'server-paid-before-local-n2',
+        allowPaidImages: true,
+      );
+
+      expect(router.calls, 1);
+      expect(router.lastN2?.reason, 'SERVER_IMAGE_PIPELINE');
+      expect(result.source, 'server_paid_offer');
+      expect(result.paidOfferPrompt, 'Prompt pago aprovado no servidor');
       expect(client.calls, 0);
     },
   );

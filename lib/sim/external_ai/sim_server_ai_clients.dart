@@ -190,9 +190,6 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
     String? complexity,
     String? stableLang,
   }) async {
-    if (n2.verdict == VisualVerdict.ai) {
-      return VisualN3Result(verdict: VisualVerdict.ai, reason: n2.reason);
-    }
     final requestId = _mediaRequestId(
       'vis',
       '${n2.reason}|${topic ?? ''}|${visualType ?? ''}|${imagePrompt ?? ''}',
@@ -262,6 +259,11 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
         decoded['displayDataUrl']?.toString() ??
         decoded['dataUrl']?.toString() ??
         decoded['image_data_url']?.toString();
+    final paidOffer = decoded['paidOffer'];
+    final paidOfferPrompt =
+        decoded['paidOfferPrompt']?.toString() ??
+        decoded['paid_offer_prompt']?.toString() ??
+        (paidOffer is Map ? paidOffer['prompt']?.toString() : null);
     final hasSvgPayload = svgDataUrl != null && svgDataUrl.trim().isNotEmpty;
     if (verdict == VisualVerdict.svg && !hasSvgPayload) {
       return VisualN3Result(
@@ -271,6 +273,9 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
         pedagogicalRole:
             decoded['pedagogicalRole']?.toString() ??
             decoded['pedagogical_role']?.toString(),
+        paidOfferPrompt: paidOfferPrompt?.trim().isNotEmpty == true
+            ? paidOfferPrompt
+            : null,
         requestId: decoded['requestId']?.toString() ?? requestId,
       );
     }
@@ -285,6 +290,9 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
       pedagogicalRole:
           decoded['pedagogicalRole']?.toString() ??
           decoded['pedagogical_role']?.toString(),
+      paidOfferPrompt: paidOfferPrompt?.trim().isNotEmpty == true
+          ? paidOfferPrompt
+          : null,
       requestId: decoded['requestId']?.toString() ?? requestId,
     );
   }

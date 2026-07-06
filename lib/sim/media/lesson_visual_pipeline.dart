@@ -241,6 +241,15 @@ class LessonVisualPipeline {
       return const LessonVisualResult(svg: null, dataUrl: null, source: 'skip');
     }
 
+    if (_prefersServerSideVisuals(visualRouterClient)) {
+      return _resolveServerOnlyVisual(
+        trigger: trigger,
+        lessonKey: lessonKey,
+        stableLang: stableLang,
+        academicLevel: academicLevel,
+      );
+    }
+
     // 1. SVG inline do próprio T02 (render_strategy=software + svg_payload)
     if (trigger.renderStrategy == 'software' && trigger.svgPayload != null) {
       final svgDataUrl = sanitizeAndEncodeSvg(trigger.svgPayload);
@@ -620,6 +629,109 @@ class LessonVisualPipeline {
     );
   }
 
+  Future<LessonVisualResult> _resolveServerOnlyVisual({
+    required LessonVisualTrigger trigger,
+    required String lessonKey,
+    required String? stableLang,
+    required String? academicLevel,
+  }) async {
+    const serverN2 = VisualN2Result(
+      verdict: VisualVerdict.ambiguous,
+      matched: ['server_image_pipeline'],
+      reason: 'SERVER_IMAGE_PIPELINE',
+      confidence: 1,
+    );
+    final softwareRequest = SoftwareVisualRequest(
+      n2: serverN2,
+      topic: trigger.topic,
+      visualType: trigger.visualType,
+      imagePrompt: trigger.imagePrompt,
+      colorLegend: trigger.colorLegend,
+      keyElements: trigger.keyElements,
+      highlightFocus: trigger.highlightFocus,
+      complexity: trigger.complexity,
+      pedagogicalNeed: trigger.pedagogicalNeed,
+      academicLevel: academicLevel,
+      pedagogicalGoal: trigger.highlightFocus,
+    );
+    final n3 = await routeVisualCheapN3(
+      client: visualRouterClient,
+      n2: serverN2,
+      topic: trigger.topic,
+      visualType: trigger.visualType,
+      imagePrompt: trigger.imagePrompt,
+      keyElements: trigger.keyElements,
+      pedagogicalNeed: trigger.pedagogicalNeed,
+      highlightFocus: trigger.highlightFocus,
+      complexity: trigger.complexity,
+      stableLang: stableLang,
+    );
+    _visualLog(
+      lessonKey,
+      'server_only',
+      'verdict=${n3.verdict.name} reason=${_shortVisualText(n3.reason)} hasSvg=${n3.svgDataUrl != null} hasRaster=${n3.displayDataUrl != null} hasPaidOffer=${n3.paidOfferPrompt != null}',
+    );
+    if (n3.transportFailed) {
+      _recordOutcome(lessonKey, 'failed', 'server_failed', n3.reason);
+      return LessonVisualResult(
+        svg: null,
+        dataUrl: null,
+        source: 'server_failed',
+        n2Reason: n3.reason,
+      );
+    }
+    if (n3.verdict == VisualVerdict.noImage) {
+      _recordOutcome(lessonKey, 'no_image', 'server_no_image', n3.reason);
+      return LessonVisualResult(
+        svg: null,
+        dataUrl: null,
+        source: 'server_no_image',
+        n2Reason: n3.reason,
+      );
+    }
+    if (n3.verdict == VisualVerdict.svg && n3.svgDataUrl != null) {
+      final accepted = _acceptFinalSoftwareSvg(
+        lessonKey,
+        'server_visual',
+        n3.svgDataUrl!,
+        softwareRequest,
+      );
+      if (accepted) {
+        _recordOutcome(lessonKey, 'software', 'server_visual', n3.reason);
+        return LessonVisualResult(
+          svg: n3.displayDataUrl ?? n3.svgDataUrl,
+          dataUrl: null,
+          source: 'server_visual',
+          n2Reason: n3.reason,
+        );
+      }
+      _recordOutcome(lessonKey, 'failed', 'server_visual_rejected', n3.reason);
+      return LessonVisualResult(
+        svg: null,
+        dataUrl: null,
+        source: 'server_visual_rejected',
+        n2Reason: n3.reason,
+      );
+    }
+    if (n3.paidOfferPrompt == null || n3.paidOfferPrompt!.trim().isEmpty) {
+      _recordOutcome(lessonKey, 'failed', 'server_missing_offer', n3.reason);
+      return LessonVisualResult(
+        svg: null,
+        dataUrl: null,
+        source: 'server_missing_offer',
+        n2Reason: n3.reason,
+      );
+    }
+    _recordOutcome(lessonKey, 'paid_offer', 'server_paid_offer', n3.reason);
+    return LessonVisualResult(
+      svg: null,
+      dataUrl: null,
+      source: 'server_paid_offer',
+      n2Reason: n3.reason,
+      paidOfferPrompt: n3.paidOfferPrompt,
+    );
+  }
+
   SoftwareVisualRequest _requestFromTrigger(
     LessonVisualTrigger trigger, {
     String? academicLevel,
@@ -983,6 +1095,7 @@ class LessonVisualResult {
     required this.source,
     this.n2Reason,
     this.imageMetadata,
+    this.paidOfferPrompt,
   });
 
   /// data URL de SVG inline (grátis) — usar se não nulo.
@@ -995,6 +1108,7 @@ class LessonVisualResult {
   final String source;
   final String? n2Reason;
   final LessonImageGenerationMetadata? imageMetadata;
+  final String? paidOfferPrompt;
 
   /// Imagem útil disponível (SVG ou AI)
   bool get hasImage => svg != null || dataUrl != null;

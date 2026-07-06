@@ -10,6 +10,7 @@ class VisualN3Result {
     this.displayDataUrl,
     this.confidence,
     this.pedagogicalRole,
+    this.paidOfferPrompt,
     this.requestId,
     this.transportFailed = false,
     this.statusCode,
@@ -21,6 +22,7 @@ class VisualN3Result {
   final String? displayDataUrl;
   final double? confidence;
   final String? pedagogicalRole;
+  final String? paidOfferPrompt;
   final String? requestId;
   final bool transportFailed;
   final int? statusCode;
