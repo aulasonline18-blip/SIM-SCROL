@@ -86,11 +86,13 @@ class _IdiomaScreenState extends State<IdiomaScreen> {
       child: OnboardingChatFlow(
         semanticLabel: t('onboarding_chat_region'),
         children: [
-          SimChatBubble(
-            text: t('language_chat_intro'),
-            supportingText: t('language_body'),
+          SimChatReveal(
+            child: SimChatBubble(
+              text: t('language_chat_intro'),
+              supportingText: t('language_body'),
+            ),
           ),
-          SimChatChoiceWrap(
+          SimChatChoiceWrap.staggered(
             children: [
               for (final language in supportedLangs)
                 SimChatChoiceChip(
@@ -109,7 +111,10 @@ class _IdiomaScreenState extends State<IdiomaScreen> {
           ),
           if (session.selectedLanguageCode == 'other') ...[
             const SizedBox(height: 8),
-            OtherLanguageBox(session: session),
+            SimChatReveal(
+              delay: const Duration(milliseconds: 120),
+              child: OtherLanguageBox(session: session),
+            ),
           ],
         ],
       ),
@@ -189,12 +194,19 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
   bool attachmentMenuOpen = false;
   bool sending = false;
   String? error;
+  int visibleProfileStep = 0;
   late final TextEditingController objectiveController = TextEditingController(
     text: widget.session.freeText,
   );
   late final TextEditingController nameController = TextEditingController(
     text: widget.session.preferredName,
   );
+  late final Map<String, TextEditingController> guidedControllers = {
+    for (final group in GuidedOnboardingSection.groups)
+      group.keyName: TextEditingController(
+        text: widget.session.guidedAnswers[group.keyName] ?? '',
+      ),
+  };
 
   bool get waitingAttachment => widget.session.attachments.any(
     (a) => a.status == 'uploading' || a.status == 'processing',
@@ -206,7 +218,34 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
   void dispose() {
     objectiveController.dispose();
     nameController.dispose();
+    for (final controller in guidedControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
+  }
+
+  int get _guidedCount => GuidedOnboardingSection.groups.length;
+  bool get _nameVisible => visibleProfileStep >= 1;
+  bool get _guidedIntroVisible => visibleProfileStep >= 2;
+  int get _visibleGuidedCount =>
+      (visibleProfileStep - 1).clamp(0, _guidedCount).toInt();
+  bool get _saveVisible => visibleProfileStep >= _guidedCount + 2;
+
+  void _revealNextProfileStep() {
+    setState(() {
+      error = null;
+      visibleProfileStep = (visibleProfileStep + 1)
+          .clamp(0, _guidedCount + 2)
+          .toInt();
+    });
+  }
+
+  void _advanceFromObjective() {
+    if (objectiveTooShort) {
+      showObjectiveRequired();
+      return;
+    }
+    _revealNextProfileStep();
   }
 
   void showObjectiveRequired() {
@@ -255,157 +294,195 @@ class _ObjetoScreenState extends State<ObjetoScreen> {
       child: OnboardingChatFlow(
         semanticLabel: t('onboarding_chat_region'),
         children: [
-          SimChatBubble(
-            text: t('objective_chat_intro'),
-            supportingText: t('objective_chat_body'),
+          SimChatReveal(
+            child: SimChatBubble(
+              text: t('objective_chat_intro'),
+              supportingText: t('objective_chat_body'),
+            ),
           ),
-          SimChatInputCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          SimChatReveal(
+            delay: const Duration(milliseconds: 100),
+            child: SimChatInputCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.chat_bubble_outline, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SimChatFieldLabel(t('objeto_card1_title')),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  AttachmentPreviewList(
+                    attachments: widget.session.attachments,
+                    onRemove: (index) =>
+                        setState(() => widget.session.removeAttachment(index)),
+                  ),
+                  Text(
+                    t('objeto_required_help'),
+                    style: TextStyle(
+                      color: SimThemeScope.paletteOf(context).muted,
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: objectiveController,
+                    minLines: 4,
+                    maxLines: 7,
+                    maxLength: maxFreeText,
+                    decoration: InputDecoration(
+                      hintText: t('objeto_hint'),
+                      border: const OutlineInputBorder(),
+                      counterText: '',
+                    ),
+                    style: const TextStyle(fontSize: 16, height: 1.4),
+                    onChanged: (value) {
+                      widget.session.setFreeText(value);
+                      if (error == 'objective_required' ||
+                          error == 'objective_required_attachment') {
+                        setState(() => error = null);
+                      } else {
+                        setState(() {});
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      IconButton(
+                        tooltip: t('attachment_open_menu'),
+                        onPressed: () => setState(
+                          () => attachmentMenuOpen = !attachmentMenuOpen,
+                        ),
+                        icon: const Icon(Icons.attach_file),
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${widget.session.freeText.length}/$maxFreeText',
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color: SimThemeScope.paletteOf(context).muted,
+                            fontSize: 12,
+                            fontFamily: kMono,
+                          ),
+                        ),
+                      ),
+                      SimChatSendButton(
+                        semanticLabel: t('continue'),
+                        onPressed: _advanceFromObjective,
+                      ),
+                    ],
+                  ),
+                  if (attachmentMenuOpen) AttachmentMenu(onPick: addAttachment),
+                  if (widget.session.attachments.isNotEmpty &&
+                      objectiveTooShort) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      t('objective_required_attachment'),
+                      style: const TextStyle(color: Colors.black, fontSize: 13),
+                    ),
+                  ],
+                  if (remaining < 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      t('objeto_too_long'),
+                      style: const TextStyle(color: Colors.black, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (_nameVisible) ...[
+            SimChatReveal(child: SimChatBubble(text: t('name_chat_prompt'))),
+            SimChatReveal(
+              child: SimChatInputCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.chat_bubble_outline, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(child: SimChatFieldLabel(t('objeto_card1_title'))),
+                    SimChatFieldLabel(t('objeto_preferred_name')),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SimInput(
+                            hint: t('objeto_name_placeholder'),
+                            controller: nameController,
+                            onChanged: widget.session.setPreferredName,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SimChatSendButton(
+                          semanticLabel: t('continue'),
+                          onPressed: _revealNextProfileStep,
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                AttachmentPreviewList(
-                  attachments: widget.session.attachments,
-                  onRemove: (index) =>
-                      setState(() => widget.session.removeAttachment(index)),
-                ),
-                Text(
-                  t('objeto_required_help'),
-                  style: TextStyle(
-                    color: SimThemeScope.paletteOf(context).muted,
-                    fontSize: 13,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: objectiveController,
-                  minLines: 4,
-                  maxLines: 7,
-                  maxLength: maxFreeText,
-                  decoration: InputDecoration(
-                    hintText: t('objeto_hint'),
-                    border: const OutlineInputBorder(),
-                    counterText: '',
-                  ),
-                  style: const TextStyle(fontSize: 16, height: 1.4),
-                  onChanged: (value) {
-                    widget.session.setFreeText(value);
-                    if (error == 'objective_required' ||
-                        error == 'objective_required_attachment') {
-                      setState(() => error = null);
-                    } else {
-                      setState(() {});
-                    }
-                  },
-                ),
-                const SizedBox(height: 8),
-                Row(
+              ),
+            ),
+          ],
+          if (_guidedIntroVisible)
+            SimChatReveal(
+              child: SimChatBubble(
+                text: t('guided_title'),
+                supportingText: t('guided_body'),
+              ),
+            ),
+          for (var i = 0; i < _visibleGuidedCount; i++)
+            _GuidedChatQuestion(
+              session: widget.session,
+              group: GuidedOnboardingSection.groups[i],
+              controller:
+                  guidedControllers[GuidedOnboardingSection.groups[i].keyName]!,
+              onSubmit: _revealNextProfileStep,
+            ),
+          if (error != null) SimChatError(text: t(error!)),
+          if (_saveVisible)
+            SimChatReveal(
+              child: Semantics(
+                button: true,
+                enabled: canContinue,
+                label: t('objeto_save_continue'),
+                child: Row(
                   children: [
-                    IconButton(
-                      tooltip: t('attachment_open_menu'),
-                      onPressed: () => setState(
-                        () => attachmentMenuOpen = !attachmentMenuOpen,
-                      ),
-                      icon: const Icon(Icons.attach_file),
-                    ),
                     Expanded(
-                      child: Text(
-                        '${widget.session.freeText.length}/$maxFreeText',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: SimThemeScope.paletteOf(context).muted,
-                          fontSize: 12,
-                          fontFamily: kMono,
+                      child: FilledButton.icon(
+                        onPressed: canContinue
+                            ? saveAndContinue
+                            : waitingAttachment
+                            ? null
+                            : showObjectiveRequired,
+                        icon: sending
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.arrow_forward),
+                        label: Text(
+                          sending
+                              ? t('objetivo_reading')
+                              : waitingAttachment
+                              ? t('attachment_waiting')
+                              : objectiveTooShort
+                              ? t('objeto_helper')
+                              : t('objeto_save_continue'),
                         ),
                       ),
                     ),
                   ],
                 ),
-                if (attachmentMenuOpen) AttachmentMenu(onPick: addAttachment),
-                if (widget.session.attachments.isNotEmpty &&
-                    objectiveTooShort) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    t('objective_required_attachment'),
-                    style: const TextStyle(color: Colors.black, fontSize: 13),
-                  ),
-                ],
-                if (remaining < 0) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    t('objeto_too_long'),
-                    style: const TextStyle(color: Colors.black, fontSize: 12),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (!objectiveTooShort) ...[
-            SimChatBubble(text: t('name_chat_prompt')),
-            SimChatInputCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SimChatFieldLabel(t('objeto_preferred_name')),
-                  const SizedBox(height: 6),
-                  SimInput(
-                    hint: t('objeto_name_placeholder'),
-                    controller: nameController,
-                    onChanged: widget.session.setPreferredName,
-                  ),
-                ],
               ),
             ),
-            SimChatBubble(
-              text: t('guided_title'),
-              supportingText: t('guided_body'),
-            ),
-            for (final group in GuidedOnboardingSection.groups)
-              _GuidedChatQuestion(session: widget.session, group: group),
-          ],
-          if (error != null) SimChatError(text: t(error!)),
-          Semantics(
-            button: true,
-            enabled: canContinue,
-            label: t('objeto_save_continue'),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: canContinue
-                        ? saveAndContinue
-                        : waitingAttachment
-                        ? null
-                        : showObjectiveRequired,
-                    icon: sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.arrow_forward),
-                    label: Text(
-                      sending
-                          ? t('objetivo_reading')
-                          : waitingAttachment
-                          ? t('attachment_waiting')
-                          : objectiveTooShort
-                          ? t('objeto_helper')
-                          : t('objeto_save_continue'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -436,6 +513,77 @@ class OnboardingChatFlow extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class SimChatReveal extends StatefulWidget {
+  const SimChatReveal({
+    required this.child,
+    this.delay = Duration.zero,
+    super.key,
+  });
+
+  final Widget child;
+  final Duration delay;
+
+  @override
+  State<SimChatReveal> createState() => _SimChatRevealState();
+}
+
+class _SimChatRevealState extends State<SimChatReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 460),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(widget.delay, () {
+      if (!mounted) return;
+      final reduced = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (reduced) {
+        _controller.value = 1;
+      } else {
+        _controller.forward();
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Scrollable.ensureVisible(
+          context,
+          duration: reduced ? Duration.zero : const Duration(milliseconds: 360),
+          curve: Curves.easeOutCubic,
+          alignment: 0.78,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        );
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final value = Curves.easeOutCubic.transform(_controller.value);
+        return Opacity(
+          opacity: value,
+          child: Transform.scale(
+            alignment: Alignment.topLeft,
+            scale: lerpDouble(0.82, 1, value)!,
+            child: child,
+          ),
+        );
+      },
+      child: widget.child,
     );
   }
 }
@@ -519,13 +667,59 @@ class SimChatInputCard extends StatelessWidget {
 }
 
 class SimChatChoiceWrap extends StatelessWidget {
-  const SimChatChoiceWrap({required this.children, super.key});
+  const SimChatChoiceWrap({required this.children, super.key})
+    : staggered = false;
+
+  const SimChatChoiceWrap.staggered({required this.children, super.key})
+    : staggered = true;
 
   final List<Widget> children;
+  final bool staggered;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(spacing: 8, runSpacing: 8, children: children);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (var i = 0; i < children.length; i++)
+          staggered
+              ? SimChatReveal(
+                  delay: Duration(milliseconds: 150 + (i * 70)),
+                  child: children[i],
+                )
+              : children[i],
+      ],
+    );
+  }
+}
+
+class SimChatSendButton extends StatelessWidget {
+  const SimChatSendButton({
+    required this.semanticLabel,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String semanticLabel;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: IconButton.filled(
+        onPressed: onPressed,
+        icon: const Icon(Icons.arrow_forward),
+        color: palette.onPrimary,
+        style: IconButton.styleFrom(
+          backgroundColor: palette.primary,
+          minimumSize: const Size(SimTouch.min, SimTouch.min),
+        ),
+      ),
+    );
   }
 }
 
@@ -740,71 +934,70 @@ class GuidedOnboardingSection extends StatelessWidget {
   }
 }
 
-class _GuidedChatQuestion extends StatefulWidget {
-  const _GuidedChatQuestion({required this.session, required this.group});
+class _GuidedChatQuestion extends StatelessWidget {
+  const _GuidedChatQuestion({
+    required this.session,
+    required this.group,
+    required this.controller,
+    required this.onSubmit,
+  });
 
   final LabSession session;
   final GuidedGroup group;
-
-  @override
-  State<_GuidedChatQuestion> createState() => _GuidedChatQuestionState();
-}
-
-class _GuidedChatQuestionState extends State<_GuidedChatQuestion> {
-  late final TextEditingController controller = TextEditingController(
-    text: _customInitialValue(),
-  );
-
-  String _customInitialValue() {
-    final current = widget.session.guidedAnswers[widget.group.keyName] ?? '';
-    final optionLabels = widget.group.optionKeys.map(t).toSet();
-    return optionLabels.contains(current) ? '' : current;
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
+  final TextEditingController controller;
+  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
-    final selected = widget.session.guidedAnswers[widget.group.keyName] ?? '';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SimChatBubble(text: t(widget.group.titleKey)),
-        SimChatChoiceWrap(
+    final palette = SimThemeScope.paletteOf(context);
+    return SimChatReveal(
+      child: SimChatInputCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (final optionKey in widget.group.optionKeys)
-              SimChatChoiceChip(
-                label: t(optionKey),
-                selected: selected == t(optionKey),
-                onTap: () {
-                  controller.clear();
-                  widget.session.setGuidedAnswer(
-                    widget.group.keyName,
-                    selected == t(optionKey) ? '' : t(optionKey),
-                  );
-                },
-              ),
+            SimChatFieldLabel(t(group.titleKey)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final optionKey in group.optionKeys)
+                  Text(
+                    t(optionKey),
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    minLines: 1,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: t('guided_custom_hint'),
+                    ),
+                    onChanged: (value) =>
+                        session.setGuidedAnswer(group.keyName, value),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SimChatSendButton(
+                  semanticLabel: t('continue'),
+                  onPressed: onSubmit,
+                ),
+              ],
+            ),
           ],
         ),
-        const SizedBox(height: 8),
-        SimChatInputCard(
-          child: TextField(
-            controller: controller,
-            minLines: 1,
-            maxLines: 3,
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              hintText: t('guided_custom_hint'),
-            ),
-            onChanged: (value) =>
-                widget.session.setGuidedAnswer(widget.group.keyName, value),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

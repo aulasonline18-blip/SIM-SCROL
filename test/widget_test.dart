@@ -250,6 +250,24 @@ void main() {
       'Quero estudar essa lista para a prova de matemática.',
     );
     await tester.pumpAndSettle();
+    Future<void> tapProgressiveContinue() async {
+      final arrow = find.byIcon(Icons.arrow_forward).last;
+      await tester.ensureVisible(arrow);
+      await tester.pumpAndSettle();
+      await tester.tap(arrow);
+      await tester.pumpAndSettle();
+    }
+
+    await tapProgressiveContinue();
+    expect(
+      find.text('What should I call you? You can skip this.'),
+      findsOneWidget,
+    );
+    await tapProgressiveContinue();
+    expect(find.text('What result do you want?'), findsOneWidget);
+    for (var i = 0; i < 6; i++) {
+      await tapProgressiveContinue();
+    }
     await tester.scrollUntilVisible(
       find.text('Save and continue'),
       320,

@@ -216,11 +216,7 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                         child: OnboardingChatFlow(
                           semanticLabel: t('onboarding_chat_region'),
                           children: [
-                            SimChatBubble(
-                              text: t('preparation_chat_intro'),
-                              supportingText: t('preparation_chat_body'),
-                            ),
-                            SimChatInputCard(
+                            SimChatReveal(
                               child: SimPreparationExperience(
                                 stage: simStage,
                                 ready: isReady,
