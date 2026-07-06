@@ -401,6 +401,11 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
     widget.session.openSupport(route);
   }
 
+  void _handleExternalDoor(String url) {
+    widget.onClose();
+    widget.session.openExternalDoor(url);
+  }
+
   Future<void> _handleOpenLesson(String lessonLocalId) async {
     final ok = await widget.session.openDrawerLocalLesson(lessonLocalId);
     if (ok) {
@@ -856,6 +861,29 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
                       label: t('parent_panel'),
                       compact: true,
                       onTap: () => _handleSupportRoute('/pai'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DrawerContactLine(
+                      asset: 'assets/whatsapp-logo.png',
+                      label: 'WhatsApp',
+                      onTap: () => _handleExternalDoor(
+                        'https://wa.me/message/RLCYEXAYFUIIA1',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _DrawerContactLine(
+                      asset: 'assets/messenger-logo.png',
+                      label: 'Messenger',
+                      onTap: () =>
+                          _handleExternalDoor('https://m.me/61557707493807'),
                     ),
                   ),
                 ],
@@ -1580,6 +1608,62 @@ class _DrawerActionLine extends StatelessWidget {
                     style: TextStyle(
                       color: palette.text,
                       fontSize: compact ? 12 : 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DrawerContactLine extends StatelessWidget {
+  const _DrawerContactLine({
+    required this.asset,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String asset;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 42),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: palette.border),
+            ),
+            child: Row(
+              children: [
+                Image.asset(asset, width: 18, height: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
