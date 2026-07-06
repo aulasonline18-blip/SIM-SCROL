@@ -2645,7 +2645,7 @@ void main() {
     expect(client.calls, 0);
   });
 
-  test('local software runs before server-side visual client', () async {
+  test('server-side visual client owns the Flutter image route', () async {
     final client = FakeImageClient();
     final n3Svg = sanitizeAndEncodeSvg(
       '<svg viewBox="0 0 900 560"><rect width="900" height="560" fill="#F8FAFC"/>'
@@ -2682,12 +2682,12 @@ void main() {
       allowPaidImages: false,
     );
 
-    expect(result.source, 'local_software');
-    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
-    expect(result.svg, startsWith('data:image/svg+xml;utf8,'));
-    expect(result.dataUrl, isNull);
+    expect(result.source, 'server_visual');
+    expect(result.displayUrl, raster);
+    expect(result.svg, isNull);
+    expect(result.dataUrl, raster);
     expect(router.lastSvgPayload, isNull);
-    expect(router.calls, 0);
+    expect(router.calls, 1);
     expect(client.calls, 0);
   });
 
@@ -2728,12 +2728,12 @@ void main() {
         allowPaidImages: false,
       );
 
-      expect(result.source, 'svg_inline');
-      expect(result.svg, startsWith('data:image/svg+xml;utf8,'));
-      expect(result.dataUrl, isNull);
-      expect(result.displayUrl, result.svg);
-      expect(router.lastSvgPayload, isNull);
-      expect(router.calls, 0);
+      expect(result.source, 'server_visual');
+      expect(result.svg, isNull);
+      expect(result.dataUrl, raster);
+      expect(result.displayUrl, raster);
+      expect(router.lastSvgPayload, '<svg><circle cx="1" cy="1" r="1"/></svg>');
+      expect(router.calls, 1);
       expect(client.calls, 0);
     },
   );
@@ -2767,9 +2767,9 @@ void main() {
         allowPaidImages: true,
       );
 
-      expect(router.calls, 0);
-      expect(result.source, 'skip_no_offer');
-      expect(result.paidOfferPrompt, isNull);
+      expect(router.calls, 1);
+      expect(result.source, 'server_paid_offer');
+      expect(result.paidOfferPrompt, 'Prompt pago aprovado no servidor');
       expect(client.calls, 0);
     },
   );

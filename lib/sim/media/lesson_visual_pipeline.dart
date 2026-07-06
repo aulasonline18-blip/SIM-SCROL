@@ -241,6 +241,15 @@ class LessonVisualPipeline {
       return const LessonVisualResult(svg: null, dataUrl: null, source: 'skip');
     }
 
+    if (_prefersServerSideVisuals(visualRouterClient)) {
+      return _resolveServerOnlyVisual(
+        trigger: trigger,
+        lessonKey: lessonKey,
+        stableLang: stableLang,
+        academicLevel: academicLevel,
+      );
+    }
+
     // 1. SVG inline do próprio T02 (render_strategy=software + svg_payload)
     if (trigger.renderStrategy == 'software' && trigger.svgPayload != null) {
       final svgDataUrl = sanitizeAndEncodeSvg(trigger.svgPayload);
@@ -583,7 +592,6 @@ class LessonVisualPipeline {
     );
   }
 
-  // ignore: unused_element
   Future<LessonVisualResult> _resolveServerOnlyVisual({
     required LessonVisualTrigger trigger,
     required String lessonKey,
@@ -1057,7 +1065,6 @@ String _shortVisualText(Object? value) {
   return text.substring(0, 160);
 }
 
-// ignore: unused_element
 bool _prefersServerSideVisuals(LessonVisualRouterClient client) {
   try {
     return (client as dynamic).prefersServerSideVisuals == true;

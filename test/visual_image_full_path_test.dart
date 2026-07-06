@@ -99,7 +99,7 @@ void main() {
   );
 
   testWidgets(
-    'T02 SVG pronto roda localmente e aparece pelo fallback SVG legado',
+    'T02 SVG pronto vai ao servidor e volta como raster para Image.memory',
     (tester) async {
       final transport = _RecordingTransport()
         ..jsonBody = jsonEncode({
@@ -125,11 +125,16 @@ void main() {
       final lesson = await harness.resolveImage();
       await _pumpImage(tester, lesson.imagem!);
 
-      expect(transport.lastBody, isNull);
-      expect(lesson.imagem, startsWith('data:image/svg+xml;utf8,'));
-      expect(harness.cache.peek(harness.key)?.imagem, lesson.imagem);
-      expect(find.byType(SvgPicture), findsOneWidget);
-      expect(find.byType(Image), findsNothing);
+      final body = transport.lastBody as Map;
+      final visualTrigger = body['visual_trigger'] as Map;
+      expect(body['svgPayload'], '<svg><circle cx="1" cy="1" r="1"/></svg>');
+      expect(
+        visualTrigger['svg_payload'],
+        '<svg><circle cx="1" cy="1" r="1"/></svg>',
+      );
+      expect(lesson.imagem, _webpDataUrl);
+      expect(harness.cache.peek(harness.key)?.imagem, _webpDataUrl);
+      _expectRasterImageShown();
     },
   );
 
