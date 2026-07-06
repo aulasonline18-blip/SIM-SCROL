@@ -878,9 +878,19 @@ class _LessonMediaImageViewState extends State<LessonMediaImageView> {
     final trimmed = widget.data.trim();
     if (trimmed.startsWith('data:image/svg+xml')) {
       final svg = _decodeSvgDataUrl(trimmed);
-      if (svg != null) {
+      final translatedSvg = svg == null
+          ? null
+          : translateLessonSvgForFlutter(svg);
+      if (translatedSvg != null) {
         _notifySettled();
-        return SvgPicture.string(svg, fit: BoxFit.contain);
+        return SvgPicture.string(
+          translatedSvg,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            _notifySettled();
+            return LessonImageErrorView(compact: widget.compact);
+          },
+        );
       }
       _notifySettled();
       return LessonImageErrorView(compact: widget.compact);
@@ -940,6 +950,258 @@ class _LessonMediaImageViewState extends State<LessonMediaImageView> {
       return null;
     }
   }
+}
+
+String? translateLessonSvgForFlutter(String raw) {
+  var svg = raw.trim();
+  if (svg.isEmpty) return null;
+  final start = svg.toLowerCase().indexOf('<svg');
+  final end = svg.toLowerCase().lastIndexOf('</svg>');
+  if (start < 0 || end <= start) return null;
+  svg = svg.substring(start, end + '</svg>'.length);
+  svg = svg
+      .replaceAll(RegExp(r'<\?xml[^>]*>', caseSensitive: false), '')
+      .replaceAll(RegExp(r'<!doctype[^>]*>', caseSensitive: false), '')
+      .replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '')
+      .replaceAll(
+        RegExp(r'<script\b.*?</script>', caseSensitive: false, dotAll: true),
+        '',
+      )
+      .replaceAll(
+        RegExp(
+          r'<foreignObject\b.*?</foreignObject>',
+          caseSensitive: false,
+          dotAll: true,
+        ),
+        '',
+      )
+      .replaceAll(
+        RegExp(
+          r'<animate(?:Transform|Motion)?\b.*?</animate(?:Transform|Motion)?>',
+          caseSensitive: false,
+          dotAll: true,
+        ),
+        '',
+      )
+      .replaceAll(
+        RegExp(
+          r'''\s(?:on[a-z]+|filter|mask|clip-path)=("[^"]*"|'[^']*'|[^\s>]+)''',
+          caseSensitive: false,
+        ),
+        '',
+      )
+      .replaceAll(
+        RegExp(
+          r'''\s(?:href|xlink:href)=("[^"]*javascript:[^"]*"|'[^']*javascript:[^']*'|[^\s>]*javascript:[^\s>]*)''',
+          caseSensitive: false,
+        ),
+        '',
+      )
+      .replaceAll(RegExp(r'currentColor', caseSensitive: false), '#111827')
+      .replaceAll(RegExp(r'var\([^)]+\)', caseSensitive: false), '#111827');
+
+  svg = _inlineSvgStyleBlocks(svg);
+  svg = _inlineSvgStyleAttributes(svg);
+  svg = _ensureSvgViewport(svg);
+
+  if (!_hasVisibleSvgContent(svg)) return null;
+  return svg;
+}
+
+String _inlineSvgStyleBlocks(String svg) {
+  final classStyles = <String, Map<String, String>>{};
+  final styleBlock = RegExp(
+    r'<style\b[^>]*>(.*?)</style>',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  for (final block in styleBlock.allMatches(svg)) {
+    final css = block.group(1) ?? '';
+    final rule = RegExp(r'\.([a-zA-Z0-9_-]+)\s*\{([^}]*)\}');
+    for (final match in rule.allMatches(css)) {
+      final className = match.group(1);
+      if (className == null) continue;
+      final attrs = _parseCssDeclarations(match.group(2) ?? '');
+      if (attrs.isNotEmpty) classStyles[className] = attrs;
+    }
+  }
+  svg = svg.replaceAll(styleBlock, '');
+  if (classStyles.isEmpty) return svg;
+  return svg.replaceAllMapped(RegExp(r'<([a-zA-Z][\w:-]*)([^>]*)>'), (match) {
+    final tag = match.group(1) ?? '';
+    var attrs = match.group(2) ?? '';
+    final classAttr = RegExp(
+      r'''\sclass=("([^"]*)"|'([^']*)')''',
+      caseSensitive: false,
+    ).firstMatch(attrs);
+    final classes = (classAttr?.group(2) ?? classAttr?.group(3) ?? '')
+        .split(RegExp(r'\s+'))
+        .where((value) => value.isNotEmpty);
+    for (final className in classes) {
+      final style = classStyles[className];
+      if (style == null) continue;
+      attrs = _appendMissingSvgAttributes(attrs, style);
+    }
+    return '<$tag$attrs>';
+  });
+}
+
+String _inlineSvgStyleAttributes(String svg) {
+  return svg.replaceAllMapped(RegExp(r'<([a-zA-Z][\w:-]*)([^>]*)>'), (match) {
+    final tag = match.group(1) ?? '';
+    var attrs = match.group(2) ?? '';
+    final style = RegExp(
+      r'''\sstyle=("([^"]*)"|'([^']*)')''',
+      caseSensitive: false,
+    ).firstMatch(attrs);
+    if (style == null) return match.group(0) ?? '';
+    attrs = attrs.replaceFirst(style.group(0) ?? '', '');
+    attrs = _appendMissingSvgAttributes(
+      attrs,
+      _parseCssDeclarations(style.group(2) ?? style.group(3) ?? ''),
+    );
+    return '<$tag$attrs>';
+  });
+}
+
+Map<String, String> _parseCssDeclarations(String raw) {
+  const allowed = {
+    'fill',
+    'stroke',
+    'stroke-width',
+    'stroke-linecap',
+    'stroke-linejoin',
+    'opacity',
+    'fill-opacity',
+    'stroke-opacity',
+    'font-size',
+    'font-weight',
+    'font-family',
+    'text-anchor',
+  };
+  final attrs = <String, String>{};
+  for (final declaration in raw.split(';')) {
+    final index = declaration.indexOf(':');
+    if (index <= 0) continue;
+    final name = declaration.substring(0, index).trim().toLowerCase();
+    if (!allowed.contains(name)) continue;
+    final value = declaration
+        .substring(index + 1)
+        .trim()
+        .replaceAll('"', '&quot;');
+    if (value.isEmpty) continue;
+    attrs[name] = value;
+  }
+  return attrs;
+}
+
+String _appendMissingSvgAttributes(String attrs, Map<String, String> values) {
+  var next = attrs;
+  for (final entry in values.entries) {
+    if (RegExp(
+      '\\s${RegExp.escape(entry.key)}=',
+      caseSensitive: false,
+    ).hasMatch(next)) {
+      continue;
+    }
+    next = '$next ${entry.key}="${entry.value}"';
+  }
+  return next;
+}
+
+String _ensureSvgViewport(String svg) {
+  final open = RegExp(r'<svg\b([^>]*)>', caseSensitive: false).firstMatch(svg);
+  if (open == null) return svg;
+  var attrs = open.group(1) ?? '';
+  if (!RegExp(r'\sxmlns=', caseSensitive: false).hasMatch(attrs)) {
+    attrs = '$attrs xmlns="http://www.w3.org/2000/svg"';
+  }
+  if (!RegExp(r'\sviewBox=', caseSensitive: false).hasMatch(attrs)) {
+    final width = _svgNumericAttribute(attrs, 'width') ?? 900;
+    final height = _svgNumericAttribute(attrs, 'height') ?? 560;
+    attrs = '$attrs viewBox="0 0 $width $height"';
+  }
+  return svg.replaceRange(open.start, open.end, '<svg$attrs>');
+}
+
+num? _svgNumericAttribute(String attrs, String name) {
+  final match = RegExp(
+    '\\s${RegExp.escape(name)}=("|\')?([0-9]+(?:\\.[0-9]+)?)',
+    caseSensitive: false,
+  ).firstMatch(attrs);
+  return num.tryParse(match?.group(2) ?? '');
+}
+
+bool _hasVisibleSvgContent(String svg) {
+  final elements = RegExp(
+    r'<(path|circle|ellipse|line|polygon|polyline|text|rect)\b([^>]*)>',
+    caseSensitive: false,
+  ).allMatches(svg);
+  for (final element in elements) {
+    final tag = element.group(1)?.toLowerCase();
+    final attrs = element.group(2) ?? '';
+    if (tag == 'rect' && _rectLooksLikeOnlyCanvas(attrs)) continue;
+    if (_svgElementLooksVisible(attrs)) return true;
+  }
+  return false;
+}
+
+bool _rectLooksLikeOnlyCanvas(String attrs) {
+  final fill = _svgColorAttribute(attrs, 'fill');
+  final stroke = _svgColorAttribute(attrs, 'stroke');
+  final x = _svgNumericAttribute(attrs, 'x') ?? 0;
+  final y = _svgNumericAttribute(attrs, 'y') ?? 0;
+  final width = _svgNumericAttribute(attrs, 'width') ?? 0;
+  final height = _svgNumericAttribute(attrs, 'height') ?? 0;
+  return x == 0 &&
+      y == 0 &&
+      width > 0 &&
+      height > 0 &&
+      _svgColorIsInvisibleOnWhite(fill) &&
+      (stroke == null || _svgColorIsInvisibleOnWhite(stroke));
+}
+
+bool _svgElementLooksVisible(String attrs) {
+  final opacity = _svgOpacity(attrs, 'opacity');
+  final fillOpacity = _svgOpacity(attrs, 'fill-opacity');
+  final strokeOpacity = _svgOpacity(attrs, 'stroke-opacity');
+  if (opacity == 0) return false;
+  final fill = _svgColorAttribute(attrs, 'fill');
+  final stroke = _svgColorAttribute(attrs, 'stroke');
+  final hasVisibleFill =
+      fill == null || (fillOpacity != 0 && !_svgColorIsInvisibleOnWhite(fill));
+  final hasVisibleStroke =
+      stroke != null &&
+      strokeOpacity != 0 &&
+      !_svgColorIsInvisibleOnWhite(stroke);
+  return hasVisibleFill || hasVisibleStroke;
+}
+
+String? _svgColorAttribute(String attrs, String name) {
+  final match = RegExp(
+    '''\\s${RegExp.escape(name)}=("([^"]*)"|'([^']*)')''',
+    caseSensitive: false,
+  ).firstMatch(attrs);
+  return (match?.group(2) ?? match?.group(3))?.trim().toLowerCase();
+}
+
+num? _svgOpacity(String attrs, String name) {
+  final value = _svgNumericAttribute(attrs, name);
+  if (value == null) return null;
+  if (value <= 0) return 0;
+  return value;
+}
+
+bool _svgColorIsInvisibleOnWhite(String? color) {
+  if (color == null) return false;
+  final value = color.trim().toLowerCase();
+  return value == 'none' ||
+      value == 'transparent' ||
+      value == '#fff' ||
+      value == '#ffffff' ||
+      value == 'white' ||
+      value == 'rgba(255,255,255,0)' ||
+      value == 'rgba(255, 255, 255, 0)';
 }
 
 class LessonImageErrorView extends StatelessWidget {

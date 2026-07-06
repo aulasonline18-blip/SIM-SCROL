@@ -85,9 +85,11 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
       verdict: VisualVerdict.ai,
       reason: 'TEST_N3_AI',
     ),
+    this.prefersServerSideVisuals = false,
   });
 
   final VisualN3Result result;
+  final bool prefersServerSideVisuals;
   VisualN2Result? lastN2;
   String? lastTopic;
   String? lastVisualType;
@@ -2575,6 +2577,103 @@ void main() {
     expect(router.lastKeyElements, contains('conduta'));
     expect(client.calls, 0);
   });
+
+  test('visual pipeline displays server raster while validating N3 SVG', () async {
+    final client = FakeImageClient();
+    final n3Svg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560"><rect width="900" height="560" fill="#F8FAFC"/>'
+      '<text x="80" y="90" fill="#0F172A" font-size="18">sintoma inicial</text>'
+      '<text x="80" y="130" fill="#0F172A" font-size="18">triagem</text>'
+      '<text x="80" y="170" fill="#0F172A" font-size="18">hipótese</text>'
+      '<text x="80" y="210" fill="#0F172A" font-size="18">conduta final</text></svg>',
+    );
+    const raster = 'data:image/webp;base64,AAAA';
+    final router = CapturingVisualRouterClient(
+      result: VisualN3Result(
+        verdict: VisualVerdict.svg,
+        reason: 'TEST_N3_RASTER',
+        svgDataUrl: n3Svg,
+        displayDataUrl: raster,
+      ),
+    );
+    final pipeline = LessonVisualPipeline(
+      imageClient: client,
+      visualRouterClient: router,
+    );
+
+    final result = await pipeline.resolveVisual(
+      trigger: const LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'essential',
+        topic: 'fluxograma contextual de decisão clínica',
+        visualType: 'flowchart',
+        keyElements: [
+          'sintoma inicial',
+          'triagem',
+          'hipótese',
+          'exame',
+          'risco',
+          'conduta',
+        ],
+        highlightFocus: 'relação entre risco, hipótese e conduta final',
+        complexity: 'high',
+        imagePrompt: 'composição rica em camadas com decisões específicas',
+      ),
+      lessonKey: 'n3-raster-display',
+      allowPaidImages: false,
+    );
+
+    expect(result.source, 'n3_software');
+    expect(result.displayUrl, raster);
+    expect(router.calls, 1);
+    expect(client.calls, 0);
+  });
+
+  test(
+    'server-side visual client bypasses local SVG generation on success',
+    () async {
+      final client = FakeImageClient();
+      final n3Svg = sanitizeAndEncodeSvg(
+        '<svg viewBox="0 0 900 560"><rect width="900" height="560" fill="#F8FAFC"/>'
+        '<text x="80" y="90" fill="#0F172A" font-size="18">entrada</text>'
+        '<text x="80" y="130" fill="#0F172A" font-size="18">processo</text>'
+        '<text x="80" y="170" fill="#0F172A" font-size="18">saída</text></svg>',
+      );
+      const raster = 'data:image/webp;base64,BBBB';
+      final router = CapturingVisualRouterClient(
+        prefersServerSideVisuals: true,
+        result: VisualN3Result(
+          verdict: VisualVerdict.svg,
+          reason: 'TEST_SERVER_FIRST',
+          svgDataUrl: n3Svg,
+          displayDataUrl: raster,
+        ),
+      );
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: router,
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'important',
+          topic: 'fluxograma de entrada, processamento e saída',
+          visualType: 'flowchart',
+          keyElements: ['entrada', 'processo', 'saída'],
+          highlightFocus: 'ordem entre entrada, processo e saída',
+          imagePrompt: 'fluxograma com três caixas e setas',
+        ),
+        lessonKey: 'server-first-no-local',
+        allowPaidImages: false,
+      );
+
+      expect(result.source, 'n3_software');
+      expect(result.displayUrl, raster);
+      expect(router.calls, 1);
+      expect(client.calls, 0);
+    },
+  );
 
   test(
     'visual escalation calls N3 before paid image when complexity demands it',

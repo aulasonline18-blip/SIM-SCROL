@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:sim_mobile/features/classroom/aula_widgets.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
@@ -409,6 +411,37 @@ void main() {
     expect(settled, 1);
   });
 
+  test('tradutor SVG converte estilos web para atributos do Flutter', () {
+    final translated = translateLessonSvgForFlutter('''
+<svg width="200" height="120">
+  <style>.main { fill: currentColor; stroke: var(--color-border); stroke-width: 3; }</style>
+  <rect width="200" height="120" fill="#fff"/>
+  <circle class="main" cx="100" cy="60" r="40"/>
+</svg>
+''');
+
+    expect(translated, isNotNull);
+    expect(translated, contains('xmlns="http://www.w3.org/2000/svg"'));
+    expect(translated, contains('viewBox="0 0 200 120"'));
+    expect(translated, contains('fill="#111827"'));
+    expect(translated, contains('stroke="#111827"'));
+    expect(translated, contains('stroke-width="3"'));
+    expect(translated, isNot(contains('<style')));
+    expect(translated, isNot(contains('currentColor')));
+    expect(translated, isNot(contains('var(')));
+  });
+
+  test('tradutor SVG rejeita payload que só desenha fundo branco', () {
+    final translated = translateLessonSvgForFlutter('''
+<svg width="200" height="120">
+  <rect x="0" y="0" width="200" height="120" fill="#FFFFFF"/>
+  <rect x="20" y="20" width="80" height="40" fill="white"/>
+</svg>
+''');
+
+    expect(translated, isNull);
+  });
+
   testWidgets('renderizador de imagem aceita dataUrl bitmap no histórico', (
     tester,
   ) async {
@@ -433,5 +466,42 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(Image), findsOneWidget);
+  });
+
+  testWidgets('renderizador exibe raster bitmap do servidor em viewport móvel', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 820));
+    const png =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 360,
+              height: 330,
+              child: LessonImageStudySurface(
+                data: 'data:image/png;base64,$png',
+                height: 220,
+                caption: 'Imagem rasterizada pelo servidor',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump();
+
+    expect(find.byType(LessonImageStudySurface), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+    final image = tester.widget<Image>(find.byType(Image));
+    final provider = image.image;
+    expect(provider, isA<MemoryImage>());
+    expect((provider as MemoryImage).bytes, base64Decode(png));
+    expect(find.text('Imagem rasterizada pelo servidor'), findsOneWidget);
+    expect(find.text('Imagem indisponível'), findsNothing);
   });
 }

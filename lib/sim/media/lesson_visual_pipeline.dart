@@ -271,37 +271,7 @@ class LessonVisualPipeline {
       );
     }
 
-    // 2. Math template SVG (kinematics, linear, quadratic, unit circle)
-    if (trigger.mathTemplate != null) {
-      final mathSvg = tryRenderMathTemplate(trigger.toVisualTriggerMap());
-      if (mathSvg != null) {
-        if (_acceptFinalSoftwareSvg(
-          lessonKey,
-          'math_template',
-          mathSvg,
-          _requestFromTrigger(trigger, academicLevel: academicLevel),
-        )) {
-          _visualLog(
-            lessonKey,
-            'math_template',
-            'accepted name=${_mathTemplateName(trigger.mathTemplate)}',
-          );
-          _recordOutcome(lessonKey, 'software', 'math_template');
-          return LessonVisualResult(
-            svg: mathSvg,
-            dataUrl: null,
-            source: 'math_template',
-          );
-        }
-      }
-      _visualLog(
-        lessonKey,
-        'math_template',
-        'rejected name=${_mathTemplateName(trigger.mathTemplate)}',
-      );
-    }
-
-    // 3. N2 router — classifica por palavras-chave (custo zero)
+    // 2. N2 router — classifica por palavras-chave (custo zero)
     final n2 = classifyVisualByKeywords(
       topic: trigger.topic,
       visualType: trigger.visualType,
@@ -326,7 +296,89 @@ class LessonVisualPipeline {
       academicLevel: academicLevel,
       pedagogicalGoal: trigger.highlightFocus,
     );
-    final localSoftware = softwareRenderCatalog.render(softwareRequest);
+
+    final serverFirstVisuals = _prefersServerSideVisuals(visualRouterClient);
+    var serverRouteAttempted = false;
+    var skipLocalAfterServerDecision = false;
+    if (serverFirstVisuals && n2.verdict != VisualVerdict.ai) {
+      serverRouteAttempted = true;
+      final serverResult = await _tryN3SoftwareVisual(
+        lessonKey: lessonKey,
+        n2: n2,
+        trigger: trigger,
+        softwareRequest: softwareRequest,
+        stableLang: stableLang,
+        stage: 'n3_server_first',
+      );
+      if (serverResult.result != null) return serverResult.result!;
+      if (serverResult.transportFailed) {
+        _visualLog(
+          lessonKey,
+          'n3_server_first_fallback',
+          'transport_failed=true using local emergency fallback',
+        );
+      } else {
+        skipLocalAfterServerDecision = true;
+      }
+    }
+
+    // 3. Math template SVG. No cliente real, só roda se o servidor caiu.
+    if (!skipLocalAfterServerDecision && trigger.mathTemplate != null) {
+      final mathSvg = tryRenderMathTemplate(trigger.toVisualTriggerMap());
+      if (mathSvg != null) {
+        if (_acceptFinalSoftwareSvg(
+          lessonKey,
+          'math_template',
+          mathSvg,
+          softwareRequest,
+        )) {
+          _visualLog(
+            lessonKey,
+            'math_template',
+            'accepted name=${_mathTemplateName(trigger.mathTemplate)}',
+          );
+          _recordOutcome(lessonKey, 'software', 'math_template');
+          return LessonVisualResult(
+            svg: mathSvg,
+            dataUrl: null,
+            source: 'math_template',
+          );
+        }
+      }
+      _visualLog(
+        lessonKey,
+        'math_template',
+        'rejected name=${_mathTemplateName(trigger.mathTemplate)}',
+      );
+    }
+
+    if (skipLocalAfterServerDecision) {
+      _visualLog(
+        lessonKey,
+        'local_software_skipped',
+        'server_side_visual_pipeline=true n2=${n2.verdict.name}/${n2.reason}',
+      );
+    }
+
+    if (skipLocalAfterServerDecision) {
+      if (!allowPaidImages) {
+        _visualLog(
+          lessonKey,
+          'skip_no_paid',
+          'n2=${n2.verdict.name}/${n2.reason} allowPaidImages=false topic=${_shortVisualText(trigger.topic)}',
+        );
+        _recordOutcome(lessonKey, 'paid_offer', 'skip_no_paid', n2.reason);
+        return const LessonVisualResult(
+          svg: null,
+          dataUrl: null,
+          source: 'skip_no_paid',
+        );
+      }
+    }
+
+    final localSoftware = skipLocalAfterServerDecision
+        ? null
+        : softwareRenderCatalog.render(softwareRequest);
     var localAccepted = false;
     if (localSoftware != null) {
       localAccepted = _acceptFinalSoftwareSvg(
@@ -381,7 +433,7 @@ class LessonVisualPipeline {
       localAccepted: localAccepted,
     );
 
-    if (escalationDecision.shouldCallN3) {
+    if (escalationDecision.shouldCallN3 && !serverRouteAttempted) {
       final n3 = await routeVisualCheapN3(
         client: visualRouterClient,
         n2: n2,
@@ -409,7 +461,7 @@ class LessonVisualPipeline {
         if (n3Accepted) {
           _recordOutcome(lessonKey, 'software', 'n3_software', n2.reason);
           return LessonVisualResult(
-            svg: n3.svgDataUrl,
+            svg: n3.displayDataUrl ?? n3.svgDataUrl,
             dataUrl: null,
             source: 'n3_software',
             n2Reason: n2.reason,
@@ -594,6 +646,78 @@ class LessonVisualPipeline {
     );
   }
 
+  Future<_N3VisualAttempt> _tryN3SoftwareVisual({
+    required String lessonKey,
+    required VisualN2Result n2,
+    required LessonVisualTrigger trigger,
+    required SoftwareVisualRequest softwareRequest,
+    required String? stableLang,
+    required String stage,
+  }) async {
+    final n3 = await routeVisualCheapN3(
+      client: visualRouterClient,
+      n2: n2,
+      topic: trigger.topic,
+      visualType: trigger.visualType,
+      imagePrompt: trigger.imagePrompt,
+      keyElements: trigger.keyElements,
+      pedagogicalNeed: trigger.pedagogicalNeed,
+      highlightFocus: trigger.highlightFocus,
+      complexity: trigger.complexity,
+      stableLang: stableLang,
+    );
+    _visualLog(
+      lessonKey,
+      stage,
+      'verdict=${n3.verdict.name} reason=${_shortVisualText(n3.reason)} confidence=${n3.confidence?.toStringAsFixed(2) ?? 'n/a'} role=${n3.pedagogicalRole ?? 'n/a'} hasSvg=${n3.svgDataUrl != null} hasRaster=${n3.displayDataUrl != null}',
+    );
+    if (n3.transportFailed) {
+      return const _N3VisualAttempt(transportFailed: true);
+    }
+    if (n3.verdict == VisualVerdict.noImage) {
+      _recordOutcome(lessonKey, 'no_image', 'n3_no_image', n2.reason);
+      return _N3VisualAttempt(
+        result: LessonVisualResult(
+          svg: null,
+          dataUrl: null,
+          source: 'n3_no_image',
+          n2Reason: n2.reason,
+        ),
+      );
+    }
+    if (n3.verdict == VisualVerdict.svg && n3.svgDataUrl != null) {
+      final n3Accepted = _acceptFinalSoftwareSvg(
+        lessonKey,
+        'n3_software',
+        n3.svgDataUrl!,
+        softwareRequest,
+      );
+      if (n3Accepted) {
+        _recordOutcome(lessonKey, 'software', 'n3_software', n2.reason);
+        return _N3VisualAttempt(
+          result: LessonVisualResult(
+            svg: n3.displayDataUrl ?? n3.svgDataUrl,
+            dataUrl: null,
+            source: 'n3_software',
+            n2Reason: n2.reason,
+          ),
+        );
+      }
+      final strictN3Result = await _retryN3WithStrictSvgContract(
+        lessonKey: lessonKey,
+        n2: n2,
+        trigger: trigger,
+        softwareRequest: softwareRequest,
+        stableLang: stableLang,
+        reason: n3.reason,
+      );
+      if (strictN3Result != null) {
+        return _N3VisualAttempt(result: strictN3Result);
+      }
+    }
+    return const _N3VisualAttempt();
+  }
+
   Future<LessonVisualResult?> _retryN3WithStrictSvgContract({
     required String lessonKey,
     required VisualN2Result n2,
@@ -642,7 +766,7 @@ class LessonVisualPipeline {
       n2.reason,
     );
     return LessonVisualResult(
-      svg: retry.svgDataUrl,
+      svg: retry.displayDataUrl ?? retry.svgDataUrl,
       dataUrl: null,
       source: 'n3_software_strict_retry',
       n2Reason: n2.reason,
@@ -835,6 +959,21 @@ String _shortVisualText(Object? value) {
   final text = (value ?? '').toString().replaceAll(RegExp(r'\s+'), ' ').trim();
   if (text.length <= 160) return text;
   return text.substring(0, 160);
+}
+
+bool _prefersServerSideVisuals(LessonVisualRouterClient client) {
+  try {
+    return (client as dynamic).prefersServerSideVisuals == true;
+  } catch (_) {
+    return false;
+  }
+}
+
+class _N3VisualAttempt {
+  const _N3VisualAttempt({this.result, this.transportFailed = false});
+
+  final LessonVisualResult? result;
+  final bool transportFailed;
 }
 
 class LessonVisualResult {

@@ -252,10 +252,39 @@ void main() {
     expect((body['n2'] as Map)['confidence'], 0.5);
     expect(result.verdict, VisualVerdict.svg);
     expect(result.svgDataUrl, startsWith('data:image/svg+xml;utf8,'));
+    expect(result.displayDataUrl, isNull);
     expect(result.confidence, 0.91);
     expect(result.pedagogicalRole, 'graph_reasoning');
     expect(result.requestId, 'rid-vis');
   });
+
+  test(
+    'rota visual prefere imagem raster pronta quando servidor envia',
+    () async {
+      final transport = RecordingTransport()
+        ..jsonBody =
+            '{"verdict":"svg","reason":"VISUAL_ROUTE_SVG","svgDataUrl":"data:image/svg+xml;utf8,%3Csvg%3E%3C%2Fsvg%3E","displayDataUrl":"data:image/webp;base64,AAAA","rasterized":true,"requestId":"rid-vis"}';
+      final client = SimServerVisualRouterClient(
+        config: config(),
+        transport: transport,
+      );
+
+      final result = await client.routeVisual(
+        n2: const VisualN2Result(
+          verdict: VisualVerdict.ambiguous,
+          matched: ['graph'],
+          reason: 'N2_AMBIGUOUS',
+        ),
+        topic: 'funcao linear',
+        visualType: 'graph',
+        imagePrompt: 'grafico de uma reta',
+      );
+
+      expect(result.verdict, VisualVerdict.svg);
+      expect(result.svgDataUrl, startsWith('data:image/svg+xml;utf8,'));
+      expect(result.displayDataUrl, 'data:image/webp;base64,AAAA');
+    },
+  );
 
   test('rota visual preserva decisao no_image do N3 pedagogico', () async {
     final transport = RecordingTransport()

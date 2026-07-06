@@ -7,6 +7,7 @@ class VisualN3Result {
     required this.verdict,
     required this.reason,
     this.svgDataUrl,
+    this.displayDataUrl,
     this.confidence,
     this.pedagogicalRole,
     this.requestId,
@@ -17,6 +18,7 @@ class VisualN3Result {
   final VisualVerdict verdict;
   final String reason;
   final String? svgDataUrl;
+  final String? displayDataUrl;
   final double? confidence;
   final String? pedagogicalRole;
   final String? requestId;

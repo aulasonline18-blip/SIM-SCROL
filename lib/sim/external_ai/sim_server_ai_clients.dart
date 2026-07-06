@@ -176,6 +176,8 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
   final SimHttpTransport transport;
   final Duration timeout;
 
+  bool get prefersServerSideVisuals => true;
+
   @override
   Future<VisualN3Result> routeVisual({
     required VisualN2Result n2,
@@ -256,6 +258,10 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
         ? VisualVerdict.noImage
         : VisualVerdict.ai;
     final svgDataUrl = decoded['svgDataUrl']?.toString();
+    final displayDataUrl =
+        decoded['displayDataUrl']?.toString() ??
+        decoded['dataUrl']?.toString() ??
+        decoded['image_data_url']?.toString();
     final hasSvgPayload = svgDataUrl != null && svgDataUrl.trim().isNotEmpty;
     if (verdict == VisualVerdict.svg && !hasSvgPayload) {
       return VisualN3Result(
@@ -272,6 +278,9 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
       verdict: verdict,
       reason: decoded['reason']?.toString() ?? 'N3_HTTP_ROUTE',
       svgDataUrl: hasSvgPayload ? svgDataUrl : null,
+      displayDataUrl: displayDataUrl?.trim().isNotEmpty == true
+          ? displayDataUrl
+          : null,
       confidence: _doubleFromJson(decoded['confidence']),
       pedagogicalRole:
           decoded['pedagogicalRole']?.toString() ??
