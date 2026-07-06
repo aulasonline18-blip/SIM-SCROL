@@ -789,10 +789,15 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(offers.whereType<LessonPaidImageOffer>(), hasLength(2));
 
-      await orchestrator.acceptPaidImageOffer(key);
+      final metadata = await orchestrator.acceptPaidImageOffer(key);
       expect(paidCalls, 1);
       expect(updates.last.imagem, startsWith('data:image/jpeg;base64,'));
       expect(cache.peek(key)?.imagem, updates.last.imagem);
+
+      final replayMetadata = await orchestrator.acceptPaidImageOffer(key);
+      expect(paidCalls, 1);
+      expect(replayMetadata, metadata);
+      expect(updates.last.imagem, cache.peek(key)?.imagem);
     },
   );
 

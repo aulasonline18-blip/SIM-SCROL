@@ -1,7 +1,8 @@
+import 'lesson_image_api_contract.dart';
 import '../lesson/lesson_event_bus.dart';
 
 abstract interface class LessonPaidImageOrchestrator {
-  Future<void> acceptPaidImageOffer(String lessonKey);
+  Future<LessonImageGenerationMetadata?> acceptPaidImageOffer(String lessonKey);
   void declinePaidImageOffer(String lessonKey);
 }
 

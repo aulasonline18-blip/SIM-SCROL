@@ -4,6 +4,7 @@ import 'dart:async';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
+import '../media/lesson_image_api_contract.dart';
 import '../media/student_lesson_media_service.dart';
 import 'dopamine_ready_window_engine.dart';
 import 'lesson_content_validator.dart';
@@ -44,12 +45,14 @@ class ResolveLessonMaterialResult {
     required this.imagem,
     required this.source,
     required this.waitedMs,
+    this.imageMetadata,
   });
 
   final LessonContent conteudo;
   final String? imagem;
   final LessonMaterialSource source;
   final int waitedMs;
+  final LessonImageGenerationMetadata? imageMetadata;
 }
 
 class StudentLessonMaterialService {
@@ -83,6 +86,7 @@ class StudentLessonMaterialService {
         imagem: visualReady.imagem,
         source: LessonMaterialSource.studentState,
         waitedMs: 0,
+        imageMetadata: visualReady.imageMetadata,
       );
     }
     final cached = orchestrator.peekCachedLesson(lessonKeyFor(input.params));
@@ -99,6 +103,7 @@ class StudentLessonMaterialService {
       imagem: visualReady.imagem,
       source: LessonMaterialSource.memoryCacheFromMotor,
       waitedMs: 0,
+      imageMetadata: visualReady.imageMetadata,
     );
   }
 
@@ -126,6 +131,7 @@ class StudentLessonMaterialService {
       imagem: lesson.imagem,
       source: LessonMaterialSource.studentStateAfterWait,
       waitedMs: waitedMs,
+      imageMetadata: lesson.imageMetadata,
     );
   }
 

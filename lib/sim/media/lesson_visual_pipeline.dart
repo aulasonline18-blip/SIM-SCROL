@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'blueprint_prompt.dart';
 import 'image_pedagogical_critic.dart';
+import 'lesson_image_api_contract.dart';
 import 'lesson_visual_models.dart';
 import 's12_visual_pipeline.dart';
 import 'software_render_catalog.dart';
@@ -53,6 +54,18 @@ abstract interface class LessonImageClient {
   });
 }
 
+abstract interface class LessonImageResponseClient {
+  Future<GenerateLessonImageResponse?> generateLessonImageResponse({
+    required String prompt,
+    required String lessonKey,
+    String aspectRatio = '1:1',
+    String? acceptedOfferId,
+    String? idempotencyKey,
+    Map<String, dynamic>? visualTrigger,
+    Map<String, dynamic>? lessonContext,
+  });
+}
+
 /// Modelo completo do visual_trigger do T02 (todos os campos do contrato).
 class LessonVisualTrigger {
   const LessonVisualTrigger({
@@ -68,6 +81,7 @@ class LessonVisualTrigger {
     this.mathTemplate,
     this.renderStrategy,
     this.svgPayload,
+    this.aspectRatio,
   });
 
   final bool needsImage;
@@ -83,6 +97,7 @@ class LessonVisualTrigger {
   final Object? mathTemplate;
   final String? renderStrategy; // "software" | "ai"
   final String? svgPayload;
+  final String? aspectRatio;
 
   factory LessonVisualTrigger.fromJson(Object? value) {
     if (value is! Map) return const LessonVisualTrigger();
@@ -106,6 +121,10 @@ class LessonVisualTrigger {
           value['render_strategy']?.toString() ??
           value['renderStrategy']?.toString(),
       svgPayload: value['svg_payload']?.toString(),
+      aspectRatio:
+          value['aspect_ratio']?.toString() ??
+          value['aspectRatio']?.toString() ??
+          value['image_aspect_ratio']?.toString(),
     );
   }
 
@@ -125,6 +144,7 @@ class LessonVisualTrigger {
     if (mathTemplate != null) 'math_template': mathTemplate,
     if (renderStrategy != null) 'render_strategy': renderStrategy,
     if (svgPayload != null) 'svg_payload': svgPayload,
+    if (aspectRatio != null) 'aspect_ratio': aspectRatio,
   };
 
   LessonVisualTrigger copyWith({
@@ -140,6 +160,7 @@ class LessonVisualTrigger {
     Object? mathTemplate,
     String? renderStrategy,
     String? svgPayload,
+    String? aspectRatio,
   }) {
     return LessonVisualTrigger(
       needsImage: needsImage ?? this.needsImage,
@@ -154,6 +175,7 @@ class LessonVisualTrigger {
       mathTemplate: mathTemplate ?? this.mathTemplate,
       renderStrategy: renderStrategy ?? this.renderStrategy,
       svgPayload: svgPayload ?? this.svgPayload,
+      aspectRatio: aspectRatio ?? this.aspectRatio,
     );
   }
 }
@@ -502,9 +524,10 @@ class LessonVisualPipeline {
       );
     }
 
-    final dataUrl = await fetchPaidLessonImage(
+    final paidImage = await fetchPaidLessonImageResponse(
       prompt,
       lessonKey,
+      aspectRatio: normalizedLessonImageAspectRatio(trigger.aspectRatio),
       acceptedOfferId: acceptedOfferId,
       idempotencyKey: idempotencyKey ?? acceptedOfferId,
       visualTrigger: trigger.toVisualTriggerMap(),
@@ -516,7 +539,7 @@ class LessonVisualPipeline {
         'source': 'sim_app_flutter',
       },
     );
-    if (dataUrl == null) {
+    if (paidImage == null) {
       _visualLog(
         lessonKey,
         'ai_failed',
@@ -538,9 +561,10 @@ class LessonVisualPipeline {
     _recordOutcome(lessonKey, 'paid_ready', 'ai_blueprint', n2.reason);
     return LessonVisualResult(
       svg: null,
-      dataUrl: dataUrl,
+      dataUrl: paidImage.dataUrl,
       source: 'ai_blueprint',
       n2Reason: n2.reason,
+      imageMetadata: paidImage.toMetadata(),
     );
   }
 
@@ -693,9 +717,10 @@ Hard visual contract:
     );
   }
 
-  Future<String?> fetchPaidLessonImage(
+  Future<GenerateLessonImageResponse?> fetchPaidLessonImageResponse(
     String prompt,
     String lessonKey, {
+    String aspectRatio = '1:1',
     String? acceptedOfferId,
     String? idempotencyKey,
     Map<String, dynamic>? visualTrigger,
@@ -703,17 +728,66 @@ Hard visual contract:
   }) async {
     if (prompt.trim().isEmpty) return null;
     if (acceptedOfferId == null || acceptedOfferId.trim().isEmpty) return null;
-    final dataUrl = await imageClient.generateLessonImage(
+    final normalizedAspectRatio = normalizedLessonImageAspectRatio(aspectRatio);
+    final client = imageClient;
+    if (client is LessonImageResponseClient) {
+      final responseClient = client as LessonImageResponseClient;
+      final response = await responseClient.generateLessonImageResponse(
+        prompt: prompt,
+        lessonKey: lessonKey,
+        aspectRatio: normalizedAspectRatio,
+        acceptedOfferId: acceptedOfferId,
+        idempotencyKey: idempotencyKey ?? acceptedOfferId,
+        visualTrigger: visualTrigger,
+        lessonContext: lessonContext,
+      );
+      if (response == null || !isUsableImageDataUrl(response.dataUrl)) {
+        return null;
+      }
+      return GenerateLessonImageResponse(
+        dataUrl: compressImageDataUrl(response.dataUrl),
+        cacheKey: response.cacheKey,
+        requestId: response.requestId,
+        mimeType: response.mimeType,
+        provider: response.provider,
+        model: response.model,
+        charged: response.charged,
+        cacheHit: response.cacheHit,
+        retryable: response.retryable,
+      );
+    }
+    final dataUrl = await client.generateLessonImage(
       prompt: prompt,
       lessonKey: lessonKey,
-      aspectRatio: '1:1',
+      aspectRatio: normalizedAspectRatio,
       acceptedOfferId: acceptedOfferId,
       idempotencyKey: idempotencyKey ?? acceptedOfferId,
       visualTrigger: visualTrigger,
       lessonContext: lessonContext,
     );
     if (!isUsableImageDataUrl(dataUrl)) return null;
-    return compressImageDataUrl(dataUrl!);
+    return GenerateLessonImageResponse(dataUrl: compressImageDataUrl(dataUrl!));
+  }
+
+  Future<String?> fetchPaidLessonImage(
+    String prompt,
+    String lessonKey, {
+    String aspectRatio = '1:1',
+    String? acceptedOfferId,
+    String? idempotencyKey,
+    Map<String, dynamic>? visualTrigger,
+    Map<String, dynamic>? lessonContext,
+  }) async {
+    final response = await fetchPaidLessonImageResponse(
+      prompt,
+      lessonKey,
+      aspectRatio: aspectRatio,
+      acceptedOfferId: acceptedOfferId,
+      idempotencyKey: idempotencyKey,
+      visualTrigger: visualTrigger,
+      lessonContext: lessonContext,
+    );
+    return response?.dataUrl;
   }
 
   String buildPromptForTrigger({
@@ -736,6 +810,12 @@ Hard visual contract:
       lang: lang,
     );
   }
+}
+
+String normalizedLessonImageAspectRatio(Object? value) {
+  final ratio = value?.toString().trim();
+  const allowed = {'1:1', '16:9', '9:16', '4:3', '3:4'};
+  return ratio != null && allowed.contains(ratio) ? ratio : '1:1';
 }
 
 void _visualLog(String lessonKey, String stage, String detail) {
@@ -763,6 +843,7 @@ class LessonVisualResult {
     required this.dataUrl,
     required this.source,
     this.n2Reason,
+    this.imageMetadata,
   });
 
   /// data URL de SVG inline (grátis) — usar se não nulo.
@@ -774,6 +855,7 @@ class LessonVisualResult {
   /// Fonte do resultado (para diagnóstico/auditoria).
   final String source;
   final String? n2Reason;
+  final LessonImageGenerationMetadata? imageMetadata;
 
   /// Imagem útil disponível (SVG ou AI)
   bool get hasImage => svg != null || dataUrl != null;

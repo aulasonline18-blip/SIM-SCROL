@@ -1,5 +1,6 @@
 import '../lesson/lesson_models.dart';
 import '../lesson/student_lesson_material_service.dart';
+import '../media/lesson_image_api_contract.dart';
 import '../state/student_learning_state.dart';
 import 'classroom_models.dart';
 
@@ -15,6 +16,7 @@ class LessonPositionState {
     required this.conteudo,
     required this.phase,
     required this.imagem,
+    this.imageMetadata,
     required this.teoriaPronta,
     required this.items,
   });
@@ -29,6 +31,7 @@ class LessonPositionState {
   LessonContent? conteudo;
   ClassroomPhase phase;
   String? imagem;
+  LessonImageGenerationMetadata? imageMetadata;
   bool teoriaPronta;
   List<PlannedItem> items;
 
@@ -59,6 +62,7 @@ class LessonPositionEngine {
           ? const ClassroomPhase.loading()
           : const ClassroomPhase.reading(),
       imagem: initialFastLesson?.imagem,
+      imageMetadata: initialFastLesson?.imageMetadata,
       teoriaPronta: initialFastLesson != null,
       items: List<PlannedItem>.from(baseItems),
     );

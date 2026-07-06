@@ -117,11 +117,11 @@ VisualDecision decideVisualGeneration(
     if (softwarePrompt.isNotEmpty ||
         softwareTopic.isNotEmpty ||
         vt['math_template'] != null) {
-      return const VisualDecision(
-        generate: false,
-        prompt: null,
+      return VisualDecision(
+        generate: true,
+        prompt: softwarePrompt.isNotEmpty ? softwarePrompt : softwareTopic,
         svg: null,
-        reason: 'S12_SOFTWARE_PENDING_PIPELINE',
+        reason: 'S12_SOFTWARE_ROUTE_FROM_PROMPT',
       );
     }
     // SVG quebrado/ausente → cai no fallback AI abaixo

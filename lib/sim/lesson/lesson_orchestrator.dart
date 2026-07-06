@@ -1,6 +1,7 @@
 // MIRROR OF: src/cyber/lesson-orchestrator.ts (Web, source of truth)
 import 'dart:convert';
 
+import '../media/lesson_image_api_contract.dart';
 import '../media/lesson_visual_pipeline.dart';
 import '../media/lesson_paid_image_offer.dart';
 import '../modules/pedagogical_module_contracts.dart';
@@ -27,7 +28,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
   onAudioTextReady;
   final Map<String, Future<CompleteLesson>> _textInflight = {};
   final Map<String, _PaidPending> _paidPending = {};
-  final Map<String, Future<String?>> _paidInflight = {};
+  final Map<String, Future<LessonImageGenerationMetadata?>> _paidInflight = {};
   final Map<String, _ImageInflight> _imageInflight = {};
   final Map<String, int> _imageEpochByKey = {};
   final Map<String, String> _declinedImageSignaturesByKey = {};
@@ -193,7 +194,12 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     );
     if (!_isCurrentImageDecision(key, signature, epoch)) return;
     if (result.hasImage) {
-      _publishImage(key, lesson, result.displayUrl!);
+      _publishImage(
+        key,
+        lesson,
+        result.displayUrl!,
+        imageMetadata: result.imageMetadata,
+      );
       return;
     }
     if (result.source == 'skip_no_paid' || result.source == 'skip_no_offer') {
@@ -255,11 +261,17 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     );
   }
 
-  void _publishImage(String key, CompleteLesson lesson, String imageData) {
+  void _publishImage(
+    String key,
+    CompleteLesson lesson,
+    String imageData, {
+    LessonImageGenerationMetadata? imageMetadata,
+  }) {
     final updated = CompleteLesson(
       conteudo: lesson.conteudo,
       imagem: imageData,
       audioText: lesson.audioText,
+      imageMetadata: imageMetadata,
     );
     cache.put(key, updated);
     bus.clearPaidImageOffer(key);
@@ -314,19 +326,31 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
   }
 
   @override
-  Future<void> acceptPaidImageOffer(String lessonKey) async {
-    final pending = _paidPending.remove(lessonKey);
-    if (pending == null) return;
-    _declinedImageSignaturesByKey.remove(lessonKey);
+  Future<LessonImageGenerationMetadata?> acceptPaidImageOffer(
+    String lessonKey,
+  ) async {
     final existing = _paidInflight[lessonKey];
     if (existing != null) {
-      await existing;
-      return;
+      return existing;
     }
+    final pending = _paidPending.remove(lessonKey);
+    if (pending == null) {
+      final cached = cache.peek(lessonKey);
+      if (cached?.imagem != null && cached!.imagem!.trim().isNotEmpty) {
+        bus.clearPaidImageOffer(lessonKey);
+        bus.notify(lessonKey, cached);
+        return cached.imageMetadata;
+      }
+      return null;
+    }
+    _declinedImageSignaturesByKey.remove(lessonKey);
     final future = _imageQueue.run(() async {
-      final image = await visualPipeline.fetchPaidLessonImage(
+      final image = await visualPipeline.fetchPaidLessonImageResponse(
         pending.approvedPrompt,
         lessonKey,
+        aspectRatio: normalizedLessonImageAspectRatio(
+          pending.trigger.aspectRatio,
+        ),
         acceptedOfferId: pending.offerId,
         idempotencyKey: pending.offerId,
         visualTrigger: pending.trigger.toVisualTriggerMap(),
@@ -338,14 +362,21 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
           'source': 'sim_app_flutter',
         },
       );
-      if (image != null && image.trim().isNotEmpty) {
-        _publishImage(lessonKey, pending.base, image);
+      if (image != null && image.dataUrl.trim().isNotEmpty) {
+        final metadata = image.toMetadata();
+        _publishImage(
+          lessonKey,
+          pending.base,
+          image.dataUrl,
+          imageMetadata: metadata,
+        );
+        return metadata;
       }
-      return image;
+      return null;
     });
     _paidInflight[lessonKey] = future;
     try {
-      await future;
+      return await future;
     } finally {
       _paidInflight.remove(lessonKey);
     }

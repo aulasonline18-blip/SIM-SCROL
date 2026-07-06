@@ -276,6 +276,7 @@ class FakeAudioT02Client implements T02LessonClient {
 class FakeImageClient implements LessonImageClient {
   String? next = 'data:image/jpeg;base64,AAAA';
   String? lastPrompt;
+  String? lastAspectRatio;
   Map<String, dynamic>? lastVisualTrigger;
   Map<String, dynamic>? lastLessonContext;
   int calls = 0;
@@ -292,9 +293,33 @@ class FakeImageClient implements LessonImageClient {
   }) async {
     calls += 1;
     lastPrompt = prompt;
+    lastAspectRatio = aspectRatio;
     lastVisualTrigger = visualTrigger;
     lastLessonContext = lessonContext;
     return next;
+  }
+}
+
+class RichFakeImageClient extends FakeImageClient
+    implements LessonImageResponseClient {
+  GenerateLessonImageResponse? response;
+
+  @override
+  Future<GenerateLessonImageResponse?> generateLessonImageResponse({
+    required String prompt,
+    required String lessonKey,
+    String aspectRatio = '1:1',
+    String? acceptedOfferId,
+    String? idempotencyKey,
+    Map<String, dynamic>? visualTrigger,
+    Map<String, dynamic>? lessonContext,
+  }) async {
+    calls += 1;
+    lastPrompt = prompt;
+    lastAspectRatio = aspectRatio;
+    lastVisualTrigger = visualTrigger;
+    lastLessonContext = lessonContext;
+    return response ?? GenerateLessonImageResponse(dataUrl: next ?? '');
   }
 }
 
@@ -303,8 +328,11 @@ class FakePaidOrchestrator implements LessonPaidImageOrchestrator {
   int declined = 0;
 
   @override
-  Future<void> acceptPaidImageOffer(String lessonKey) async {
+  Future<LessonImageGenerationMetadata?> acceptPaidImageOffer(
+    String lessonKey,
+  ) async {
     accepted += 1;
+    return null;
   }
 
   @override
@@ -2416,6 +2444,59 @@ void main() {
     );
   });
 
+  test('S12 software route with prompt mirrors Web fallback decision', () {
+    final decision = decideVisualGeneration({
+      'visual_trigger': {
+        'needs_image': true,
+        'pedagogical_need': 'important',
+        'render_strategy': 'software',
+        'image_prompt': 'desenhar eixo cartesiano',
+      },
+    }, const VisualDecisionContext(allowPaidImages: true, priority: 'active'));
+
+    expect(decision.generate, isTrue);
+    expect(decision.prompt, 'desenhar eixo cartesiano');
+    expect(decision.reason, 'S12_SOFTWARE_ROUTE_FROM_PROMPT');
+  });
+
+  test(
+    'paid image response preserves metadata and requested aspect ratio',
+    () async {
+      final png =
+          'data:image/png;base64,${base64Encode(img.encodePng(img.Image(width: 2, height: 2)))}';
+      final client = RichFakeImageClient()
+        ..response = GenerateLessonImageResponse(
+          dataUrl: png,
+          cacheKey: 'cache-1',
+          requestId: 'req-1',
+          mimeType: 'image/png',
+          provider: 'gemini',
+          model: 'test-image',
+          charged: true,
+          cacheHit: false,
+          retryable: false,
+        );
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: const FakeVisualRouterClient(),
+      );
+
+      final response = await pipeline.fetchPaidLessonImageResponse(
+        'prompt',
+        'lesson',
+        aspectRatio: '16:9',
+        acceptedOfferId: 'offer-1',
+      );
+
+      expect(client.lastAspectRatio, '16:9');
+      expect(response?.dataUrl, startsWith('data:image/jpeg;base64,'));
+      expect(response?.cacheKey, 'cache-1');
+      expect(response?.requestId, 'req-1');
+      expect(response?.charged, isTrue);
+      expect(response?.cacheHit, isFalse);
+    },
+  );
+
   test(
     'local software resolves schematic visual as free SVG without paid image',
     () async {
@@ -3370,6 +3451,7 @@ void main() {
         topic: 'diagrama com foto realista de um processo historico',
         visualType: 'diagram',
         imagePrompt: 'foto realista com etapas visuais',
+        aspectRatio: '16:9',
       );
 
       final blocked = await pipeline.resolveVisual(
@@ -3388,8 +3470,10 @@ void main() {
       );
       expect(paid.source, 'ai_blueprint');
       expect(client.calls, 1);
+      expect(client.lastAspectRatio, '16:9');
       expect(client.lastVisualTrigger?['needs_image'], isTrue);
       expect(client.lastVisualTrigger?['visual_type'], 'diagram');
+      expect(client.lastVisualTrigger?['aspect_ratio'], '16:9');
       expect(client.lastLessonContext?['stableLang'], isNull);
       expect(client.lastLessonContext?['source'], 'sim_app_flutter');
     },
@@ -3573,11 +3657,16 @@ void main() {
       ),
       imagem: 'data:image/png;base64,AAAA',
       audioText: 'Explicacao. Pergunta?',
+      imageMetadata: LessonImageGenerationMetadata(
+        cacheKey: 'old-cache',
+        requestId: 'old-request',
+      ),
     );
 
     final cleared = lesson.copyWith(imagem: null);
 
     expect(cleared.imagem, isNull);
+    expect(cleared.imageMetadata, isNull);
     expect(cleared.conteudo.question, 'Pergunta?');
   });
 

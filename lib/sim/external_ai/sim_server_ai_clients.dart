@@ -59,7 +59,8 @@ class SimServerT00Client implements T00BootstrapClient {
   }
 }
 
-class SimServerLessonImageClient implements LessonImageClient {
+class SimServerLessonImageClient
+    implements LessonImageClient, LessonImageResponseClient {
   SimServerLessonImageClient({
     required this.config,
     SimHttpTransport? transport,
@@ -92,6 +93,7 @@ class SimServerLessonImageClient implements LessonImageClient {
     return response?.dataUrl;
   }
 
+  @override
   Future<GenerateLessonImageResponse?> generateLessonImageResponse({
     required String prompt,
     required String lessonKey,

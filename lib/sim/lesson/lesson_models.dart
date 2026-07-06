@@ -1,4 +1,5 @@
 import '../state/student_learning_state.dart';
+import '../media/lesson_image_api_contract.dart';
 
 enum LessonMode { session, simulado, reforco, amparo }
 
@@ -74,23 +75,30 @@ class CompleteLesson {
     required this.conteudo,
     required this.imagem,
     required this.audioText,
+    this.imageMetadata,
   });
 
   final LessonContent conteudo;
   final String? imagem;
   final String audioText;
+  final LessonImageGenerationMetadata? imageMetadata;
 
   static const Object _unchanged = Object();
 
   CompleteLesson copyWith({
     LessonContent? conteudo,
     Object? imagem = _unchanged,
+    Object? imageMetadata = _unchanged,
   }) {
     final nextConteudo = conteudo ?? this.conteudo;
+    final imageChanged = !identical(imagem, _unchanged);
     return CompleteLesson(
       conteudo: nextConteudo,
-      imagem: identical(imagem, _unchanged) ? this.imagem : imagem as String?,
+      imagem: imageChanged ? imagem as String? : this.imagem,
       audioText: nextConteudo.audioText,
+      imageMetadata: identical(imageMetadata, _unchanged)
+          ? (imageChanged ? null : this.imageMetadata)
+          : imageMetadata as LessonImageGenerationMetadata?,
     );
   }
 }

@@ -77,7 +77,10 @@ class LessonMaterialController {
         itemIdx: position.itemIdx,
         layer: position.layer,
         items: baseItems
-            .map((item) => DopamineWindowItem(text: item.text, marker: item.marker))
+            .map(
+              (item) =>
+                  DopamineWindowItem(text: item.text, marker: item.marker),
+            )
             .toList(),
         source: 'cyber.aula.cache-window',
         priority: 'background',
@@ -88,19 +91,21 @@ class LessonMaterialController {
 
     position.phase = const ClassroomPhase.loading();
     position.imagem = null;
+    position.imageMetadata = null;
     position.teoriaPronta = false;
-    final resolved = await materialService.resolveLessonMaterialFromStateOrEngine(
-      ResolveLessonMaterialInput(
-        lessonLocalId: lessonLocalId,
-        topic: topic,
-        itemIdx: position.itemIdx,
-        marker: item.marker,
-        layer: position.layer,
-        params: params,
-        waitBeforeOrderMs: 0,
-        waitAfterOrderMs: 3000,
-      ),
-    );
+    final resolved = await materialService
+        .resolveLessonMaterialFromStateOrEngine(
+          ResolveLessonMaterialInput(
+            lessonLocalId: lessonLocalId,
+            topic: topic,
+            itemIdx: position.itemIdx,
+            marker: item.marker,
+            layer: position.layer,
+            params: params,
+            waitBeforeOrderMs: 0,
+            waitAfterOrderMs: 3000,
+          ),
+        );
     if (resolved == null) {
       position.phase = const ClassroomPhase.engineError(
         'A primeira aula foi liberada, mas a tela nao encontrou o slot A no Estado do aluno.',
@@ -123,6 +128,7 @@ class LessonMaterialController {
   ) {
     position.conteudo = material.conteudo;
     position.imagem = material.imagem;
+    position.imageMetadata = material.imageMetadata;
     position.teoriaPronta = true;
     position.phase = const ClassroomPhase.reading();
   }

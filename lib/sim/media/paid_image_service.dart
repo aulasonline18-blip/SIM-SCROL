@@ -45,7 +45,7 @@ class PaidImageService {
   PaidImageService({
     required StudentLearningStateService stateService,
     required PaidImageFetcher fetcher,
-    int creditCostPerImage = 1,
+    int creditCostPerImage = 10,
   }) : this._(stateService, fetcher, creditCostPerImage);
 
   PaidImageService._(this._stateService, this._fetcher, this._creditCost);

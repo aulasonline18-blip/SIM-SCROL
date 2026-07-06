@@ -47,6 +47,51 @@ class GenerateLessonImageResponse {
   final bool? charged;
   final bool? cacheHit;
   final bool? retryable;
+
+  LessonImageGenerationMetadata toMetadata() {
+    return LessonImageGenerationMetadata(
+      cacheKey: cacheKey,
+      requestId: requestId,
+      mimeType: mimeType,
+      provider: provider,
+      model: model,
+      charged: charged,
+      cacheHit: cacheHit,
+      retryable: retryable,
+    );
+  }
+}
+
+class LessonImageGenerationMetadata {
+  const LessonImageGenerationMetadata({
+    this.cacheKey,
+    this.requestId,
+    this.mimeType,
+    this.provider,
+    this.model,
+    this.charged,
+    this.cacheHit,
+    this.retryable,
+  });
+
+  final String? cacheKey;
+  final String? requestId;
+  final String? mimeType;
+  final String? provider;
+  final String? model;
+  final bool? charged;
+  final bool? cacheHit;
+  final bool? retryable;
+
+  bool get isEmpty =>
+      cacheKey == null &&
+      requestId == null &&
+      mimeType == null &&
+      provider == null &&
+      model == null &&
+      charged == null &&
+      cacheHit == null &&
+      retryable == null;
 }
 
 const String lessonImageModelPath = 'google/nano-banana-pro';

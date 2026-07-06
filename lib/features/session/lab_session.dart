@@ -1515,7 +1515,17 @@ class LabSession extends ChangeNotifier {
       imageError = null;
       _activePaidImageOffer = null;
       lessonImageOfferId = null;
+      _syncImageMetadataFromSnapshot();
     }
+  }
+
+  void _syncImageMetadataFromSnapshot() {
+    final metadata = aulaSnapshot?.imageMetadata;
+    lessonUiState.imageRequestId = metadata?.requestId;
+    lessonUiState.imageCacheKey = metadata?.cacheKey;
+    lessonUiState.imageCharged = metadata?.charged;
+    lessonUiState.imageCacheHit = metadata?.cacheHit;
+    lessonUiState.imageRetryable = metadata?.retryable;
   }
 
   void _bindActiveLessonMedia(SimOrganism organism) {
@@ -1542,6 +1552,7 @@ class LabSession extends ChangeNotifier {
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       imageStatus = 'ready';
       imageError = null;
+      _syncImageMetadataFromSnapshot();
       _activePaidImageOffer = null;
       organism.eventBus.clearPaidImageOffer(key);
       notifyListeners();
@@ -1657,7 +1668,8 @@ class LabSession extends ChangeNotifier {
     _markLessonImageStarted(offerId);
     notifyListeners();
     try {
-      await _activeOrganism!.lessonOrchestrator.acceptPaidImageOffer(key);
+      final metadata = await _activeOrganism!.lessonOrchestrator
+          .acceptPaidImageOffer(key);
       final dataUrl = aulaSnapshot?.imagem;
       if (dataUrl == null || dataUrl.trim().isEmpty) {
         throw StateError('Imagem indisponivel.');
@@ -1667,8 +1679,20 @@ class LabSession extends ChangeNotifier {
       }
       imageStatus = 'ready';
       imageError = null;
+      if (metadata != null && !metadata.isEmpty) {
+        lessonUiState.imageRequestId = metadata.requestId;
+        lessonUiState.imageCacheKey = metadata.cacheKey;
+        lessonUiState.imageCharged = metadata.charged;
+        lessonUiState.imageCacheHit = metadata.cacheHit;
+        lessonUiState.imageRetryable = metadata.retryable;
+      } else {
+        _syncImageMetadataFromSnapshot();
+      }
       _activePaidImageOffer = null;
-      _markLessonImageReady(cacheKey: offerId, imageUrl: dataUrl);
+      _markLessonImageReady(
+        cacheKey: lessonUiState.imageCacheKey ?? offerId,
+        imageUrl: dataUrl,
+      );
     } on SimExternalAiException catch (error) {
       lessonUiState.imageRequestId = error.requestId;
       lessonUiState.imageRetryable = error.retryable;

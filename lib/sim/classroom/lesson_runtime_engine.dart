@@ -1,4 +1,5 @@
 import '../lesson/lesson_models.dart';
+import '../media/lesson_image_api_contract.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
 import 'classroom_models.dart';
@@ -20,6 +21,7 @@ class LessonRuntimeSnapshot {
     required this.history,
     required this.conteudo,
     required this.imagem,
+    this.imageMetadata,
     required this.itemMarker,
     required this.itemText,
   });
@@ -33,6 +35,7 @@ class LessonRuntimeSnapshot {
   final List<QuestionHistoryEntry> history;
   final LessonContent? conteudo;
   final String? imagem;
+  final LessonImageGenerationMetadata? imageMetadata;
   final String? itemMarker;
   final String? itemText;
 
@@ -48,6 +51,7 @@ class LessonRuntimeSnapshot {
     List<QuestionHistoryEntry>? history,
     Object? conteudo = _unset,
     Object? imagem = _unset,
+    Object? imageMetadata = _unset,
     Object? itemMarker = _unset,
     Object? itemText = _unset,
   }) {
@@ -65,6 +69,9 @@ class LessonRuntimeSnapshot {
           ? this.conteudo
           : conteudo as LessonContent?,
       imagem: identical(imagem, _unset) ? this.imagem : imagem as String?,
+      imageMetadata: identical(imageMetadata, _unset)
+          ? this.imageMetadata
+          : imageMetadata as LessonImageGenerationMetadata?,
       itemMarker: identical(itemMarker, _unset)
           ? this.itemMarker
           : itemMarker as String?,
@@ -131,6 +138,7 @@ class LessonRuntimeEngine {
     }
     position.conteudo = lesson.conteudo;
     position.imagem = lesson.imagem;
+    position.imageMetadata = lesson.imageMetadata;
     if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty) {
       position.teoriaPronta = true;
     }
@@ -144,6 +152,7 @@ class LessonRuntimeEngine {
     position.history = snapshot.history;
     position.conteudo = snapshot.conteudo;
     position.imagem = snapshot.imagem;
+    position.imageMetadata = snapshot.imageMetadata;
   }
 
   Future<LessonRuntimeSnapshot> open({
@@ -164,6 +173,7 @@ class LessonRuntimeEngine {
         history: const [],
         conteudo: null,
         imagem: null,
+        imageMetadata: null,
         itemMarker: null,
         itemText: null,
       );
@@ -179,6 +189,7 @@ class LessonRuntimeEngine {
         history: const [],
         conteudo: null,
         imagem: null,
+        imageMetadata: null,
         itemMarker: null,
         itemText: null,
       );
@@ -262,6 +273,7 @@ class LessonRuntimeEngine {
         history: [],
         conteudo: null,
         imagem: null,
+        imageMetadata: null,
         itemMarker: null,
         itemText: null,
       );
@@ -287,6 +299,7 @@ class LessonRuntimeEngine {
       history: position.history,
       conteudo: position.conteudo,
       imagem: position.imagem,
+      imageMetadata: position.imageMetadata,
       itemMarker: position.itemAtivo?.marker,
       itemText: position.itemAtivo?.text,
     );
