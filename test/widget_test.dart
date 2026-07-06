@@ -51,9 +51,8 @@ void main() {
     expect(find.byType(ChatAulaScreen), findsNothing);
     expect(
       _textAny([
-        'Tell us about who is going to study',
-        'Conte-nos sobre quem vai estudar',
-        'Parlez-nous de la personne qui va étudier',
+        'What should we build together?',
+        'O que vamos construir juntos?',
       ]),
       findsOneWidget,
     );
@@ -116,11 +115,11 @@ void main() {
 
     await tester.tap(find.textContaining('Português'));
     await tester.pumpAndSettle();
-    expect(find.text('Conte-nos sobre quem vai estudar'), findsOneWidget);
+    expect(find.text('O que vamos construir juntos?'), findsOneWidget);
     expect(
       _textAny([
-        'Escreva com suas palavras. SIM vai montar o currículo ideal.',
-        'Write in your own words. SIM will build the ideal curriculum.',
+        'Responda com suas palavras. Você pode anexar arquivo ou foto e explicar o que quer aprender com ele.',
+        'Answer in your own words. You can attach a file or photo and explain what SIM should help you learn from it.',
       ]),
       findsOneWidget,
     );
@@ -137,14 +136,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('Français'));
     await tester.pumpAndSettle();
-    expect(
-      find.text('Parlez-nous de la personne qui va étudier'),
-      findsOneWidget,
-    );
+    expect(find.text('What should we build together?'), findsOneWidget);
     expect(
       _textAny([
-        'Écrivez avec vos propres mots. SIM construira le programme idéal.',
-        'Write in your own words. SIM will build the ideal curriculum.',
+        'Answer in your own words. You can attach a file or photo and explain what SIM should help you learn from it.',
       ]),
       findsOneWidget,
     );
@@ -244,7 +239,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('English'));
     await tester.pumpAndSettle();
-    expect(find.text('Tell us about who is going to study'), findsOneWidget);
+    expect(find.text('What should we build together?'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.attach_file));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Attach file'));
@@ -253,6 +248,12 @@ void main() {
     await tester.enterText(
       find.byType(TextField).first,
       'Quero estudar essa lista para a prova de matemática.',
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Save and continue'),
+      320,
+      scrollable: find.byType(Scrollable).last,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save and continue'));
@@ -428,7 +429,7 @@ void main() {
     expect(find.text('Volte e monte um novo currículo.'), findsOneWidget);
     await tester.tap(find.text('Voltar ao currículo'));
     await tester.pumpAndSettle();
-    expect(find.text('Tell us about who is going to study'), findsOneWidget);
+    expect(find.text('What should we build together?'), findsOneWidget);
   });
 
   testWidgets('Drawer lista, busca, renomeia e apaga aulas locais', (

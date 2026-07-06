@@ -74,6 +74,16 @@ const Map<String, String> _simStrings = {
 
   // Idioma
   // (language names are hardcoded in the buttons)
+  'onboarding_chat_region': 'Conversa de entrada do SIM',
+  'language_chat_intro': 'Choose your language',
+  'objective_chat_intro': 'What should we build together?',
+  'objective_chat_body':
+      'Answer in your own words. You can attach a file or photo and explain what SIM should help you learn from it.',
+  'name_chat_prompt': 'What should I call you? You can skip this.',
+  'guided_custom_hint': 'Or write your own answer...',
+  'preparation_chat_intro': 'I am preparing your learning path.',
+  'preparation_chat_body':
+      'This card stays live while SIM reads your goal, builds the curriculum and prepares the first lesson.',
 
   // Objeto
   'objeto_h1': 'Tell us about who is going to study',
@@ -328,8 +338,8 @@ const Map<String, String> _enStrings = {
   'guided_style': 'How should SIM guide you?',
   'guided_start': 'How do you want to begin?',
   'guided_school_test': 'School test',
-  'guided_exam': 'Public exam',
-  'guided_enem': 'College entrance exam',
+  'guided_exam': 'Certification or professional exam',
+  'guided_enem': 'Admission exam',
   'guided_exercises': 'Exercise list',
   'guided_understand': 'Understand a subject',
   'guided_zero': 'Starting from zero',
@@ -474,9 +484,19 @@ const Map<String, String> _ptStrings = {
   'language_title': 'Escolha seu idioma',
   'language_body':
       'O SIM usará este idioma no app, aulas, explicações, imagens, áudio e orientações a partir deste ponto.',
+  'onboarding_chat_region': 'Conversa de entrada do SIM',
+  'language_chat_intro': 'Escolha seu idioma',
   'language_other': 'Outro idioma',
   'language_type': 'Digite seu idioma',
   'language_hint': 'Ex: Italiano, Alemão, Árabe, Kiribati...',
+  'objective_chat_intro': 'O que vamos construir juntos?',
+  'objective_chat_body':
+      'Responda com suas palavras. Você pode anexar arquivo ou foto e explicar o que quer aprender com ele.',
+  'name_chat_prompt': 'Como devo chamar você? Pode pular se quiser.',
+  'guided_custom_hint': 'Ou escreva sua própria resposta...',
+  'preparation_chat_intro': 'Estou preparando sua travessia.',
+  'preparation_chat_body':
+      'Este card continua ativo enquanto o SIM entende seu objetivo, monta o currículo e prepara a primeira aula.',
   'objeto_h1': 'Conte-nos sobre quem vai estudar',
   'objeto_card1_title': 'Em que o SIM deve ajudar?',
   'objeto_required_label': 'Campo obrigatório',
@@ -510,8 +530,8 @@ const Map<String, String> _ptStrings = {
   'guided_style': 'Como o SIM deve conduzir?',
   'guided_start': 'Como quer começar?',
   'guided_school_test': 'Prova da escola',
-  'guided_exam': 'Concurso',
-  'guided_enem': 'Vestibular/ENEM',
+  'guided_exam': 'Certificação ou prova profissional',
+  'guided_enem': 'Prova de admissão',
   'guided_exercises': 'Lista de exercícios',
   'guided_understand': 'Entender uma matéria',
   'guided_zero': 'Começando do zero',

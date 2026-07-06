@@ -213,13 +213,24 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                     ),
                     Expanded(
                       child: SingleChildScrollView(
-                        child: SimPreparationExperience(
-                          stage: simStage,
-                          ready: isReady,
-                          onContinue: () {
-                            _started = false;
-                            _launch();
-                          },
+                        child: OnboardingChatFlow(
+                          semanticLabel: t('onboarding_chat_region'),
+                          children: [
+                            SimChatBubble(
+                              text: t('preparation_chat_intro'),
+                              supportingText: t('preparation_chat_body'),
+                            ),
+                            SimChatInputCard(
+                              child: SimPreparationExperience(
+                                stage: simStage,
+                                ready: isReady,
+                                onContinue: () {
+                                  _started = false;
+                                  _launch();
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -333,30 +344,27 @@ class _PlacementChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return OnboardingChatFlow(
+      semanticLabel: t('onboarding_chat_region'),
       children: [
-        Text(
-          t('placement_choice_h1'),
-          style: const TextStyle(
-            color: simDark,
-            fontSize: 28,
-            height: 1.12,
-            fontWeight: FontWeight.w700,
-          ),
+        SimChatBubble(
+          text: t('placement_choice_h1'),
+          supportingText: t('placement_choice_body'),
         ),
-        const SizedBox(height: 12),
-        Text(
-          t('placement_choice_body'),
-          style: const TextStyle(color: simMuted, fontSize: 17, height: 1.45),
+        SimChatChoiceWrap(
+          children: [
+            SimChatChoiceChip(
+              label: t('placement_start_beginning'),
+              selected: false,
+              onTap: onBeginning,
+            ),
+            SimChatChoiceChip(
+              label: t('placement_take_quick'),
+              selected: false,
+              onTap: onQuick,
+            ),
+          ],
         ),
-        const SizedBox(height: 32),
-        PrimaryWideButton(
-          label: t('placement_start_beginning'),
-          onTap: onBeginning,
-        ),
-        const SizedBox(height: 12),
-        SecondaryWideButton(label: t('placement_take_quick'), onTap: onQuick),
       ],
     );
   }
@@ -370,27 +378,25 @@ class _PlacementIntro extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return OnboardingChatFlow(
+      semanticLabel: t('onboarding_chat_region'),
       children: [
-        Text(
-          t('placement_intro_h1'),
-          style: const TextStyle(
-            color: simDark,
-            fontSize: 28,
-            height: 1.12,
-            fontWeight: FontWeight.w700,
+        SimChatBubble(
+          text: t('placement_intro_h1'),
+          supportingText: t('placement_intro_body'),
+        ),
+        FilledButton.icon(
+          onPressed: onStart,
+          icon: preparing
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.play_arrow),
+          label: Text(
+            preparing ? t('placement_preparing') : t('placement_start'),
           ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          t('placement_intro_body'),
-          style: const TextStyle(color: simMuted, fontSize: 17, height: 1.45),
-        ),
-        const SizedBox(height: 32),
-        PrimaryWideButton(
-          label: preparing ? t('placement_preparing') : t('placement_start'),
-          onTap: onStart ?? () {},
         ),
       ],
     );
@@ -413,41 +419,28 @@ class _PlacementQuestion extends StatelessWidget {
     if (screen == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return OnboardingChatFlow(
+      semanticLabel: t('onboarding_chat_region'),
       children: [
-        Text(
-          t('placement_question_of', {
+        SimChatBubble(
+          text: screen.prompt,
+          supportingText: t('placement_question_of', {
             'n': '${controller.index + 1}',
             'total': '${controller.blocks.length}',
           }),
-          style: TextStyle(
-            fontFamily: kMono,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: simMuted,
-          ),
         ),
-        const SizedBox(height: 16),
-        Text(
-          screen.prompt,
-          style: const TextStyle(
-            color: simDark,
-            fontSize: 20,
-            height: 1.3,
-            fontWeight: FontWeight.w700,
-          ),
+        SimChatChoiceWrap(
+          children: [
+            for (final entry
+                in controller.blocks[controller.index].choices.asMap().entries)
+              SimChatChoiceChip(
+                label:
+                    '${String.fromCharCode(65 + entry.key)}. ${t(entry.value.label)}',
+                selected: false,
+                onTap: () => onAnswered(entry.value.id),
+              ),
+          ],
         ),
-        const SizedBox(height: 24),
-        for (final entry
-            in controller.blocks[controller.index].choices.asMap().entries) ...[
-          SecondaryWideButton(
-            label:
-                '${String.fromCharCode(65 + entry.key)}. ${t(entry.value.label)}',
-            onTap: () => onAnswered(entry.value.id),
-          ),
-          const SizedBox(height: 8),
-        ],
       ],
     );
   }
@@ -462,27 +455,20 @@ class _PlacementResult extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return OnboardingChatFlow(
+      semanticLabel: t('onboarding_chat_region'),
       children: [
-        Text(
-          t('placement_result_h1'),
-          style: const TextStyle(
-            color: simDark,
-            fontSize: 28,
-            height: 1.12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          controller.result?.startMarker == null
+        SimChatBubble(
+          text: t('placement_result_h1'),
+          supportingText: controller.result?.startMarker == null
               ? t('placement_result_body')
               : '${t('placement_result_body')}\n\n${t('placement_starting_at')}: ${controller.result!.startMarker}',
-          style: const TextStyle(color: simMuted, fontSize: 17, height: 1.45),
         ),
-        const SizedBox(height: 32),
-        PrimaryWideButton(label: t('continue'), onTap: onContinue),
+        FilledButton.icon(
+          onPressed: onContinue,
+          icon: const Icon(Icons.arrow_forward),
+          label: Text(t('continue')),
+        ),
       ],
     );
   }
