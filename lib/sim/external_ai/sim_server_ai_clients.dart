@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../media/audio_core.dart';
 import '../media/lesson_audio_api_contract.dart';
 import '../media/lesson_image_api_contract.dart';
+import '../media/lesson_visual_models.dart';
 import '../media/lesson_visual_pipeline.dart';
 import '../lesson/lesson_content_validator.dart';
 import '../modules/pedagogical_module_contracts.dart';
@@ -189,6 +190,7 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
     String? highlightFocus,
     String? complexity,
     String? stableLang,
+    String? svgPayload,
   }) async {
     final requestId = _mediaRequestId(
       'vis',
@@ -226,6 +228,10 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
       },
       if (keyElements.isNotEmpty) 'keyElements': keyElements,
     };
+    if (svgPayload != null && svgPayload.trim().isNotEmpty) {
+      body['svgPayload'] = svgPayload;
+      body['visual_trigger'] = {'svg_payload': svgPayload};
+    }
     if (pedagogicalNeed != null) body['pedagogicalNeed'] = pedagogicalNeed;
     if (highlightFocus != null) body['highlightFocus'] = highlightFocus;
     if (complexity != null) body['complexity'] = complexity;
@@ -248,6 +254,7 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
         reason: 'N3_HTTP_INVALID_RESPONSE',
       );
     }
+    final reason = decoded['reason']?.toString() ?? 'N3_HTTP_ROUTE';
     final verdictRaw = decoded['verdict']?.toString();
     final verdict = verdictRaw == 'svg'
         ? VisualVerdict.svg
@@ -255,10 +262,11 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
         ? VisualVerdict.noImage
         : VisualVerdict.ai;
     final svgDataUrl = decoded['svgDataUrl']?.toString();
-    final displayDataUrl =
-        decoded['displayDataUrl']?.toString() ??
-        decoded['dataUrl']?.toString() ??
-        decoded['image_data_url']?.toString();
+    final displayDataUrl = _firstUsableRasterDataUrl(
+      decoded['displayDataUrl'],
+      decoded['dataUrl'],
+      decoded['image_data_url'],
+    );
     final paidOffer = decoded['paidOffer'];
     final paidOfferPrompt =
         decoded['paidOfferPrompt']?.toString() ??
@@ -281,11 +289,9 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
     }
     return VisualN3Result(
       verdict: verdict,
-      reason: decoded['reason']?.toString() ?? 'N3_HTTP_ROUTE',
+      reason: reason,
       svgDataUrl: hasSvgPayload ? svgDataUrl : null,
-      displayDataUrl: displayDataUrl?.trim().isNotEmpty == true
-          ? displayDataUrl
-          : null,
+      displayDataUrl: displayDataUrl,
       confidence: _doubleFromJson(decoded['confidence']),
       pedagogicalRole:
           decoded['pedagogicalRole']?.toString() ??
@@ -296,6 +302,17 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
       requestId: decoded['requestId']?.toString() ?? requestId,
     );
   }
+}
+
+String? _firstUsableRasterDataUrl(
+  Object? first,
+  Object? second,
+  Object? third,
+) {
+  for (final value in [first, second, third]) {
+    if (isUsableRasterImageDataUrl(value)) return (value! as String).trim();
+  }
+  return null;
 }
 
 class SimServerGeneratedAudioClient implements GeneratedAudioClient {

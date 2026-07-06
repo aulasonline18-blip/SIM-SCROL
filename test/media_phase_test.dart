@@ -74,6 +74,7 @@ class ThrowingVisualRouterClient implements LessonVisualRouterClient {
     String? highlightFocus,
     String? complexity,
     String? stableLang,
+    String? svgPayload,
   }) async {
     throw StateError('HTTP 401 Unauthorized requestId=vis-test');
   }
@@ -99,6 +100,7 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
   String? lastHighlightFocus;
   String? lastComplexity;
   String? lastStableLang;
+  String? lastSvgPayload;
   int calls = 0;
 
   @override
@@ -112,6 +114,7 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
     String? highlightFocus,
     String? complexity,
     String? stableLang,
+    String? svgPayload,
   }) async {
     calls += 1;
     lastN2 = n2;
@@ -123,6 +126,7 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
     lastHighlightFocus = highlightFocus;
     lastComplexity = complexity;
     lastStableLang = stableLang;
+    lastSvgPayload = svgPayload;
     return result;
   }
 }
@@ -145,6 +149,7 @@ class SequenceVisualRouterClient implements LessonVisualRouterClient {
     String? highlightFocus,
     String? complexity,
     String? stableLang,
+    String? svgPayload,
   }) async {
     prompts.add(imagePrompt);
     final index = calls < results.length ? calls : results.length - 1;
@@ -903,6 +908,10 @@ void main() {
     expect(prompt, contains('Writing visible text in English'));
     expect(isUsableImageDataUrl('data:image/webp;base64,AAAA'), true);
     expect(isUsableImageDataUrl('http://x'), false);
+    expect(isUsableRasterImageDataUrl('data:image/webp;base64,AAAA'), true);
+    expect(isUsableRasterImageDataUrl('data:image/png;base64,AAAA'), true);
+    expect(isUsableRasterImageDataUrl('data:image/jpeg;base64,AAAA'), true);
+    expect(isUsableRasterImageDataUrl('data:image/svg+xml;base64,AAAA'), false);
   });
 
   test('image critic judges visual quality instead of raw text count', () {
@@ -2625,6 +2634,8 @@ void main() {
 
     expect(result.source, 'n3_software');
     expect(result.displayUrl, raster);
+    expect(result.svg, isNull);
+    expect(result.dataUrl, raster);
     expect(router.calls, 1);
     expect(client.calls, 0);
   });
@@ -2670,7 +2681,56 @@ void main() {
 
       expect(result.source, 'server_visual');
       expect(result.displayUrl, raster);
+      expect(result.svg, isNull);
+      expect(result.dataUrl, raster);
+      expect(router.lastSvgPayload, isNull);
       expect(router.calls, 1);
+      expect(client.calls, 0);
+    },
+  );
+
+  test(
+    'server-side visual sends T02 svg_payload for server rasterization',
+    () async {
+      final client = FakeImageClient();
+      final n3Svg = sanitizeAndEncodeSvg(
+        '<svg viewBox="0 0 900 560"><rect width="900" height="560" fill="#F8FAFC"/>'
+        '<circle cx="450" cy="280" r="80" fill="#2563EB"/></svg>',
+      );
+      const raster = 'data:image/png;base64,CCCC';
+      final router = CapturingVisualRouterClient(
+        prefersServerSideVisuals: true,
+        result: VisualN3Result(
+          verdict: VisualVerdict.svg,
+          reason: 'T02_READY_SVG_RASTERIZED',
+          svgDataUrl: n3Svg,
+          displayDataUrl: raster,
+        ),
+      );
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: router,
+      );
+
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'important',
+          topic: 'grafico pronto',
+          visualType: 'graph',
+          imagePrompt: 'svg pronto para conversao no servidor',
+          renderStrategy: 'software',
+          svgPayload: '<svg><circle cx="1" cy="1" r="1"/></svg>',
+        ),
+        lessonKey: 'server-rasterizes-ready-svg',
+        allowPaidImages: false,
+      );
+
+      expect(result.source, 'server_visual');
+      expect(result.svg, isNull);
+      expect(result.dataUrl, raster);
+      expect(result.displayUrl, raster);
+      expect(router.lastSvgPayload, '<svg><circle cx="1" cy="1" r="1"/></svg>');
       expect(client.calls, 0);
     },
   );

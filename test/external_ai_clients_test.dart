@@ -286,6 +286,61 @@ void main() {
     },
   );
 
+  test(
+    'rota visual prioriza displayDataUrl sobre dataUrl image_data_url e svgDataUrl',
+    () async {
+      final transport = RecordingTransport()
+        ..jsonBody =
+            '{"verdict":"svg","reason":"VISUAL_ROUTE_SVG","svgDataUrl":"data:image/svg+xml;utf8,%3Csvg%3E%3C%2Fsvg%3E","displayDataUrl":"data:image/webp;base64,DISPLAY","dataUrl":"data:image/png;base64,DATA","image_data_url":"data:image/jpeg;base64,IMAGE","requestId":"rid-vis"}';
+      final client = SimServerVisualRouterClient(
+        config: config(),
+        transport: transport,
+      );
+
+      final result = await client.routeVisual(
+        n2: const VisualN2Result(
+          verdict: VisualVerdict.ambiguous,
+          matched: ['graph'],
+          reason: 'N2_AMBIGUOUS',
+        ),
+        topic: 'funcao linear',
+        visualType: 'graph',
+        imagePrompt: 'grafico de uma reta',
+      );
+
+      expect(result.verdict, VisualVerdict.svg);
+      expect(result.svgDataUrl, startsWith('data:image/svg+xml;utf8,'));
+      expect(result.displayDataUrl, 'data:image/webp;base64,DISPLAY');
+    },
+  );
+
+  test('rota visual envia svg_payload pronto para o servidor', () async {
+    final transport = RecordingTransport()
+      ..jsonBody =
+          '{"verdict":"svg","reason":"T02_READY_SVG_RASTERIZED","svgDataUrl":"data:image/svg+xml;utf8,%3Csvg%3E%3C%2Fsvg%3E","displayDataUrl":"data:image/png;base64,AAAA","requestId":"rid-vis"}';
+    final client = SimServerVisualRouterClient(
+      config: config(),
+      transport: transport,
+    );
+
+    final result = await client.routeVisual(
+      n2: const VisualN2Result(
+        verdict: VisualVerdict.ambiguous,
+        matched: ['server_image_pipeline'],
+        reason: 'SERVER_IMAGE_PIPELINE',
+      ),
+      topic: 'grafico pronto',
+      visualType: 'graph',
+      imagePrompt: 'svg pronto',
+      svgPayload: '<svg><circle cx="1" cy="1" r="1"/></svg>',
+    );
+
+    final body = transport.lastBody as Map;
+    expect(body['svgPayload'], '<svg><circle cx="1" cy="1" r="1"/></svg>');
+    expect((body['visual_trigger'] as Map)['svg_payload'], body['svgPayload']);
+    expect(result.displayDataUrl, 'data:image/png;base64,AAAA');
+  });
+
   test('rota visual preserva decisao no_image do N3 pedagogico', () async {
     final transport = RecordingTransport()
       ..jsonBody =

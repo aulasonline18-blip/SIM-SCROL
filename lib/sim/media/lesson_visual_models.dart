@@ -29,3 +29,11 @@ bool isUsableImageDataUrl(Object? value) {
     caseSensitive: false,
   ).hasMatch(value);
 }
+
+bool isUsableRasterImageDataUrl(Object? value) {
+  if (value is! String) return false;
+  return RegExp(
+    r'^data:image/(png|jpeg|jpg|webp);base64,',
+    caseSensitive: false,
+  ).hasMatch(value.trim());
+}

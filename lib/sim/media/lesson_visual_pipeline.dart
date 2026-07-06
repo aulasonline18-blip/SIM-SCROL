@@ -454,6 +454,7 @@ class LessonVisualPipeline {
         highlightFocus: trigger.highlightFocus,
         complexity: trigger.complexity,
         stableLang: stableLang,
+        svgPayload: trigger.svgPayload,
       );
       _visualLog(
         lessonKey,
@@ -469,8 +470,16 @@ class LessonVisualPipeline {
         );
         if (n3Accepted) {
           _recordOutcome(lessonKey, 'software', 'n3_software', n2.reason);
+          if (n3.displayDataUrl != null) {
+            return LessonVisualResult(
+              svg: null,
+              dataUrl: n3.displayDataUrl,
+              source: 'n3_software',
+              n2Reason: n2.reason,
+            );
+          }
           return LessonVisualResult(
-            svg: n3.displayDataUrl ?? n3.svgDataUrl,
+            svg: n3.svgDataUrl,
             dataUrl: null,
             source: 'n3_software',
             n2Reason: n2.reason,
@@ -665,6 +674,7 @@ class LessonVisualPipeline {
       highlightFocus: trigger.highlightFocus,
       complexity: trigger.complexity,
       stableLang: stableLang,
+      svgPayload: trigger.svgPayload,
     );
     _visualLog(
       lessonKey,
@@ -698,8 +708,16 @@ class LessonVisualPipeline {
       );
       if (accepted) {
         _recordOutcome(lessonKey, 'software', 'server_visual', n3.reason);
+        if (n3.displayDataUrl != null) {
+          return LessonVisualResult(
+            svg: null,
+            dataUrl: n3.displayDataUrl,
+            source: 'server_visual',
+            n2Reason: n3.reason,
+          );
+        }
         return LessonVisualResult(
-          svg: n3.displayDataUrl ?? n3.svgDataUrl,
+          svg: n3.svgDataUrl,
           dataUrl: null,
           source: 'server_visual',
           n2Reason: n3.reason,
@@ -777,6 +795,7 @@ class LessonVisualPipeline {
       highlightFocus: trigger.highlightFocus,
       complexity: trigger.complexity,
       stableLang: stableLang,
+      svgPayload: trigger.svgPayload,
     );
     _visualLog(
       lessonKey,
@@ -806,14 +825,20 @@ class LessonVisualPipeline {
       );
       if (n3Accepted) {
         _recordOutcome(lessonKey, 'software', 'n3_software', n2.reason);
-        return _N3VisualAttempt(
-          result: LessonVisualResult(
-            svg: n3.displayDataUrl ?? n3.svgDataUrl,
-            dataUrl: null,
-            source: 'n3_software',
-            n2Reason: n2.reason,
-          ),
-        );
+        final result = n3.displayDataUrl != null
+            ? LessonVisualResult(
+                svg: null,
+                dataUrl: n3.displayDataUrl,
+                source: 'n3_software',
+                n2Reason: n2.reason,
+              )
+            : LessonVisualResult(
+                svg: n3.svgDataUrl,
+                dataUrl: null,
+                source: 'n3_software',
+                n2Reason: n2.reason,
+              );
+        return _N3VisualAttempt(result: result);
       }
       final strictN3Result = await _retryN3WithStrictSvgContract(
         lessonKey: lessonKey,
@@ -855,6 +880,7 @@ class LessonVisualPipeline {
       highlightFocus: trigger.highlightFocus,
       complexity: trigger.complexity,
       stableLang: stableLang,
+      svgPayload: trigger.svgPayload,
     );
     _visualLog(
       lessonKey,
@@ -877,8 +903,16 @@ class LessonVisualPipeline {
       'n3_software_strict_retry',
       n2.reason,
     );
+    if (retry.displayDataUrl != null) {
+      return LessonVisualResult(
+        svg: null,
+        dataUrl: retry.displayDataUrl,
+        source: 'n3_software_strict_retry',
+        n2Reason: n2.reason,
+      );
+    }
     return LessonVisualResult(
-      svg: retry.displayDataUrl ?? retry.svgDataUrl,
+      svg: retry.svgDataUrl,
       dataUrl: null,
       source: 'n3_software_strict_retry',
       n2Reason: n2.reason,
@@ -1101,7 +1135,7 @@ class LessonVisualResult {
   /// data URL de SVG inline (grátis) — usar se não nulo.
   final String? svg;
 
-  /// data URL de imagem gerada por IA (Blueprint pago) — usar se svg nulo.
+  /// data URL de imagem raster pronta (servidor/Blueprint pago) — usar primeiro.
   final String? dataUrl;
 
   /// Fonte do resultado (para diagnóstico/auditoria).
@@ -1110,9 +1144,9 @@ class LessonVisualResult {
   final LessonImageGenerationMetadata? imageMetadata;
   final String? paidOfferPrompt;
 
-  /// Imagem útil disponível (SVG ou AI)
+  /// Imagem útil disponível (raster ou SVG)
   bool get hasImage => svg != null || dataUrl != null;
 
-  /// data URL para exibição (prefere SVG)
-  String? get displayUrl => svg ?? dataUrl;
+  /// data URL para exibição (prefere raster pronto)
+  String? get displayUrl => dataUrl ?? svg;
 }

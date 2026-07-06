@@ -32,6 +32,7 @@ import '../../sim/lesson/lesson_models.dart';
 import '../../sim/media/audio_core.dart';
 import '../../sim/media/audio_preference.dart';
 import '../../sim/media/lesson_audio_controller.dart';
+import '../../sim/media/lesson_visual_models.dart';
 import '../../sim/media/student_lesson_media_service.dart';
 import '../../sim/state/shared_prefs_state_storage.dart';
 import '../../sim/state/student_learning_state.dart';
@@ -895,7 +896,7 @@ class _LessonMediaImageViewState extends State<LessonMediaImageView> {
       _notifySettled();
       return LessonImageErrorView(compact: widget.compact);
     }
-    if (trimmed.startsWith('data:image/')) {
+    if (isUsableRasterImageDataUrl(trimmed)) {
       final comma = trimmed.indexOf(',');
       if (comma > 0 && trimmed.substring(0, comma).contains(';base64')) {
         try {
