@@ -61,23 +61,32 @@ class StudentLessonMaterialService {
     required this.orchestrator,
     required this.readyWindowEngine,
     this.mediaService,
-  });
+  }) {
+    final previousOnImageReady = orchestrator.onImageReady;
+    orchestrator.onImageReady = (params, lesson) {
+      previousOnImageReady?.call(params, lesson);
+      _mirrorImageReady(params, lesson);
+    };
+  }
 
   final StudentLearningStateService stateService;
   final LessonOrchestrator orchestrator;
   final DopamineReadyWindowEngine readyWindowEngine;
   final StudentLessonMediaService? mediaService;
+  final Map<String, ResolveLessonMaterialInput> _inputsByLessonKey = {};
+  final Map<String, void Function()> _imageUnsubscribersByLessonKey = {};
 
   ResolveLessonMaterialResult? resolveFastLessonMaterialFromStateOrCache(
     ResolveLessonMaterialInput input,
   ) {
+    _rememberInput(input);
     final fromState = _readReadyFromStudentState(input);
     if (fromState != null) {
       final visualReady = orchestrator.ensureVisualForReadyLesson(
         input.params,
         fromState.conteudo,
         priority: 'active',
-        initialImage: null,
+        initialImage: fromState.imagem,
       );
       _prepareLessonAudio(input, visualReady.conteudo);
       _mirrorCurrentLessonMaterial(input, visualReady);
@@ -110,6 +119,7 @@ class StudentLessonMaterialService {
   Future<ResolveLessonMaterialResult?> resolveLessonMaterialFromStateOrEngine(
     ResolveLessonMaterialInput input,
   ) async {
+    _rememberInput(input);
     final startedAt = DateTime.now().millisecondsSinceEpoch;
     final fast = resolveFastLessonMaterialFromStateOrCache(input);
     if (fast != null) return fast;
@@ -132,6 +142,18 @@ class StudentLessonMaterialService {
       source: LessonMaterialSource.studentStateAfterWait,
       waitedMs: waitedMs,
       imageMetadata: lesson.imageMetadata,
+    );
+  }
+
+  void _rememberInput(ResolveLessonMaterialInput input) {
+    final key = lessonKeyFor(input.params);
+    _inputsByLessonKey[key] = input;
+    _imageUnsubscribersByLessonKey.putIfAbsent(
+      key,
+      () => orchestrator.bus.subscribe(key, (lesson) {
+        if (lesson.imagem == null || lesson.imagem!.trim().isEmpty) return;
+        _mirrorImageReady(input.params, lesson);
+      }),
     );
   }
 
@@ -360,8 +382,11 @@ class StudentLessonMaterialService {
       final content = validatedLessonContentFromJson(JsonMap.from(material));
       return CompleteLesson(
         conteudo: content,
-        imagem: null,
+        imagem: _stringOrNull(material['imagem']),
         audioText: content.audioText,
+        imageMetadata: LessonImageGenerationMetadata.fromJson(
+          material['imageMetadata'],
+        ),
       );
     } on LessonContentValidationException catch (error) {
       stateService.mutate(input.lessonLocalId, (state) {
@@ -388,17 +413,46 @@ class StudentLessonMaterialService {
     }
   }
 
+  String? _stringOrNull(Object? value) {
+    final text = value?.toString();
+    return text == null || text.trim().isEmpty ? null : text;
+  }
+
+  void _mirrorImageReady(CompleteLessonParams params, CompleteLesson lesson) {
+    if (lesson.imagem == null || lesson.imagem!.trim().isEmpty) return;
+    final input = _inputsByLessonKey[lessonKeyFor(params)];
+    if (input == null) return;
+    final key = preparedLessonMaterialKey(
+      input.itemIdx,
+      input.marker,
+      input.layer,
+    );
+    final material = preparedMaterialFromLesson(
+      lesson: lesson,
+      itemIdx: input.itemIdx,
+      marker: input.marker,
+      layer: input.layer,
+    );
+    stateService.mutate(input.lessonLocalId, (state) {
+      return state.copyWith(
+        lessonLocalId: input.lessonLocalId,
+        currentLessonMaterial: material,
+        readyLessonMaterials: {...state.readyLessonMaterials, key: material},
+      );
+    });
+  }
+
   void _mirrorCurrentLessonMaterial(
     ResolveLessonMaterialInput input,
     CompleteLesson lesson,
   ) {
     stateService.mutate(input.lessonLocalId, (state) {
       return state.copyWith(
-        currentLessonMaterial: preparedMaterialFromLesson(
-          lesson: lesson,
-          itemIdx: input.itemIdx,
-          marker: input.marker,
-          layer: input.layer,
+        lessonLocalId: input.lessonLocalId,
+        currentLessonMaterial: _preparedMaterialPreservingImage(
+          input,
+          lesson,
+          state,
         ),
       );
     });
@@ -413,18 +467,48 @@ class StudentLessonMaterialService {
       input.marker,
       input.layer,
     );
+    stateService.mutate(input.lessonLocalId, (state) {
+      final material = _preparedMaterialPreservingImage(input, lesson, state);
+      return state.copyWith(
+        lessonLocalId: input.lessonLocalId,
+        currentLessonMaterial: material,
+        readyLessonMaterials: {...state.readyLessonMaterials, key: material},
+      );
+    });
+  }
+
+  JsonMap _preparedMaterialPreservingImage(
+    ResolveLessonMaterialInput input,
+    CompleteLesson lesson,
+    StudentLearningState state,
+  ) {
     final material = preparedMaterialFromLesson(
       lesson: lesson,
       itemIdx: input.itemIdx,
       marker: input.marker,
       layer: input.layer,
     );
-    stateService.mutate(input.lessonLocalId, (state) {
-      return state.copyWith(
-        currentLessonMaterial: material,
-        readyLessonMaterials: {...state.readyLessonMaterials, key: material},
-      );
-    });
+    if ((material['imagem'] as String?)?.trim().isNotEmpty == true) {
+      return material;
+    }
+    final key = preparedLessonMaterialKey(
+      input.itemIdx,
+      input.marker,
+      input.layer,
+    );
+    final existing =
+        state.readyLessonMaterials[key] ?? state.currentLessonMaterial;
+    final cached = orchestrator.peekCachedLesson(lessonKeyFor(input.params));
+    final image = _stringOrNull(existing?['imagem']) ?? cached?.imagem;
+    if (image == null) return material;
+    return {
+      ...material,
+      'imagem': image,
+      if (cached?.imageMetadata != null && !cached!.imageMetadata!.isEmpty)
+        'imageMetadata': cached.imageMetadata!.toJson()
+      else if (existing?['imageMetadata'] != null)
+        'imageMetadata': existing?['imageMetadata'],
+    };
   }
 
   // D4: Resume Instantâneo — lê da fonte única (StudentLearningState) diretamente.

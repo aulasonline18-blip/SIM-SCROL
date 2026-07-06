@@ -169,11 +169,11 @@ void main() {
 
       expect(cached, isNotNull);
       expect(cached!.conteudo.explanation, 'Texto persistido');
-      expect(cached.imagem, isNull);
+      expect(cached.imagem, 'data:image/png;base64,large');
     },
   );
 
-  test('LessonMaterialCache descarta toda imagem ao hidratar material', () async {
+  test('LessonMaterialCache preserva imagem ao hidratar material', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final svg =
@@ -190,7 +190,10 @@ void main() {
     final hydrated = LessonMaterialCache();
     hydrated.hydrateFromPreferences(prefs);
 
-    expect(hydrated.peekCachedLesson('svg-free')?.imagem, isNull);
-    expect(hydrated.peekCachedLesson('raster-paid')?.imagem, isNull);
+    expect(hydrated.peekCachedLesson('svg-free')?.imagem, svg);
+    expect(
+      hydrated.peekCachedLesson('raster-paid')?.imagem,
+      'data:image/png;base64,AAAA',
+    );
   });
 }

@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../media/lesson_image_api_contract.dart';
 import 'lesson_content_validator.dart';
 import 'lesson_models.dart';
 
@@ -101,8 +102,7 @@ class LessonMaterialCache {
     _persist();
   }
 
-  // Espelha o Web: imagem vive no cache em memória, mas não é serializada no
-  // armazenamento local para evitar restaurar imagem stale de outra sessão.
+  // Imagem da aula é estática depois que chega; deve sobreviver à restauração.
   void _persist() {
     unawaited(
       Future(() async {
@@ -129,6 +129,10 @@ class LessonMaterialCache {
     return {
       'conteudo': lesson.conteudo.toJson(),
       'audioText': lesson.audioText,
+      if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty)
+        'imagem': lesson.imagem,
+      if (lesson.imageMetadata != null && !lesson.imageMetadata!.isEmpty)
+        'imageMetadata': lesson.imageMetadata!.toJson(),
     };
   }
 
@@ -142,8 +146,11 @@ class LessonMaterialCache {
       if (conteudo == null) return null;
       return CompleteLesson(
         conteudo: conteudo,
-        imagem: null,
+        imagem: _stringOrNull(json['imagem']),
         audioText: json['audioText'] as String? ?? conteudo.audioText,
+        imageMetadata: LessonImageGenerationMetadata.fromJson(
+          json['imageMetadata'],
+        ),
       );
     } catch (_) {
       return null;
@@ -156,5 +163,10 @@ class LessonMaterialCache {
     } catch (_) {
       return null;
     }
+  }
+
+  static String? _stringOrNull(Object? value) {
+    final text = value?.toString();
+    return text == null || text.trim().isEmpty ? null : text;
   }
 }

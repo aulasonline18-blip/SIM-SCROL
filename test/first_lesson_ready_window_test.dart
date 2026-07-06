@@ -1307,6 +1307,20 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(updates.last.imagem, startsWith('data:'));
     expect(cache.peek(lessonKeyFor(params))?.imagem, updates.last.imagem);
+    expect(
+      service.read('cyber-cache')?.currentLessonMaterial?['imagem'],
+      updates.last.imagem,
+    );
+    expect(
+      service
+          .read('cyber-cache')
+          ?.readyLessonMaterials[preparedLessonMaterialKey(
+        0,
+        'M1',
+        LessonLayer.l1,
+      )]?['imagem'],
+      updates.last.imagem,
+    );
   });
 
   test('StudentExperienceT02Adapter prepares first minimum lesson', () async {

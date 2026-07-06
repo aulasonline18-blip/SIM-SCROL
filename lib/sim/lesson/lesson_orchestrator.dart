@@ -18,6 +18,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     required this.bus,
     required this.visualPipeline,
     this.onAudioTextReady,
+    this.onImageReady,
   });
 
   final T02LessonClient t02Client;
@@ -26,6 +27,8 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
   final LessonVisualPipeline visualPipeline;
   void Function(CompleteLessonParams params, CompleteLesson lesson)?
   onAudioTextReady;
+  void Function(CompleteLessonParams params, CompleteLesson lesson)?
+  onImageReady;
   final Map<String, Future<CompleteLesson>> _textInflight = {};
   final Map<String, _PaidPending> _paidPending = {};
   final Map<String, Future<LessonImageGenerationMetadata?>> _paidInflight = {};
@@ -195,7 +198,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     if (!_isCurrentImageDecision(key, signature, epoch)) return;
     if (result.hasImage) {
       _publishImage(
-        key,
+        params,
         lesson,
         result.displayUrl!,
         imageMetadata: result.imageMetadata,
@@ -265,11 +268,12 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
   }
 
   void _publishImage(
-    String key,
+    CompleteLessonParams params,
     CompleteLesson lesson,
     String imageData, {
     LessonImageGenerationMetadata? imageMetadata,
   }) {
+    final key = lessonKeyFor(params);
     final updated = CompleteLesson(
       conteudo: lesson.conteudo,
       imagem: imageData,
@@ -277,6 +281,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       imageMetadata: imageMetadata,
     );
     cache.put(key, updated);
+    onImageReady?.call(params, updated);
     bus.clearPaidImageOffer(key);
     bus.notify(key, updated);
   }
@@ -323,6 +328,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
             audioText: '',
           ),
       offerId: offerId,
+      params: params,
       trigger: trigger,
       stableLang: params.lang,
       source: source,
@@ -371,7 +377,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       if (image != null && image.dataUrl.trim().isNotEmpty) {
         final metadata = image.toMetadata();
         _publishImage(
-          lessonKey,
+          pending.params,
           pending.base,
           image.dataUrl,
           imageMetadata: metadata,
@@ -583,6 +589,7 @@ class _PaidPending {
     required this.approvedPrompt,
     required this.base,
     required this.offerId,
+    required this.params,
     required this.trigger,
     required this.stableLang,
     required this.source,
@@ -592,6 +599,7 @@ class _PaidPending {
   final String approvedPrompt;
   final CompleteLesson base;
   final String offerId;
+  final CompleteLessonParams params;
   final LessonVisualTrigger trigger;
   final String stableLang;
   final String source;
@@ -614,6 +622,10 @@ JsonMap preparedMaterialFromLesson({
   return {
     'text_status': 'ready',
     ...lesson.conteudo.toJson(),
+    if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty)
+      'imagem': lesson.imagem,
+    if (lesson.imageMetadata != null && !lesson.imageMetadata!.isEmpty)
+      'imageMetadata': lesson.imageMetadata!.toJson(),
     'generated_at': DateTime.now().toIso8601String(),
     'model': 'T02_content',
     'prompt_contract_version': 'T02_content.v3',

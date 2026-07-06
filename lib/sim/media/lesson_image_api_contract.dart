@@ -92,6 +92,32 @@ class LessonImageGenerationMetadata {
       charged == null &&
       cacheHit == null &&
       retryable == null;
+
+  Map<String, Object?> toJson() => {
+    'cacheKey': cacheKey,
+    'requestId': requestId,
+    'mimeType': mimeType,
+    'provider': provider,
+    'model': model,
+    'charged': charged,
+    'cacheHit': cacheHit,
+    'retryable': retryable,
+  };
+
+  static LessonImageGenerationMetadata? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final metadata = LessonImageGenerationMetadata(
+      cacheKey: raw['cacheKey']?.toString(),
+      requestId: raw['requestId']?.toString(),
+      mimeType: raw['mimeType']?.toString(),
+      provider: raw['provider']?.toString(),
+      model: raw['model']?.toString(),
+      charged: raw['charged'] is bool ? raw['charged'] as bool : null,
+      cacheHit: raw['cacheHit'] is bool ? raw['cacheHit'] as bool : null,
+      retryable: raw['retryable'] is bool ? raw['retryable'] as bool : null,
+    );
+    return metadata.isEmpty ? null : metadata;
+  }
 }
 
 const String lessonImageModelPath = 'google/nano-banana-pro';
