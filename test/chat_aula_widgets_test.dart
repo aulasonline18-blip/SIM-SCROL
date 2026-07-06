@@ -641,7 +641,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
     expect(session.autoAdvances, 0);
 
-    await tester.tap(_textAny(['Próximo', 'Next', 'Suivant', 'Siguiente']));
+    await Scrollable.ensureVisible(
+      tester.element(find.byKey(const Key('chat-feedback-next-button'))),
+      duration: Duration.zero,
+      alignment: 0.5,
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
     await tester.pump();
     expect(session.autoAdvances, 1);
   });
@@ -666,7 +672,7 @@ void main() {
           ),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
 
       await tester.scrollUntilVisible(
         find.textContaining('Mensagem 32'),
@@ -680,7 +686,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 700));
 
       expect(find.text('Mensagem nova'), findsOneWidget);
-      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
       expect(controller.position.maxScrollExtent, greaterThan(96));
 
       unawaited(
@@ -716,7 +721,7 @@ void main() {
   );
 
   testWidgets(
-    'chat timeline targets full new lesson content instead of stale feedback',
+    'chat timeline does not jump to new lesson content without explicit action',
     (tester) async {
       final key = GlobalKey<_ChatTimelineHarnessState>();
       final controller = ScrollController();
@@ -736,16 +741,24 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 500));
+      controller.jumpTo(controller.position.maxScrollExtent);
+      await tester.pump();
 
+      final beforePassiveUpdate = controller.position.pixels;
       await tester.drag(
         find.byKey(const Key('chat-aula-timeline')),
         const Offset(0, 900),
       );
       await tester.pump(const Duration(milliseconds: 220));
+      final afterManualDrag = controller.position.pixels;
+      expect(afterManualDrag, lessThan(beforePassiveUpdate));
 
       key.currentState!.appendNewLessonTurn();
       await tester.pump(const Duration(milliseconds: 120));
 
+      expect(controller.position.pixels, afterManualDrag);
+      expect(find.text('Nova explicacao do item.'), findsNothing);
+      expect(find.text('Nova alternativa B'), findsNothing);
       expect(
         find.byKey(const Key('chat-return-current-button')),
         findsOneWidget,
@@ -779,9 +792,16 @@ void main() {
     await tester.pumpAndSettle();
     controller.jumpTo(controller.position.maxScrollExtent);
     await tester.pump(const Duration(milliseconds: 120));
-    expect(controller.position.pixels, controller.position.maxScrollExtent);
+    expect(controller.position.pixels, greaterThan(0));
 
-    key.currentState!.appendNewLessonTurn();
+    key.currentState!.appendMessage('Feedback para avancar');
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('chat-feedback-next-button')),
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
     await tester.pumpAndSettle();
 
     final timelineRect = tester.getRect(
@@ -813,6 +833,44 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 120));
     expect(controller.position.pixels, lessThan(beforeManualDrag));
+  });
+
+  testWidgets('chat timeline scrolls to feedback after explicit signal', (
+    tester,
+  ) async {
+    final key = GlobalKey<_ChatTimelineHarnessState>();
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 520,
+            child: _ChatTimelineHarness(key: key, scrollController: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    key.currentState!.appendAnsweredSignalPrompt();
+    await tester.pump();
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump();
+    await Scrollable.ensureVisible(
+      tester.element(find.byKey(const Key('signal-button-2'))),
+      duration: Duration.zero,
+      alignment: 0.5,
+    );
+    await tester.pump();
+
+    final beforeSignal = controller.position.pixels;
+    await tester.tap(find.byKey(const Key('signal-button-2')));
+    await tester.pumpAndSettle();
+
+    expect(controller.position.pixels, greaterThan(beforeSignal));
+    expect(find.text('Feedback do qualificador 2'), findsOneWidget);
   });
 
   testWidgets('chat return button follows reading column on wide layout', (
@@ -870,7 +928,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump();
     expect(controller.position.pixels, greaterThan(0));
 
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
@@ -909,6 +968,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump();
 
     final beforeDrag = controller.position.pixels;
     expect(beforeDrag, greaterThan(300));
@@ -927,7 +988,23 @@ void main() {
     await gesture.up();
     await tester.pump(const Duration(milliseconds: 260));
 
-    expect(controller.position.pixels, lessThan(beforeDrag - 40));
+    final afterDrag = controller.position.pixels;
+    expect(afterDrag, lessThan(beforeDrag - 40));
+
+    final state = tester.state<_ChatTimelineHarnessState>(
+      find.byType(_ChatTimelineHarness),
+    );
+    state.appendNewLessonTurn();
+    await tester.pump();
+    ScrollMetricsNotification(
+      metrics: controller.position,
+      context: tester.element(find.byKey(const Key('chat-aula-timeline'))),
+    ).dispatch(tester.element(find.byKey(const Key('chat-aula-timeline'))));
+    await tester.pump(const Duration(milliseconds: 260));
+
+    expect(controller.position.pixels, afterDrag);
+    expect(find.text('Nova explicacao do item.'), findsNothing);
+    expect(find.text('Nova alternativa B'), findsNothing);
   });
 
   testWidgets(
@@ -953,7 +1030,7 @@ void main() {
 
       await tester.scrollUntilVisible(
         find.textContaining('Mensagem 12'),
-        -220,
+        220,
         scrollable: find.byType(Scrollable).last,
       );
       await tester.pump(const Duration(milliseconds: 120));
@@ -973,7 +1050,7 @@ void main() {
   );
 
   testWidgets(
-    'chat timeline keeps current lesson visible through rotation with reduced motion',
+    'chat timeline does not recenter through rotation with reduced motion',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 740));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -998,21 +1075,16 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-
-      expect(
-        find.textContaining('Mensagem 32', skipOffstage: false),
-        findsOneWidget,
-      );
+      controller.jumpTo(0);
+      await tester.pump();
+      final beforeResize = controller.position.pixels;
 
       await tester.binding.setSurfaceSize(const Size(740, 390));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
       expect(tester.takeException(), isNull);
-      expect(
-        find.textContaining('Mensagem 32', skipOffstage: false),
-        findsOneWidget,
-      );
+      expect(controller.position.pixels, beforeResize);
       expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
     },
   );
@@ -1061,6 +1133,8 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 500));
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump();
 
     expect(
       tester.getSemantics(find.byType(ChatAulaMessageBubble).last).label,
@@ -2001,6 +2075,12 @@ void main() {
       180,
       scrollable: find.byType(Scrollable).last,
     );
+    await Scrollable.ensureVisible(
+      tester.element(find.byKey(const Key('chat-feedback-doubt-button'))),
+      duration: Duration.zero,
+      alignment: 0.5,
+    );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -2056,6 +2136,12 @@ void main() {
         180,
         scrollable: find.byType(Scrollable).last,
       );
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const Key('chat-feedback-doubt-button'))),
+        duration: Duration.zero,
+        alignment: 0.5,
+      );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -2570,6 +2656,46 @@ class _ChatTimelineHarnessState extends State<_ChatTimelineHarness> {
     });
   }
 
+  void appendAnsweredSignalPrompt() {
+    setState(() {
+      final id = _nextId++;
+      _messages.add(
+        ChatLessonMessage(
+          id: 'answered-options-$id',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.options,
+          selectedAnswer: AnswerLetter.A,
+          options: const [
+            ChatLessonOption(
+              letter: AnswerLetter.A,
+              text: 'Alternativa sinalizada A',
+              selected: true,
+              enabled: false,
+            ),
+            ChatLessonOption(
+              letter: AnswerLetter.B,
+              text: 'Alternativa sinalizada B',
+              selected: false,
+              enabled: false,
+            ),
+          ],
+          signals: const [
+            ChatLessonSignal(
+              value: 1,
+              labelKey: 'aula_sig_revisar',
+              enabled: true,
+            ),
+            ChatLessonSignal(
+              value: 2,
+              labelKey: 'aula_sig_certeza',
+              enabled: true,
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
   void markLastMessageFailed() {
     setState(() {
       final last = _messages.removeLast();
@@ -2586,9 +2712,9 @@ class _ChatTimelineHarnessState extends State<_ChatTimelineHarness> {
       scrollController: widget.scrollController,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       onChooseAnswer: (_) {},
-      onSignal: (_) {},
+      onSignal: (value) => appendMessage('Feedback do qualificador $value'),
       onRetry: () {},
-      onNext: () {},
+      onNext: appendNewLessonTurn,
       onOpenDoubt: () {},
     );
   }

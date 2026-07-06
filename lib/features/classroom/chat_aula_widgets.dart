@@ -56,24 +56,16 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   final FocusNode _timelineFocusNode = FocusNode(
     debugLabel: 'chat-aula-timeline-focus',
   );
-  bool _autoFollow = true;
   bool _showCurrentButton = false;
   int _unreadWhileAway = 0;
   String _messageSignature = '';
-  String? _manualAnchorMessageId;
-  double _manualAnchorAlignment = 0.12;
-  bool _restoreAfterMetricsChangeScheduled = false;
-  bool _programmaticScrollInProgress = false;
-  bool _userScrollInProgress = false;
+  _ExplicitScrollIntent? _pendingScrollIntent;
 
   @override
   void initState() {
     super.initState();
     _messageSignature = _signatureOf(widget.messages);
     _scrollController.addListener(_handleScroll);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _scrollToCurrent(immediate: true),
-    );
   }
 
   @override
@@ -86,13 +78,12 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     final fallbackOffset = _scrollController.hasClients
         ? _scrollController.position.pixels
         : null;
+    final intent = _pendingScrollIntent;
+    _pendingScrollIntent = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (_autoFollow) {
-        _scrollToCurrent(
-          preferNewTurnStart: true,
-          initialFallbackOffset: fallbackOffset,
-        );
+      if (intent != null) {
+        _scrollForIntent(intent, initialFallbackOffset: fallbackOffset);
       } else {
         setState(() {
           _showCurrentButton = true;
@@ -114,14 +105,26 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
     final nearEnd = position.maxScrollExtent - position.pixels <= 96;
-    if (!nearEnd) _captureVisibleAnchor();
-    if (nearEnd != _autoFollow || _showCurrentButton == nearEnd) {
+    if (_showCurrentButton == nearEnd) {
       setState(() {
-        _autoFollow = nearEnd;
         _showCurrentButton = !nearEnd;
         if (nearEnd) _unreadWhileAway = 0;
       });
     }
+  }
+
+  Future<void> _scrollForIntent(
+    _ExplicitScrollIntent intent, {
+    bool immediate = false,
+    bool preferNewTurnStart = false,
+    double? initialFallbackOffset,
+  }) {
+    return _scrollToCurrent(
+      immediate: immediate,
+      preferNewTurnStart:
+          preferNewTurnStart || intent == _ExplicitScrollIntent.nextExplanation,
+      initialFallbackOffset: initialFallbackOffset,
+    );
   }
 
   Future<void> _scrollToCurrent({
@@ -137,16 +140,16 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         : _scrollDuration;
     final position = _scrollController.position;
     if (!position.hasContentDimensions) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _scrollToCurrent(
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _scrollToCurrent(
           immediate: immediate,
           preferNewTurnStart: preferNewTurnStart,
           initialFallbackOffset: initialFallbackOffset,
-        ),
-      );
+        );
+      });
       return;
     }
-    _programmaticScrollInProgress = true;
     final target = preferNewTurnStart
         ? _autoScrollTargetMessage()
         : _targetMessage();
@@ -198,19 +201,34 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     }
     if (!mounted) return;
     setState(() {
-      _autoFollow = true;
       _showCurrentButton = false;
       _unreadWhileAway = 0;
-      _manualAnchorMessageId = null;
     });
+  }
+
+  void _handleSignal(int value) {
+    _pendingScrollIntent = _ExplicitScrollIntent.currentFeedback;
+    widget.onSignal(value);
+    _consumePendingIntentIfWidgetDoesNotUpdate();
+  }
+
+  void _handleNext() {
+    _pendingScrollIntent = _ExplicitScrollIntent.nextExplanation;
+    widget.onNext();
+    _consumePendingIntentIfWidgetDoesNotUpdate();
+  }
+
+  void _consumePendingIntentIfWidgetDoesNotUpdate() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _programmaticScrollInProgress = false;
+      final intent = _pendingScrollIntent;
+      if (!mounted || intent == null) return;
+      _pendingScrollIntent = null;
+      _scrollForIntent(intent);
     });
   }
 
   Future<void> _scrollByViewport(double factor) async {
     if (!_scrollController.hasClients) return;
-    _programmaticScrollInProgress = true;
     final position = _scrollController.position;
     final target = (position.pixels + (position.viewportDimension * factor))
         .clamp(0.0, position.maxScrollExtent);
@@ -219,27 +237,16 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       duration: const Duration(milliseconds: 240),
       curve: Curves.easeOutCubic,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _programmaticScrollInProgress = false;
-    });
   }
 
   Future<void> _scrollToTranscriptStart() async {
     if (!_scrollController.hasClients) return;
-    _programmaticScrollInProgress = true;
     await _scrollController.animateTo(
       0,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
     );
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
-    _manualAnchorMessageId = widget.messages.isEmpty
-        ? null
-        : widget.messages.first.id;
-    _manualAnchorAlignment = 0.05;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _programmaticScrollInProgress = false;
-    });
   }
 
   double _fallbackOffsetFor(
@@ -292,10 +299,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   void _retainMessageKeys(List<ChatLessonMessage> messages) {
     final ids = messages.map((message) => message.id).toSet();
     _messageKeys.removeWhere((id, _) => !ids.contains(id));
-    if (_manualAnchorMessageId != null &&
-        !ids.contains(_manualAnchorMessageId)) {
-      _manualAnchorMessageId = null;
-    }
   }
 
   GlobalKey _keyForMessage(ChatLessonMessage message) {
@@ -404,73 +407,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     return null;
   }
 
-  void _captureVisibleAnchor() {
-    if (!mounted || widget.messages.isEmpty) return;
-    final viewportBox = context.findRenderObject();
-    if (viewportBox is! RenderBox || !viewportBox.attached) return;
-    final viewportTop = viewportBox.localToGlobal(Offset.zero).dy;
-    final viewportHeight = viewportBox.size.height;
-    if (viewportHeight <= 0) return;
-
-    String? bestId;
-    double? bestDistance;
-    double bestAlignment = 0.12;
-    for (final message in widget.messages) {
-      final box = _messageKeys[message.id]?.currentContext?.findRenderObject();
-      if (box is! RenderBox || !box.attached || !box.hasSize) continue;
-      final messageTop = box.localToGlobal(Offset.zero).dy;
-      final messageBottom = messageTop + box.size.height;
-      final overlapsViewport =
-          messageBottom >= viewportTop &&
-          messageTop <= viewportTop + viewportHeight;
-      if (!overlapsViewport) continue;
-      final distance = (messageTop - viewportTop).abs();
-      if (bestDistance == null || distance < bestDistance) {
-        bestDistance = distance;
-        bestId = message.id;
-        bestAlignment = ((messageTop - viewportTop) / viewportHeight).clamp(
-          0.05,
-          0.72,
-        );
-      }
-    }
-    if (bestId == null) return;
-    _manualAnchorMessageId = bestId;
-    _manualAnchorAlignment = bestAlignment;
-  }
-
-  void _scheduleMetricsRestore() {
-    if (_restoreAfterMetricsChangeScheduled) return;
-    _restoreAfterMetricsChangeScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _restoreAfterMetricsChangeScheduled = false;
-      if (!mounted || !_scrollController.hasClients) return;
-      if (_programmaticScrollInProgress) return;
-      if (_userScrollInProgress ||
-          _scrollController.position.isScrollingNotifier.value) {
-        return;
-      }
-      if (_autoFollow) {
-        _scrollToCurrent(immediate: true, preferNewTurnStart: true);
-        return;
-      }
-      final anchorId = _manualAnchorMessageId;
-      final anchorContext = anchorId == null
-          ? null
-          : _messageKeys[anchorId]?.currentContext;
-      if (anchorContext == null || !anchorContext.mounted) {
-        _captureVisibleAnchor();
-        return;
-      }
-      Scrollable.ensureVisible(
-        anchorContext,
-        duration: Duration.zero,
-        alignment: _manualAnchorAlignment,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -517,7 +453,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                 children: [
                   NotificationListener<ScrollMetricsNotification>(
                     onNotification: (_) {
-                      _scheduleMetricsRestore();
                       return false;
                     },
                     child: NotificationListener<SizeChangedLayoutNotification>(
@@ -527,21 +462,16 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                       child: NotificationListener<UserScrollNotification>(
                         onNotification: (notification) {
                           if (notification.direction != ScrollDirection.idle) {
-                            _userScrollInProgress = true;
                             final metrics = notification.metrics;
                             final nearEnd =
                                 metrics.maxScrollExtent - metrics.pixels <= 96;
-                            if (!nearEnd &&
-                                (_autoFollow || !_showCurrentButton)) {
-                              _captureVisibleAnchor();
+                            if (!nearEnd && !_showCurrentButton) {
                               setState(() {
-                                _autoFollow = false;
                                 _showCurrentButton = true;
                               });
                             }
                             return false;
                           }
-                          _userScrollInProgress = false;
                           _handleScroll();
                           return false;
                         },
@@ -594,20 +524,14 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                                         semanticIndex: index,
                                         session: widget.session,
                                         onChooseAnswer: widget.onChooseAnswer,
-                                        onSignal: widget.onSignal,
+                                        onSignal: _handleSignal,
                                         onRetry: widget.onRetry,
-                                        onNext: widget.onNext,
+                                        onNext: _handleNext,
                                         onOpenDoubt: widget.onOpenDoubt,
                                         pendingActionKeys:
                                             widget.pendingActionKeys,
                                         onImageSettled: () {
                                           widget.onImageSettled?.call();
-                                          if (_autoFollow) {
-                                            WidgetsBinding.instance
-                                                .addPostFrameCallback(
-                                                  (_) => _scrollToCurrent(),
-                                                );
-                                          }
                                         },
                                       ),
                                     ),
@@ -643,6 +567,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     );
   }
 }
+
+enum _ExplicitScrollIntent { currentFeedback, nextExplanation }
 
 class _ChatEmptyState extends StatelessWidget {
   const _ChatEmptyState();
@@ -1622,6 +1548,7 @@ class _SignalButtonGroup extends StatelessWidget {
         final buttons = [
           for (final signal in signals)
             _SignalButton(
+              key: Key('signal-button-${signal.value}'),
               signal: signal,
               busy: busy,
               onPressed: () => onSignal(signal.value),
@@ -1660,6 +1587,7 @@ class _SignalButton extends StatelessWidget {
     required this.signal,
     required this.busy,
     required this.onPressed,
+    super.key,
   });
 
   final ChatLessonSignal signal;
