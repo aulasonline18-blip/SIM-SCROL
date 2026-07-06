@@ -2682,7 +2682,7 @@ void main() {
       allowPaidImages: false,
     );
 
-    expect(result.source, 'server_visual');
+    expect(result.source, 'server_raster');
     expect(result.displayUrl, raster);
     expect(result.svg, isNull);
     expect(result.dataUrl, raster);
@@ -2728,7 +2728,7 @@ void main() {
         allowPaidImages: false,
       );
 
-      expect(result.source, 'server_visual');
+      expect(result.source, 'server_raster');
       expect(result.svg, isNull);
       expect(result.dataUrl, raster);
       expect(result.displayUrl, raster);
@@ -2739,7 +2739,7 @@ void main() {
   );
 
   test(
-    'realistic visual skips local software and publishes paid offer',
+    'server-side visual ignores paid offer while app is raster-only frame',
     () async {
       final client = FakeImageClient();
       final router = CapturingVisualRouterClient(
@@ -2768,8 +2768,8 @@ void main() {
       );
 
       expect(router.calls, 1);
-      expect(result.source, 'server_paid_offer');
-      expect(result.paidOfferPrompt, 'Prompt pago aprovado no servidor');
+      expect(result.source, 'server_missing_raster');
+      expect(result.paidOfferPrompt, isNull);
       expect(client.calls, 0);
     },
   );

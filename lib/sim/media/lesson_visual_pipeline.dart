@@ -598,28 +598,14 @@ class LessonVisualPipeline {
     required String? stableLang,
     required String? academicLevel,
   }) async {
-    const serverN2 = VisualN2Result(
-      verdict: VisualVerdict.ambiguous,
-      matched: ['server_image_pipeline'],
-      reason: 'SERVER_IMAGE_PIPELINE',
-      confidence: 1,
-    );
-    final softwareRequest = SoftwareVisualRequest(
-      n2: serverN2,
-      topic: trigger.topic,
-      visualType: trigger.visualType,
-      imagePrompt: trigger.imagePrompt,
-      colorLegend: trigger.colorLegend,
-      keyElements: trigger.keyElements,
-      highlightFocus: trigger.highlightFocus,
-      complexity: trigger.complexity,
-      pedagogicalNeed: trigger.pedagogicalNeed,
-      academicLevel: academicLevel,
-      pedagogicalGoal: trigger.highlightFocus,
-    );
     final n3 = await routeVisualCheapN3(
       client: visualRouterClient,
-      n2: serverN2,
+      n2: const VisualN2Result(
+        verdict: VisualVerdict.ambiguous,
+        matched: ['server_image_pipeline'],
+        reason: 'SERVER_IMAGE_PIPELINE',
+        confidence: 1,
+      ),
       topic: trigger.topic,
       visualType: trigger.visualType,
       imagePrompt: trigger.imagePrompt,
@@ -654,54 +640,21 @@ class LessonVisualPipeline {
         n2Reason: n3.reason,
       );
     }
-    if (n3.verdict == VisualVerdict.svg && n3.svgDataUrl != null) {
-      final accepted = _acceptFinalSoftwareSvg(
-        lessonKey,
-        'server_visual',
-        n3.svgDataUrl!,
-        softwareRequest,
-      );
-      if (accepted) {
-        _recordOutcome(lessonKey, 'software', 'server_visual', n3.reason);
-        if (n3.displayDataUrl != null) {
-          return LessonVisualResult(
-            svg: null,
-            dataUrl: n3.displayDataUrl,
-            source: 'server_visual',
-            n2Reason: n3.reason,
-          );
-        }
-        return LessonVisualResult(
-          svg: n3.svgDataUrl,
-          dataUrl: null,
-          source: 'server_visual',
-          n2Reason: n3.reason,
-        );
-      }
-      _recordOutcome(lessonKey, 'failed', 'server_visual_rejected', n3.reason);
+    if (n3.displayDataUrl != null) {
+      _recordOutcome(lessonKey, 'software', 'server_raster', n3.reason);
       return LessonVisualResult(
         svg: null,
-        dataUrl: null,
-        source: 'server_visual_rejected',
+        dataUrl: n3.displayDataUrl,
+        source: 'server_raster',
         n2Reason: n3.reason,
       );
     }
-    if (n3.paidOfferPrompt == null || n3.paidOfferPrompt!.trim().isEmpty) {
-      _recordOutcome(lessonKey, 'failed', 'server_missing_offer', n3.reason);
-      return LessonVisualResult(
-        svg: null,
-        dataUrl: null,
-        source: 'server_missing_offer',
-        n2Reason: n3.reason,
-      );
-    }
-    _recordOutcome(lessonKey, 'paid_offer', 'server_paid_offer', n3.reason);
+    _recordOutcome(lessonKey, 'failed', 'server_missing_raster', n3.reason);
     return LessonVisualResult(
       svg: null,
       dataUrl: null,
-      source: 'server_paid_offer',
+      source: 'server_missing_raster',
       n2Reason: n3.reason,
-      paidOfferPrompt: n3.paidOfferPrompt,
     );
   }
 

@@ -189,9 +189,10 @@ void main() {
     _expectRasterImageShown();
   });
 
-  testWidgets('AI paga devolve imagem pronta e aparece como Image.memory', (
+  testWidgets('AI paga sem raster nao vira imagem nem oferta no app moldura', (
     tester,
   ) async {
+    final offers = <LessonPaidImageOffer?>[];
     final harness = _buildHarness(
       visualTransport: _RecordingTransport()
         ..jsonBody = jsonEncode({
@@ -209,18 +210,17 @@ void main() {
         'image_prompt': 'foto realista de anatomia',
       },
     );
-
-    await harness.resolveImage(expectImage: false);
-    await harness.waitForPaidImageOffer();
-    final metadata = await harness.orchestrator.acceptPaidImageOffer(
+    final cancel = harness.bus.subscribePaidImageOffer(
       harness.key,
+      offers.add,
     );
-    final lesson = harness.cache.peek(harness.key)!;
-    await _pumpImage(tester, lesson.imagem!);
 
-    expect(metadata, isNotNull);
-    expect(lesson.imagem, _jpegDataUrl);
-    _expectRasterImageShown();
+    final lesson = await harness.resolveImage(expectImage: false);
+    await tester.pump(const Duration(milliseconds: 20));
+    cancel();
+
+    expect(lesson.imagem, isNull);
+    expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
   });
 
   test('no_image nao tenta mostrar imagem quebrada e aula segue', () async {
