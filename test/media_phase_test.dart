@@ -75,6 +75,7 @@ class ThrowingVisualRouterClient implements LessonVisualRouterClient {
     String? complexity,
     String? stableLang,
     String? svgPayload,
+    Object? mathTemplate,
   }) async {
     throw StateError('HTTP 401 Unauthorized requestId=vis-test');
   }
@@ -101,6 +102,7 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
   String? lastComplexity;
   String? lastStableLang;
   String? lastSvgPayload;
+  Object? lastMathTemplate;
   int calls = 0;
 
   @override
@@ -115,6 +117,7 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
     String? complexity,
     String? stableLang,
     String? svgPayload,
+    Object? mathTemplate,
   }) async {
     calls += 1;
     lastN2 = n2;
@@ -127,6 +130,7 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
     lastComplexity = complexity;
     lastStableLang = stableLang;
     lastSvgPayload = svgPayload;
+    lastMathTemplate = mathTemplate;
     return result;
   }
 }
@@ -150,6 +154,7 @@ class SequenceVisualRouterClient implements LessonVisualRouterClient {
     String? complexity,
     String? stableLang,
     String? svgPayload,
+    Object? mathTemplate,
   }) async {
     prompts.add(imagePrompt);
     final index = calls < results.length ? calls : results.length - 1;
@@ -2640,54 +2645,51 @@ void main() {
     expect(client.calls, 0);
   });
 
-  test(
-    'server-side visual client bypasses local SVG generation on success',
-    () async {
-      final client = FakeImageClient();
-      final n3Svg = sanitizeAndEncodeSvg(
-        '<svg viewBox="0 0 900 560"><rect width="900" height="560" fill="#F8FAFC"/>'
-        '<text x="80" y="90" fill="#0F172A" font-size="18">entrada</text>'
-        '<text x="80" y="130" fill="#0F172A" font-size="18">processo</text>'
-        '<text x="80" y="170" fill="#0F172A" font-size="18">saída</text></svg>',
-      );
-      const raster = 'data:image/webp;base64,BBBB';
-      final router = CapturingVisualRouterClient(
-        prefersServerSideVisuals: true,
-        result: VisualN3Result(
-          verdict: VisualVerdict.svg,
-          reason: 'TEST_SERVER_FIRST',
-          svgDataUrl: n3Svg,
-          displayDataUrl: raster,
-        ),
-      );
-      final pipeline = LessonVisualPipeline(
-        imageClient: client,
-        visualRouterClient: router,
-      );
+  test('local software runs before server-side visual client', () async {
+    final client = FakeImageClient();
+    final n3Svg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560"><rect width="900" height="560" fill="#F8FAFC"/>'
+      '<text x="80" y="90" fill="#0F172A" font-size="18">entrada</text>'
+      '<text x="80" y="130" fill="#0F172A" font-size="18">processo</text>'
+      '<text x="80" y="170" fill="#0F172A" font-size="18">saída</text></svg>',
+    );
+    const raster = 'data:image/webp;base64,BBBB';
+    final router = CapturingVisualRouterClient(
+      prefersServerSideVisuals: true,
+      result: VisualN3Result(
+        verdict: VisualVerdict.svg,
+        reason: 'TEST_SERVER_FIRST',
+        svgDataUrl: n3Svg,
+        displayDataUrl: raster,
+      ),
+    );
+    final pipeline = LessonVisualPipeline(
+      imageClient: client,
+      visualRouterClient: router,
+    );
 
-      final result = await pipeline.resolveVisual(
-        trigger: const LessonVisualTrigger(
-          needsImage: true,
-          pedagogicalNeed: 'important',
-          topic: 'fluxograma de entrada, processamento e saída',
-          visualType: 'flowchart',
-          keyElements: ['entrada', 'processo', 'saída'],
-          highlightFocus: 'ordem entre entrada, processo e saída',
-          imagePrompt: 'fluxograma com três caixas e setas',
-        ),
-        lessonKey: 'server-first-no-local',
-        allowPaidImages: false,
-      );
+    final result = await pipeline.resolveVisual(
+      trigger: const LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'important',
+        topic: 'fluxograma de entrada, processamento e saída',
+        visualType: 'flowchart',
+        keyElements: ['entrada', 'processo', 'saída'],
+        highlightFocus: 'ordem entre entrada, processo e saída',
+        imagePrompt: 'fluxograma com três caixas e setas',
+      ),
+      lessonKey: 'server-first-no-local',
+      allowPaidImages: false,
+    );
 
-      expect(result.source, 'server_visual');
-      expect(result.displayUrl, raster);
-      expect(result.svg, isNull);
-      expect(result.dataUrl, raster);
-      expect(router.lastSvgPayload, isNull);
-      expect(router.calls, 1);
-      expect(client.calls, 0);
-    },
-  );
+    expect(result.source, 'local_software');
+    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+    expect(result.svg, startsWith('data:image/svg+xml;utf8,'));
+    expect(result.dataUrl, isNull);
+    expect(router.lastSvgPayload, isNull);
+    expect(router.calls, 0);
+    expect(client.calls, 0);
+  });
 
   test(
     'server-side visual sends T02 svg_payload for server rasterization',
@@ -2726,17 +2728,18 @@ void main() {
         allowPaidImages: false,
       );
 
-      expect(result.source, 'server_visual');
-      expect(result.svg, isNull);
-      expect(result.dataUrl, raster);
-      expect(result.displayUrl, raster);
-      expect(router.lastSvgPayload, '<svg><circle cx="1" cy="1" r="1"/></svg>');
+      expect(result.source, 'svg_inline');
+      expect(result.svg, startsWith('data:image/svg+xml;utf8,'));
+      expect(result.dataUrl, isNull);
+      expect(result.displayUrl, result.svg);
+      expect(router.lastSvgPayload, isNull);
+      expect(router.calls, 0);
       expect(client.calls, 0);
     },
   );
 
   test(
-    'server-side visual client owns paid image decision before local N2',
+    'realistic visual skips local software and publishes paid offer',
     () async {
       final client = FakeImageClient();
       final router = CapturingVisualRouterClient(
@@ -2764,10 +2767,9 @@ void main() {
         allowPaidImages: true,
       );
 
-      expect(router.calls, 1);
-      expect(router.lastN2?.reason, 'SERVER_IMAGE_PIPELINE');
-      expect(result.source, 'server_paid_offer');
-      expect(result.paidOfferPrompt, 'Prompt pago aprovado no servidor');
+      expect(router.calls, 0);
+      expect(result.source, 'skip_no_offer');
+      expect(result.paidOfferPrompt, isNull);
       expect(client.calls, 0);
     },
   );

@@ -241,15 +241,6 @@ class LessonVisualPipeline {
       return const LessonVisualResult(svg: null, dataUrl: null, source: 'skip');
     }
 
-    if (_prefersServerSideVisuals(visualRouterClient)) {
-      return _resolveServerOnlyVisual(
-        trigger: trigger,
-        lessonKey: lessonKey,
-        stableLang: stableLang,
-        academicLevel: academicLevel,
-      );
-    }
-
     // 1. SVG inline do próprio T02 (render_strategy=software + svg_payload)
     if (trigger.renderStrategy == 'software' && trigger.svgPayload != null) {
       final svgDataUrl = sanitizeAndEncodeSvg(trigger.svgPayload);
@@ -306,33 +297,10 @@ class LessonVisualPipeline {
       pedagogicalGoal: trigger.highlightFocus,
     );
 
-    final serverFirstVisuals = _prefersServerSideVisuals(visualRouterClient);
-    var serverRouteAttempted = false;
-    var skipLocalAfterServerDecision = false;
-    if (serverFirstVisuals && n2.verdict != VisualVerdict.ai) {
-      serverRouteAttempted = true;
-      final serverResult = await _tryN3SoftwareVisual(
-        lessonKey: lessonKey,
-        n2: n2,
-        trigger: trigger,
-        softwareRequest: softwareRequest,
-        stableLang: stableLang,
-        stage: 'n3_server_first',
-      );
-      if (serverResult.result != null) return serverResult.result!;
-      if (serverResult.transportFailed) {
-        _visualLog(
-          lessonKey,
-          'n3_server_first_fallback',
-          'transport_failed=true using local emergency fallback',
-        );
-      } else {
-        skipLocalAfterServerDecision = true;
-      }
-    }
+    final canUseFreeSoftware = n2.verdict != VisualVerdict.ai;
 
-    // 3. Math template SVG. No cliente real, só roda se o servidor caiu.
-    if (!skipLocalAfterServerDecision && trigger.mathTemplate != null) {
+    // 3. Math template SVG.
+    if (canUseFreeSoftware && trigger.mathTemplate != null) {
       final mathSvg = tryRenderMathTemplate(trigger.toVisualTriggerMap());
       if (mathSvg != null) {
         if (_acceptFinalSoftwareSvg(
@@ -361,33 +329,9 @@ class LessonVisualPipeline {
       );
     }
 
-    if (skipLocalAfterServerDecision) {
-      _visualLog(
-        lessonKey,
-        'local_software_skipped',
-        'server_side_visual_pipeline=true n2=${n2.verdict.name}/${n2.reason}',
-      );
-    }
-
-    if (skipLocalAfterServerDecision) {
-      if (!allowPaidImages) {
-        _visualLog(
-          lessonKey,
-          'skip_no_paid',
-          'n2=${n2.verdict.name}/${n2.reason} allowPaidImages=false topic=${_shortVisualText(trigger.topic)}',
-        );
-        _recordOutcome(lessonKey, 'paid_offer', 'skip_no_paid', n2.reason);
-        return const LessonVisualResult(
-          svg: null,
-          dataUrl: null,
-          source: 'skip_no_paid',
-        );
-      }
-    }
-
-    final localSoftware = skipLocalAfterServerDecision
-        ? null
-        : softwareRenderCatalog.render(softwareRequest);
+    final localSoftware = canUseFreeSoftware
+        ? softwareRenderCatalog.render(softwareRequest)
+        : null;
     var localAccepted = false;
     if (localSoftware != null) {
       localAccepted = _acceptFinalSoftwareSvg(
@@ -442,7 +386,7 @@ class LessonVisualPipeline {
       localAccepted: localAccepted,
     );
 
-    if (escalationDecision.shouldCallN3 && !serverRouteAttempted) {
+    if (canUseFreeSoftware && escalationDecision.shouldCallN3) {
       final n3 = await routeVisualCheapN3(
         client: visualRouterClient,
         n2: n2,
@@ -455,6 +399,7 @@ class LessonVisualPipeline {
         complexity: trigger.complexity,
         stableLang: stableLang,
         svgPayload: trigger.svgPayload,
+        mathTemplate: trigger.mathTemplate,
       );
       _visualLog(
         lessonKey,
@@ -638,6 +583,7 @@ class LessonVisualPipeline {
     );
   }
 
+  // ignore: unused_element
   Future<LessonVisualResult> _resolveServerOnlyVisual({
     required LessonVisualTrigger trigger,
     required String lessonKey,
@@ -675,6 +621,7 @@ class LessonVisualPipeline {
       complexity: trigger.complexity,
       stableLang: stableLang,
       svgPayload: trigger.svgPayload,
+      mathTemplate: trigger.mathTemplate,
     );
     _visualLog(
       lessonKey,
@@ -776,6 +723,7 @@ class LessonVisualPipeline {
     );
   }
 
+  // ignore: unused_element
   Future<_N3VisualAttempt> _tryN3SoftwareVisual({
     required String lessonKey,
     required VisualN2Result n2,
@@ -796,6 +744,7 @@ class LessonVisualPipeline {
       complexity: trigger.complexity,
       stableLang: stableLang,
       svgPayload: trigger.svgPayload,
+      mathTemplate: trigger.mathTemplate,
     );
     _visualLog(
       lessonKey,
@@ -881,6 +830,7 @@ class LessonVisualPipeline {
       complexity: trigger.complexity,
       stableLang: stableLang,
       svgPayload: trigger.svgPayload,
+      mathTemplate: trigger.mathTemplate,
     );
     _visualLog(
       lessonKey,
@@ -1107,6 +1057,7 @@ String _shortVisualText(Object? value) {
   return text.substring(0, 160);
 }
 
+// ignore: unused_element
 bool _prefersServerSideVisuals(LessonVisualRouterClient client) {
   try {
     return (client as dynamic).prefersServerSideVisuals == true;

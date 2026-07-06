@@ -38,6 +38,7 @@ class FakeVisualRouterClient implements LessonVisualRouterClient {
     String? complexity,
     String? stableLang,
     String? svgPayload,
+    Object? mathTemplate,
   }) async {
     if (svgDataUrl != null) {
       return VisualN3Result(

@@ -99,7 +99,7 @@ void main() {
   );
 
   testWidgets(
-    'T02 SVG pronto vai ao servidor volta raster e aparece como Image.memory',
+    'T02 SVG pronto roda localmente e aparece pelo fallback SVG legado',
     (tester) async {
       final transport = _RecordingTransport()
         ..jsonBody = jsonEncode({
@@ -125,23 +125,35 @@ void main() {
       final lesson = await harness.resolveImage();
       await _pumpImage(tester, lesson.imagem!);
 
-      final body = transport.lastBody as Map;
-      expect(body['svgPayload'], '<svg><circle cx="1" cy="1" r="1"/></svg>');
-      expect(lesson.imagem, _webpDataUrl);
-      expect(harness.cache.peek(harness.key)?.imagem, _webpDataUrl);
-      _expectRasterImageShown();
+      expect(transport.lastBody, isNull);
+      expect(lesson.imagem, startsWith('data:image/svg+xml;utf8,'));
+      expect(harness.cache.peek(harness.key)?.imagem, lesson.imagem);
+      expect(find.byType(SvgPicture), findsOneWidget);
+      expect(find.byType(Image), findsNothing);
     },
   );
 
   testWidgets('N3 SVG rasterizado pelo servidor aparece como Image.memory', (
     tester,
   ) async {
+    final n3Svg = sanitizeAndEncodeSvg(
+      '<svg viewBox="0 0 900 560">'
+      '<rect width="900" height="560" fill="#F8FAFC"/>'
+      '<text x="80" y="90" font-size="18">sintoma inicial</text>'
+      '<text x="80" y="130" font-size="18">triagem</text>'
+      '<text x="80" y="170" font-size="18">hipótese</text>'
+      '<text x="80" y="210" font-size="18">exame</text>'
+      '<text x="80" y="250" font-size="18">risco</text>'
+      '<text x="80" y="290" font-size="18">conduta</text>'
+      '<text x="80" y="330" font-size="18">relação entre risco, hipótese e conduta final</text>'
+      '</svg>',
+    );
     final harness = _buildHarness(
       visualTransport: _RecordingTransport()
         ..jsonBody = jsonEncode({
           'verdict': 'svg',
           'reason': 'N3_SVG_RASTERIZED',
-          'svgDataUrl': _svgDataUrl,
+          'svgDataUrl': n3Svg,
           'displayDataUrl': _pngDataUrl,
           'requestId': 'rid-n3',
         }),
@@ -150,8 +162,17 @@ void main() {
         'pedagogical_need': 'essential',
         'visual_type': 'flowchart',
         'topic': 'fluxograma',
-        'image_prompt': 'fluxograma de entrada processo saida',
-        'key_elements': ['entrada', 'processo', 'saida'],
+        'image_prompt': 'composição rica em camadas com decisões específicas',
+        'key_elements': [
+          'sintoma inicial',
+          'triagem',
+          'hipótese',
+          'exame',
+          'risco',
+          'conduta',
+        ],
+        'highlight_focus': 'relação entre risco, hipótese e conduta final',
+        'complexity': 'high',
       },
     );
 
@@ -207,10 +228,20 @@ void main() {
         }),
       visualTrigger: const {
         'needs_image': true,
-        'pedagogical_need': 'important',
-        'visual_type': 'none',
-        'topic': 'conceito textual',
-        'image_prompt': 'sem imagem',
+        'pedagogical_need': 'essential',
+        'visual_type': 'flowchart',
+        'topic': 'fluxograma que o juiz decide sem imagem',
+        'image_prompt': 'composição rica em camadas com decisões específicas',
+        'key_elements': [
+          'contexto',
+          'critério',
+          'decisão',
+          'exceção',
+          'resultado',
+          'revisão',
+        ],
+        'highlight_focus': 'decisão do juiz visual sem imagem',
+        'complexity': 'high',
       },
     );
 

@@ -314,7 +314,7 @@ void main() {
     },
   );
 
-  test('rota visual envia svg_payload pronto para o servidor', () async {
+  test('rota visual envia svg_payload e math_template para o servidor', () async {
     final transport = RecordingTransport()
       ..jsonBody =
           '{"verdict":"svg","reason":"T02_READY_SVG_RASTERIZED","svgDataUrl":"data:image/svg+xml;utf8,%3Csvg%3E%3C%2Fsvg%3E","displayDataUrl":"data:image/png;base64,AAAA","requestId":"rid-vis"}';
@@ -333,11 +333,23 @@ void main() {
       visualType: 'graph',
       imagePrompt: 'svg pronto',
       svgPayload: '<svg><circle cx="1" cy="1" r="1"/></svg>',
+      mathTemplate: const {
+        'name': 'linear_function',
+        'params': {'a': 2, 'b': 1},
+      },
     );
 
     final body = transport.lastBody as Map;
     expect(body['svgPayload'], '<svg><circle cx="1" cy="1" r="1"/></svg>');
+    expect(body['mathTemplate'], {
+      'name': 'linear_function',
+      'params': {'a': 2, 'b': 1},
+    });
     expect((body['visual_trigger'] as Map)['svg_payload'], body['svgPayload']);
+    expect(
+      (body['visual_trigger'] as Map)['math_template'],
+      body['mathTemplate'],
+    );
     expect(result.displayDataUrl, 'data:image/png;base64,AAAA');
   });
 
