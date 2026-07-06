@@ -756,9 +756,64 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Nova alternativa B'), findsOneWidget);
-      expect(find.text('Feedback anterior.'), findsNothing);
     },
   );
+
+  testWidgets('chat timeline auto scrolls to new explanation after advance', (
+    tester,
+  ) async {
+    final key = GlobalKey<_ChatTimelineHarnessState>();
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: _ChatTimelineHarness(key: key, scrollController: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(controller.position.pixels, controller.position.maxScrollExtent);
+
+    key.currentState!.appendNewLessonTurn();
+    await tester.pumpAndSettle();
+
+    final timelineRect = tester.getRect(
+      find.byKey(const Key('chat-aula-timeline')),
+    );
+    final explanationRect = tester.getRect(
+      find.text('Nova explicacao do item.'),
+    );
+    expect(explanationRect.top, greaterThanOrEqualTo(timelineRect.top));
+    expect(explanationRect.top, lessThan(timelineRect.top + 96));
+
+    final optionsFinder = find.text('Nova alternativa B');
+    if (optionsFinder.evaluate().isNotEmpty) {
+      expect(tester.getRect(optionsFinder).top, greaterThan(timelineRect.top));
+    }
+
+    await tester.scrollUntilVisible(
+      optionsFinder,
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(optionsFinder, findsOneWidget);
+
+    final beforeManualDrag = controller.position.pixels;
+    await tester.drag(
+      find.byKey(const Key('chat-aula-timeline')),
+      const Offset(0, 120),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(controller.position.pixels, lessThan(beforeManualDrag));
+  });
 
   testWidgets('chat return button follows reading column on wide layout', (
     tester,

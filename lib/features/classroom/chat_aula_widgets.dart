@@ -83,10 +83,16 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     if (nextSignature == _messageSignature) return;
     _messageSignature = nextSignature;
     _retainMessageKeys(widget.messages);
+    final fallbackOffset = _scrollController.hasClients
+        ? _scrollController.position.pixels
+        : null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (_autoFollow) {
-        _scrollToCurrent();
+        _scrollToCurrent(
+          preferNewTurnStart: true,
+          initialFallbackOffset: fallbackOffset,
+        );
       } else {
         setState(() {
           _showCurrentButton = true;
@@ -118,7 +124,11 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     }
   }
 
-  Future<void> _scrollToCurrent({bool immediate = false}) async {
+  Future<void> _scrollToCurrent({
+    bool immediate = false,
+    bool preferNewTurnStart = false,
+    double? initialFallbackOffset,
+  }) async {
     if (!_scrollController.hasClients) return;
     final disableAnimations =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -127,11 +137,19 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         : _scrollDuration;
     final position = _scrollController.position;
     if (!position.hasContentDimensions) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollToCurrent(
+          immediate: immediate,
+          preferNewTurnStart: preferNewTurnStart,
+          initialFallbackOffset: initialFallbackOffset,
+        ),
+      );
       return;
     }
     _programmaticScrollInProgress = true;
-    final target = _targetMessage();
+    final target = preferNewTurnStart
+        ? _autoScrollTargetMessage()
+        : _targetMessage();
     final targetKey = target == null ? null : _messageKeys[target.message.id];
     final targetContext = targetKey?.currentContext;
     if (targetContext != null && target != null) {
@@ -143,7 +161,15 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
       );
     } else {
-      final fallbackOffset = _fallbackOffsetFor(position, target?.message);
+      final seededFallbackOffset = initialFallbackOffset == null
+          ? null
+          : (initialFallbackOffset +
+                    (preferNewTurnStart
+                        ? position.viewportDimension * 0.45
+                        : 0))
+                .clamp(0.0, position.maxScrollExtent);
+      final fallbackOffset =
+          seededFallbackOffset ?? _fallbackOffsetFor(position, target?.message);
       if (immediate) {
         _scrollController.jumpTo(fallbackOffset);
       } else if (disableAnimations) {
@@ -346,6 +372,38 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     return _ChatScrollTarget.forMessage(latestTurnStart);
   }
 
+  _ChatScrollTarget? _autoScrollTargetMessage() {
+    final turnStart = _latestNewTurnStartAfterLiveTarget();
+    if (turnStart != null) {
+      return _ChatScrollTarget.forMessage(turnStart);
+    }
+    return _targetMessage();
+  }
+
+  ChatLessonMessage? _latestNewTurnStartAfterLiveTarget() {
+    var latestExplanationIndex = -1;
+    var latestLiveIndex = -1;
+    for (var i = 0; i < widget.messages.length; i++) {
+      final message = widget.messages[i];
+      if (message.kind == ChatLessonMessageKind.explanation) {
+        latestExplanationIndex = i;
+      }
+      final isLiveTarget = switch (message.kind) {
+        ChatLessonMessageKind.feedback ||
+        ChatLessonMessageKind.processing ||
+        ChatLessonMessageKind.error => true,
+        ChatLessonMessageKind.options =>
+          message.selectedAnswer != null || message.signals.isNotEmpty,
+        _ => false,
+      };
+      if (isLiveTarget) latestLiveIndex = i;
+    }
+    if (latestLiveIndex >= 0 && latestExplanationIndex > latestLiveIndex) {
+      return widget.messages[latestExplanationIndex];
+    }
+    return null;
+  }
+
   void _captureVisibleAnchor() {
     if (!mounted || widget.messages.isEmpty) return;
     final viewportBox = context.findRenderObject();
@@ -393,7 +451,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         return;
       }
       if (_autoFollow) {
-        _scrollToCurrent(immediate: true);
+        _scrollToCurrent(immediate: true, preferNewTurnStart: true);
         return;
       }
       final anchorId = _manualAnchorMessageId;
