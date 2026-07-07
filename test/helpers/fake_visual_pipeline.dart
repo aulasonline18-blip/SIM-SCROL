@@ -22,37 +22,25 @@ class FakeNoopImageClient implements LessonImageClient {
 }
 
 class FakeVisualRouterClient implements LessonVisualRouterClient {
-  const FakeVisualRouterClient({this.svgDataUrl, this.displayDataUrl});
+  const FakeVisualRouterClient({this.displayDataUrl});
 
-  final String? svgDataUrl;
   final String? displayDataUrl;
 
   @override
-  Future<VisualN3Result> routeVisual({
-    required VisualN2Result n2,
-    String? topic,
-    String? visualType,
-    String? imagePrompt,
-    List<String> keyElements = const [],
-    String? pedagogicalNeed,
-    String? highlightFocus,
-    String? complexity,
+  Future<ServerVisualRouteResult> routeVisual({
     String? stableLang,
-    String? svgPayload,
-    Object? mathTemplate,
-    Map<String, dynamic>? visualTrigger,
+    required Map<String, dynamic> visualTrigger,
   }) async {
-    if (svgDataUrl != null || displayDataUrl != null) {
-      return VisualN3Result(
-        verdict: VisualVerdict.svg,
-        reason: 'TEST_N3_SVG',
-        svgDataUrl: svgDataUrl,
-        displayDataUrl: displayDataUrl,
+    if (displayDataUrl != null) {
+      return ServerVisualRouteResult(
+        verdict: ServerVisualRouteVerdict.image,
+        reason: 'TEST_SERVER_IMAGE',
+        readyImageDataUrl: displayDataUrl,
       );
     }
-    return const VisualN3Result(
-      verdict: VisualVerdict.ai,
-      reason: 'TEST_N3_AI',
+    return const ServerVisualRouteResult(
+      verdict: ServerVisualRouteVerdict.missingRaster,
+      reason: 'TEST_SERVER_MISSING_RASTER',
     );
   }
 }
@@ -68,9 +56,6 @@ LessonVisualPipeline fakeVisualPipeline({
       imageDataUrl: paidImageDataUrl,
       onGenerate: onPaidImageGenerate,
     ),
-    visualRouterClient: FakeVisualRouterClient(
-      svgDataUrl: svgDataUrl,
-      displayDataUrl: displayDataUrl,
-    ),
+    visualRouterClient: FakeVisualRouterClient(displayDataUrl: displayDataUrl),
   );
 }

@@ -73,7 +73,6 @@ class SimOrganism {
     required this.mediaService,
     required this.lessonAudioController,
     required this.visualPipeline,
-    required this.visualTelemetry,
     required this.creditsController,
     required this.accountDeletionController,
   });
@@ -101,7 +100,6 @@ class SimOrganism {
   final StudentLessonMediaService mediaService;
   final LessonAudioController lessonAudioController;
   final LessonVisualPipeline visualPipeline;
-  final VisualFunnelTelemetry visualTelemetry;
   final CreditsRouteController creditsController;
   final AccountDeletionController accountDeletionController;
 
@@ -133,11 +131,9 @@ class SimOrganism {
     final cache = LessonMaterialCache();
     cache.hydrateFromPreferences(prefs);
     final eventBus = LessonEventBus();
-    final visualTelemetry = VisualFunnelTelemetry();
     final visualPipeline = LessonVisualPipeline(
       imageClient: SimServerLessonImageClient(config: aiConfig),
       visualRouterClient: SimServerVisualRouterClient(config: aiConfig),
-      telemetry: visualTelemetry,
     );
     final orchestrator = LessonOrchestrator(
       t02Client: t02Client,
@@ -306,7 +302,6 @@ class SimOrganism {
       mediaService: mediaService,
       lessonAudioController: lessonAudioController,
       visualPipeline: visualPipeline,
-      visualTelemetry: visualTelemetry,
       creditsController: creditsController,
       accountDeletionController: accountDeletionController,
     );

@@ -22,18 +22,41 @@ class LessonAvatarModel {
   double get barProgress => speaking ? 1 : 0.28;
 }
 
-bool isUsableImageDataUrl(Object? value) {
-  if (value is! String) return false;
-  return RegExp(
-    r'^data:image/(png|jpeg|jpg|webp|svg\+xml);base64,',
-    caseSensitive: false,
-  ).hasMatch(value);
-}
-
 bool isUsableRasterImageDataUrl(Object? value) {
   if (value is! String) return false;
   return RegExp(
     r'^data:image/(png|jpeg|jpg|webp);base64,',
     caseSensitive: false,
   ).hasMatch(value.trim());
+}
+
+enum ServerVisualRouteVerdict { image, noImage, missingRaster }
+
+class ServerVisualRouteResult {
+  const ServerVisualRouteResult({
+    required this.verdict,
+    required this.reason,
+    this.readyImageDataUrl,
+    this.transportFailed = false,
+    this.statusCode,
+    this.requestId,
+    this.retryable = false,
+    this.errorCode,
+  });
+
+  final ServerVisualRouteVerdict verdict;
+  final String reason;
+  final String? readyImageDataUrl;
+  final bool transportFailed;
+  final int? statusCode;
+  final String? requestId;
+  final bool retryable;
+  final String? errorCode;
+}
+
+abstract interface class LessonVisualRouterClient {
+  Future<ServerVisualRouteResult> routeVisual({
+    String? stableLang,
+    required Map<String, dynamic> visualTrigger,
+  });
 }

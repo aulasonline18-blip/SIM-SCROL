@@ -16,13 +16,10 @@ import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
 void main() {
-  test(
-    'default API URL points to Scroll API, not the SimWeb host',
-    () {
-      expect(SimEnvironment.apiBaseUrl, 'http://167.179.109.137:3000');
-      expect(SimEnvironment.assertProductionSafe, returnsNormally);
-    },
-  );
+  test('default API URL points to Scroll API, not the SimWeb host', () {
+    expect(SimEnvironment.apiBaseUrl, 'http://167.179.109.137:3000');
+    expect(SimEnvironment.assertProductionSafe, returnsNormally);
+  });
 
   test(
     'curriculo tenta preparar aula sem redirecionar para login antes do T00',
@@ -304,7 +301,7 @@ void main() {
             },
             correctAnswer: AnswerLetter.A,
           ),
-          imagem: 'data:image/svg+xml;utf8,%3Csvg%3E%3C%2Fsvg%3E',
+          imagem: 'data:image/png;base64,AAAA',
           itemMarker: 'M1',
           itemText: 'Item antigo',
         );

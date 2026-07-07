@@ -1215,7 +1215,7 @@ void main() {
                   id: 'ready',
                   role: ChatLessonMessageRole.sim,
                   kind: ChatLessonMessageKind.image,
-                  imageData: 'data:image/svg+xml,%3Csvg%2F%3E',
+                  imageData: 'data:image/png;base64,AAAA',
                   imageStatus: 'ready',
                 ),
               ),
@@ -1277,7 +1277,7 @@ void main() {
                   role: ChatLessonMessageRole.student,
                   kind: ChatLessonMessageKind.studentDoubt,
                   text: 'Nao entendi este grafico.',
-                  imageData: _svgDataUrl(),
+                  imageData: _pngDataUrl(),
                   mediaName: 'grafico.png',
                   mediaType: 'image/png',
                   mediaSize: 2048,
@@ -1325,7 +1325,7 @@ void main() {
                 role: ChatLessonMessageRole.sim,
                 kind: ChatLessonMessageKind.historyQuestion,
                 text: 'Questão antiga com imagem?',
-                imageData: _svgDataUrl(),
+                imageData: _pngDataUrl(),
                 options: [
                   ChatLessonOption(
                     letter: AnswerLetter.A,
@@ -1701,7 +1701,7 @@ void main() {
           headerLabel: 'aula_item_of:1/4:aula_layer_1',
           explanation: 'Primeira explicacao preservada.',
           question: 'Primeira pergunta preservada?',
-          imagem: _svgDataUrl(),
+          imagem: _pngDataUrl(),
         );
 
       await tester.pumpWidget(
@@ -1739,7 +1739,7 @@ void main() {
           .where((message) => message.kind == ChatLessonMessageKind.image)
           .toList();
       expect(imageMessages, hasLength(1));
-      expect(imageMessages.single.imageData, _svgDataUrl());
+      expect(imageMessages.single.imageData, _pngDataUrl());
       expect(
         timeline.messages
             .where((message) => message.text == 'Primeira pergunta preservada?')
@@ -2244,7 +2244,7 @@ void main() {
           role: ChatLessonMessageRole.student,
           kind: ChatLessonMessageKind.studentDoubt,
           text: 'Dúvida salva com foto.',
-          imageData: _svgDataUrl(),
+          imageData: _pngDataUrl(),
           mediaName: 'duvida.png',
           mediaType: 'image/png',
           mediaSize: 4096,
@@ -2385,7 +2385,7 @@ void main() {
       ..route = '/cyber/aula'
       ..aulaSnapshot = _chatSnapshot(
         phase: const ClassroomPhase.reading(),
-        imagem: _svgDataUrl(),
+        imagem: _pngDataUrl(),
       );
 
     await tester.pumpWidget(
@@ -2570,14 +2570,6 @@ LessonRuntimeSnapshot _chatSnapshot({
   );
 }
 
-String _svgDataUrl() {
-  final svg = Uri.encodeComponent(
-    '<svg viewBox="0 0 120 80"><rect width="120" height="80" fill="#fff"/>'
-    '<circle cx="60" cy="40" r="20" fill="#111827"/></svg>',
-  );
-  return 'data:image/svg+xml;utf8,$svg';
-}
-
 String _pngDataUrl() {
   const png =
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3QMgAAAABJRU5ErkJggg==';
@@ -2647,7 +2639,7 @@ class _ChatTimelineHarnessState extends State<_ChatTimelineHarness> {
           id: 'new-image-$id',
           role: ChatLessonMessageRole.sim,
           kind: ChatLessonMessageKind.image,
-          imageData: _svgDataUrl(),
+          imageData: _pngDataUrl(),
           imageStatus: 'ready',
         ),
         ChatLessonMessage(

@@ -176,8 +176,7 @@ void main() {
   test('LessonMaterialCache preserva imagem ao hidratar material', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    final svg =
-        'data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%2010%2010%22%3E%3Ccircle%20cx%3D%225%22%20cy%3D%225%22%20r%3D%224%22%2F%3E%3C%2Fsvg%3E';
+    final svg = 'data:image/png;base64,AAAA';
 
     final first = LessonMaterialCache();
     first.put('svg-free', _lesson('Com SVG gratis', imagem: svg));

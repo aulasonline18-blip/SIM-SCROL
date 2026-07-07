@@ -1,6 +1,5 @@
 import '../auxiliary/aux_room_models.dart';
 import '../classroom/classroom_models.dart';
-import '../media/visual_funnel_telemetry.dart';
 
 class VisualLearningFeedbackReport {
   const VisualLearningFeedbackReport({
@@ -25,16 +24,13 @@ class VisualLearningFeedbackReport {
 }
 
 class VisualOperationalReport {
-  const VisualOperationalReport({required this.funnel, required this.feedback});
+  const VisualOperationalReport({required this.feedback});
 
-  final VisualFunnelSnapshot funnel;
   final VisualLearningFeedbackReport feedback;
 
-  bool get hasEnoughSignals => funnel.total > 0 || feedback.hasLearningSignal;
+  bool get hasEnoughSignals => feedback.hasLearningSignal;
 
   bool get needsHumanReview {
-    if (funnel.failed > 0) return true;
-    if (funnel.total >= 4 && funnel.softwareRate < 0.35) return true;
     if (feedback.answeredWithImage >= 3 && feedback.accuracyAfterImage < 0.5) {
       return true;
     }
@@ -42,15 +38,6 @@ class VisualOperationalReport {
   }
 
   Map<String, Object> toJson() => {
-    'funnel': {
-      'total': funnel.total,
-      'software': funnel.software,
-      'paidOffer': funnel.paidOffer,
-      'paidReady': funnel.paidReady,
-      'noImage': funnel.noImage,
-      'failed': funnel.failed,
-      'softwareRate': funnel.softwareRate,
-    },
     'feedback': {
       'answeredWithImage': feedback.answeredWithImage,
       'correctWithImage': feedback.correctWithImage,

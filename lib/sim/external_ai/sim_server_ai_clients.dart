@@ -180,72 +180,58 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
   bool get prefersServerSideVisuals => true;
 
   @override
-  Future<VisualN3Result> routeVisual({
-    required VisualN2Result n2,
-    String? topic,
-    String? visualType,
-    String? imagePrompt,
-    List<String> keyElements = const [],
-    String? pedagogicalNeed,
-    String? highlightFocus,
-    String? complexity,
+  Future<ServerVisualRouteResult> routeVisual({
     String? stableLang,
-    String? svgPayload,
-    Object? mathTemplate,
-    Map<String, dynamic>? visualTrigger,
+    required Map<String, dynamic> visualTrigger,
   }) async {
+    final topic = visualTrigger['topic']?.toString();
+    final visualType = visualTrigger['visual_type']?.toString();
+    final imagePrompt =
+        visualTrigger['image_prompt']?.toString() ??
+        visualTrigger['teacher_prompt']?.toString() ??
+        visualTrigger['teacherPrompt']?.toString() ??
+        visualTrigger['prompt']?.toString();
     final requestId = _mediaRequestId(
       'vis',
-      '${n2.reason}|${topic ?? ''}|${visualType ?? ''}|${imagePrompt ?? ''}',
+      '${topic ?? ''}|${visualType ?? ''}|${imagePrompt ?? ''}',
     );
     final headers = await config.jsonHeaders();
     headers['x-request-id'] = requestId;
+    final visualTriggerPayload = <String, Object?>{...visualTrigger}
+      ..removeWhere((_, value) => value == null);
+    final keyElements = visualTriggerPayload['key_elements'];
     final body = <String, Object?>{
-      'contractVersion': 'n3_pedagogical_v1',
+      'contractVersion': 'server_ready_image_v1',
       'topic': topic ?? '',
       'visualType': visualType ?? '',
       'imagePrompt': imagePrompt ?? '',
-      'hint': n2.verdict.name,
-      'n2': {
-        'verdict': n2.verdict.name,
-        'reason': n2.reason,
-        'matched': n2.matched,
-        'confidence': n2.confidence,
-        if (n2.pedagogicalRole != null)
-          'pedagogicalRole': n2.pedagogicalRole!.id,
-      },
       'outputContract': {
-        'format': 'structured_visual_route',
-        'allowedVerdicts': ['svg', 'ai', 'no_image'],
-        'requiredFields': ['verdict', 'reason'],
-        'svgField': 'svgDataUrl',
-        'svgMustBeDataUrl': true,
-        'paidImageIsLastResort': true,
+        'format': 'ready_raster_image',
+        'acceptedDataUrls': ['png', 'jpeg', 'jpg', 'webp'],
+        'preferredFields': ['displayDataUrl', 'dataUrl', 'image_data_url'],
       },
-      'qualityGate': {
-        'preferPedagogicalSvg': true,
-        'avoidPaidForDiagramsGraphsTablesTimelines': true,
-        'rejectEmptyDecorativeSvg': true,
-        'mustRespectLessonContext': true,
-      },
-      if (keyElements.isNotEmpty) 'keyElements': keyElements,
+      if (keyElements is List && keyElements.isNotEmpty)
+        'keyElements': keyElements,
+      if (visualTriggerPayload.isNotEmpty)
+        'visual_trigger': visualTriggerPayload,
     };
-    final visualTriggerPayload = <String, Object?>{...?visualTrigger};
+    final svgPayload = visualTriggerPayload['svg_payload']?.toString();
     if (svgPayload != null && svgPayload.trim().isNotEmpty) {
       body['svgPayload'] = svgPayload;
-      visualTriggerPayload['svg_payload'] = svgPayload;
     }
+    final mathTemplate = visualTriggerPayload['math_template'];
     if (mathTemplate != null) {
       body['mathTemplate'] = mathTemplate;
-      visualTriggerPayload['math_template'] = mathTemplate;
     }
-    visualTriggerPayload.removeWhere((_, value) => value == null);
-    if (visualTriggerPayload.isNotEmpty) {
-      body['visual_trigger'] = visualTriggerPayload;
+    if (visualTriggerPayload['pedagogical_need'] != null) {
+      body['pedagogicalNeed'] = visualTriggerPayload['pedagogical_need'];
     }
-    if (pedagogicalNeed != null) body['pedagogicalNeed'] = pedagogicalNeed;
-    if (highlightFocus != null) body['highlightFocus'] = highlightFocus;
-    if (complexity != null) body['complexity'] = complexity;
+    if (visualTriggerPayload['highlight_focus'] != null) {
+      body['highlightFocus'] = visualTriggerPayload['highlight_focus'];
+    }
+    if (visualTriggerPayload['complexity'] != null) {
+      body['complexity'] = visualTriggerPayload['complexity'];
+    }
     if (stableLang != null) body['stableLang'] = stableLang;
     final response = await _postJsonWithTimeout(
       transport,
@@ -260,56 +246,27 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) {
-      return const VisualN3Result(
-        verdict: VisualVerdict.ai,
-        reason: 'N3_HTTP_INVALID_RESPONSE',
+      return const ServerVisualRouteResult(
+        verdict: ServerVisualRouteVerdict.missingRaster,
+        reason: 'VISUAL_ROUTE_INVALID_RESPONSE',
       );
     }
-    final reason = decoded['reason']?.toString() ?? 'N3_HTTP_ROUTE';
+    final reason = decoded['reason']?.toString() ?? 'VISUAL_ROUTE_RESPONSE';
     final verdictRaw = decoded['verdict']?.toString();
-    final verdict = verdictRaw == 'svg'
-        ? VisualVerdict.svg
-        : verdictRaw == 'no_image'
-        ? VisualVerdict.noImage
-        : VisualVerdict.ai;
-    final svgDataUrl = decoded['svgDataUrl']?.toString();
+    final noImage = verdictRaw == 'no_image';
     final displayDataUrl = _firstUsableRasterDataUrl(
       decoded['displayDataUrl'],
       decoded['dataUrl'],
       decoded['image_data_url'],
     );
-    final paidOffer = decoded['paidOffer'];
-    final paidOfferPrompt =
-        decoded['paidOfferPrompt']?.toString() ??
-        decoded['paid_offer_prompt']?.toString() ??
-        (paidOffer is Map ? paidOffer['prompt']?.toString() : null);
-    final hasSvgPayload = svgDataUrl != null && svgDataUrl.trim().isNotEmpty;
-    if (verdict == VisualVerdict.svg && !hasSvgPayload) {
-      return VisualN3Result(
-        verdict: VisualVerdict.ambiguous,
-        reason: decoded['reason']?.toString() ?? 'N3_SVG_MISSING_PAYLOAD',
-        confidence: _doubleFromJson(decoded['confidence']),
-        pedagogicalRole:
-            decoded['pedagogicalRole']?.toString() ??
-            decoded['pedagogical_role']?.toString(),
-        paidOfferPrompt: paidOfferPrompt?.trim().isNotEmpty == true
-            ? paidOfferPrompt
-            : null,
-        requestId: decoded['requestId']?.toString() ?? requestId,
-      );
-    }
-    return VisualN3Result(
-      verdict: verdict,
+    return ServerVisualRouteResult(
+      verdict: noImage
+          ? ServerVisualRouteVerdict.noImage
+          : displayDataUrl != null
+          ? ServerVisualRouteVerdict.image
+          : ServerVisualRouteVerdict.missingRaster,
       reason: reason,
-      svgDataUrl: hasSvgPayload ? svgDataUrl : null,
-      displayDataUrl: displayDataUrl,
-      confidence: _doubleFromJson(decoded['confidence']),
-      pedagogicalRole:
-          decoded['pedagogicalRole']?.toString() ??
-          decoded['pedagogical_role']?.toString(),
-      paidOfferPrompt: paidOfferPrompt?.trim().isNotEmpty == true
-          ? paidOfferPrompt
-          : null,
+      readyImageDataUrl: displayDataUrl,
       requestId: decoded['requestId']?.toString() ?? requestId,
     );
   }
@@ -454,12 +411,6 @@ SimExternalAiException _mediaHttpException(
 String _mediaRequestId(String prefix, String basis) {
   final stamp = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
   return 'sim-$prefix-$stamp-${_stableHash(basis)}';
-}
-
-double? _doubleFromJson(Object? value) {
-  if (value is num) return value.toDouble();
-  if (value is String) return double.tryParse(value);
-  return null;
 }
 
 String _stableHash(String input) {

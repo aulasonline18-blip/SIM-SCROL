@@ -47,9 +47,7 @@ import '../../sim/media/doubt_audio.dart';
 import '../../sim/media/image_data_url_compression.dart';
 import '../../sim/media/lesson_audio_controller.dart';
 import '../../sim/media/platform_audio_adapter.dart';
-import '../../sim/media/s12_visual_pipeline.dart';
 import '../../sim/media/student_lesson_media_service.dart';
-import '../../sim/media/visual_funnel_telemetry.dart';
 import '../../sim/state/shared_prefs_state_storage.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/state/student_state_store.dart';
@@ -149,19 +147,7 @@ class LabSession extends ChangeNotifier {
       );
 
   VisualOperationalReport get visualOperationalReport =>
-      VisualOperationalReport(
-        funnel:
-            _activeOrganism?.visualTelemetry.snapshot() ??
-            const VisualFunnelSnapshot(
-              total: 0,
-              software: 0,
-              paidOffer: 0,
-              paidReady: 0,
-              noImage: 0,
-              failed: 0,
-            ),
-        feedback: visualLearningFeedbackReport,
-      );
+      VisualOperationalReport(feedback: visualLearningFeedbackReport);
 
   bool _creditsLoaded = false;
   Future<void>? _creditsLoadInFlight;

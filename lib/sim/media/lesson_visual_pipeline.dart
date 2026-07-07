@@ -1,43 +1,13 @@
-// LessonVisualPipeline — funil de imagem do SIM App.
-// Espelha o comportamento vivo do SimWeb; o provedor pago final é próprio da API do app.
 import 'package:flutter/foundation.dart';
 
-import 'blueprint_prompt.dart';
-import 'image_pedagogical_critic.dart';
 import 'lesson_image_api_contract.dart';
 import 'lesson_visual_models.dart';
-import 'software_render_catalog.dart';
-import 'visual_router_n2.dart';
-import 'visual_router_n3.dart';
-import 'visual_funnel_telemetry.dart';
-import 'visual_escalation_policy.dart';
-import 'visual_final_quality_evaluator.dart';
-import 'image_data_url_compression.dart';
 
-export 's12_visual_pipeline.dart'
+export 'lesson_visual_models.dart'
     show
-        sanitizeAndEncodeSvg,
-        decideVisualGeneration,
-        VisualDecision,
-        VisualDecisionContext;
-export 'visual_router_n2.dart'
-    show classifyVisualByKeywords, VisualVerdict, VisualN2Result;
-export 'visual_router_n3.dart'
-    show routeVisualCheapN3, VisualN3Result, LessonVisualRouterClient;
-export 'visual_pedagogical_role.dart'
-    show
-        VisualPedagogicalRole,
-        VisualPedagogicalRoleId,
-        inferVisualPedagogicalRole;
-export 'image_pedagogical_critic.dart'
-    show ImagePedagogicalCritic, ImagePedagogicalCritique;
-export 'visual_funnel_telemetry.dart'
-    show VisualFunnelTelemetry, VisualFunnelEvent, VisualFunnelSnapshot;
-export 'visual_final_quality_evaluator.dart'
-    show
-        VisualFinalQualityEvaluator,
-        VisualFinalQualityResult,
-        VisualFinalQualityAction;
+        ServerVisualRouteResult,
+        ServerVisualRouteVerdict,
+        LessonVisualRouterClient;
 
 abstract interface class LessonImageClient {
   Future<String?> generateLessonImage({
@@ -63,7 +33,7 @@ abstract interface class LessonImageResponseClient {
   });
 }
 
-/// Modelo completo do visual_trigger do T02 (todos os campos do contrato).
+/// Modelo mínimo do visual_trigger do T02. O app só carrega e repassa a ficha.
 class LessonVisualTrigger {
   const LessonVisualTrigger({
     this.needsImage = false,
@@ -87,7 +57,7 @@ class LessonVisualTrigger {
   final String? topic;
   final String? visualType;
   final List<String> keyElements;
-  final List<BlueprintColorLegendItem> colorLegend;
+  final List<Object?> colorLegend;
   final String? highlightFocus;
   final String? complexity; // "simple" | "moderate" | "technical"
   final String? imagePrompt;
@@ -105,7 +75,7 @@ class LessonVisualTrigger {
       topic: value['topic']?.toString(),
       visualType: value['visual_type']?.toString(),
       keyElements: _parseStringList(value['key_elements']),
-      colorLegend: colorLegendFromJson(value['color_legend']),
+      colorLegend: _parseObjectList(value['color_legend']),
       highlightFocus: value['highlight_focus']?.toString(),
       complexity: value['complexity']?.toString(),
       imagePrompt:
@@ -132,9 +102,7 @@ class LessonVisualTrigger {
     if (visualType != null) 'visual_type': visualType,
     if (keyElements.isNotEmpty) 'key_elements': keyElements,
     if (colorLegend.isNotEmpty)
-      'color_legend': colorLegend
-          .map((c) => {'id': c.id, 'label': c.label, 'color': c.color})
-          .toList(),
+      'color_legend': colorLegend.where((c) => c != null).toList(),
     if (highlightFocus != null) 'highlight_focus': highlightFocus,
     if (complexity != null) 'complexity': complexity,
     if (imagePrompt != null) 'image_prompt': imagePrompt,
@@ -150,7 +118,7 @@ class LessonVisualTrigger {
     String? topic,
     String? visualType,
     List<String>? keyElements,
-    List<BlueprintColorLegendItem>? colorLegend,
+    List<Object?>? colorLegend,
     String? highlightFocus,
     String? complexity,
     String? imagePrompt,
@@ -182,24 +150,23 @@ List<String> _parseStringList(Object? v) {
   return const [];
 }
 
+List<Object?> _parseObjectList(Object? v) {
+  if (v is List) return v;
+  return const [];
+}
+
 class LessonVisualPipeline {
   LessonVisualPipeline({
     required this.imageClient,
     required this.visualRouterClient,
-    ImagePedagogicalCritic? imageCritic,
-    VisualFinalQualityEvaluator? finalQualityEvaluator,
-    SoftwareRenderCatalog? softwareRenderCatalog,
-    this.telemetry,
-    VisualEscalationPolicy? escalationPolicy,
   });
 
   final LessonImageClient imageClient;
   final LessonVisualRouterClient visualRouterClient;
-  final VisualFunnelTelemetry? telemetry;
 
   /// Ponto de entrada principal: o app só encaminha o visual_trigger ao
-  /// servidor e recebe foto raster pronta. Desenho, decisão, SVG, N2/N3 e
-  /// oferta paga pertencem ao servidor.
+  /// servidor e recebe foto raster pronta. Desenho, decisão, SVG e
+  /// oferta visual pertencem ao servidor.
   Future<LessonVisualResult> resolveVisual({
     required LessonVisualTrigger trigger,
     required String lessonKey,
@@ -215,7 +182,6 @@ class LessonVisualPipeline {
         'skip',
         'needsImage=${trigger.needsImage} pedagogicalNeed=${trigger.pedagogicalNeed}',
       );
-      _recordOutcome(lessonKey, 'no_image', 'skip');
       return const LessonVisualResult(svg: null, dataUrl: null, source: 'skip');
     }
 
@@ -233,212 +199,59 @@ class LessonVisualPipeline {
     required String? stableLang,
     required String? academicLevel,
   }) async {
-    final VisualN3Result serverImage;
+    final ServerVisualRouteResult serverImage;
     try {
       serverImage = await visualRouterClient.routeVisual(
-        n2: const VisualN2Result(
-          verdict: VisualVerdict.ambiguous,
-          matched: ['server_ready_image'],
-          reason: 'SERVER_READY_IMAGE_REQUEST',
-          confidence: 1,
-        ),
-        topic: trigger.topic,
-        visualType: trigger.visualType,
-        imagePrompt: trigger.imagePrompt,
-        keyElements: trigger.keyElements,
-        pedagogicalNeed: trigger.pedagogicalNeed,
-        highlightFocus: trigger.highlightFocus,
-        complexity: trigger.complexity,
         stableLang: stableLang,
-        svgPayload: trigger.svgPayload,
-        mathTemplate: trigger.mathTemplate,
         visualTrigger: trigger.toVisualTriggerMap(),
       );
     } catch (error) {
       final reason =
           'SERVER_IMAGE_TRANSPORT_FAILED: ${_shortVisualText(error)}';
       _visualLog(lessonKey, 'server_photo', reason);
-      _recordOutcome(lessonKey, 'failed', 'server_failed', reason);
       return LessonVisualResult(
         svg: null,
         dataUrl: null,
         source: 'server_failed',
-        n2Reason: reason,
+        routeReason: reason,
       );
     }
     _visualLog(
       lessonKey,
       'server_photo',
-      'verdict=${serverImage.verdict.name} reason=${_shortVisualText(serverImage.reason)} hasRaster=${serverImage.displayDataUrl != null}',
+      'verdict=${serverImage.verdict.name} reason=${_shortVisualText(serverImage.reason)} hasRaster=${serverImage.readyImageDataUrl != null}',
     );
     if (serverImage.transportFailed) {
-      _recordOutcome(lessonKey, 'failed', 'server_failed', serverImage.reason);
       return LessonVisualResult(
         svg: null,
         dataUrl: null,
         source: 'server_failed',
-        n2Reason: serverImage.reason,
+        routeReason: serverImage.reason,
       );
     }
-    if (serverImage.verdict == VisualVerdict.noImage) {
-      _recordOutcome(
-        lessonKey,
-        'no_image',
-        'server_no_image',
-        serverImage.reason,
-      );
+    if (serverImage.verdict == ServerVisualRouteVerdict.noImage) {
       return LessonVisualResult(
         svg: null,
         dataUrl: null,
         source: 'server_no_image',
-        n2Reason: serverImage.reason,
+        routeReason: serverImage.reason,
       );
     }
-    if (serverImage.displayDataUrl != null) {
-      _recordOutcome(
-        lessonKey,
-        'software',
-        'server_raster',
-        serverImage.reason,
-      );
+    if (serverImage.readyImageDataUrl != null) {
       return LessonVisualResult(
         svg: null,
-        dataUrl: serverImage.displayDataUrl,
+        dataUrl: serverImage.readyImageDataUrl,
         source: 'server_raster',
-        n2Reason: serverImage.reason,
+        routeReason: serverImage.reason,
       );
     }
-    _recordOutcome(
-      lessonKey,
-      'failed',
-      'server_missing_raster',
-      serverImage.reason,
-    );
     return LessonVisualResult(
       svg: null,
       dataUrl: null,
       source: 'server_missing_raster',
-      n2Reason: serverImage.reason,
+      routeReason: serverImage.reason,
     );
   }
-
-  void _recordOutcome(
-    String lessonKey,
-    String outcome,
-    String source, [
-    String? n2Reason,
-    String? detail,
-  ]) {
-    telemetry?.record(
-      VisualFunnelEvent(
-        lessonKey: lessonKey,
-        outcome: outcome,
-        source: source,
-        n2Reason: n2Reason,
-        detail: detail,
-      ),
-    );
-  }
-
-  Future<GenerateLessonImageResponse?> fetchPaidLessonImageResponse(
-    String prompt,
-    String lessonKey, {
-    String aspectRatio = '1:1',
-    String? acceptedOfferId,
-    String? idempotencyKey,
-    Map<String, dynamic>? visualTrigger,
-    Map<String, dynamic>? lessonContext,
-  }) async {
-    if (prompt.trim().isEmpty) return null;
-    if (acceptedOfferId == null || acceptedOfferId.trim().isEmpty) return null;
-    final normalizedAspectRatio = normalizedLessonImageAspectRatio(aspectRatio);
-    final client = imageClient;
-    if (client is LessonImageResponseClient) {
-      final responseClient = client as LessonImageResponseClient;
-      final response = await responseClient.generateLessonImageResponse(
-        prompt: prompt,
-        lessonKey: lessonKey,
-        aspectRatio: normalizedAspectRatio,
-        acceptedOfferId: acceptedOfferId,
-        idempotencyKey: idempotencyKey ?? acceptedOfferId,
-        visualTrigger: visualTrigger,
-        lessonContext: lessonContext,
-      );
-      if (response == null || !isUsableImageDataUrl(response.dataUrl)) {
-        return null;
-      }
-      return GenerateLessonImageResponse(
-        dataUrl: compressImageDataUrl(response.dataUrl),
-        cacheKey: response.cacheKey,
-        requestId: response.requestId,
-        mimeType: response.mimeType,
-        provider: response.provider,
-        model: response.model,
-        charged: response.charged,
-        cacheHit: response.cacheHit,
-        retryable: response.retryable,
-      );
-    }
-    final dataUrl = await client.generateLessonImage(
-      prompt: prompt,
-      lessonKey: lessonKey,
-      aspectRatio: normalizedAspectRatio,
-      acceptedOfferId: acceptedOfferId,
-      idempotencyKey: idempotencyKey ?? acceptedOfferId,
-      visualTrigger: visualTrigger,
-      lessonContext: lessonContext,
-    );
-    if (!isUsableImageDataUrl(dataUrl)) return null;
-    return GenerateLessonImageResponse(dataUrl: compressImageDataUrl(dataUrl!));
-  }
-
-  Future<String?> fetchPaidLessonImage(
-    String prompt,
-    String lessonKey, {
-    String aspectRatio = '1:1',
-    String? acceptedOfferId,
-    String? idempotencyKey,
-    Map<String, dynamic>? visualTrigger,
-    Map<String, dynamic>? lessonContext,
-  }) async {
-    final response = await fetchPaidLessonImageResponse(
-      prompt,
-      lessonKey,
-      aspectRatio: aspectRatio,
-      acceptedOfferId: acceptedOfferId,
-      idempotencyKey: idempotencyKey,
-      visualTrigger: visualTrigger,
-      lessonContext: lessonContext,
-    );
-    return response?.dataUrl;
-  }
-
-  String buildPromptForTrigger({
-    required String topic,
-    required LessonVisualTrigger trigger,
-    String? lang,
-  }) {
-    final teacherPrompt = trigger.imagePrompt ?? '';
-    if (trigger.colorLegend.length >= 2) {
-      return buildNaturalImagePrompt(
-        topic: topic,
-        teacherPrompt: teacherPrompt,
-        lang: lang,
-        colorLegend: trigger.colorLegend,
-      );
-    }
-    return buildNaturalImagePrompt(
-      topic: topic,
-      teacherPrompt: teacherPrompt,
-      lang: lang,
-    );
-  }
-}
-
-String normalizedLessonImageAspectRatio(Object? value) {
-  final ratio = value?.toString().trim();
-  const allowed = {'1:1', '16:9', '9:16', '4:3', '3:4'};
-  return ratio != null && allowed.contains(ratio) ? ratio : '1:1';
 }
 
 void _visualLog(String lessonKey, String stage, String detail) {
@@ -458,26 +271,24 @@ class LessonVisualResult {
     required this.svg,
     required this.dataUrl,
     required this.source,
-    this.n2Reason,
+    this.routeReason,
     this.imageMetadata,
-    this.paidOfferPrompt,
   });
 
-  /// data URL de SVG inline (grátis) — usar se não nulo.
+  /// Mantido só para compatibilidade de tipo. O fluxo ativo do app não preenche SVG.
   final String? svg;
 
-  /// data URL de imagem raster pronta (servidor/Blueprint pago) — usar primeiro.
+  /// data URL de imagem raster pronta recebida do servidor.
   final String? dataUrl;
 
   /// Fonte do resultado (para diagnóstico/auditoria).
   final String source;
-  final String? n2Reason;
+  final String? routeReason;
   final LessonImageGenerationMetadata? imageMetadata;
-  final String? paidOfferPrompt;
 
-  /// Imagem útil disponível (raster ou SVG)
-  bool get hasImage => svg != null || dataUrl != null;
+  /// Imagem útil disponível. No fluxo ativo, só raster pronto é aceito.
+  bool get hasImage => dataUrl != null;
 
-  /// data URL para exibição (prefere raster pronto)
-  String? get displayUrl => dataUrl ?? svg;
+  /// data URL para exibição.
+  String? get displayUrl => dataUrl;
 }

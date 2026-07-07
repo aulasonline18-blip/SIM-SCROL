@@ -14,7 +14,6 @@ import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
 import 'package:sim_mobile/sim/media/lesson_image_api_contract.dart';
 import 'package:sim_mobile/sim/media/lesson_visual_pipeline.dart';
-import 'package:sim_mobile/sim/media/software_render_catalog.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
@@ -46,15 +45,6 @@ void main() {
       );
 
       final result = await client.routeVisual(
-        n2: const VisualN2Result(
-          verdict: VisualVerdict.ambiguous,
-          matched: ['server_ready_image'],
-          reason: 'SERVER_READY_IMAGE_REQUEST',
-        ),
-        topic: 'grafico pronto',
-        visualType: 'graph',
-        imagePrompt: 'svg pronto',
-        svgPayload: '<svg><circle cx="1" cy="1" r="1"/></svg>',
         visualTrigger: const {
           'needs_image': true,
           'pedagogical_need': 'important',
@@ -62,13 +52,13 @@ void main() {
           'visual_type': 'graph',
           'image_prompt': 'svg pronto',
           'render_strategy': 'software',
+          'svg_payload': '<svg><circle cx="1" cy="1" r="1"/></svg>',
         },
       );
 
       final body = transport.lastBody as Map;
       expect(body['svgPayload'], '<svg><circle cx="1" cy="1" r="1"/></svg>');
       expect(body['topic'], 'grafico pronto');
-      expect(body['n2']['reason'], 'SERVER_READY_IMAGE_REQUEST');
       expect(
         (body['visual_trigger'] as Map)['svg_payload'],
         body['svgPayload'],
@@ -76,13 +66,12 @@ void main() {
       expect((body['visual_trigger'] as Map)['topic'], 'grafico pronto');
       expect((body['visual_trigger'] as Map)['visual_type'], 'graph');
       expect((body['visual_trigger'] as Map)['render_strategy'], 'software');
-      expect(result.svgDataUrl, _svgDataUrl);
-      expect(result.displayDataUrl, _webpDataUrl);
+      expect(result.readyImageDataUrl, _webpDataUrl);
     },
   );
 
   test(
-    'SimServerVisualRouterClient ignora raster invalido e preserva SVG como auditoria',
+    'SimServerVisualRouterClient ignora raster invalido e escolhe proximo raster',
     () async {
       final transport = _RecordingTransport()
         ..jsonBody = jsonEncode({
@@ -100,15 +89,10 @@ void main() {
       );
 
       final result = await client.routeVisual(
-        n2: const VisualN2Result(
-          verdict: VisualVerdict.ambiguous,
-          matched: ['graph'],
-          reason: 'N2_AMBIGUOUS',
-        ),
+        visualTrigger: const {'needs_image': true, 'topic': 'grafico'},
       );
 
-      expect(result.svgDataUrl, _svgDataUrl);
-      expect(result.displayDataUrl, _jpegDataUrl);
+      expect(result.readyImageDataUrl, _jpegDataUrl);
     },
   );
 
@@ -142,7 +126,6 @@ void main() {
       final body = transport.lastBody as Map;
       final visualTrigger = body['visual_trigger'] as Map;
       expect(body['svgPayload'], '<svg><circle cx="1" cy="1" r="1"/></svg>');
-      expect(body['n2']['reason'], 'SERVER_READY_IMAGE_REQUEST');
       expect(visualTrigger['needs_image'], isTrue);
       expect(visualTrigger['pedagogical_need'], 'important');
       expect(visualTrigger['topic'], contains('grafico pronto'));
@@ -162,10 +145,10 @@ void main() {
     },
   );
 
-  testWidgets('N3 SVG rasterizado pelo servidor aparece como Image.memory', (
+  testWidgets('SVG rasterizado pelo servidor aparece como Image.memory', (
     tester,
   ) async {
-    final n3Svg = sanitizeAndEncodeSvg(
+    final serverAuditSvg = _encodeSvg(
       '<svg viewBox="0 0 900 560">'
       '<rect width="900" height="560" fill="#F8FAFC"/>'
       '<text x="80" y="90" font-size="18">sintoma inicial</text>'
@@ -181,10 +164,10 @@ void main() {
       visualTransport: _RecordingTransport()
         ..jsonBody = jsonEncode({
           'verdict': 'svg',
-          'reason': 'N3_SVG_RASTERIZED',
-          'svgDataUrl': n3Svg,
+          'reason': 'SERVER_SVG_RASTERIZED',
+          'svgDataUrl': serverAuditSvg,
           'displayDataUrl': _pngDataUrl,
-          'requestId': 'rid-n3',
+          'requestId': 'rid-server',
         }),
       visualTrigger: const {
         'needs_image': true,
@@ -222,7 +205,6 @@ void main() {
         ..jsonBody = jsonEncode({
           'verdict': 'ai',
           'reason': 'REALISTIC_IMAGE_REQUIRED',
-          'paidOfferPrompt': 'imagem realista de anatomia',
           'requestId': 'rid-ai',
         }),
       imageClient: _FakePaidImageClient(_jpegDataUrl),
@@ -350,7 +332,6 @@ void main() {
           config: _config(),
           transport: transport,
         ),
-        softwareRenderCatalog: _ThrowingSoftwareRenderCatalog(),
       ),
     );
     final paramsA = _paramsForItem('Aula A');
@@ -403,7 +384,6 @@ _FullPathHarness _buildHarness({
     visualPipeline: LessonVisualPipeline(
       imageClient: imageClient ?? _FakePaidImageClient(_jpegDataUrl),
       visualRouterClient: visualClient,
-      softwareRenderCatalog: _ThrowingSoftwareRenderCatalog(),
     ),
   );
   return _FullPathHarness(
@@ -650,13 +630,6 @@ class _ThrowingPaidImageClient
   }
 }
 
-class _ThrowingSoftwareRenderCatalog extends SoftwareRenderCatalog {
-  @override
-  SoftwareRenderResult? render(SoftwareVisualRequest request) {
-    throw StateError('local software renderer must not run in frame-only app');
-  }
-}
-
 class _RecordingTransport implements SimHttpTransport {
   Uri? lastUri;
   Map<String, String>? lastHeaders;
@@ -704,3 +677,6 @@ class _RecordingTransport implements SimHttpTransport {
     throw UnimplementedError();
   }
 }
+
+String _encodeSvg(String svg) =>
+    'data:image/svg+xml;utf8,${Uri.encodeComponent(svg)}';

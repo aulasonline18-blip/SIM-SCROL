@@ -14,7 +14,7 @@ void main() {
       ChatLessonTimelineInput(
         snapshot: _snapshot(
           phase: const ClassroomPhase.reading(),
-          imagem: 'data:image/svg+xml,%3Csvg%2F%3E',
+          imagem: 'data:image/png;base64,AAAA',
         ),
         showImagePanel: true,
       ),
@@ -284,7 +284,7 @@ void main() {
 
   test('image states stay non blocking before question and options', () {
     for (final state in const [
-      ('ready', 'data:image/svg+xml,%3Csvg%2F%3E', null, false),
+      ('ready', 'data:image/png;base64,AAAA', null, false),
       ('loading', null, null, false),
       ('error', null, 'Imagem falhou sem bloquear.', false),
       ('offer', null, null, true),

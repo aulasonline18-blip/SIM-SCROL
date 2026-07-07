@@ -143,11 +143,6 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final svg = Uri.encodeComponent(
-      '<svg viewBox="0 0 120 80"><rect width="120" height="80" fill="#eef2ff"/>'
-      '<path d="M10 60 Q60 10 110 60" stroke="#111827" fill="none" stroke-width="4"/>'
-      '</svg>',
-    );
     final session = LabSession()
       ..authed = true
       ..authReady = true
@@ -199,7 +194,7 @@ void main() {
     );
 
     session.aulaSnapshot = session.aulaSnapshot!.copyWith(
-      imagem: 'data:image/svg+xml;utf8,$svg',
+      imagem: 'data:image/png;base64,AAAA',
     );
     session.notifyListeners();
     await tester.pumpAndSettle();

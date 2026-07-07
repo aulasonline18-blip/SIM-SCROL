@@ -194,29 +194,27 @@ void main() {
     expect(response?.model, 'gemini-image');
   });
 
-  test('rota visual usa /api/visual-route e preserva SVG gratuito', () async {
+  test('rota visual envia visual_trigger para /api/visual-route', () async {
     final transport = RecordingTransport()
       ..jsonBody =
-          '{"verdict":"svg","reason":"VISUAL_ROUTE_SVG","svgDataUrl":"data:image/svg+xml;utf8,%3Csvg%3E%3C%2Fsvg%3E","requestId":"rid-vis","confidence":0.91,"pedagogicalRole":"graph_reasoning"}';
+          '{"verdict":"svg","reason":"VISUAL_ROUTE_SVG","displayDataUrl":"data:image/png;base64,AAAA","requestId":"rid-vis"}';
     final client = SimServerVisualRouterClient(
       config: config(),
       transport: transport,
     );
 
     final result = await client.routeVisual(
-      n2: const VisualN2Result(
-        verdict: VisualVerdict.ambiguous,
-        matched: ['graph'],
-        reason: 'N2_AMBIGUOUS',
-      ),
-      topic: 'funcao linear',
-      visualType: 'graph',
-      imagePrompt: 'grafico de uma reta',
-      keyElements: const ['eixo x', 'eixo y'],
-      pedagogicalNeed: 'important',
-      highlightFocus: 'inclinação da reta',
-      complexity: 'simple',
       stableLang: 'pt-BR',
+      visualTrigger: const {
+        'needs_image': true,
+        'pedagogical_need': 'important',
+        'topic': 'funcao linear',
+        'visual_type': 'graph',
+        'image_prompt': 'grafico de uma reta',
+        'key_elements': ['eixo x', 'eixo y'],
+        'highlight_focus': 'inclinação da reta',
+        'complexity': 'simple',
+      },
     );
 
     expect(
@@ -226,35 +224,18 @@ void main() {
     expect(transport.lastHeaders?['authorization'], 'Bearer user-token');
     expect(transport.lastHeaders?['x-request-id'], startsWith('sim-vis-'));
     final body = transport.lastBody as Map;
-    expect(body['contractVersion'], 'n3_pedagogical_v1');
-    expect(body['hint'], 'ambiguous');
+    expect(body['contractVersion'], 'server_ready_image_v1');
     expect(body['keyElements'], ['eixo x', 'eixo y']);
     expect(body['pedagogicalNeed'], 'important');
     expect(body['highlightFocus'], 'inclinação da reta');
     expect(body['complexity'], 'simple');
     expect(body['stableLang'], 'pt-BR');
-    expect(
-      (body['outputContract'] as Map)['format'],
-      'structured_visual_route',
-    );
-    expect((body['outputContract'] as Map)['allowedVerdicts'], [
-      'svg',
-      'ai',
-      'no_image',
-    ]);
-    expect((body['outputContract'] as Map)['paidImageIsLastResort'], isTrue);
-    expect((body['qualityGate'] as Map)['preferPedagogicalSvg'], isTrue);
-    expect(
-      (body['qualityGate'] as Map)['avoidPaidForDiagramsGraphsTablesTimelines'],
-      isTrue,
-    );
-    expect((body['n2'] as Map)['reason'], 'N2_AMBIGUOUS');
-    expect((body['n2'] as Map)['confidence'], 0.5);
-    expect(result.verdict, VisualVerdict.svg);
-    expect(result.svgDataUrl, startsWith('data:image/svg+xml;utf8,'));
-    expect(result.displayDataUrl, isNull);
-    expect(result.confidence, 0.91);
-    expect(result.pedagogicalRole, 'graph_reasoning');
+    expect((body['outputContract'] as Map)['format'], 'ready_raster_image');
+    expect(body.containsKey('hint'), isFalse);
+    expect(body.containsKey('qualityGate'), isFalse);
+    expect((body['visual_trigger'] as Map)['topic'], 'funcao linear');
+    expect(result.verdict, ServerVisualRouteVerdict.image);
+    expect(result.readyImageDataUrl, 'data:image/png;base64,AAAA');
     expect(result.requestId, 'rid-vis');
   });
 
@@ -270,19 +251,16 @@ void main() {
       );
 
       final result = await client.routeVisual(
-        n2: const VisualN2Result(
-          verdict: VisualVerdict.ambiguous,
-          matched: ['graph'],
-          reason: 'N2_AMBIGUOUS',
-        ),
-        topic: 'funcao linear',
-        visualType: 'graph',
-        imagePrompt: 'grafico de uma reta',
+        visualTrigger: const {
+          'needs_image': true,
+          'topic': 'funcao linear',
+          'visual_type': 'graph',
+          'image_prompt': 'grafico de uma reta',
+        },
       );
 
-      expect(result.verdict, VisualVerdict.svg);
-      expect(result.svgDataUrl, startsWith('data:image/svg+xml;utf8,'));
-      expect(result.displayDataUrl, 'data:image/webp;base64,AAAA');
+      expect(result.verdict, ServerVisualRouteVerdict.image);
+      expect(result.readyImageDataUrl, 'data:image/webp;base64,AAAA');
     },
   );
 
@@ -298,19 +276,16 @@ void main() {
       );
 
       final result = await client.routeVisual(
-        n2: const VisualN2Result(
-          verdict: VisualVerdict.ambiguous,
-          matched: ['graph'],
-          reason: 'N2_AMBIGUOUS',
-        ),
-        topic: 'funcao linear',
-        visualType: 'graph',
-        imagePrompt: 'grafico de uma reta',
+        visualTrigger: const {
+          'needs_image': true,
+          'topic': 'funcao linear',
+          'visual_type': 'graph',
+          'image_prompt': 'grafico de uma reta',
+        },
       );
 
-      expect(result.verdict, VisualVerdict.svg);
-      expect(result.svgDataUrl, startsWith('data:image/svg+xml;utf8,'));
-      expect(result.displayDataUrl, 'data:image/webp;base64,DISPLAY');
+      expect(result.verdict, ServerVisualRouteVerdict.image);
+      expect(result.readyImageDataUrl, 'data:image/webp;base64,DISPLAY');
     },
   );
 
@@ -324,18 +299,16 @@ void main() {
     );
 
     final result = await client.routeVisual(
-      n2: const VisualN2Result(
-        verdict: VisualVerdict.ambiguous,
-        matched: ['server_ready_image'],
-        reason: 'SERVER_READY_IMAGE_REQUEST',
-      ),
-      topic: 'grafico pronto',
-      visualType: 'graph',
-      imagePrompt: 'svg pronto',
-      svgPayload: '<svg><circle cx="1" cy="1" r="1"/></svg>',
-      mathTemplate: const {
-        'name': 'linear_function',
-        'params': {'a': 2, 'b': 1},
+      visualTrigger: const {
+        'needs_image': true,
+        'topic': 'grafico pronto',
+        'visual_type': 'graph',
+        'image_prompt': 'svg pronto',
+        'svg_payload': '<svg><circle cx="1" cy="1" r="1"/></svg>',
+        'math_template': {
+          'name': 'linear_function',
+          'params': {'a': 2, 'b': 1},
+        },
       },
     );
 
@@ -350,10 +323,10 @@ void main() {
       (body['visual_trigger'] as Map)['math_template'],
       body['mathTemplate'],
     );
-    expect(result.displayDataUrl, 'data:image/png;base64,AAAA');
+    expect(result.readyImageDataUrl, 'data:image/png;base64,AAAA');
   });
 
-  test('rota visual preserva decisao no_image do N3 pedagogico', () async {
+  test('rota visual preserva no_image do servidor', () async {
     final transport = RecordingTransport()
       ..jsonBody =
           '{"verdict":"no_image","reason":"TEST_NO_IMAGE","requestId":"rid-no-image","confidence":0.82,"pedagogicalRole":"concept_anchor"}';
@@ -363,54 +336,47 @@ void main() {
     );
 
     final result = await client.routeVisual(
-      n2: const VisualN2Result(
-        verdict: VisualVerdict.ambiguous,
-        matched: ['diagram'],
-        reason: 'N2_AMBIGUOUS',
-      ),
-      topic: 'conceito que nao precisa de imagem',
-      visualType: 'diagram',
-      imagePrompt: 'imagem pode confundir',
+      visualTrigger: const {
+        'needs_image': true,
+        'topic': 'conceito que nao precisa de imagem',
+        'visual_type': 'diagram',
+        'image_prompt': 'imagem pode confundir',
+      },
     );
 
-    expect(result.verdict, VisualVerdict.noImage);
-    expect(result.svgDataUrl, isNull);
+    expect(result.verdict, ServerVisualRouteVerdict.noImage);
+    expect(result.readyImageDataUrl, isNull);
     expect(result.reason, 'TEST_NO_IMAGE');
-    expect(result.confidence, 0.82);
-    expect(result.pedagogicalRole, 'concept_anchor');
     expect(result.requestId, 'rid-no-image');
   });
 
-  test('rota visual preserva oferta paga decidida pelo servidor', () async {
-    final transport = RecordingTransport()
-      ..jsonBody =
-          '{"verdict":"ai","reason":"SERVER_PAID_AI","paidOfferPrompt":"Prompt aprovado no servidor","paidOffer":{"prompt":"Prompt aprovado no servidor","cost":10},"requestId":"rid-paid"}';
-    final client = SimServerVisualRouterClient(
-      config: config(),
-      transport: transport,
-    );
+  test(
+    'rota visual sem foto pronta vira missingRaster sem oferta no app',
+    () async {
+      final transport = RecordingTransport()
+        ..jsonBody =
+            '{"verdict":"ai","reason":"SERVER_PAID_AI","requestId":"rid-paid"}';
+      final client = SimServerVisualRouterClient(
+        config: config(),
+        transport: transport,
+      );
 
-    final result = await client.routeVisual(
-      n2: const VisualN2Result(
-        verdict: VisualVerdict.ai,
-        matched: ['photo'],
-        reason: 'LOCAL_WOULD_HAVE_STOPPED',
-      ),
-      topic: 'foto realista de laboratorio',
-      visualType: 'photograph',
-      imagePrompt: 'foto realista',
-    );
+      final result = await client.routeVisual(
+        visualTrigger: const {
+          'needs_image': true,
+          'topic': 'foto realista de laboratorio',
+          'visual_type': 'photograph',
+          'image_prompt': 'foto realista',
+        },
+      );
 
-    expect(transport.lastUri.toString(), endsWith('/api/visual-route'));
-    expect(
-      (transport.lastBody as Map)['n2']['reason'],
-      'LOCAL_WOULD_HAVE_STOPPED',
-    );
-    expect(result.verdict, VisualVerdict.ai);
-    expect(result.reason, 'SERVER_PAID_AI');
-    expect(result.paidOfferPrompt, 'Prompt aprovado no servidor');
-    expect(result.requestId, 'rid-paid');
-  });
+      expect(transport.lastUri.toString(), endsWith('/api/visual-route'));
+      expect(result.verdict, ServerVisualRouteVerdict.missingRaster);
+      expect(result.reason, 'SERVER_PAID_AI');
+      expect(result.readyImageDataUrl, isNull);
+      expect(result.requestId, 'rid-paid');
+    },
+  );
 
   test('audio usa /api/generate-lesson-audio e devolve dataUrl', () async {
     final transport = RecordingTransport()
