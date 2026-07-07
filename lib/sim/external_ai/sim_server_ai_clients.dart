@@ -16,6 +16,7 @@ import 'sim_http_transport.dart';
 const String simT00BootstrapPath = '/api/bootstrap-t00';
 const String simServerClassroomStartPath = '/api/server-classroom/start';
 const String simServerClassroomSlotPath = '/api/server-classroom/slot';
+const String simWarmupPath = '/api/warmup';
 const String simLessonImagePath = '/api/generate-lesson-image';
 const String simLessonAudioPath = '/api/generate-lesson-audio';
 const String simVisualRoutePath = '/api/visual-route';
@@ -127,6 +128,124 @@ class SimServerT00Client implements T00BootstrapClient {
       },
     );
     yield const T00BootstrapChunk(type: 'done', payload: {'ok': true});
+  }
+}
+
+class SimWarmupLesson {
+  const SimWarmupLesson({
+    required this.explanation,
+    required this.question,
+    required this.options,
+    required this.correctAnswer,
+    this.whyCorrect,
+    this.whyWrong = const {},
+  });
+
+  final String explanation;
+  final String question;
+  final Map<String, String> options;
+  final String correctAnswer;
+  final String? whyCorrect;
+  final Map<String, String> whyWrong;
+
+  Map<String, Object?> toJson() => {
+    'explanation': explanation,
+    'question': question,
+    'options': options,
+    'correctAnswer': correctAnswer,
+    'whyCorrect': whyCorrect,
+    'whyWrong': whyWrong,
+    'type': 'warmup',
+    'officialCurriculum': false,
+    'countsForMastery': false,
+  };
+
+  static SimWarmupLesson? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final source = raw['warmup'] is Map ? raw['warmup'] as Map : raw;
+    final optionsRaw = source['options'];
+    if (optionsRaw is! Map) return null;
+    final options = <String, String>{
+      for (final letter in const ['A', 'B', 'C'])
+        letter: (optionsRaw[letter] ?? optionsRaw[letter.toLowerCase()] ?? '')
+            .toString()
+            .trim(),
+    };
+    final explanation = (source['explanation'] ?? source['explicacao'] ?? '')
+        .toString()
+        .trim();
+    final question = (source['question'] ?? source['pergunta'] ?? '')
+        .toString()
+        .trim();
+    final correct = (source['correct_answer'] ?? source['correctAnswer'] ?? '')
+        .toString()
+        .trim()
+        .toUpperCase();
+    if (explanation.isEmpty ||
+        question.isEmpty ||
+        options.values.any((value) => value.isEmpty) ||
+        !options.containsKey(correct)) {
+      return null;
+    }
+    final whyWrongRaw = source['why_wrong'] ?? source['whyWrong'];
+    final whyWrong = <String, String>{
+      if (whyWrongRaw is Map)
+        for (final letter in const ['A', 'B', 'C'])
+          if ((whyWrongRaw[letter] ?? whyWrongRaw[letter.toLowerCase()]) !=
+              null)
+            letter: (whyWrongRaw[letter] ?? whyWrongRaw[letter.toLowerCase()])
+                .toString(),
+    };
+    return SimWarmupLesson(
+      explanation: explanation,
+      question: question,
+      options: options,
+      correctAnswer: correct,
+      whyCorrect: (source['why_correct'] ?? source['whyCorrect'])?.toString(),
+      whyWrong: whyWrong,
+    );
+  }
+}
+
+class SimServerWarmupClient {
+  SimServerWarmupClient({
+    required this.config,
+    SimHttpTransport? transport,
+    this.timeout = const Duration(seconds: 12),
+  }) : transport = transport ?? DartIoSimHttpTransport();
+
+  final SimAiServerConfig config;
+  final SimHttpTransport transport;
+  final Duration timeout;
+
+  Future<SimWarmupLesson?> generate({
+    required String lessonLocalId,
+    required String objective,
+    required Map<String, dynamic> ficha,
+    required SimLocaleContract locale,
+    String? academic,
+  }) async {
+    final response = await transport.postJson(
+      config.uri(simWarmupPath),
+      headers: await config.jsonHeaders(),
+      body: {
+        'lessonLocalId': lessonLocalId,
+        'objective': objective,
+        'ficha': {
+          ...ficha,
+          ...locale.toJson(),
+          'lessonLocalId': lessonLocalId,
+          'academic_level': ?academic,
+        },
+        ...locale.toJson(),
+        'academic_level': ?academic,
+      },
+      timeout: timeout,
+    );
+    if (!response.ok) return null;
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) return null;
+    return SimWarmupLesson.fromJson(decoded);
   }
 }
 

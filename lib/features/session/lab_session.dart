@@ -139,6 +139,10 @@ class LabSession extends ChangeNotifier {
   LessonRuntimeSnapshot? aulaSnapshot;
   bool aulaRuntimeLoading = false;
   String? aulaRuntimeError;
+  SimWarmupLesson? warmupLesson;
+  bool warmupLoading = false;
+  String? warmupError;
+  String? warmupSelectedAnswer;
 
   VisualLearningFeedbackReport get visualLearningFeedbackReport =>
       buildVisualLearningFeedbackReport(
@@ -790,6 +794,9 @@ class LabSession extends ChangeNotifier {
   Future<void> _doLaunchExperience(String id, int generation) async {
     entryStatus = 't00_running';
     entryError = null;
+    warmupLesson = null;
+    warmupError = null;
+    warmupSelectedAnswer = null;
     notifyListeners();
 
     try {
@@ -849,6 +856,16 @@ class LabSession extends ChangeNotifier {
         },
       );
 
+      unawaited(
+        _prepareWarmupLesson(
+          lessonLocalId: id,
+          objective: freeText.trim(),
+          onboarding: onboarding,
+          academic: academic,
+          generation: generation,
+        ),
+      );
+
       final result = await _prepareExperienceWithAuthRetry(
         id: id,
         args: args,
@@ -877,6 +894,69 @@ class LabSession extends ChangeNotifier {
       entryStatus = 'erro';
       notifyListeners();
     }
+  }
+
+  Future<void> _prepareWarmupLesson({
+    required String lessonLocalId,
+    required String objective,
+    required Map<String, dynamic> onboarding,
+    required String academic,
+    required int generation,
+  }) async {
+    if (objective.trim().isEmpty) return;
+    warmupLoading = true;
+    warmupError = null;
+    notifyListeners();
+    try {
+      final lesson = await SimServerWarmupClient(config: _serverConfig())
+          .generate(
+            lessonLocalId: lessonLocalId,
+            objective: objective,
+            ficha: onboarding,
+            locale: localeContract,
+            academic: academic,
+          );
+      if (!_isCurrentExperience(lessonLocalId, generation)) return;
+      warmupLesson = lesson;
+      warmupLoading = false;
+      warmupError = lesson == null ? 'Aquecimento indisponível.' : null;
+      if (lesson != null) {
+        canonicalStore?.patchState(lessonLocalId, (state) {
+          return state.copyWith(
+            extra: {...state.extra, 'warmup': lesson.toJson()},
+          );
+        });
+      }
+      notifyListeners();
+    } catch (error) {
+      if (!_isCurrentExperience(lessonLocalId, generation)) return;
+      warmupLoading = false;
+      warmupError = error.toString();
+      notifyListeners();
+    }
+  }
+
+  void chooseWarmupAnswer(String answer) {
+    final normalized = answer.trim().toUpperCase();
+    if (!const {'A', 'B', 'C'}.contains(normalized)) return;
+    warmupSelectedAnswer = normalized;
+    final id = lessonLocalId;
+    final lesson = warmupLesson;
+    if (id != null && lesson != null) {
+      canonicalStore?.patchState(id, (state) {
+        return state.copyWith(
+          extra: {
+            ...state.extra,
+            'warmup': {
+              ...lesson.toJson(),
+              'selectedAnswer': normalized,
+              'selectedAt': DateTime.now().millisecondsSinceEpoch,
+            },
+          },
+        );
+      });
+    }
+    notifyListeners();
   }
 
   Future<StudentExperienceResult> _prepareExperienceWithAuthRetry({

@@ -121,6 +121,7 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
         error?.toLowerCase().contains('credit') == true;
     final simStage = _toSimStage(status);
     final isReady = status == 'primeira_aula_pronta';
+    final warmup = widget.session.warmupLesson;
 
     return Scaffold(
       backgroundColor: SimThemeScope.paletteOf(context).background,
@@ -226,6 +227,16 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                                 },
                               ),
                             ),
+                            if (warmup != null || widget.session.warmupLoading)
+                              SimChatReveal(
+                                child: _WarmupRoomCard(
+                                  lesson: warmup,
+                                  loading: widget.session.warmupLoading,
+                                  selectedAnswer:
+                                      widget.session.warmupSelectedAnswer,
+                                  onAnswer: widget.session.chooseWarmupAnswer,
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -233,6 +244,205 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                   ],
                 ),
               ),
+      ),
+    );
+  }
+}
+
+class _WarmupRoomCard extends StatelessWidget {
+  const _WarmupRoomCard({
+    required this.lesson,
+    required this.loading,
+    required this.selectedAnswer,
+    required this.onAnswer,
+  });
+
+  final SimWarmupLesson? lesson;
+  final bool loading;
+  final String? selectedAnswer;
+  final ValueChanged<String> onAnswer;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final item = lesson;
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(18),
+      constraints: const BoxConstraints(maxWidth: 560),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: palette.border.withValues(alpha: 0.7)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: item == null
+          ? Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: palette.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Preparando uma questão de aquecimento...',
+                    style: TextStyle(
+                      color: simMuted,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Questão de aquecimento',
+                  style: TextStyle(
+                    color: simDark,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  item.explanation,
+                  style: const TextStyle(
+                    color: simDark,
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  item.question,
+                  style: const TextStyle(
+                    color: simDark,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                for (final entry in item.options.entries)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _WarmupOptionButton(
+                      letter: entry.key,
+                      text: entry.value,
+                      selected: selectedAnswer == entry.key,
+                      correct: item.correctAnswer == entry.key,
+                      answered: selectedAnswer != null,
+                      onTap: () => onAnswer(entry.key),
+                    ),
+                  ),
+                if (selectedAnswer != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    selectedAnswer == item.correctAnswer
+                        ? (item.whyCorrect?.trim().isNotEmpty == true
+                              ? item.whyCorrect!.trim()
+                              : 'Certo. A aula principal continua sendo preparada.')
+                        : (item.whyWrong[selectedAnswer]?.trim().isNotEmpty ==
+                                  true
+                              ? item.whyWrong[selectedAnswer]!.trim()
+                              : 'Boa tentativa. A aula principal vai explicar melhor.'),
+                    style: TextStyle(
+                      color: selectedAnswer == item.correctAnswer
+                          ? const Color(0xFF047857)
+                          : const Color(0xFFB45309),
+                      fontSize: 13,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+class _WarmupOptionButton extends StatelessWidget {
+  const _WarmupOptionButton({
+    required this.letter,
+    required this.text,
+    required this.selected,
+    required this.correct,
+    required this.answered,
+    required this.onTap,
+  });
+
+  final String letter;
+  final String text;
+  final bool selected;
+  final bool correct;
+  final bool answered;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = answered && correct
+        ? const Color(0xFF10B981)
+        : selected
+        ? const Color(0xFF111827)
+        : const Color(0xFFD1D5DB);
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: answered ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFF3F4F6) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: borderColor),
+              ),
+              child: Text(
+                letter,
+                style: const TextStyle(
+                  color: simDark,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  color: simDark,
+                  fontSize: 14,
+                  height: 1.3,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

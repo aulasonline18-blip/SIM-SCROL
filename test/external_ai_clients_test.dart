@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/external_ai/sim_http_transport.dart';
 import 'package:sim_mobile/sim/external_ai/sim_server_ai_clients.dart';
+import 'package:sim_mobile/sim/localization/sim_locale_contract.dart';
 import 'package:sim_mobile/sim/media/lesson_visual_pipeline.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
@@ -129,6 +130,47 @@ void main() {
       'done',
     ]);
   });
+
+  test(
+    'warmup usa /api/warmup como sala paralela sem curriculo oficial',
+    () async {
+      final transport = RecordingTransport()
+        ..jsonBody =
+            '{"ok":true,"warmup":{"type":"warmup","officialCurriculum":false,"countsForMastery":false,"explanation":"Antes da aula oficial, pense no deslocamento como a distância entre começo e fim.","question":"Um ciclista sai do km 0 e chega ao km 10. Qual é o deslocamento?","options":{"A":"10 km","B":"0 km","C":"20 km"},"correct_answer":"A","why_correct":"A posição final está 10 km depois do início.","why_wrong":{"B":"0 km seria voltar ao ponto inicial.","C":"20 km não é a distância entre início e fim."}}}';
+      final client = SimServerWarmupClient(
+        config: config(),
+        transport: transport,
+      );
+
+      final lesson = await client.generate(
+        lessonLocalId: 'lesson-warmup-1',
+        objective: 'Aprender deslocamento em Física',
+        ficha: const {'free_text': 'Aprender deslocamento em Física'},
+        locale: const SimLocaleContract(
+          interfaceLocale: 'pt-BR',
+          learningLocale: 'pt-BR',
+          explanationLanguage: 'Portuguese',
+        ),
+        academic: 'ano 8',
+      );
+
+      expect(
+        transport.lastUri.toString(),
+        'https://gemini-aid-pal.lovable.app/api/warmup',
+      );
+      expect(transport.lastHeaders?['authorization'], 'Bearer user-token');
+      final body = transport.lastBody as Map;
+      expect(body['lessonLocalId'], 'lesson-warmup-1');
+      expect(body['objective'], 'Aprender deslocamento em Física');
+      expect(body['interfaceLocale'], 'pt-BR');
+      expect((body['ficha'] as Map)['learningLocale'], 'pt-BR');
+      expect((body['ficha'] as Map)['academic_level'], 'ano 8');
+      expect(lesson?.toJson()['officialCurriculum'], isFalse);
+      expect(lesson?.toJson()['countsForMastery'], isFalse);
+      expect(lesson?.options.keys, ['A', 'B', 'C']);
+      expect(lesson?.correctAnswer, 'A');
+    },
+  );
 
   test('imagem usa /api/generate-lesson-image sem chave de provedor', () async {
     final transport = RecordingTransport();
