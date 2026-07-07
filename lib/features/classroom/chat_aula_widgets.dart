@@ -1115,7 +1115,7 @@ class _HistoryQuestionMessage extends StatelessWidget {
       children: [
         if (hasImage) ...[
           Semantics(
-            label: 'Imagem da questão respondida',
+            label: t('aula_answered_question_image'),
             image: true,
             child: Container(
               constraints: const BoxConstraints(maxWidth: 220, maxHeight: 160),

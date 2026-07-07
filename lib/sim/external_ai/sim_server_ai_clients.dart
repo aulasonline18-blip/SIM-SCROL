@@ -7,6 +7,7 @@ import '../media/lesson_image_api_contract.dart';
 import '../media/lesson_visual_models.dart';
 import '../media/lesson_visual_pipeline.dart';
 import '../lesson/lesson_content_validator.dart';
+import '../localization/sim_locale_contract.dart';
 import '../modules/pedagogical_module_contracts.dart';
 import '../state/student_learning_state.dart';
 import 'sim_ai_server_config.dart';
@@ -32,11 +33,18 @@ class SimServerT00Client implements T00BootstrapClient {
 
   @override
   Stream<T00BootstrapChunk> runBootstrap(T00BootstrapRequest request) async* {
+    final locale = _localeFields(
+      interfaceLocale: request.interfaceLocale,
+      learningLocale: request.learningLocale,
+      explanationLanguage: request.explanationLanguage ?? request.lang,
+      targetLanguage: request.targetLanguage,
+    );
     final ficha = {
       ...request.onboarding,
+      ...locale,
       'lessonLocalId': request.lessonLocalId,
-      'language': request.lang,
-      'stableLang': request.lang,
+      'language': locale['learningLocale'],
+      'stableLang': locale['explanationLanguage'],
       'academic_level': request.academic,
       if (request.onboarding['free_text'] == null)
         'free_text': request.onboarding['objetivo'] ?? '',
@@ -47,6 +55,7 @@ class SimServerT00Client implements T00BootstrapClient {
       body: {
         'lessonLocalId': request.lessonLocalId,
         'ficha': ficha,
+        ...locale,
         'timeoutMs': timeout.inMilliseconds,
       },
       timeout: timeout,
@@ -69,7 +78,9 @@ class SimServerT00Client implements T00BootstrapClient {
       );
       return;
     }
-    final session = JsonMap.from(decoded);
+    final session = decoded['session'] is Map
+        ? JsonMap.from(decoded['session'] as Map)
+        : JsonMap.from(decoded);
     final profile = session['profile'] is Map
         ? JsonMap.from(session['profile'] as Map)
         : const <String, dynamic>{};
@@ -103,10 +114,7 @@ class SimServerT00Client implements T00BootstrapClient {
       );
     }
     if (items.isNotEmpty) {
-      yield T00BootstrapChunk(
-        type: 't00_partial_ready',
-        payload: {'count': 1},
-      );
+      yield T00BootstrapChunk(type: 't00_partial_ready', payload: {'count': 1});
     }
     yield T00BootstrapChunk(
       type: 't00_final',
@@ -166,6 +174,7 @@ class SimServerLessonImageClient
     Map<String, dynamic>? visualTrigger,
     Map<String, dynamic>? lessonContext,
   }) async {
+    final locale = _localeFieldsFromMap(lessonContext, visualTrigger);
     final request = GenerateLessonImageRequest(
       prompt: prompt,
       lessonKey: lessonKey,
@@ -175,6 +184,7 @@ class SimServerLessonImageClient
       'prompt': request.prompt,
       'lessonKey': request.lessonKey,
       'aspectRatio': request.aspectRatio,
+      ...locale,
     };
     if (acceptedOfferId != null) body['acceptedOfferId'] = acceptedOfferId;
     if (idempotencyKey != null) body['idempotencyKey'] = idempotencyKey;
@@ -246,6 +256,9 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
     String? stableLang,
     required Map<String, dynamic> visualTrigger,
   }) async {
+    final locale = _localeFieldsFromMap(visualTrigger, {
+      'explanationLanguage': ?stableLang,
+    });
     final topic = visualTrigger['topic']?.toString();
     final visualType = visualTrigger['visual_type']?.toString();
     final imagePrompt =
@@ -260,6 +273,7 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
     final headers = await config.jsonHeaders();
     headers['x-request-id'] = requestId;
     final visualTriggerPayload = <String, Object?>{...visualTrigger}
+      ..addAll(locale)
       ..removeWhere((_, value) => value == null);
     final keyElements = visualTriggerPayload['key_elements'];
     final body = <String, Object?>{
@@ -267,6 +281,7 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
       'topic': topic ?? '',
       'visualType': visualType ?? '',
       'imagePrompt': imagePrompt ?? '',
+      ...locale,
       'outputContract': {
         'format': 'ready_raster_image',
         'acceptedDataUrls': ['png', 'jpeg', 'jpg', 'webp'],
@@ -363,6 +378,10 @@ class SimServerGeneratedAudioClient implements GeneratedAudioClient {
     required String voice,
     required String lessonKey,
   }) async {
+    final locale = _localeFields(
+      learningLocale: lang,
+      explanationLanguage: simLanguageNameForLocale(lang),
+    );
     final request = GenerateLessonAudioRequest(
       text: text,
       lang: lang,
@@ -382,6 +401,7 @@ class SimServerGeneratedAudioClient implements GeneratedAudioClient {
       body: {
         'text': request.text,
         'lang': request.lang,
+        ...locale,
         'lessonKey': request.lessonKey,
         'voice': request.voice,
       },
@@ -483,6 +503,48 @@ String _stableHash(String input) {
   return (hash & 0xffffffff).toRadixString(36);
 }
 
+Map<String, Object?> _localeFieldsForT02(T02LessonRequest request) {
+  return _localeFieldsFromMap(request.profile, {
+    'interfaceLocale': request.interfaceLocale,
+    'learningLocale': request.learningLocale ?? request.lang,
+    'explanationLanguage': request.explanationLanguage ?? request.lang,
+    'targetLanguage': request.targetLanguage,
+  });
+}
+
+Map<String, Object?> _localeFieldsFromMap(
+  Map<String, dynamic>? primary, [
+  Map<String, dynamic>? secondary,
+]) {
+  Object? pick(String key) => primary?[key] ?? secondary?[key];
+  return _localeFields(
+    interfaceLocale: pick('interfaceLocale')?.toString(),
+    learningLocale: pick('learningLocale')?.toString(),
+    explanationLanguage: pick('explanationLanguage')?.toString(),
+    targetLanguage: pick('targetLanguage')?.toString(),
+  );
+}
+
+Map<String, Object?> _localeFields({
+  String? interfaceLocale,
+  String? learningLocale,
+  String? explanationLanguage,
+  String? targetLanguage,
+}) {
+  final learning = normalizeSimLocaleTag(learningLocale ?? explanationLanguage);
+  final iface = normalizeSimLocaleTag(interfaceLocale);
+  final explanation = (explanationLanguage ?? '').trim().isEmpty
+      ? simLanguageNameForLocale(learning)
+      : explanationLanguage!.trim();
+  return {
+    'interfaceLocale': iface,
+    'learningLocale': learning,
+    'explanationLanguage': explanation,
+    if (targetLanguage != null && targetLanguage.trim().isNotEmpty)
+      'targetLanguage': targetLanguage.trim(),
+  };
+}
+
 class SimServerT02Client implements T02LessonClient {
   SimServerT02Client({
     required this.config,
@@ -518,6 +580,7 @@ class SimServerT02Client implements T02LessonClient {
     T02LessonRequest request, {
     required String mode,
   }) async {
+    final locale = _localeFieldsForT02(request);
     final path = config.t02Path;
     if (path == null || path.trim().isEmpty) {
       throw const SimExternalAiException(
@@ -531,9 +594,10 @@ class SimServerT02Client implements T02LessonClient {
         'mode': mode,
         'lessonLocalId': request.lessonLocalId,
         'item': request.item,
+        ...locale,
         if (request.topic != null) 'topic': request.topic,
         if (request.itemIdx != null) 'itemIdx': request.itemIdx,
-        'stable_lang': request.lang,
+        'stable_lang': locale['explanationLanguage'] ?? request.lang,
         'academic_level': request.academic,
         'layer': request.layer.value,
         'err_count': request.errCount,
@@ -569,13 +633,15 @@ class SimServerT02Client implements T02LessonClient {
   Future<T02LessonMaterial> _callServerClassroomSlot(
     T02LessonRequest request,
   ) async {
+    final locale = _localeFieldsForT02(request);
     final response = await transport.postJson(
       config.uri(simServerClassroomSlotPath),
       headers: await config.jsonHeaders(),
       body: {
         'lessonLocalId': request.lessonLocalId,
         'item': request.item,
-        'stable_lang': request.lang,
+        ...locale,
+        'stable_lang': locale['explanationLanguage'] ?? request.lang,
         'academic_level': request.academic,
         'layer': request.layer.value,
         'err_count': request.errCount,
@@ -588,7 +654,7 @@ class SimServerT02Client implements T02LessonClient {
         if (request.curriculumItems.isNotEmpty)
           'adopt': {
             'topic': request.topic ?? request.profile['target_topic'],
-            'profile': request.profile,
+            'profile': {...request.profile, ...locale},
             'curriculumItems': request.curriculumItems,
           },
         ...request.profile,

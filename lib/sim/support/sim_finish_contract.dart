@@ -1,3 +1,5 @@
+import '../ui/sim_i18n.dart';
+
 enum SimFinishArea {
   visualFaithfulness,
   buttons,
@@ -15,70 +17,72 @@ enum SimFinishArea {
 class SimFinishRequirement {
   const SimFinishRequirement({
     required this.area,
-    required this.label,
+    required this.labelKey,
     required this.sourceOfTruth,
   });
 
   final SimFinishArea area;
-  final String label;
+  final String labelKey;
   final String sourceOfTruth;
+
+  String get label => t(labelKey);
 }
 
 const simFinishRequirements = <SimFinishRequirement>[
   SimFinishRequirement(
     area: SimFinishArea.visualFaithfulness,
-    label: 'Fidelidade visual das telas vivas',
+    labelKey: 'finish_visual_faithfulness',
     sourceOfTruth:
         'Portal, Login, Idioma, Objetivo, Curriculo, Placement, Aula',
   ),
   SimFinishRequirement(
     area: SimFinishArea.buttons,
-    label: 'Botoes e portas preservados',
+    labelKey: 'finish_buttons',
     sourceOfTruth: 'Start, Google, anexos, continuar, A/B/C, duvida, audio',
   ),
   SimFinishRequirement(
     area: SimFinishArea.texts,
-    label: 'Textos preservados sem trocar funcao',
+    labelKey: 'finish_texts',
     sourceOfTruth: 'Textos vivos do fluxo traduzido',
   ),
   SimFinishRequirement(
     area: SimFinishArea.menus,
-    label: 'Menus da entrada e aula acessiveis',
+    labelKey: 'finish_menus',
     sourceOfTruth: 'Drawer/menu vivo do SIM',
   ),
   SimFinishRequirement(
     area: SimFinishArea.audioPlaybackState,
-    label: 'Audio com estado visivel',
+    labelKey: 'finish_audio_state',
     sourceOfTruth: 'useLessonAudioController/audio preference',
   ),
   SimFinishRequirement(
     area: SimFinishArea.imagePresentationState,
-    label: 'Imagem com estado visivel',
+    labelKey: 'finish_image_state',
     sourceOfTruth: 'LessonVisualPipeline/generate lesson image',
   ),
   SimFinishRequirement(
     area: SimFinishArea.feedbacks,
-    label: 'Feedbacks de resposta e acoes',
+    labelKey: 'finish_feedbacks',
     sourceOfTruth: 'lessonAnswerFeedback/LearningDecisionEngine',
   ),
   SimFinishRequirement(
     area: SimFinishArea.realLoading,
-    label: 'Loading real para acoes demoradas',
+    labelKey: 'finish_real_loading',
     sourceOfTruth: 'Auth, anexos, preparo, imagem e audio',
   ),
   SimFinishRequirement(
     area: SimFinishArea.errorStates,
-    label: 'Estados de erro visiveis',
+    labelKey: 'finish_error_states',
     sourceOfTruth: 'Auth, objetivo, anexos, audio, imagem, pagamento',
   ),
   SimFinishRequirement(
     area: SimFinishArea.testableApk,
-    label: 'APK debug testavel',
+    labelKey: 'finish_testable_apk',
     sourceOfTruth: 'flutter build apk --debug',
   ),
   SimFinishRequirement(
     area: SimFinishArea.androidPhoneTabletAdjustments,
-    label: 'Ajustes Android celular/tablet',
+    labelKey: 'finish_android_adjustments',
     sourceOfTruth: 'SafeArea, scroll, max width, deep link e permissoes',
   ),
 ];

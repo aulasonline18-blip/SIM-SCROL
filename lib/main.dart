@@ -22,6 +22,7 @@ import 'sim/cloud/supabase_student_state_cloud_storage.dart';
 import 'sim/config/sim_environment.dart';
 import 'sim/config/sim_scroll_flags.dart';
 import 'sim/external_ai/sim_ai_server_config.dart';
+import 'sim/localization/sim_locale_contract.dart';
 import 'sim/state/shared_prefs_state_storage.dart';
 import 'sim/state/student_state_store.dart';
 import 'sim/ui/sim_i18n.dart';
@@ -102,8 +103,8 @@ class SimBootFailureApp extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'SIM nao iniciou',
+                    Text(
+                      t('boot_failure_title'),
                       style: TextStyle(
                         color: Color(0xFF111827),
                         fontSize: 24,
@@ -111,8 +112,8 @@ class SimBootFailureApp extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'A configuracao de producao precisa ser corrigida para abrir o app.',
+                    Text(
+                      t('boot_failure_body'),
                       style: TextStyle(
                         color: Color(0xFF374151),
                         fontSize: 15,
@@ -156,8 +157,8 @@ class SimRuntimeFailureView extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'SIM encontrou um erro',
+                Text(
+                  t('runtime_failure_title'),
                   style: TextStyle(
                     color: Color(0xFF111827),
                     fontSize: 22,
@@ -165,8 +166,8 @@ class SimRuntimeFailureView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'O app abriu, mas uma parte da tela falhou. Tente novamente.',
+                Text(
+                  t('runtime_failure_body'),
                   style: TextStyle(
                     color: Color(0xFF374151),
                     fontSize: 15,
@@ -257,7 +258,10 @@ class _SimAppState extends State<SimApp> {
 
   @override
   Widget build(BuildContext context) {
-    setSimActiveLanguage(session.selectedLanguageCode ?? session.stableLang);
+    final interfaceLocale = session.resolveInterfaceLocale(
+      PlatformDispatcher.instance.locale,
+    );
+    setSimActiveLanguage(simUiCodeForLocaleTag(interfaceLocale));
     Widget screen;
     final routePath = Uri.tryParse(session.route)?.path ?? session.route;
     switch (routePath) {
@@ -319,11 +323,9 @@ class _SimAppState extends State<SimApp> {
         title: 'SIM',
         locale: simActiveLocale,
         supportedLocales: const [
-          Locale('en'),
           Locale('pt', 'BR'),
+          Locale('en'),
           Locale('es'),
-          Locale('fr'),
-          Locale('ja'),
         ],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         themeMode: _darkMode ? ThemeMode.dark : ThemeMode.light,

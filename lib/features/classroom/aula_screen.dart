@@ -713,7 +713,7 @@ class _AulaLabScreenState extends State<AulaLabScreen>
                             const SizedBox(height: 16),
                             Semantics(
                               button: true,
-                              label: 'Tentar novamente preparar aula',
+                              label: t('aula_retry_prepare'),
                               child: Material(
                                 color: const Color(0x0F000000),
                                 borderRadius: BorderRadius.circular(8),
@@ -813,7 +813,7 @@ class _AulaLabScreenState extends State<AulaLabScreen>
                                 const SizedBox(height: 12),
                                 DoubtProgressBar(
                                   progress: session.doubt.progress.toDouble(),
-                                  label: 'Analisando sua dúvida...',
+                                  label: t('aula_doubt_processing'),
                                 ),
                               ],
                               // Doubt: explaining / error â†’ explanation card
@@ -1070,7 +1070,7 @@ class _AulaLabScreenState extends State<AulaLabScreen>
                             const SizedBox(height: 16),
                             Semantics(
                               button: true,
-                              label: 'Tentar novamente preparar aula',
+                              label: t('aula_retry_prepare'),
                               child: Material(
                                 color: palette.text,
                                 borderRadius: BorderRadius.circular(10),
@@ -1299,7 +1299,7 @@ class _FontScaleButton extends StatelessWidget {
     return Semantics(
       button: true,
       excludeSemantics: true,
-      label: 'Tamanho da letra: nível $level de 5',
+      label: t('aula_font_scale_label', {'level': level}),
       child: Material(
         color: palette.surface,
         borderRadius: BorderRadius.circular(16),
@@ -1369,7 +1369,7 @@ class _AulaStudyRail extends StatelessWidget {
     final palette = SimThemeScope.paletteOf(context);
     return Semantics(
       container: true,
-      label: 'Ferramentas da aula',
+      label: t('aula_tools'),
       child: Container(
         key: const Key('aula-study-rail'),
         width: 72,
@@ -1389,7 +1389,10 @@ class _AulaStudyRail extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('AULA', style: SimTypography.meta.copyWith(fontSize: 9)),
+            Text(
+              t('aula_header_short'),
+              style: SimTypography.meta.copyWith(fontSize: 9),
+            ),
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
@@ -2146,7 +2149,7 @@ class _FixedBubbleState extends State<_FixedBubble>
             ),
           );
     return Semantics(
-      label: 'Áudio da aula tocando',
+      label: t('aula_audio_playing'),
       liveRegion: true,
       child: child,
     );

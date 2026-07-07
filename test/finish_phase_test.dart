@@ -13,6 +13,7 @@ import 'package:sim_mobile/main.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/support/sim_finish_contract.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
+import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 import 'package:sim_mobile/sim/ui/widgets/sim_typewriter.dart';
 
 class FakeAttachmentTransport implements SimHttpTransport {
@@ -208,7 +209,7 @@ void main() {
     expect(find.text('Audio da aula ligado'), findsNothing);
     expect(find.text('Gerar imagem'), findsNothing);
 
-    await tester.tap(find.bySemanticsLabel('Tocar áudio da aula'));
+    await tester.tap(find.bySemanticsLabel(t('aula_audio_play')));
     await tester.pump();
     expect(find.text('Audio da aula ligado'), findsNothing);
     await tester.pumpAndSettle();
@@ -356,7 +357,7 @@ void main() {
     expect(find.text('Imagem da aula pronta'), findsNothing);
     expect(find.byType(LessonImageStudySurface), findsOneWidget);
     expect(find.text('fluxo do sangue entre coração e corpo'), findsOneWidget);
-    expect(find.byTooltip('Ampliar imagem'), findsOneWidget);
+    expect(find.byTooltip(t('aula_image_expand')), findsOneWidget);
     expect(settled, 1);
   });
 
@@ -377,14 +378,14 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byTooltip('Ampliar imagem'));
+    await tester.tap(find.byTooltip(t('aula_image_expand')));
     await tester.pumpAndSettle();
 
     expect(find.byType(InteractiveViewer), findsOneWidget);
-    expect(find.text('Apoio visual'), findsOneWidget);
+    expect(find.text(t('aula_image_alt')), findsOneWidget);
     expect(find.text('parábola com eixo e intercepto'), findsWidgets);
 
-    await tester.tap(find.byTooltip('Fechar imagem'));
+    await tester.tap(find.byTooltip(t('aula_image_close')));
     await tester.pumpAndSettle();
 
     expect(find.byType(InteractiveViewer), findsNothing);
@@ -406,7 +407,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Imagem indisponível'), findsOneWidget);
+    expect(find.text(t('aula_image_unavailable_short')), findsOneWidget);
     expect(settled, 1);
   });
 
@@ -470,6 +471,6 @@ void main() {
     expect(provider, isA<MemoryImage>());
     expect((provider as MemoryImage).bytes, base64Decode(png));
     expect(find.text('Imagem rasterizada pelo servidor'), findsOneWidget);
-    expect(find.text('Imagem indisponível'), findsNothing);
+    expect(find.text(t('aula_image_unavailable_short')), findsNothing);
   });
 }

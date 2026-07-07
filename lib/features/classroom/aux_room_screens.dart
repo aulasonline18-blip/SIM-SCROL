@@ -163,7 +163,7 @@ class _AuxQuestionScreen extends StatelessWidget {
                   if (onBack != null)
                     SimIconAction(
                       icon: Icons.arrow_back,
-                      semanticLabel: 'Voltar da sala auxiliar',
+                      semanticLabel: t('aux_room_back'),
                       onPressed: onBack,
                       size: 40,
                       iconSize: 20,
@@ -215,7 +215,7 @@ class _AuxQuestionScreen extends StatelessWidget {
                     const SizedBox(width: 8),
                     SimIconAction(
                       icon: Icons.volume_up,
-                      semanticLabel: 'Tocar áudio da sala auxiliar',
+                      semanticLabel: t('aux_room_audio_play'),
                       onPressed: onAudio,
                       size: 40,
                       iconSize: 18,
@@ -499,7 +499,7 @@ class _AuxFeedbackBox extends StatelessWidget {
           const SizedBox(width: 12),
           Semantics(
             button: true,
-            label: 'Avançar sala auxiliar',
+            label: t('aux_room_advance'),
             child: Material(
               color: simDark,
               borderRadius: BorderRadius.circular(8),

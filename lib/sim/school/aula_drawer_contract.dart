@@ -1,17 +1,21 @@
+import '../ui/sim_i18n.dart';
+
 class AulaDrawerAction {
   const AulaDrawerAction({
     required this.id,
-    required this.label,
+    required this.labelKey,
     required this.effect,
     this.destination,
     this.requiresAuth = false,
   });
 
   final String id;
-  final String label;
+  final String labelKey;
   final String effect;
   final String? destination;
   final bool requiresAuth;
+
+  String get label => t(labelKey);
 }
 
 const aulaDrawerInitialVisible = 30;
@@ -20,95 +24,95 @@ const aulaDrawerPageSize = 30;
 const aulaDrawerActions = <AulaDrawerAction>[
   AulaDrawerAction(
     id: 'new_lesson',
-    label: 'Nova aula',
+    labelKey: 'nova_aula',
     effect: 'freezeActive, clearOnboarding, clearCurriculo',
     destination: '/cyber/aula',
   ),
   AulaDrawerAction(
     id: 'top_up',
-    label: 'Recarregar créditos',
+    labelKey: 'recarregar_creditos',
     effect: 'save returnTo and open credits',
     destination: '/creditos',
     requiresAuth: true,
   ),
   AulaDrawerAction(
     id: 'open_current_lesson',
-    label: 'Abrir aula',
+    labelKey: 'menu_open_lesson',
     effect: 'open current active lesson or start objective flow if none exists',
     destination: '/cyber/aula',
   ),
   AulaDrawerAction(
     id: 'parent_panel',
-    label: 'Painel do responsável',
+    labelKey: 'parent_panel',
     effect: 'open responsible adult support panel',
     destination: '/pai',
     requiresAuth: true,
   ),
   AulaDrawerAction(
     id: 'privacy',
-    label: 'Privacidade',
+    labelKey: 'privacy',
     effect: 'open privacy policy',
     destination: '/privacidade',
   ),
   AulaDrawerAction(
     id: 'terms',
-    label: 'Termos',
+    labelKey: 'terms',
     effect: 'open terms of use',
     destination: '/termos',
   ),
   AulaDrawerAction(
     id: 'search_history',
-    label: 'Buscar histórico',
+    labelKey: 'drawer_search_history',
     effect: 'filter cloud and local lessons by tema, idioma, nivel or id',
   ),
   AulaDrawerAction(
     id: 'open_cloud_lesson',
-    label: 'Abrir aula da conta',
+    labelKey: 'drawer_open_cloud_lesson',
     effect: 'hydrate StudentLearningState from cloud and set active',
     destination: '/cyber/aula',
     requiresAuth: true,
   ),
   AulaDrawerAction(
     id: 'open_local_lesson',
-    label: 'Abrir aula local',
+    labelKey: 'drawer_open_local_lesson',
     effect: 'restore cyber lesson to session',
     destination: '/cyber/aula',
   ),
   AulaDrawerAction(
     id: 'rename',
-    label: 'Renomear',
+    labelKey: 'drawer_rename',
     effect: 'rename local/cloud lesson and enqueue sync',
   ),
   AulaDrawerAction(
     id: 'delete',
-    label: 'Apagar',
+    labelKey: 'drawer_delete',
     effect: 'local-first tombstone and cloud delete when authenticated',
   ),
   AulaDrawerAction(
     id: 'export_backup',
-    label: 'Exportar',
+    labelKey: 'drawer_export_backup',
     effect: 'download sim-backup-YYYY-MM-DD.txt',
   ),
   AulaDrawerAction(
     id: 'import_backup',
-    label: 'Importar',
+    labelKey: 'drawer_import_backup',
     effect: 'parse backup, import lessons, enqueue sync and pull cloud',
   ),
   AulaDrawerAction(
     id: 'export_status',
-    label: 'Status',
+    labelKey: 'drawer_export_status',
     effect: 'download sim-status-YYYY-MM-DD.txt from fatherPanel report',
   ),
   AulaDrawerAction(
     id: 'logout',
-    label: 'Sair',
+    labelKey: 'logout',
     effect: 'signOut, clear local session, open login',
     destination: '/login',
     requiresAuth: true,
   ),
   AulaDrawerAction(
     id: 'delete_account',
-    label: 'Solicitar exclusão da conta',
+    labelKey: 'delete_account_request',
     effect: 'open account deletion route',
     destination: '/conta/deletar',
     requiresAuth: true,

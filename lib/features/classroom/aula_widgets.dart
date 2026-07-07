@@ -268,10 +268,10 @@ class AulaTopBar extends StatelessWidget {
                             ? palette.text
                             : palette.muted,
                         semanticLabel: session.audioLoading
-                            ? 'Preparando áudio da aula'
+                            ? t('aula_audio_preparing')
                             : session.audioPlaying
-                            ? 'Parar áudio da aula'
-                            : 'Tocar áudio da aula',
+                            ? t('aula_audio_stop')
+                            : t('aula_audio_play'),
                         onTap: session.toggleAudio,
                         size: iconTouchSize,
                       ),
@@ -292,7 +292,7 @@ class AulaTopBar extends StatelessWidget {
                         Semantics(
                           button: true,
                           excludeSemantics: true,
-                          label: 'Abrir revisão',
+                          label: t('aula_open_review'),
                           child: Material(
                             color: Colors.transparent,
                             borderRadius: BorderRadius.circular(SimRadius.md),
@@ -372,7 +372,7 @@ class _HeaderFontScaleBtn extends StatelessWidget {
     return Semantics(
       button: true,
       excludeSemantics: true,
-      label: 'Tamanho da letra: nível $level de 5',
+      label: t('aula_font_scale_label', {'level': level}),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(SimRadius.md),
@@ -526,10 +526,10 @@ class LessonImagePanel extends StatelessWidget {
               if (!ready)
                 Text(
                   loading
-                      ? 'Gerando imagem da aula...'
+                      ? t('aula_image_loading')
                       : offer
                       ? t('aula_img_desc')
-                      : error ?? 'Imagem indisponível. A aula continua.',
+                      : error ?? t('aula_image_unavailable'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: palette.text,
@@ -739,9 +739,9 @@ class LessonImageStudySurface extends StatelessWidget {
               Semantics(
                 container: true,
                 button: true,
-                label: 'Ampliar imagem da aula',
+                label: t('aula_image_expand_lesson'),
                 child: IconButton(
-                  tooltip: 'Ampliar imagem',
+                  tooltip: t('aula_image_expand'),
                   onPressed: () => showLessonImageInspector(
                     context,
                     data: data,
@@ -784,7 +784,7 @@ Future<void> showLessonImageInspector(
                   children: [
                     Expanded(
                       child: Text(
-                        'Apoio visual',
+                        t('aula_image_alt'),
                         style: TextStyle(
                           color: palette.text,
                           fontSize: 17,
@@ -793,7 +793,7 @@ Future<void> showLessonImageInspector(
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Fechar imagem',
+                      tooltip: t('aula_image_close'),
                       onPressed: () => Navigator.of(dialogContext).pop(),
                       icon: const Icon(Icons.close_rounded),
                       color: palette.text,
@@ -937,7 +937,7 @@ class LessonImageErrorView extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
     return Semantics(
-      label: 'Imagem indisponível',
+      label: t('aula_image_unavailable_short'),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -949,7 +949,7 @@ class LessonImageErrorView extends StatelessWidget {
           if (!compact) ...[
             const SizedBox(height: 6),
             Text(
-              'Imagem indisponível',
+              t('aula_image_unavailable_short'),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: palette.muted,

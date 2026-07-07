@@ -58,6 +58,10 @@ class CompleteLessonParams {
     this.curriculumItems = const [],
     this.topic,
     this.itemIdx,
+    this.interfaceLocale,
+    this.learningLocale,
+    this.explanationLanguage,
+    this.targetLanguage,
   });
 
   final String lessonLocalId;
@@ -74,6 +78,10 @@ class CompleteLessonParams {
   final List<JsonMap> curriculumItems;
   final String? topic;
   final int? itemIdx;
+  final String? interfaceLocale;
+  final String? learningLocale;
+  final String? explanationLanguage;
+  final String? targetLanguage;
 }
 
 class CompleteLesson {
@@ -115,6 +123,8 @@ String lessonKeyFor(CompleteLessonParams params) {
     'lesson:v1:m2:v2',
     params.lessonLocalId,
     params.lang,
+    params.learningLocale ?? '',
+    params.explanationLanguage ?? '',
     params.academic,
     params.layer.value,
     params.mode.name,

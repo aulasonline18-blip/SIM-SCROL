@@ -1,4 +1,5 @@
 import '../state/student_learning_state.dart';
+import '../localization/sim_locale_contract.dart';
 
 enum StudentExperienceRouteStage {
   profile,
@@ -103,6 +104,11 @@ class StudentExperienceArgs {
     required this.idioma,
     required this.lessonLocalId,
     required this.onboarding,
+    this.localeContract = const SimLocaleContract(
+      interfaceLocale: 'pt-BR',
+      learningLocale: 'pt-BR',
+      explanationLanguage: 'Portuguese',
+    ),
     this.onStage,
   });
 
@@ -110,6 +116,7 @@ class StudentExperienceArgs {
   final String idioma;
   final String lessonLocalId;
   final JsonMap onboarding;
+  final SimLocaleContract localeContract;
   final void Function(StudentExperienceRouteStage stage)? onStage;
 }
 

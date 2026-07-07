@@ -40,6 +40,7 @@ import '../../session/entry_form_state.dart';
 import '../../session/lesson_ui_state.dart';
 import '../../session/navigation_state.dart';
 import '../../sim/lesson/lesson_models.dart';
+import '../../sim/localization/sim_locale_contract.dart';
 import '../../sim/lesson/lesson_event_bus.dart';
 import '../../sim/media/audio_core.dart';
 import '../../sim/media/audio_preference.dart';
@@ -153,6 +154,7 @@ class LabSession extends ChangeNotifier {
   Future<void>? _creditsLoadInFlight;
   Future<void>? _launchExperienceInFlight;
   int _experienceGeneration = 0;
+  late SimLocaleSettings localeSettings = SimLocaleSettings.load(prefs);
 
   late final AudioPreference _audioPreference = AudioPreference(
     storage: prefs == null ? null : SharedPrefsAudioPreferenceStorage(prefs!),
@@ -209,6 +211,14 @@ class LabSession extends ChangeNotifier {
       entryForm.selectedLanguageCode = value;
   String? get stableLang => entryForm.stableLang;
   set stableLang(String? value) => entryForm.stableLang = value;
+  String get interfaceLocaleTag =>
+      localeSettings.resolveInterfaceLocale(PlatformDispatcher.instance.locale);
+  String get learningLocaleTag =>
+      normalizeSimLocaleTag(localeSettings.learningLocale);
+  String get explanationLanguage =>
+      simLanguageNameForLocale(localeSettings.learningLocale);
+  SimLocaleContract get localeContract =>
+      localeSettings.contract(PlatformDispatcher.instance.locale);
   String get otherLanguage => entryForm.otherLanguage;
   String get freeText => entryForm.freeText;
   set freeText(String value) => entryForm.freeText = value;
@@ -562,7 +572,18 @@ class LabSession extends ChangeNotifier {
     final stableLabel = code == 'other'
         ? name.trim()
         : stableLangLabelFor(code, name);
-    setSimActiveLanguage(code == 'other' ? stableLabel : code);
+    final localeTag = normalizeSimLocaleTag(
+      code == 'other' ? stableLabel : code,
+    );
+    setSimActiveLanguage(simUiCodeForLocaleTag(localeTag));
+    localeSettings = localeSettings.copyWith(
+      followDeviceInterface: false,
+      manualInterfaceLocale: localeTag,
+      learningLocale: localeTag,
+      targetLanguage: null,
+    );
+    final p = prefs;
+    if (p != null) unawaited(localeSettings.save(p));
     entryForm.updateLanguage(code, stableLabel);
     final cleanName = name.trim();
     if (code != 'other' || cleanName.isNotEmpty) {
@@ -571,6 +592,44 @@ class LabSession extends ChangeNotifier {
   }
 
   void setOtherLanguage(String value) => entryForm.setOtherLanguage(value);
+
+  Future<void> setInterfaceLanguage({
+    required bool followDevice,
+    String? localeTag,
+  }) async {
+    localeSettings = localeSettings.copyWith(
+      followDeviceInterface: followDevice,
+      manualInterfaceLocale: followDevice
+          ? null
+          : normalizeSimLocaleTag(localeTag),
+    );
+    final p = prefs ?? await SharedPreferences.getInstance();
+    await localeSettings.save(p);
+    setSimActiveLanguage(simUiCodeForLocaleTag(resolveInterfaceLocale()));
+    notifyListeners();
+  }
+
+  Future<void> setLearningLanguage({
+    required String localeTag,
+    String? targetLanguage,
+  }) async {
+    final normalized = normalizeSimLocaleTag(localeTag);
+    localeSettings = localeSettings.copyWith(
+      learningLocale: normalized,
+      targetLanguage: targetLanguage,
+    );
+    final p = prefs ?? await SharedPreferences.getInstance();
+    await localeSettings.save(p);
+    entryForm.updateLanguage(
+      simUiCodeForLocaleTag(normalized),
+      simLanguageNameForLocale(normalized),
+    );
+    notifyListeners();
+  }
+
+  String resolveInterfaceLocale([Locale? deviceLocale]) {
+    return localeSettings.resolveInterfaceLocale(deviceLocale);
+  }
 
   void setFreeText(String value) => entryForm.updateFreeText(value);
 
@@ -656,7 +715,7 @@ class LabSession extends ChangeNotifier {
   String _attachmentPickErrorMessage(Object error) {
     final text = error.toString();
     if (text.contains('permission') || text.contains('denied')) {
-      return 'Permissao negada para acessar o anexo.';
+      return t('attachment_permission_denied');
     }
     if (text.contains('AUDIO_NOT_SUPPORTED')) {
       return entryFormAudioNotSupportedMessage;
@@ -664,7 +723,7 @@ class LabSession extends ChangeNotifier {
     if (text.contains('VIDEO_NOT_SUPPORTED')) {
       return entryFormVideoNotSupportedMessage;
     }
-    return 'Nao foi possivel abrir o anexo.';
+    return t('attachment_open_failed');
   }
 
   bool saveObjectiveEntry() {
@@ -675,8 +734,8 @@ class LabSession extends ChangeNotifier {
         : freeTrim;
     entryForm.attachmentsText = entryForm.buildAttachmentsText();
     final guided = _guidedProfileFields(clipped);
-    final language = stableLang ?? 'English';
-    final id = _deriveLessonLocalId(clipped, selectedLanguageCode ?? language);
+    final language = explanationLanguage;
+    final id = _deriveLessonLocalId(clipped, learningLocaleTag);
     lessonLocalId = id;
     entryForm.studentProfileNotes = _studentProfileNotes(
       objective: clipped,
@@ -688,6 +747,7 @@ class LabSession extends ChangeNotifier {
       id: id,
       objective: clipped,
       language: language,
+      locale: localeContract,
       guided: guided,
     );
     entryStatus = 'pedido_recebido';
@@ -753,10 +813,11 @@ class LabSession extends ChangeNotifier {
       final onboarding = <String, dynamic>{
         'objetivo': freeText.trim(),
         'free_text': freeText.trim(),
-        'idioma': stableLang ?? 'pt-BR',
-        'language': selectedLanguageCode ?? stableLang ?? 'pt-BR',
-        'stableLang': stableLang ?? 'pt-BR',
-        'STABLE_LANG': stableLang ?? 'pt-BR',
+        ...localeContract.toJson(),
+        'idioma': explanationLanguage,
+        'language': learningLocaleTag,
+        'stableLang': explanationLanguage,
+        'STABLE_LANG': explanationLanguage,
         'ACADEMIC_LEVEL': academic,
         'academic_level': academic,
         'nivel': academic,
@@ -771,7 +832,8 @@ class LabSession extends ChangeNotifier {
       };
       final args = StudentExperienceArgs(
         academic: academic,
-        idioma: stableLang ?? 'pt-BR',
+        idioma: explanationLanguage,
+        localeContract: localeContract,
         lessonLocalId: id,
         onboarding: onboarding,
         onStage: (stage) {
@@ -918,6 +980,7 @@ class LabSession extends ChangeNotifier {
     required String id,
     required String objective,
     required String language,
+    required SimLocaleContract locale,
     JsonMap guided = const {},
   }) {
     canonicalStore?.patchState(id, (state) {
@@ -927,19 +990,23 @@ class LabSession extends ChangeNotifier {
           preferredName: preferredName.trim().isEmpty
               ? state.profile.preferredName
               : preferredName.trim(),
-          language: selectedLanguageCode ?? language,
-          stableLang: stableLang ?? language,
+          language: locale.learningLocale,
+          stableLang: locale.explanationLanguage,
           objetivo: objective,
           targetTopic: objective,
           sessionGoal: objective,
-          extra: {...state.profile.extra, ...guided},
+          extra: {...state.profile.extra, ...guided, ...locale.toJson()},
         ),
       );
     });
     canonicalStore?.appendEvent(
       lessonLocalId: id,
       type: 'STUDENT_FORM_SUBMITTED',
-      payload: {'objective_length': objective.length, 'language': language},
+      payload: {
+        'objective_length': objective.length,
+        'language': language,
+        ...locale.toJson(),
+      },
       source: 'lab_session',
       userId: userId,
     );
@@ -1683,7 +1750,7 @@ class LabSession extends ChangeNotifier {
       lessonUiState.imageRequestId = error.requestId;
       lessonUiState.imageRetryable = error.retryable;
       imageStatus = 'error';
-      imageError = 'Imagem indisponível. A aula continua sem imagem.';
+      imageError = t('aula_image_unavailable_no_image');
       _markLessonImageFailed(
         [
           if (error.code != null) error.code,
@@ -1693,7 +1760,7 @@ class LabSession extends ChangeNotifier {
       );
     } catch (error) {
       imageStatus = 'error';
-      imageError = 'Imagem indisponível. A aula continua sem imagem.';
+      imageError = t('aula_image_unavailable_no_image');
       _markLessonImageFailed(error.toString());
     } finally {
       lessonImageOfferLoading = false;
@@ -2070,7 +2137,7 @@ class LabSession extends ChangeNotifier {
       navigationState.openRoute('/');
     } catch (error) {
       lessonUiState.failAccountDeletionRequest(
-        'Não foi possível concluir a exclusão agora: $error',
+        t('account_delete_failed', {'error': error}),
       );
     }
   }
@@ -2124,7 +2191,7 @@ class LabSession extends ChangeNotifier {
         lessonKey: '$id:$source',
       );
     } catch (_) {
-      audioError = 'Nao foi possivel preparar o audio agora.';
+      audioError = t('audio_prepare_failed');
       notifyListeners();
     }
   }
@@ -2255,10 +2322,10 @@ class LabSession extends ChangeNotifier {
       );
       audioPlaying = started && controller.falando;
       if (!started) {
-        audioError = 'Áudio ainda não está disponível.';
+        audioError = t('aula_audio_unavailable');
       }
     } catch (_) {
-      audioError = 'Não foi possível preparar o áudio agora.';
+      audioError = t('audio_prepare_failed');
       audioPlaying = false;
     } finally {
       audioLoading = false;

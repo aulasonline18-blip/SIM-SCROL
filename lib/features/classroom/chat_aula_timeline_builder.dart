@@ -246,7 +246,7 @@ String? _studentFacingRuntimeError(String? raw) {
   if (text == null || text.isEmpty) return null;
   final lower = text.toLowerCase();
   if (lower.contains('lessonlocalid ausente')) {
-    return 'Escolha um objetivo para abrir a aula.';
+    return t('aula_choose_goal');
   }
   if (lower.contains('http 401') ||
       lower.contains('http 403') ||
@@ -254,13 +254,13 @@ String? _studentFacingRuntimeError(String? raw) {
       lower.contains('unauthorized') ||
       lower.contains('forbidden') ||
       lower.contains('missing bearer')) {
-    return 'Sua sessão expirou. Entre novamente para continuar a aula.';
+    return t('aula_session_expired');
   }
   if (lower.contains('socketexception') ||
       lower.contains('failed host lookup') ||
       lower.contains('connection') ||
       lower.contains('timeout')) {
-    return 'Não consegui falar com o servidor agora. Tente novamente.';
+    return t('aula_server_unavailable');
   }
   return text;
 }

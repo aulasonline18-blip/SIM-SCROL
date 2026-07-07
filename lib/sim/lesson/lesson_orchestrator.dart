@@ -180,7 +180,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     final result = await visualPipeline.resolveVisual(
       trigger: trigger,
       lessonKey: key,
-      stableLang: params.lang,
+      stableLang: params.explanationLanguage ?? params.lang,
       academicLevel: params.academic,
       allowPaidImages: true,
       acceptedOfferId: null,
@@ -295,6 +295,10 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
         curriculumItems: params.curriculumItems,
         topic: params.topic,
         itemIdx: params.itemIdx,
+        interfaceLocale: params.interfaceLocale,
+        learningLocale: params.learningLocale,
+        explanationLanguage: params.explanationLanguage,
+        targetLanguage: params.targetLanguage,
       ),
     );
     final conteudo = LessonContent(

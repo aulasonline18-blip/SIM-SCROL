@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../sim/external_ai/sim_ai_server_config.dart';
 import '../sim/external_ai/sim_server_attachment_client.dart';
+import '../sim/ui/sim_i18n.dart';
 
 const entryFormMaxFreeText = 1500;
 const entryFormMaxAttachments = 3;
@@ -262,7 +263,7 @@ class EntryFormState extends ChangeNotifier {
     if (text.contains('VIDEO_NOT_SUPPORTED')) {
       return entryFormVideoNotSupportedMessage;
     }
-    return 'Não foi possível ler o anexo agora.';
+    return t('attachment_read_failed');
   }
 
   void _replaceAttachment(String id, AttachmentDraft next) {

@@ -63,6 +63,10 @@ class StudentExperienceT02Adapter {
       curriculumItems: _curriculumSnapshot(first.curriculum),
       topic: topic,
       itemIdx: first.itemIndex,
+      interfaceLocale: args.localeContract.interfaceLocale,
+      learningLocale: args.localeContract.learningLocale,
+      explanationLanguage: args.localeContract.explanationLanguage,
+      targetLanguage: args.localeContract.targetLanguage,
       pedagogicalEnvelope: _pedagogicalEnvelope(mergedOnboarding),
     );
 
@@ -235,7 +239,8 @@ class StudentExperienceT02Adapter {
         {
           'order': index + 1,
           'marker': curriculum.items[index].marker,
-          'title': curriculum.items[index].title ?? curriculum.items[index].text,
+          'title':
+              curriculum.items[index].title ?? curriculum.items[index].text,
           'text': curriculum.items[index].text,
           'purpose': curriculum.items[index].teacherText,
           'microitem_for_teacher': curriculum.items[index].teacherText,

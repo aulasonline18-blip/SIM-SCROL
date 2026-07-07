@@ -92,14 +92,68 @@ class _IdiomaScreenState extends State<IdiomaScreen> {
               supportingText: t('language_body'),
             ),
           ),
+          SimChatReveal(
+            delay: const Duration(milliseconds: 80),
+            child: SimChatBubble(
+              text: t('language_app_title'),
+              supportingText: t('language_app_body'),
+            ),
+          ),
           SimChatChoiceWrap.staggered(
             children: [
-              for (final language in supportedLangs)
+              SimChatChoiceChip(
+                label: t('language_follow_device'),
+                selected: session.localeSettings.followDeviceInterface,
+                onTap: () =>
+                    unawaited(session.setInterfaceLanguage(followDevice: true)),
+              ),
+              for (final language in supportedLangs.where(
+                (lang) => const {'pt', 'en', 'es'}.contains(lang.code),
+              ))
                 SimChatChoiceChip(
                   label: language.native.isEmpty
                       ? language.name
                       : '${language.native} · ${language.name}',
-                  selected: session.selectedLanguageCode == language.code,
+                  selected:
+                      !session.localeSettings.followDeviceInterface &&
+                      session.interfaceLocaleTag ==
+                          switch (language.code) {
+                            'pt' => 'pt-BR',
+                            'es' => 'es',
+                            _ => 'en',
+                          },
+                  onTap: () => unawaited(
+                    session.setInterfaceLanguage(
+                      followDevice: false,
+                      localeTag: language.code,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          SimChatReveal(
+            delay: const Duration(milliseconds: 120),
+            child: SimChatBubble(
+              text: t('language_lessons_title'),
+              supportingText: t('language_lessons_body'),
+            ),
+          ),
+          SimChatChoiceWrap.staggered(
+            children: [
+              for (final language in supportedLangs.where(
+                (lang) => const {'pt', 'en', 'es'}.contains(lang.code),
+              ))
+                SimChatChoiceChip(
+                  label: language.native.isEmpty
+                      ? language.name
+                      : '${language.native} · ${language.name}',
+                  selected:
+                      session.learningLocaleTag ==
+                      switch (language.code) {
+                        'pt' => 'pt-BR',
+                        'es' => 'es',
+                        _ => 'en',
+                      },
                   onTap: () => _pick(language.code, language.name),
                 ),
               SimChatChoiceChip(
@@ -537,11 +591,12 @@ class _SimChatRevealState extends State<SimChatReveal>
     vsync: this,
     duration: const Duration(milliseconds: 460),
   );
+  Timer? _delayTimer;
 
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(widget.delay, () {
+    _delayTimer = Timer(widget.delay, () {
       if (!mounted) return;
       final reduced = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
       if (reduced) {
@@ -564,6 +619,7 @@ class _SimChatRevealState extends State<SimChatReveal>
 
   @override
   void dispose() {
+    _delayTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }

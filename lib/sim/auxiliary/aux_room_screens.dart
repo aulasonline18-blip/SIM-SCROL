@@ -1,4 +1,5 @@
 import 'aux_room_models.dart';
+import '../ui/sim_i18n.dart';
 
 class DoubtInputSheetModel {
   const DoubtInputSheetModel({
@@ -22,23 +23,19 @@ class DoubtInputSheetModel {
   final String removeLabel;
 }
 
-const doubtInputSheetModel = DoubtInputSheetModel(
-  title: 'Enviar dúvida',
-  description:
-      'Escreva sua dúvida ou envie uma foto do exercício, resolução, fórmula, gráfico ou tabela.',
-  placeholder: 'Escreva sua dúvida aqui...',
-  submitLabel: 'Enviar dúvida',
-  busyLabel: 'Enviando...',
-  cameraLabel: 'Tirar foto',
-  galleryLabel: 'Escolher imagem',
-  removeLabel: 'Remover',
+DoubtInputSheetModel get doubtInputSheetModel => DoubtInputSheetModel(
+  title: t('aula_doubt'),
+  description: t('aula_doubt_about_question'),
+  placeholder: t('doubt_placeholder'),
+  submitLabel: t('aula_doubt'),
+  busyLabel: t('aula_registering'),
+  cameraLabel: t('attach_camera'),
+  galleryLabel: t('attach_image'),
+  removeLabel: t('remove'),
 );
 
 class AuxRoomScreenState {
-  const AuxRoomScreenState({
-    this.review,
-    this.recovery,
-  });
+  const AuxRoomScreenState({this.review, this.recovery});
 
   final ReviewRoomView? review;
   final RecoveryRoomView? recovery;

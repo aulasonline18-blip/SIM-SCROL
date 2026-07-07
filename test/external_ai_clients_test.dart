@@ -84,40 +84,51 @@ void main() {
   );
 
   test('T00 inicia o orquestrador server-classroom com ficha e bearer', () async {
-      final transport = RecordingTransport()
-        ..jsonBody =
-            '{"lessonLocalId":"lesson-1","profile":{"raw":"ok"},"curriculum":{"items":[{"order":1,"marker":"M1","title":"Frações","purpose":"Aprender frações","text":"Frações"}]},"slots":{}}';
-      final client = SimServerT00Client(config: config(), transport: transport);
+    final transport = RecordingTransport()
+      ..jsonBody =
+          '{"session":{"lessonLocalId":"lesson-1","profile":{"raw":"ok"},"curriculum":{"items":[{"order":1,"marker":"M1","title":"Frações","purpose":"Aprender frações","text":"Frações"}]},"ready":{"0:L1":{"status":"ready"}}},"firstSlot":{"status":"ready"}}';
+    final client = SimServerT00Client(config: config(), transport: transport);
 
-      final chunks = await client
-          .runBootstrap(
-            const T00BootstrapRequest(
-              lessonLocalId: 'lesson-1',
-              onboarding: {'objetivo': 'Aprender frações'},
-              lang: 'pt-BR',
-              academic: 'ano 6',
-            ),
-          )
-          .toList();
+    final chunks = await client
+        .runBootstrap(
+          const T00BootstrapRequest(
+            lessonLocalId: 'lesson-1',
+            onboarding: {'objetivo': 'Aprender frações'},
+            lang: 'pt-BR',
+            academic: 'ano 6',
+            interfaceLocale: 'en',
+            learningLocale: 'es',
+            explanationLanguage: 'Spanish',
+          ),
+        )
+        .toList();
 
-      expect(
-        transport.lastUri.toString(),
-        'https://gemini-aid-pal.lovable.app/api/server-classroom/start',
-      );
-      expect(transport.lastHeaders?['authorization'], 'Bearer user-token');
-      expect(
-        (transport.lastBody as Map)['ficha']['free_text'],
-        'Aprender frações',
-      );
-      expect(chunks.map((chunk) => chunk.type), [
-        't00_profile',
-        't00_item_partial',
-        't00_partial_ready',
-        't00_final',
-        'done',
-      ]);
-    },
-  );
+    expect(
+      transport.lastUri.toString(),
+      'https://gemini-aid-pal.lovable.app/api/server-classroom/start',
+    );
+    expect(transport.lastHeaders?['authorization'], 'Bearer user-token');
+    expect(
+      (transport.lastBody as Map)['ficha']['free_text'],
+      'Aprender frações',
+    );
+    expect((transport.lastBody as Map)['interfaceLocale'], 'en');
+    expect((transport.lastBody as Map)['learningLocale'], 'es');
+    expect((transport.lastBody as Map)['explanationLanguage'], 'Spanish');
+    expect((transport.lastBody as Map)['ficha']['interfaceLocale'], 'en');
+    expect((transport.lastBody as Map)['ficha']['learningLocale'], 'es');
+    expect(
+      (transport.lastBody as Map)['ficha']['explanationLanguage'],
+      'Spanish',
+    );
+    expect(chunks.map((chunk) => chunk.type), [
+      't00_profile',
+      't00_item_partial',
+      't00_partial_ready',
+      't00_final',
+      'done',
+    ]);
+  });
 
   test('imagem usa /api/generate-lesson-image sem chave de provedor', () async {
     final transport = RecordingTransport();
@@ -205,6 +216,9 @@ void main() {
     final result = await client.routeVisual(
       stableLang: 'pt-BR',
       visualTrigger: const {
+        'interfaceLocale': 'en',
+        'learningLocale': 'pt-BR',
+        'explanationLanguage': 'Portuguese',
         'needs_image': true,
         'pedagogical_need': 'important',
         'topic': 'funcao linear',
@@ -229,10 +243,14 @@ void main() {
     expect(body['highlightFocus'], 'inclinação da reta');
     expect(body['complexity'], 'simple');
     expect(body['stableLang'], 'pt-BR');
+    expect(body['interfaceLocale'], 'en');
+    expect(body['learningLocale'], 'pt-BR');
+    expect(body['explanationLanguage'], 'Portuguese');
     expect((body['outputContract'] as Map)['format'], 'ready_raster_image');
     expect(body.containsKey('hint'), isFalse);
     expect(body.containsKey('qualityGate'), isFalse);
     expect((body['visual_trigger'] as Map)['topic'], 'funcao linear');
+    expect((body['visual_trigger'] as Map)['learningLocale'], 'pt-BR');
     expect(result.verdict, ServerVisualRouteVerdict.image);
     expect(result.readyImageDataUrl, 'data:image/png;base64,AAAA');
     expect(result.requestId, 'rid-vis');
@@ -399,6 +417,9 @@ void main() {
       'https://gemini-aid-pal.lovable.app/api/generate-lesson-audio',
     );
     expect((transport.lastBody as Map)['text'], 'texto da aula');
+    expect((transport.lastBody as Map)['interfaceLocale'], 'pt-BR');
+    expect((transport.lastBody as Map)['learningLocale'], 'pt-BR');
+    expect((transport.lastBody as Map)['explanationLanguage'], 'Portuguese');
     expect(transport.lastHeaders?['x-request-id'], startsWith('sim-aud-'));
   });
 
@@ -536,6 +557,9 @@ void main() {
         mode: 'session',
         errCount: 0,
         history: [],
+        interfaceLocale: 'en',
+        learningLocale: 'es',
+        explanationLanguage: 'Spanish',
       ),
     );
 
@@ -544,64 +568,81 @@ void main() {
       'https://gemini-aid-pal.lovable.app/api/server-classroom/slot',
     );
     expect((transport.lastBody as Map)['lessonLocalId'], 'lesson-1');
+    expect((transport.lastBody as Map)['interfaceLocale'], 'en');
+    expect((transport.lastBody as Map)['learningLocale'], 'es');
+    expect((transport.lastBody as Map)['explanationLanguage'], 'Spanish');
     expect(material.question, 'Pergunta?');
     expect(material.imageDataUrl, 'data:image/png;base64,abc');
     expect(material.imageId, 'img-1');
   });
 
-  test('T02 envia curriculo antigo para server-classroom adotar sessao', () async {
-    final transport = RecordingTransport()
-      ..jsonBody =
-          '{"slot":{"material":{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}}}}';
-    final client = SimServerT02Client(
-      config: SimAiServerConfig(
-        baseUrl: 'https://gemini-aid-pal.lovable.app',
-        t02Path: '/api/sim/t02',
-        accessTokenProvider: () async => 'user-token',
-      ),
-      transport: transport,
-    );
+  test(
+    'T02 envia curriculo antigo para server-classroom adotar sessao',
+    () async {
+      final transport = RecordingTransport()
+        ..jsonBody =
+            '{"slot":{"material":{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}}}}';
+      final client = SimServerT02Client(
+        config: SimAiServerConfig(
+          baseUrl: 'https://gemini-aid-pal.lovable.app',
+          t02Path: '/api/sim/t02',
+          accessTokenProvider: () async => 'user-token',
+        ),
+        transport: transport,
+      );
 
-    await client.completeLesson(
-      const T02LessonRequest(
-        lessonLocalId: 'old-lesson-1',
-        item: 'Movimento uniforme',
-        lang: 'pt-BR',
-        academic: 'ano 9',
-        layer: LessonLayer.l1,
-        mode: 'session',
-        errCount: 0,
-        history: [],
-        marker: 'M2',
-        topic: 'Fisica',
-        itemIdx: 1,
-        profile: {'target_topic': 'Fisica'},
-        curriculumItems: [
-          {
-            'order': 1,
-            'marker': 'M1',
-            'title': 'Velocidade',
-            'text': 'Velocidade media',
-          },
-          {
-            'order': 2,
-            'marker': 'M2',
-            'title': 'Movimento uniforme',
-            'text': 'Movimento uniforme',
-          },
-        ],
-      ),
-    );
+      await client.completeLesson(
+        const T02LessonRequest(
+          lessonLocalId: 'old-lesson-1',
+          item: 'Movimento uniforme',
+          lang: 'pt-BR',
+          academic: 'ano 9',
+          layer: LessonLayer.l1,
+          mode: 'session',
+          errCount: 0,
+          history: [],
+          marker: 'M2',
+          topic: 'Fisica',
+          itemIdx: 1,
+          profile: {'target_topic': 'Fisica'},
+          interfaceLocale: 'en',
+          learningLocale: 'pt-BR',
+          explanationLanguage: 'Portuguese',
+          curriculumItems: [
+            {
+              'order': 1,
+              'marker': 'M1',
+              'title': 'Velocidade',
+              'text': 'Velocidade media',
+            },
+            {
+              'order': 2,
+              'marker': 'M2',
+              'title': 'Movimento uniforme',
+              'text': 'Movimento uniforme',
+            },
+          ],
+        ),
+      );
 
-    final body = transport.lastBody as Map;
-    expect(body['lessonLocalId'], 'old-lesson-1');
-    expect(body['topic'], 'Fisica');
-    expect(body['itemIdx'], 1);
-    expect(body['marker'], 'M2');
-    expect((body['adopt'] as Map)['topic'], 'Fisica');
-    expect((body['adopt'] as Map)['profile'], {'target_topic': 'Fisica'});
-    expect((body['adopt'] as Map)['curriculumItems'], hasLength(2));
-  });
+      final body = transport.lastBody as Map;
+      expect(body['lessonLocalId'], 'old-lesson-1');
+      expect(body['topic'], 'Fisica');
+      expect(body['itemIdx'], 1);
+      expect(body['marker'], 'M2');
+      expect(body['interfaceLocale'], 'en');
+      expect(body['learningLocale'], 'pt-BR');
+      expect(body['explanationLanguage'], 'Portuguese');
+      expect((body['adopt'] as Map)['topic'], 'Fisica');
+      expect((body['adopt'] as Map)['profile'], {
+        'target_topic': 'Fisica',
+        'interfaceLocale': 'en',
+        'learningLocale': 'pt-BR',
+        'explanationLanguage': 'Portuguese',
+      });
+      expect((body['adopt'] as Map)['curriculumItems'], hasLength(2));
+    },
+  );
 
   test('T02 invalido nao vira aula falsa nem default A', () async {
     final transport = RecordingTransport()

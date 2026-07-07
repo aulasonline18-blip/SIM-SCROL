@@ -1,3 +1,5 @@
+import '../ui/sim_i18n.dart';
+
 class AccountDeletionRequest {
   const AccountDeletionRequest({
     required this.userId,
@@ -46,7 +48,7 @@ class AccountDeletionController {
     } catch (err) {
       error = err is Error
           ? err.toString()
-          : 'Nao foi possivel registrar a solicitacao.';
+          : t('account_delete_register_failed');
     } finally {
       loading = false;
     }

@@ -6,12 +6,20 @@ class T00BootstrapRequest {
     required this.onboarding,
     required this.lang,
     required this.academic,
+    this.interfaceLocale,
+    this.learningLocale,
+    this.explanationLanguage,
+    this.targetLanguage,
   });
 
   final String lessonLocalId;
   final JsonMap onboarding;
   final String lang;
   final String academic;
+  final String? interfaceLocale;
+  final String? learningLocale;
+  final String? explanationLanguage;
+  final String? targetLanguage;
 }
 
 class T00BootstrapChunk {
@@ -42,6 +50,10 @@ class T02LessonRequest {
     this.curriculumItems = const [],
     this.topic,
     this.itemIdx,
+    this.interfaceLocale,
+    this.learningLocale,
+    this.explanationLanguage,
+    this.targetLanguage,
   });
 
   final String lessonLocalId;
@@ -59,6 +71,10 @@ class T02LessonRequest {
   final List<JsonMap> curriculumItems;
   final String? topic;
   final int? itemIdx;
+  final String? interfaceLocale;
+  final String? learningLocale;
+  final String? explanationLanguage;
+  final String? targetLanguage;
 }
 
 class T02LessonMaterial {

@@ -107,6 +107,10 @@ class StudentExperienceT00Adapter {
           onboarding: args.onboarding,
           lang: args.idioma,
           academic: args.academic,
+          interfaceLocale: args.localeContract.interfaceLocale,
+          learningLocale: args.localeContract.learningLocale,
+          explanationLanguage: args.localeContract.explanationLanguage,
+          targetLanguage: args.localeContract.targetLanguage,
         ),
       )) {
         switch (chunk.type) {

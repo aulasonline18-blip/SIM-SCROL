@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../sim/ui/sim_i18n.dart';
 import 'navigation_state.dart';
 
 class AuthSession extends ChangeNotifier {
@@ -118,7 +119,7 @@ class AuthSession extends ChangeNotifier {
     notifyListeners();
     final client = _supabaseClientOrNull();
     if (client == null) {
-      authError = 'Supabase nao foi inicializado.';
+      authError = t('supabase_not_initialized');
       notifyListeners();
       return;
     }
@@ -129,10 +130,10 @@ class AuthSession extends ChangeNotifier {
         queryParams: const {'prompt': 'select_account'},
       );
       if (!launched) {
-        authError = 'Não foi possível abrir o login do Google.';
+        authError = t('google_login_open_failed');
       }
     } catch (_) {
-      authError = 'Não foi possível abrir o login do Google.';
+      authError = t('google_login_open_failed');
     }
     notifyListeners();
   }

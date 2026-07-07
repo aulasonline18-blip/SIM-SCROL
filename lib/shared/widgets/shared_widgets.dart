@@ -396,6 +396,22 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
     }
   }
 
+  Future<void> _setDrawerInterfaceLanguage({
+    required bool followDevice,
+    String? localeTag,
+  }) async {
+    await widget.session.setInterfaceLanguage(
+      followDevice: followDevice,
+      localeTag: localeTag,
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _setDrawerLearningLanguage(String localeTag) async {
+    await widget.session.setLearningLanguage(localeTag: localeTag);
+    if (mounted) setState(() {});
+  }
+
   void _handleSupportRoute(String route) {
     widget.onClose();
     widget.session.openSupport(route);
@@ -921,6 +937,17 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _DrawerLanguageSettings(
+                  session: session,
+                  onInterfaceFollowDevice: () =>
+                      _setDrawerInterfaceLanguage(followDevice: true),
+                  onInterfaceLocale: (localeTag) => _setDrawerInterfaceLanguage(
+                    followDevice: false,
+                    localeTag: localeTag,
+                  ),
+                  onLearningLocale: _setDrawerLearningLanguage,
+                ),
+                const SizedBox(height: 14),
                 Text(
                   t('historico').toUpperCase(),
                   style: TextStyle(
@@ -1551,6 +1578,150 @@ class _DrawerFooterBtn extends StatelessWidget {
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DrawerLanguageSettings extends StatelessWidget {
+  const _DrawerLanguageSettings({
+    required this.session,
+    required this.onInterfaceFollowDevice,
+    required this.onInterfaceLocale,
+    required this.onLearningLocale,
+  });
+
+  final LabSession session;
+  final VoidCallback onInterfaceFollowDevice;
+  final ValueChanged<String> onInterfaceLocale;
+  final ValueChanged<String> onLearningLocale;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final interfaceLocale = session.interfaceLocaleTag;
+    final learningLocale = session.learningLocaleTag;
+    final languages = supportedLangs.where(
+      (language) => const {'pt', 'en', 'es'}.contains(language.code),
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DrawerLanguageTitle(title: t('language_app_title')),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _DrawerLanguageChip(
+                label: t('language_follow_device'),
+                selected: session.localeSettings.followDeviceInterface,
+                onTap: onInterfaceFollowDevice,
+              ),
+              for (final language in languages)
+                _DrawerLanguageChip(
+                  label: language.native,
+                  selected:
+                      !session.localeSettings.followDeviceInterface &&
+                      interfaceLocale == language.code,
+                  onTap: () => onInterfaceLocale(language.code),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _DrawerLanguageTitle(title: t('language_lessons_title')),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final language in languages)
+                _DrawerLanguageChip(
+                  label: language.native,
+                  selected: learningLocale == language.code,
+                  onTap: () => onLearningLocale(language.code),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DrawerLanguageTitle extends StatelessWidget {
+  const _DrawerLanguageTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        title,
+        style: TextStyle(
+          color: palette.text,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _DrawerLanguageChip extends StatelessWidget {
+  const _DrawerLanguageChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: selected
+            ? palette.primary.withValues(alpha: 0.14)
+            : palette.surfaceSoft,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 34),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: selected ? palette.primary : palette.border,
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected ? palette.primary : palette.text,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),

@@ -647,7 +647,10 @@ class SimpleLabPage extends StatelessWidget {
                     SecondaryWideButton(label: secondary!, onTap: onSecondary!),
                     const SizedBox(height: 10),
                   ],
-                  SecondaryWideButton(label: 'Portal', onTap: session.goPortal),
+                  SecondaryWideButton(
+                    label: t('portal'),
+                    onTap: session.goPortal,
+                  ),
                 ],
               ),
             ),

@@ -9,6 +9,7 @@ import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/auxiliary/doubt_input_sheet.dart';
 import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/responsive/sim_responsive.dart';
+import '../../sim/ui/sim_i18n.dart';
 import '../../sim/ui/sim_theme.dart';
 
 class DoubtInputSheet extends StatefulWidget {
@@ -226,8 +227,8 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                                   ),
                                 ),
                                 SimTextAction(
-                                  label: 'Remover',
-                                  semanticLabel: 'Remover foto da dúvida',
+                                  label: t('remove'),
+                                  semanticLabel: t('remove_doubt_photo'),
                                   onPressed: () =>
                                       setState(() => _image = null),
                                 ),
@@ -255,11 +256,13 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                                 scrollPadding: const EdgeInsets.only(
                                   bottom: 96,
                                 ),
-                                decoration: const InputDecoration(
-                                  hintText: 'Escreva sua dúvida aqui...',
+                                decoration: InputDecoration(
+                                  hintText: t('doubt_placeholder'),
                                   border: InputBorder.none,
                                   counterText: '',
-                                  contentPadding: EdgeInsets.only(bottom: 28),
+                                  contentPadding: const EdgeInsets.only(
+                                    bottom: 28,
+                                  ),
                                 ),
                                 style: TextStyle(
                                   color: palette.text,
@@ -274,7 +277,7 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                                 bottom: 0,
                                 child: SimIconAction(
                                   icon: Icons.attach_file,
-                                  semanticLabel: 'Adicionar foto à dúvida',
+                                  semanticLabel: t('doubt_add_photo'),
                                   onPressed: widget.busy
                                       ? null
                                       : () => setState(
@@ -306,13 +309,13 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         _DoubtImageMenuLine(
-                                          label: 'Tirar foto',
+                                          label: t('attach_camera'),
                                           onTap: () => unawaited(
                                             _pickImage(ImageSource.camera),
                                           ),
                                         ),
                                         _DoubtImageMenuLine(
-                                          label: 'Escolher imagem',
+                                          label: t('attach_image'),
                                           onTap: () => unawaited(
                                             _pickImage(ImageSource.gallery),
                                           ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../sim_i18n.dart';
+
 /// Pulsing audio indicator bubble — shown when audio is enabled AND speaking.
 /// Port of FixedBubble.tsx: fixed bottom-center, 40×40, animate-pulse-bubble (1.2s).
 class FixedBubble extends StatefulWidget {
@@ -76,7 +78,7 @@ class _FixedBubbleState extends State<FixedBubble>
         child: Semantics(
           button: true,
           enabled: widget.onTap != null,
-          label: 'Áudio tocando',
+          label: t('audio_playing'),
           child: ScaleTransition(
             scale: _scale,
             child: Material(

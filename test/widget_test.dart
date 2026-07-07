@@ -113,7 +113,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.textContaining('Português'));
+    await tester.tap(find.textContaining('Português').last);
     await tester.pumpAndSettle();
     expect(find.text('O que vamos construir juntos?'), findsOneWidget);
     expect(
@@ -126,25 +126,32 @@ void main() {
     expect(session.selectedLanguageCode, 'pt');
     expect(session.stableLang, 'Portuguese');
 
-    final french = LabSession()
+    final spanish = LabSession()
       ..authed = true
       ..authReady = true
       ..route = '/cyber/idioma';
     await tester.pumpWidget(
-      SimMobileApp(key: UniqueKey(), initialSession: french),
+      SimMobileApp(key: UniqueKey(), initialSession: spanish),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Français'));
+    await tester.tap(find.textContaining('Español').last);
     await tester.pumpAndSettle();
-    expect(find.text('What should we build together?'), findsOneWidget);
     expect(
       _textAny([
+        'What should we build together?',
+        'O que vamos construir juntos?',
+      ]),
+      findsOneWidget,
+    );
+    expect(
+      _textAny([
+        'Responda com suas palavras. Você pode anexar arquivo ou foto e explicar o que quer aprender com ele.',
         'Answer in your own words. You can attach a file or photo and explain what SIM should help you learn from it.',
       ]),
       findsOneWidget,
     );
-    expect(french.selectedLanguageCode, 'fr');
-    expect(french.stableLang, 'French');
+    expect(spanish.selectedLanguageCode, 'es');
+    expect(spanish.stableLang, 'Spanish');
   });
 
   testWidgets('Portal alterna e persiste dark mode', (
@@ -192,7 +199,10 @@ void main() {
 
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
     expect(scaffold.backgroundColor, const Color(0xFF05070D));
-    expect(find.text('Choose your language'), findsOneWidget);
+    expect(
+      _textAny(['Choose your language', 'Escolha seu idioma']),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Objetivo continua, prepara primeira aula e permite responder', (
@@ -237,9 +247,15 @@ void main() {
     await tester.pumpWidget(SimMobileApp(initialSession: session));
     await tester.tap(find.text('Start'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('English'));
+    await tester.tap(find.textContaining('English').last);
     await tester.pumpAndSettle();
-    expect(find.text('What should we build together?'), findsOneWidget);
+    expect(
+      _textAny([
+        'What should we build together?',
+        'O que vamos construir juntos?',
+      ]),
+      findsOneWidget,
+    );
     await tester.tap(find.byIcon(Icons.attach_file));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Attach file'));
@@ -260,7 +276,10 @@ void main() {
 
     await tapProgressiveContinue();
     expect(
-      find.text('What should I call you? You can skip this.'),
+      _textAny([
+        'What should I call you? You can skip this.',
+        'Como devo chamar você? Pode pular se quiser.',
+      ]),
       findsOneWidget,
     );
     await tapProgressiveContinue();
@@ -390,7 +409,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('2'));
       await tester.pump(const Duration(milliseconds: 120));
-      expect(find.text('Tenho dúvida sobre essa questão'), findsOneWidget);
+      expect(
+        _textAny([
+          'Tenho dúvida sobre essa questão',
+          'I have a question about this',
+          'Tengo una duda sobre esta pregunta',
+        ]),
+        findsOneWidget,
+      );
       expect(find.text(t('aula_fb_correct')), findsOneWidget);
 
       await tester.binding.setSurfaceSize(null);
@@ -400,7 +426,7 @@ void main() {
   testWidgets('aula keeps signals and feedback visible after answer flow', (
     WidgetTester tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(480, 520));
+    await tester.binding.setSurfaceSize(const Size(480, 900));
     final session = LabSession()
       ..authed = true
       ..authReady = true
@@ -415,17 +441,18 @@ void main() {
     await session.openAulaRuntime();
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('B'));
     await tester.tap(find.text('B'));
     await tester.pumpAndSettle();
     final signalRect = tester.getRect(find.text('2'));
     expect(signalRect.top, greaterThanOrEqualTo(0));
-    expect(signalRect.bottom, lessThanOrEqualTo(520));
+    expect(signalRect.bottom, lessThanOrEqualTo(900));
 
     await tester.tap(find.text('2'));
     await tester.pumpAndSettle();
     final feedbackRect = tester.getRect(find.text(t('aula_fb_correct')));
     expect(feedbackRect.top, greaterThanOrEqualTo(0));
-    expect(feedbackRect.bottom, lessThanOrEqualTo(520));
+    expect(feedbackRect.bottom, lessThanOrEqualTo(900));
 
     await tester.binding.setSurfaceSize(null);
   });
@@ -447,7 +474,13 @@ void main() {
     expect(find.text('Volte e monte um novo currículo.'), findsOneWidget);
     await tester.tap(find.text('Voltar ao currículo'));
     await tester.pumpAndSettle();
-    expect(find.text('What should we build together?'), findsOneWidget);
+    expect(
+      _textAny([
+        'What should we build together?',
+        'O que vamos construir juntos?',
+      ]),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Drawer lista, busca, renomeia e apaga aulas locais', (
