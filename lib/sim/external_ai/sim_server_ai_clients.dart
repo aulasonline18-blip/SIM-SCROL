@@ -170,7 +170,7 @@ class SimServerVisualRouterClient implements LessonVisualRouterClient {
   SimServerVisualRouterClient({
     required this.config,
     SimHttpTransport? transport,
-    this.timeout = const Duration(seconds: 45),
+    this.timeout = const Duration(seconds: 100),
   }) : transport = transport ?? DartIoSimHttpTransport();
 
   final SimAiServerConfig config;
