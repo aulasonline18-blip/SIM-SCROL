@@ -66,6 +66,8 @@ class T02LessonMaterial {
     required this.generatedAt,
     required this.source,
     this.visualTrigger,
+    this.imageDataUrl,
+    this.imageId,
   });
 
   final String explanation;
@@ -77,6 +79,8 @@ class T02LessonMaterial {
   final DateTime generatedAt;
   final String source;
   final JsonMap? visualTrigger;
+  final String? imageDataUrl;
+  final String? imageId;
 }
 
 abstract interface class T02LessonClient {

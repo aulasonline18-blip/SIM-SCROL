@@ -109,8 +109,10 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
           bus.notify(key, lesson);
           onAudioTextReady?.call(params, lesson);
           if (_textInflight[key] != null) _textInflight.remove(key);
-          // Part III.6: dispatch image sequentially in background
-          _scheduleImage(params, lesson);
+          if ((lesson.imagem == null || lesson.imagem!.trim().isEmpty) &&
+              _lessonNeedsImage(lesson)) {
+            _scheduleImage(params, lesson);
+          }
           return lesson;
         })
         .catchError((Object error) {
@@ -303,8 +305,20 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     );
     return CompleteLesson(
       conteudo: conteudo,
-      imagem: null,
+      imagem: material.imageDataUrl?.trim().isEmpty == true
+          ? null
+          : material.imageDataUrl,
       audioText: conteudo.audioText,
+      imageMetadata: material.imageDataUrl == null
+          ? null
+          : LessonImageGenerationMetadata(
+              requestId: material.imageId,
+              provider: 'server-classroom',
+              model: material.source,
+              mimeType: null,
+              charged: false,
+              cacheHit: true,
+            ),
     );
   }
 

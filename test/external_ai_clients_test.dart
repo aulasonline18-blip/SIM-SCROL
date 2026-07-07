@@ -83,14 +83,10 @@ void main() {
     accessTokenProvider: () async => 'user-token',
   );
 
-  test(
-    'T00 usa a mesma porta viva /api/bootstrap-t00 com ficha e bearer',
-    () async {
+  test('T00 inicia o orquestrador server-classroom com ficha e bearer', () async {
       final transport = RecordingTransport()
-        ..streamLines = const [
-          'data: {"type":"t00_profile","profile":"ok"}',
-          'data: {"type":"t00_item_partial","item":{"marker":"M1","text":"Frações"}}',
-        ];
+        ..jsonBody =
+            '{"lessonLocalId":"lesson-1","profile":{"raw":"ok"},"curriculum":{"items":[{"order":1,"marker":"M1","title":"Frações","purpose":"Aprender frações","text":"Frações"}]},"slots":{}}';
       final client = SimServerT00Client(config: config(), transport: transport);
 
       final chunks = await client
@@ -106,7 +102,7 @@ void main() {
 
       expect(
         transport.lastUri.toString(),
-        'https://gemini-aid-pal.lovable.app/api/bootstrap-t00',
+        'https://gemini-aid-pal.lovable.app/api/server-classroom/start',
       );
       expect(transport.lastHeaders?['authorization'], 'Bearer user-token');
       expect(
@@ -116,6 +112,9 @@ void main() {
       expect(chunks.map((chunk) => chunk.type), [
         't00_profile',
         't00_item_partial',
+        't00_partial_ready',
+        't00_final',
+        'done',
       ]);
     },
   );
@@ -514,10 +513,10 @@ void main() {
     },
   );
 
-  test('T02 usa ponte HTTP do servidor quando configurada', () async {
+  test('T02 principal usa slot pronto do server-classroom', () async {
     final transport = RecordingTransport()
       ..jsonBody =
-          '{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}';
+          '{"slot":{"material":{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"},"visual_trigger":{"needs_image":true,"pedagogical_need":"important","render_strategy":"software","visual_type":"diagram","topic":"Frações","image_prompt":"desenhar frações"}}},"imageId":"img-1","image":{"imageId":"img-1","dataUrl":"data:image/png;base64,abc","mimeType":"image/png"}}}';
     final client = SimServerT02Client(
       config: SimAiServerConfig(
         baseUrl: 'https://gemini-aid-pal.lovable.app',
@@ -542,16 +541,18 @@ void main() {
 
     expect(
       transport.lastUri.toString(),
-      'https://gemini-aid-pal.lovable.app/api/sim/t02',
+      'https://gemini-aid-pal.lovable.app/api/server-classroom/slot',
     );
-    expect((transport.lastBody as Map)['mode'], 'lesson');
+    expect((transport.lastBody as Map)['lessonLocalId'], 'lesson-1');
     expect(material.question, 'Pergunta?');
+    expect(material.imageDataUrl, 'data:image/png;base64,abc');
+    expect(material.imageId, 'img-1');
   });
 
   test('T02 invalido nao vira aula falsa nem default A', () async {
     final transport = RecordingTransport()
       ..jsonBody =
-          '{"explanation":"Exp","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"D"}';
+          '{"slot":{"material":{"conteudo":{"explanation":"Exp","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"D"}}}}';
     final client = SimServerT02Client(
       config: SimAiServerConfig(
         baseUrl: 'https://gemini-aid-pal.lovable.app',

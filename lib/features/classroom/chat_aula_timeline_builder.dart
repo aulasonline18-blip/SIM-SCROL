@@ -210,6 +210,17 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           deliveryStatus: ChatLessonDeliveryStatus.delivered,
         ),
       );
+      if (input.runtimeLoading) {
+        messages.add(
+          ChatLessonMessage(
+            id: 'runtime-advance-loading-$activeId',
+            role: ChatLessonMessageRole.system,
+            kind: ChatLessonMessageKind.loading,
+            text: t('preparing_next_lesson'),
+            deliveryStatus: ChatLessonDeliveryStatus.processing,
+          ),
+        );
+      }
     }
   }
 

@@ -110,6 +110,33 @@ void main() {
     expect(feedback.actionKey, 'aula_next');
   });
 
+  test('completed phase shows immediate next-topic loading feedback', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.completed(
+            message: 'aula_fb_correct',
+            wasCorrect: true,
+            signal: DecisionSignal.one,
+          ),
+        ),
+        runtimeLoading: true,
+      ),
+    );
+
+    expect(
+      messages.map((message) => message.kind),
+      containsAllInOrder([
+        ChatLessonMessageKind.feedback,
+        ChatLessonMessageKind.loading,
+      ]),
+    );
+    final loading = messages.last;
+    expect(loading.id, startsWith('runtime-advance-loading-'));
+    expect(loading.text, t('preparing_next_lesson'));
+    expect(loading.deliveryStatus, ChatLessonDeliveryStatus.processing);
+  });
+
   test('processing phase does not add student signal echo', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(
