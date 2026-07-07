@@ -200,7 +200,7 @@ class StudentLessonMaterialService {
           'itemIdx': itemIdx,
           'marker': marker,
           'layer': layer.value,
-          'maxSlots': 3,
+          'maxSlots': 4,
         },
       ),
     );
@@ -209,7 +209,7 @@ class StudentLessonMaterialService {
           .runDopamineReadyWindowFromStudentState(
             lessonLocalId: lessonLocalId,
             source: source,
-            maxSlots: 3,
+            maxSlots: 4,
             itemIdx: itemIdx,
             layer: layer,
             marker: marker,
@@ -272,7 +272,7 @@ class StudentLessonMaterialService {
           'priority': priority,
           'source': source,
           'payload': {
-            'maxSlots': 3,
+            'maxSlots': 4,
             'reason': reason ?? 'lesson_window_visible',
             'itemIdx': itemIdx,
             'layer': layer.value,
@@ -332,7 +332,7 @@ class StudentLessonMaterialService {
       (offset: 0, item: first, layer: firstLayer),
     ];
     var cursor = (idx: fromIdx, layer: firstLayer);
-    while (window.length < 3) {
+    while (window.length < 4) {
       final next = _nextReadyWindowSlot(cursor.idx, cursor.layer, items);
       if (next == null || next.idx < 0 || next.idx >= items.length) break;
       final item = items[next.idx];

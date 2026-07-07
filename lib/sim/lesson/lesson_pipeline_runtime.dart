@@ -1,6 +1,6 @@
 // MIRROR OF: src/cyber/lesson-pipeline-runtime.ts (Web, source of truth)
 // Part III.4: runImageSequential + runBackgroundText queues
-// D2.2: ensureFirstLessonPrepared + ensureLessonWindow (janela de 3 aulas)
+// D2.2: ensureFirstLessonPrepared + ensureLessonWindow
 import 'dart:async';
 
 import 'lesson_material_cache.dart';
@@ -64,13 +64,13 @@ Future<CompleteLesson?> ensureFirstLessonPrepared({
   }
 }
 
-/// Mantém janela de N aulas pré-carregadas (lei: 3 aulas constante).
+/// Mantém a janela viva de experiências pedagógicas pré-carregadas.
 /// Mirror de ensureLessonWindow (src/cyber/lesson-pipeline-runtime.ts).
 Future<void> ensureLessonWindow({
   required LessonOrchestrator orchestrator,
   required LessonMaterialCache cache,
   required List<CompleteLessonParams> window,
-  int maxSlots = 3,
+  int maxSlots = 4,
 }) async {
   final needed = window.take(maxSlots).toList();
   await Future.wait(

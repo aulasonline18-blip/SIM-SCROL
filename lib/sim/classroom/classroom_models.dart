@@ -187,7 +187,7 @@ List<({int idx, PlannedItem item, LessonLayer layer})> lessonWindow(
     (idx: fromIdx, item: first, layer: firstLayer),
   ];
   var position = (idx: fromIdx, layer: firstLayer);
-  while (window.length < 3) {
+  while (window.length < 4) {
     final next = nextLessonSlot(position.idx, position.layer, pool);
     if (next == null) break;
     if (next.idx < 0 || next.idx >= pool.length) break;

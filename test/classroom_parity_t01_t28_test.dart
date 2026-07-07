@@ -785,10 +785,10 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // T23 – readyWindow com 3 itens → prepara 3 slots
+  // T23 – readyWindow com 3 itens → prepara 4 slots
   // -------------------------------------------------------------------------
   test(
-    'T23: readyWindow (idx=0,L1) com 3 items → 3 slots preparados',
+    'T23: readyWindow (idx=0,L1) com 3 items → 4 slots preparados',
     () async {
       final svc = StudentLearningStateService(seed: {'L1': _state0()});
       final t02 = _FakeT02();
@@ -803,12 +803,12 @@ void main() {
       final result = await rwe.runDopamineReadyWindowFromStudentState(
         lessonLocalId: 'L1',
         source: 'test-T23',
-        maxSlots: 3,
+        maxSlots: 4,
       );
 
-      expect(result, hasLength(3));
+      expect(result, hasLength(4));
       expect(result.every((ok) => ok), isTrue);
-      expect(svc.read('L1')?.readyLessonMaterials.length, 3);
+      expect(svc.read('L1')?.readyLessonMaterials.length, 4);
     },
   );
 

@@ -123,6 +123,20 @@ class LessonMaterialController {
       material: resolved,
     );
     _markShowingFirstLessonIfNeeded(lessonLocalId, position, item);
+    materialService.maintainLessonReadyWindow(
+      lessonLocalId: lessonLocalId,
+      topic: topic,
+      itemIdx: position.itemIdx,
+      layer: position.layer,
+      items: baseItems
+          .map(
+            (item) => DopamineWindowItem(text: item.text, marker: item.marker),
+          )
+          .toList(),
+      source: 'cyber.aula.loaded-window',
+      priority: 'background',
+      reason: 'lesson_loaded_keeps_ready_window_alive',
+    );
   }
 
   void _applyMaterial(

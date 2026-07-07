@@ -15,6 +15,9 @@ import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
 import 'package:sim_mobile/sim/media/lesson_visual_pipeline.dart';
+import 'package:sim_mobile/sim/classroom/classroom_models.dart';
+import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
+import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/lesson/student_lesson_material_service.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/live_entry_state.dart';
@@ -947,7 +950,7 @@ void main() {
     },
   );
 
-  test('DopamineReadyWindowEngine prepares A/B/C slots from state', () async {
+  test('DopamineReadyWindowEngine prepares A/B/C/D slots from state', () async {
     final service = StudentLearningStateService(
       seed: {'cyber-ready': _stateWithCurriculum()},
     );
@@ -966,12 +969,12 @@ void main() {
     final result = await engine.runDopamineReadyWindowFromStudentState(
       lessonLocalId: 'cyber-ready',
       source: 'test',
-      maxSlots: 3,
+      maxSlots: 4,
     );
 
-    expect(result, [true, true, true]);
-    expect(t02.calls, 3);
-    expect(service.read('cyber-ready')?.readyLessonMaterials.length, 3);
+    expect(result, [true, true, true, true]);
+    expect(t02.calls, 4);
+    expect(service.read('cyber-ready')?.readyLessonMaterials.length, 4);
   });
 
   test(
@@ -1077,12 +1080,55 @@ void main() {
     expect(state?.queuedActions, hasLength(1));
     expect(event?.payload['currentItemIdx'], 0);
     expect(event?.payload['currentLayer'], 1);
-    expect(event?.payload['windowSize'], 3);
-    expect(event?.payload['cachedCount'], 3);
+    expect(event?.payload['windowSize'], 4);
+    expect(event?.payload['cachedCount'], 4);
     expect(event?.payload['windowMarkers'], [
       {'marker': 'M1', 'layer': 1, 'offset': 0},
       {'marker': 'M1', 'layer': 2, 'offset': 1},
       {'marker': 'M1', 'layer': 3, 'offset': 2},
+      {'marker': 'M2', 'layer': 1, 'offset': 3},
+    ]);
+  });
+
+  test('ready window from L3 keeps next item L1/L2/L3 possible experiences', () {
+    final service = StudentLearningStateService();
+    service.ensure(lessonLocalId: 'cyber-window-l3');
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+      visualPipeline: fakeVisualPipeline(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      ),
+    );
+
+    materialService.maintainLessonReadyWindow(
+      lessonLocalId: 'cyber-window-l3',
+      topic: 'Funções',
+      itemIdx: 0,
+      layer: LessonLayer.l3,
+      source: 'test-window-l3',
+      items: const [
+        DopamineWindowItem(text: 'Item 1', marker: 'M1'),
+        DopamineWindowItem(text: 'Item 2', marker: 'M2'),
+      ],
+    );
+
+    final event = service.read('cyber-window-l3')?.events.singleWhere(
+          (event) => event.type == 'CACHE_WINDOW_UPDATED',
+        );
+    expect(event?.payload['windowSize'], 4);
+    expect(event?.payload['windowMarkers'], [
+      {'marker': 'M1', 'layer': 3, 'offset': 0},
+      {'marker': 'M2', 'layer': 1, 'offset': 1},
+      {'marker': 'M2', 'layer': 2, 'offset': 2},
+      {'marker': 'M2', 'layer': 3, 'offset': 3},
     ]);
   });
 
@@ -1128,6 +1174,76 @@ void main() {
       state?.events.where((event) => event.type == 'CACHE_WINDOW_UPDATED'),
       hasLength(2),
     );
+  });
+
+  test('loaded active lesson keeps current plus three next slots queued', () async {
+    final service = StudentLearningStateService();
+    service.ensure(lessonLocalId: 'cyber-loaded-window');
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+      visualPipeline: fakeVisualPipeline(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      ),
+    );
+    final controller = LessonMaterialController(
+      stateService: service,
+      materialService: materialService,
+    );
+    final items = const [
+      PlannedItem(marker: 'M1', text: 'Item 1'),
+      PlannedItem(marker: 'M2', text: 'Item 2'),
+    ];
+    final position = LessonPositionState(
+      itemIdx: 0,
+      layer: LessonLayer.l1,
+      erros: 0,
+      historia: const [],
+      history: const [],
+      mainAdvances: 0,
+      loadingLayer: LessonLayer.l1,
+      conteudo: null,
+      phase: const ClassroomPhase.loading(),
+      imagem: null,
+      teoriaPronta: false,
+      items: items,
+    );
+
+    await controller.carregar(
+      lessonLocalId: 'cyber-loaded-window',
+      topic: 'Funções',
+      position: position,
+      idioma: 'pt-BR',
+      academic: 'fundamental',
+      mode: LessonMode.session,
+      baseItems: items,
+    );
+
+    final state = service.read('cyber-loaded-window');
+    expect(position.teoriaPronta, isTrue);
+    expect(state?.queuedActions, hasLength(1));
+    expect(state?.queuedActions.single['type'], 'PREPARE_READY_WINDOW');
+    expect(
+      state?.queuedActions.single['source'],
+      'cyber.aula.loaded-window',
+    );
+    final event = state?.events.lastWhere(
+      (event) => event.type == 'CACHE_WINDOW_UPDATED',
+    );
+    expect(event?.payload['windowSize'], 4);
+    expect(event?.payload['windowMarkers'], [
+      {'marker': 'M1', 'layer': 1, 'offset': 0},
+      {'marker': 'M1', 'layer': 2, 'offset': 1},
+      {'marker': 'M1', 'layer': 3, 'offset': 2},
+      {'marker': 'M2', 'layer': 1, 'offset': 3},
+    ]);
   });
 
   test('invalid persistent cache entries are ignored', () async {

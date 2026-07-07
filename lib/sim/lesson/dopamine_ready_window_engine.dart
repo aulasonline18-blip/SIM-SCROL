@@ -67,7 +67,7 @@ class DopamineReadyWindowEngine {
           : currentLayer,
     );
 
-    for (final slotName in const ['A', 'B', 'C']) {
+    for (final slotName in const ['A', 'B', 'C', 'D']) {
       if (cursor == null) break;
       if (cursor.itemIdx >= items.length) break;
       final item = items[cursor.itemIdx];
@@ -95,7 +95,7 @@ class DopamineReadyWindowEngine {
     bool returnMode = false,
     int? maxSlots,
   }) async {
-    final selected = slots.take(maxSlots ?? (returnMode ? 2 : 3)).toList();
+    final selected = slots.take(maxSlots ?? (returnMode ? 2 : 4)).toList();
     _event(lessonLocalId, 'DOPAMINE_WINDOW_REQUESTED', {
       'source': source,
       'returnMode': returnMode,
