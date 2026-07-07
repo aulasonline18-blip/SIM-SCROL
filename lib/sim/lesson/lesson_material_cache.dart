@@ -9,7 +9,7 @@ import 'lesson_content_validator.dart';
 import 'lesson_models.dart';
 
 const String _kCacheKey = 'sim-lesson-text-cache-v1';
-const int _kMaxMemoryLessons = 3;
+const int _kMaxMemoryLessons = 80;
 const int _kLessonTtlMs = 86400000; // 24h
 
 class _CacheEntry {

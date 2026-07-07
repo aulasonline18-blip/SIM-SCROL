@@ -349,6 +349,71 @@ void main() {
     expect(cache.peek(keyA)?.imagem, isNot(cache.peek(keyB)?.imagem));
   });
 
+  test('foto atrasada fica salva no ID da propria questao', () async {
+    final cache = LessonMaterialCache(maxLessons: 80);
+    final bus = LessonEventBus();
+    final transport = _ControlledTransport();
+    final orchestrator = LessonOrchestrator(
+      t02Client: _MapT02Client({
+        'Aula A': const {
+          'needs_image': true,
+          'pedagogical_need': 'important',
+          'topic': 'imagem A',
+          'image_prompt': 'foto A',
+        },
+        'Aula B': const {
+          'needs_image': true,
+          'pedagogical_need': 'important',
+          'topic': 'imagem B',
+          'image_prompt': 'foto B',
+        },
+      }),
+      cache: cache,
+      bus: bus,
+      visualPipeline: LessonVisualPipeline(
+        imageClient: _ThrowingPaidImageClient(),
+        visualRouterClient: SimServerVisualRouterClient(
+          config: _config(),
+          transport: transport,
+        ),
+      ),
+    );
+    final paramsA = _paramsForItem('Aula A');
+    final paramsB = _paramsForItem('Aula B');
+    final keyA = lessonKeyFor(paramsA);
+    final keyB = lessonKeyFor(paramsB);
+
+    await orchestrator.prefetchCompleteLesson(paramsA, priority: 'active');
+    await _waitFor(() => transport.pendingCount == 1);
+
+    await orchestrator.prefetchCompleteLesson(paramsB, priority: 'active');
+    await _waitFor(() => transport.pendingCount == 2);
+
+    transport.complete(
+      1,
+      jsonEncode({
+        'verdict': 'svg',
+        'reason': 'SERVER_B',
+        'displayDataUrl': _jpegDataUrl,
+      }),
+    );
+    await _waitFor(() => cache.peek(keyB)?.imagem == _jpegDataUrl);
+    expect(cache.peek(keyA)?.imagem, isNull);
+
+    transport.complete(
+      0,
+      jsonEncode({
+        'verdict': 'svg',
+        'reason': 'SERVER_A',
+        'displayDataUrl': _webpDataUrl,
+      }),
+    );
+    await _waitFor(() => cache.peek(keyA)?.imagem == _webpDataUrl);
+
+    expect(cache.peek(keyA)?.imagem, _webpDataUrl);
+    expect(cache.peek(keyB)?.imagem, _jpegDataUrl);
+  });
+
   testWidgets('base64 invalido mostra erro controlado sem quebrar', (
     tester,
   ) async {
@@ -358,6 +423,19 @@ void main() {
     expect(find.byType(Image), findsNothing);
     expect(find.byType(SvgPicture), findsNothing);
   });
+}
+
+Future<void> _waitFor(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  final end = DateTime.now().add(timeout);
+  while (!condition()) {
+    if (DateTime.now().isAfter(end)) {
+      throw TimeoutException('condition not reached');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
 }
 
 SimAiServerConfig _config() => SimAiServerConfig(
@@ -654,6 +732,49 @@ class _RecordingTransport implements SimHttpTransport {
         ? jsonBody
         : bodies[(calls - 1).clamp(0, bodies.length - 1)];
     return SimHttpResponse(statusCode: 200, body: bodyText);
+  }
+
+  @override
+  Stream<String> postEventStream(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Object? body,
+    Duration timeout = const Duration(seconds: 140),
+  }) async* {}
+
+  @override
+  Future<SimHttpResponse> postMultipart(
+    Uri uri, {
+    required Map<String, String> headers,
+    required String fieldName,
+    required String filename,
+    required String contentType,
+    required List<int> bytes,
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    throw UnimplementedError();
+  }
+}
+
+class _ControlledTransport implements SimHttpTransport {
+  final List<Completer<SimHttpResponse>> _pending = [];
+
+  int get pendingCount => _pending.length;
+
+  void complete(int index, String body) {
+    _pending[index].complete(SimHttpResponse(statusCode: 200, body: body));
+  }
+
+  @override
+  Future<SimHttpResponse> postJson(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Object? body,
+    Duration timeout = const Duration(seconds: 45),
+  }) {
+    final completer = Completer<SimHttpResponse>();
+    _pending.add(completer);
+    return completer.future;
   }
 
   @override

@@ -32,7 +32,6 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
   final Map<String, Future<CompleteLesson>> _textInflight = {};
   final Map<String, _ImageInflight> _imageInflight = {};
   final Map<String, int> _imageEpochByKey = {};
-  final ImageSequentialQueue _imageQueue = ImageSequentialQueue();
   final BackgroundTextSemaphore _bgText = BackgroundTextSemaphore();
   Future<void> _lastLessonFullyComplete = Future.value();
 
@@ -142,10 +141,13 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
 
     final epoch = (_imageEpochByKey[key] ?? 0) + 1;
     _imageEpochByKey[key] = epoch;
-    final future = _imageQueue
-        .run(() => _fetchImage(params, lesson, signature, epoch))
-        .catchError((_) {});
     _imageInflight[key] = _ImageInflight(signature: signature, epoch: epoch);
+    final future = _fetchImage(
+      params,
+      lesson,
+      signature,
+      epoch,
+    ).catchError((_) {});
     future.whenComplete(() {
       final current = _imageInflight[key];
       if (current != null && current.epoch == epoch) {
@@ -181,7 +183,6 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       allowPaidImages: true,
       acceptedOfferId: null,
     );
-    if (!_isCurrentImageDecision(key, signature, epoch)) return;
     if (result.hasImage) {
       _publishImage(
         params,
@@ -244,10 +245,15 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     LessonImageGenerationMetadata? imageMetadata,
   }) {
     final key = lessonKeyFor(params);
+    final cached = cache.peek(key);
+    if (cached?.imagem != null && cached!.imagem!.trim().isNotEmpty) {
+      return;
+    }
+    final base = cached ?? lesson;
     final updated = CompleteLesson(
-      conteudo: lesson.conteudo,
+      conteudo: base.conteudo,
       imagem: imageData,
-      audioText: lesson.audioText,
+      audioText: base.audioText,
       imageMetadata: imageMetadata,
     );
     cache.put(key, updated);
