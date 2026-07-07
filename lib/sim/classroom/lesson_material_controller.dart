@@ -44,6 +44,9 @@ class LessonMaterialController {
       history: position.historia,
       marker: item.marker,
       amparoLvl: currentState?.progress?.amparoLvl,
+      curriculumItems: _curriculumSnapshot(baseItems),
+      topic: topic,
+      itemIdx: position.itemIdx,
       pedagogicalEnvelope: _pedagogicalEnvelope(
         currentState?.profile.toJson() ?? const {},
         item,
@@ -209,5 +212,19 @@ class LessonMaterialController {
       if (pick(['original_text_preserved']).isNotEmpty)
         'original_text_preserved': pick(['original_text_preserved']),
     };
+  }
+
+  List<JsonMap> _curriculumSnapshot(List<PlannedItem> items) {
+    return [
+      for (var index = 0; index < items.length; index += 1)
+        {
+          'order': index + 1,
+          'marker': items[index].marker,
+          'title': items[index].text,
+          'text': items[index].text,
+          'purpose': items[index].text,
+          'microitem_for_teacher': items[index].text,
+        },
+    ];
   }
 }

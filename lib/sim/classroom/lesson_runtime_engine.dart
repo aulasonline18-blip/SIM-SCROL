@@ -120,6 +120,9 @@ class LessonRuntimeEngine {
       history: position.historia,
       marker: item.marker,
       amparoLvl: currentState?.progress?.amparoLvl,
+      curriculumItems: _curriculumSnapshot(currentState?.curriculum),
+      topic: currentState?.profile.objetivo ?? currentState?.curriculum?.topic,
+      itemIdx: position.itemIdx,
       pedagogicalEnvelope: currentState?.profile.toJson() ?? const {},
     );
   }
@@ -315,4 +318,19 @@ class LessonRuntimeEngine {
       positionEngine.mergeBaseItems(position, latestSession.baseItems);
     }
   }
+}
+
+List<JsonMap> _curriculumSnapshot(StudentCurriculum? curriculum) {
+  final items = curriculum?.items ?? const <CurriculumItem>[];
+  return [
+    for (var index = 0; index < items.length; index += 1)
+      {
+        'order': index + 1,
+        'marker': items[index].marker,
+        'title': items[index].title ?? items[index].text,
+        'text': items[index].text,
+        'purpose': items[index].teacherText,
+        'microitem_for_teacher': items[index].teacherText,
+      },
+  ];
 }

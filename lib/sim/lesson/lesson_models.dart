@@ -55,6 +55,9 @@ class CompleteLessonParams {
     this.amparoLvl,
     this.marker,
     this.pedagogicalEnvelope = const {},
+    this.curriculumItems = const [],
+    this.topic,
+    this.itemIdx,
   });
 
   final String lessonLocalId;
@@ -68,6 +71,9 @@ class CompleteLessonParams {
   final int? amparoLvl;
   final String? marker;
   final JsonMap pedagogicalEnvelope;
+  final List<JsonMap> curriculumItems;
+  final String? topic;
+  final int? itemIdx;
 }
 
 class CompleteLesson {

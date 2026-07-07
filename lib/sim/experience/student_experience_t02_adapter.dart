@@ -60,6 +60,9 @@ class StudentExperienceT02Adapter {
       errCount: 0,
       history: const [],
       marker: first.marker,
+      curriculumItems: _curriculumSnapshot(first.curriculum),
+      topic: topic,
+      itemIdx: first.itemIndex,
       pedagogicalEnvelope: _pedagogicalEnvelope(mergedOnboarding),
     );
 
@@ -224,5 +227,19 @@ class StudentExperienceT02Adapter {
     put(envelope, 'geographic_zone', ['geographic_zone', 'GEOGRAPHIC_ZONE']);
     put(envelope, 'original_text_preserved', ['original_text_preserved']);
     return envelope;
+  }
+
+  List<JsonMap> _curriculumSnapshot(StudentCurriculum curriculum) {
+    return [
+      for (var index = 0; index < curriculum.items.length; index += 1)
+        {
+          'order': index + 1,
+          'marker': curriculum.items[index].marker,
+          'title': curriculum.items[index].title ?? curriculum.items[index].text,
+          'text': curriculum.items[index].text,
+          'purpose': curriculum.items[index].teacherText,
+          'microitem_for_teacher': curriculum.items[index].teacherText,
+        },
+    ];
   }
 }

@@ -304,6 +304,8 @@ class DopamineReadyWindowEngine {
     final profile = state.profile.toJson();
     final lang = _langFromProfile(profile);
     final academic = _academicFromProfile(profile);
+    final curriculumSnapshot = _curriculumSnapshot(state.curriculum);
+    final topicSnapshot = topic ?? state.profile.objetivo ?? state.curriculum?.topic;
 
     final slots = buildDopamineReadySlots(
       lessonLocalId: lessonLocalId,
@@ -319,6 +321,9 @@ class DopamineReadyWindowEngine {
         layer: slotLayer,
         mode: item.isReview ? LessonMode.reforco : LessonMode.session,
         marker: item.marker,
+        curriculumItems: curriculumSnapshot,
+        topic: topicSnapshot,
+        itemIdx: items.indexOf(item),
         pedagogicalEnvelope: _pedagogicalEnvelope(profile),
       ),
     );
@@ -457,6 +462,21 @@ String _academicFromProfile(JsonMap profile) {
     'avancado' => 'avancado',
     _ => 'iniciante (nivel incerto, ajustar)',
   };
+}
+
+List<JsonMap> _curriculumSnapshot(StudentCurriculum? curriculum) {
+  final items = curriculum?.items ?? const <CurriculumItem>[];
+  return [
+    for (var index = 0; index < items.length; index += 1)
+      {
+        'order': index + 1,
+        'marker': items[index].marker,
+        'title': items[index].title ?? items[index].text,
+        'text': items[index].text,
+        'purpose': items[index].teacherText,
+        'microitem_for_teacher': items[index].teacherText,
+      },
+  ];
 }
 
 JsonMap _pedagogicalEnvelope(JsonMap profile) {

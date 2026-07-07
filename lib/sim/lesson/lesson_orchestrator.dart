@@ -292,6 +292,9 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
         marker: params.marker,
         profile: params.pedagogicalEnvelope,
         amparoLvl: params.amparoLvl,
+        curriculumItems: params.curriculumItems,
+        topic: params.topic,
+        itemIdx: params.itemIdx,
       ),
     );
     final conteudo = LessonContent(

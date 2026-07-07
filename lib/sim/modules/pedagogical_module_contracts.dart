@@ -39,6 +39,9 @@ class T02LessonRequest {
     this.profile = const {},
     this.addendum,
     this.amparoLvl,
+    this.curriculumItems = const [],
+    this.topic,
+    this.itemIdx,
   });
 
   final String lessonLocalId;
@@ -53,6 +56,9 @@ class T02LessonRequest {
   final JsonMap profile;
   final String? addendum;
   final int? amparoLvl;
+  final List<JsonMap> curriculumItems;
+  final String? topic;
+  final int? itemIdx;
 }
 
 class T02LessonMaterial {

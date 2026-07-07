@@ -549,6 +549,60 @@ void main() {
     expect(material.imageId, 'img-1');
   });
 
+  test('T02 envia curriculo antigo para server-classroom adotar sessao', () async {
+    final transport = RecordingTransport()
+      ..jsonBody =
+          '{"slot":{"material":{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}}}}';
+    final client = SimServerT02Client(
+      config: SimAiServerConfig(
+        baseUrl: 'https://gemini-aid-pal.lovable.app',
+        t02Path: '/api/sim/t02',
+        accessTokenProvider: () async => 'user-token',
+      ),
+      transport: transport,
+    );
+
+    await client.completeLesson(
+      const T02LessonRequest(
+        lessonLocalId: 'old-lesson-1',
+        item: 'Movimento uniforme',
+        lang: 'pt-BR',
+        academic: 'ano 9',
+        layer: LessonLayer.l1,
+        mode: 'session',
+        errCount: 0,
+        history: [],
+        marker: 'M2',
+        topic: 'Fisica',
+        itemIdx: 1,
+        profile: {'target_topic': 'Fisica'},
+        curriculumItems: [
+          {
+            'order': 1,
+            'marker': 'M1',
+            'title': 'Velocidade',
+            'text': 'Velocidade media',
+          },
+          {
+            'order': 2,
+            'marker': 'M2',
+            'title': 'Movimento uniforme',
+            'text': 'Movimento uniforme',
+          },
+        ],
+      ),
+    );
+
+    final body = transport.lastBody as Map;
+    expect(body['lessonLocalId'], 'old-lesson-1');
+    expect(body['topic'], 'Fisica');
+    expect(body['itemIdx'], 1);
+    expect(body['marker'], 'M2');
+    expect((body['adopt'] as Map)['topic'], 'Fisica');
+    expect((body['adopt'] as Map)['profile'], {'target_topic': 'Fisica'});
+    expect((body['adopt'] as Map)['curriculumItems'], hasLength(2));
+  });
+
   test('T02 invalido nao vira aula falsa nem default A', () async {
     final transport = RecordingTransport()
       ..jsonBody =
