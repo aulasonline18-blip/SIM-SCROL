@@ -169,6 +169,27 @@ void main() {
     },
   );
 
+  test('escolha de nivelamento abre warmup antes da aula oficial', () async {
+    final session = LabSession()
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'pt-BR'
+      ..freeText = 'Quero aprender deslocamento em física começando do zero.';
+
+    expect(session.saveObjectiveEntry(), isTrue);
+    session.entryStatus = 't02_running';
+
+    session.skipPlacement();
+
+    expect(session.route, '/cyber/warmup');
+    expect(session.entryStatus, 't02_running');
+
+    session.chooseWarmupAnswer('A');
+    await session.continueFromWarmupToAula();
+
+    expect(session.route, '/cyber/warmup');
+    expect(session.warmupWaitingForOfficialLesson, isTrue);
+  });
+
   testWidgets(
     'erro do onboarding respeita idioma portugues nos botoes de retry',
     (tester) async {

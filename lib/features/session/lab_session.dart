@@ -143,6 +143,7 @@ class LabSession extends ChangeNotifier {
   bool warmupLoading = false;
   String? warmupError;
   String? warmupSelectedAnswer;
+  bool warmupWaitingForOfficialLesson = false;
 
   VisualLearningFeedbackReport get visualLearningFeedbackReport =>
       buildVisualLearningFeedbackReport(
@@ -797,6 +798,7 @@ class LabSession extends ChangeNotifier {
     warmupLesson = null;
     warmupError = null;
     warmupSelectedAnswer = null;
+    warmupWaitingForOfficialLesson = false;
     notifyListeners();
 
     try {
@@ -877,9 +879,15 @@ class LabSession extends ChangeNotifier {
       notifyListeners();
 
       debugPrint('[SIM] CLASSROOM_OPENED route=${result.destination}');
-      navigationState.openRoute(result.destination);
-      if (result.destination == '/cyber/aula') {
+      if (route == '/cyber/warmup' && warmupWaitingForOfficialLesson) {
+        warmupWaitingForOfficialLesson = false;
+        navigationState.openRoute('/cyber/aula');
         unawaited(openAulaRuntime());
+      } else if (route == '/cyber/curriculo') {
+        navigationState.openRoute(result.destination);
+        if (result.destination == '/cyber/aula') {
+          unawaited(openAulaRuntime());
+        }
       }
     } on StudentExperienceEngineException catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
@@ -926,6 +934,9 @@ class LabSession extends ChangeNotifier {
             extra: {...state.extra, 'warmup': lesson.toJson()},
           );
         });
+        if (route == '/cyber/curriculo') {
+          navigationState.openRoute('/cyber/placement');
+        }
       }
       notifyListeners();
     } catch (error) {
@@ -957,6 +968,39 @@ class LabSession extends ChangeNotifier {
       });
     }
     notifyListeners();
+  }
+
+  void openWarmupBridge({bool preparePlacement = false}) {
+    final controller = activePlacementController;
+    if (preparePlacement) {
+      if (controller != null) {
+        controller.chooseStart();
+        unawaited(controller.startTest());
+      }
+    } else {
+      controller?.skip();
+    }
+    navigationState.openRoute('/cyber/warmup');
+    notifyListeners();
+  }
+
+  Future<void> continueFromWarmupToAula() async {
+    final controller = activePlacementController;
+    if (controller != null && controller.destination != '/cyber/aula') {
+      controller.continueToAula();
+    }
+    if (entryStatus != 'primeira_aula_pronta') {
+      warmupWaitingForOfficialLesson = true;
+      notifyListeners();
+      return;
+    }
+    warmupWaitingForOfficialLesson = false;
+    if (controller == null) {
+      navigationState.openRoute('/cyber/aula');
+      await openAulaRuntime();
+      return;
+    }
+    await openAulaAfterPlacementIfReady();
   }
 
   Future<StudentExperienceResult> _prepareExperienceWithAuthRetry({
@@ -2053,16 +2097,7 @@ class LabSession extends ChangeNotifier {
   }
 
   void skipPlacement() {
-    final controller = activePlacementController;
-    if (controller != null) {
-      controller.skip();
-      unawaited(openAulaAfterPlacementIfReady());
-      notifyListeners();
-      return;
-    }
-    lessonUiState.skipPlacement();
-    navigationState.openRoute('/cyber/aula');
-    unawaited(openAulaRuntime());
+    openWarmupBridge();
   }
 
   Future<void> startPlacementTest() async {

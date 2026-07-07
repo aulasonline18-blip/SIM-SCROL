@@ -121,7 +121,6 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
         error?.toLowerCase().contains('credit') == true;
     final simStage = _toSimStage(status);
     final isReady = status == 'primeira_aula_pronta';
-    final warmup = widget.session.warmupLesson;
 
     return Scaffold(
       backgroundColor: SimThemeScope.paletteOf(context).background,
@@ -227,16 +226,6 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                                 },
                               ),
                             ),
-                            if (warmup != null || widget.session.warmupLoading)
-                              SimChatReveal(
-                                child: _WarmupRoomCard(
-                                  lesson: warmup,
-                                  loading: widget.session.warmupLoading,
-                                  selectedAnswer:
-                                      widget.session.warmupSelectedAnswer,
-                                  onAnswer: widget.session.chooseWarmupAnswer,
-                                ),
-                              ),
                           ],
                         ),
                       ),
@@ -249,18 +238,50 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
   }
 }
 
+class WarmupBridgeScreen extends StatelessWidget {
+  const WarmupBridgeScreen({required this.session, super.key});
+
+  final LabSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Scaffold(
+      backgroundColor: palette.background,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: Center(
+            child: SingleChildScrollView(
+              child: _WarmupRoomCard(
+                lesson: session.warmupLesson,
+                selectedAnswer: session.warmupSelectedAnswer,
+                waitingForOfficial: session.warmupWaitingForOfficialLesson,
+                onAnswer: session.chooseWarmupAnswer,
+                onContinue: session.continueFromWarmupToAula,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _WarmupRoomCard extends StatelessWidget {
   const _WarmupRoomCard({
     required this.lesson,
-    required this.loading,
     required this.selectedAnswer,
+    required this.waitingForOfficial,
     required this.onAnswer,
+    required this.onContinue,
   });
 
   final SimWarmupLesson? lesson;
-  final bool loading;
   final String? selectedAnswer;
+  final bool waitingForOfficial;
   final ValueChanged<String> onAnswer;
+  final VoidCallback onContinue;
 
   @override
   Widget build(BuildContext context) {
@@ -283,28 +304,15 @@ class _WarmupRoomCard extends StatelessWidget {
         ],
       ),
       child: item == null
-          ? Row(
-              children: [
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: palette.primary,
-                  ),
+          ? Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: palette.primary,
                 ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Preparando uma questão de aquecimento...',
-                    style: TextStyle(
-                      color: simMuted,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -367,6 +375,20 @@ class _WarmupRoomCard extends StatelessWidget {
                       fontSize: 13,
                       height: 1.35,
                       fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: waitingForOfficial ? null : onContinue,
+                    icon: waitingForOfficial
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.arrow_forward),
+                    label: Text(
+                      waitingForOfficial ? 'Preparando a aula...' : 'Continuar',
                     ),
                   ),
                 ],
@@ -467,8 +489,7 @@ class _PlacementLabScreenState extends State<PlacementLabScreen> {
       widget.session.activePlacementController;
 
   void _goToIntro() {
-    _controller?.chooseStart();
-    setState(() {});
+    widget.session.openWarmupBridge(preparePlacement: true);
   }
 
   void _goToQuestion() async {

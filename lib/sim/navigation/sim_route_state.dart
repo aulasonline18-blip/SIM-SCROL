@@ -244,6 +244,34 @@ const simRouteStateContracts = <SimRouteStateContract>[
     ],
   ),
   SimRouteStateContract(
+    routeName: 'warmup',
+    path: '/cyber/warmup',
+    restorable: true,
+    storageScope: SimRouteStateScope.memory,
+    fields: [
+      SimRouteStateField(
+        key: 'lessonLocalId',
+        kind: SimRouteStateFieldKind.live,
+        scope: SimRouteStateScope.memory,
+      ),
+      SimRouteStateField(
+        key: 'warmup',
+        kind: SimRouteStateFieldKind.live,
+        scope: SimRouteStateScope.memory,
+      ),
+      SimRouteStateField(
+        key: 'selectedAnswer',
+        kind: SimRouteStateFieldKind.live,
+        scope: SimRouteStateScope.memory,
+      ),
+      SimRouteStateField(
+        key: 'loadingState',
+        kind: SimRouteStateFieldKind.volatile,
+        scope: SimRouteStateScope.neverPersist,
+      ),
+    ],
+  ),
+  SimRouteStateContract(
     routeName: 'classroom',
     path: '/cyber/aula',
     restorable: true,

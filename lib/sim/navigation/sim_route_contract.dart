@@ -196,6 +196,30 @@ const simRouteContract = <SimRouteContractEntry>[
     ],
   ),
   SimRouteContractEntry(
+    name: 'warmup',
+    path: '/cyber/warmup',
+    destination: 'WarmupBridgeScreen',
+    access: SimRouteAccess.protected,
+    surface: SimRouteSurface.screen,
+    requiredParams: ['lessonLocalId'],
+    preconditions: [
+      SimRoutePrecondition.authReady,
+      SimRoutePrecondition.authenticated,
+      SimRoutePrecondition.languageSelected,
+      SimRoutePrecondition.objectiveReady,
+    ],
+    canDeepLink: false,
+    restorable: true,
+    fallbackPath: '/cyber/placement',
+    origins: [
+      SimRouteOrigin(
+        origin: 'placement',
+        action: 'warmup bridge before classroom',
+        navigation: SimNavigationAction.replace,
+      ),
+    ],
+  ),
+  SimRouteContractEntry(
     name: 'classroom',
     path: '/cyber/aula',
     destination: 'ChatAulaScreen or AulaLabScreen',

@@ -275,6 +275,8 @@ class _SimAppState extends State<SimApp> {
         screen = PhaseBoundaryScreen(session: session);
       case '/cyber/placement':
         screen = PlacementLabScreen(session: session);
+      case '/cyber/warmup':
+        screen = WarmupBridgeScreen(session: session);
       case '/cyber/aula':
         screen = _guardActiveLesson(
           session,

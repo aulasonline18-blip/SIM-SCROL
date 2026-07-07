@@ -14,6 +14,7 @@ void main() {
     expect(paths, contains('/cyber/objeto'));
     expect(paths, contains('/cyber/curriculo'));
     expect(paths, contains('/cyber/placement'));
+    expect(paths, contains('/cyber/warmup'));
     expect(paths, contains('/cyber/aula'));
     expect(paths, contains('/creditos'));
     expect(paths, contains('/checkout/return'));
@@ -101,7 +102,7 @@ void main() {
     expect(report.complete, true);
     expect(report.environmentCount, greaterThanOrEqualTo(14));
     expect(report.doorCount, greaterThanOrEqualTo(50));
-    expect(report.screenRouteCount, 13);
+    expect(report.screenRouteCount, 14);
     expect(report.apiRouteCount, 4);
     expect(report.externalRouteCount, 3);
   });

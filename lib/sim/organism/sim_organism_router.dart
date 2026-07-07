@@ -21,7 +21,8 @@ class SimRouteDecision {
   final String destination;
   final SimOrganismRouteGuard guard;
 
-  bool get allowed => requested == destination && guard == SimOrganismRouteGuard.open;
+  bool get allowed =>
+      requested == destination && guard == SimOrganismRouteGuard.open;
 }
 
 class SimOrganismRouter {
@@ -89,12 +90,12 @@ class SimOrganismRouter {
       '/cyber/objeto' ||
       '/cyber/curriculo' ||
       '/cyber/placement' ||
+      '/cyber/warmup' ||
       '/cyber/aula' ||
       '/creditos' ||
       '/checkout/return' ||
       '/pai' ||
-      '/conta/deletar' =>
-        true,
+      '/conta/deletar' => true,
       _ => false,
     };
   }
@@ -104,15 +105,18 @@ class SimOrganismRouter {
       '/cyber/objeto' ||
       '/cyber/curriculo' ||
       '/cyber/placement' ||
-      '/cyber/aula' =>
-        true,
+      '/cyber/warmup' ||
+      '/cyber/aula' => true,
       _ => false,
     };
   }
 
   bool _requiresObjective(String path) {
     return switch (path) {
-      '/cyber/curriculo' || '/cyber/placement' || '/cyber/aula' => true,
+      '/cyber/curriculo' ||
+      '/cyber/placement' ||
+      '/cyber/warmup' ||
+      '/cyber/aula' => true,
       _ => false,
     };
   }
