@@ -1751,9 +1751,7 @@ class LabSession extends ChangeNotifier {
             text: content.options[AnswerLetter.C] ?? '',
           ),
         ],
-        locked:
-            phase.type == ClassroomPhaseType.processando ||
-            phase.type == ClassroomPhaseType.concluido,
+        locked: false,
         nextLabel: phase.type == ClassroomPhaseType.concluido
             ? 'aula_next'
             : '',

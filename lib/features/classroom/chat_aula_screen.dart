@@ -162,7 +162,6 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   }
 
   void _runConversationAction(String key, FutureOr<void> Function() action) {
-    if (_pendingConversationActions.contains(key)) return;
     setState(() => _pendingConversationActions.add(key));
     Future<void>.sync(action).whenComplete(() {
       if (!mounted) return;

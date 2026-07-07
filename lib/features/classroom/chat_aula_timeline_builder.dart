@@ -174,14 +174,13 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     );
 
     final selected = phase?.letter;
-    final locked = snapshot?.viewModel?.locked ?? false;
     messages.add(
       ChatLessonMessage(
         id: 'options-$activeId',
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.options,
         selectedAnswer: selected,
-        options: _options(content, selected: selected, enabled: !locked),
+        options: _options(content, selected: selected, enabled: true),
         signals: phase?.type == ClassroomPhaseType.expandida
             ? _signals(enabled: true)
             : const [],

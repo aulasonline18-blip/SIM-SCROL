@@ -485,7 +485,6 @@ class _AulaLabScreenState extends State<AulaLabScreen>
     final isDone = snapshot?.isDone ?? false;
     final wasCorrect = phase?.wasCorrect;
     final feedbackKey = phase?.message;
-    final locked = viewModel?.locked ?? false;
     final layerLabel = _activeLayerLabel(viewModel?.headerLabel);
     final media = MediaQuery.of(context);
     final screenWidth = media.size.width;
@@ -534,7 +533,7 @@ class _AulaLabScreenState extends State<AulaLabScreen>
             label: label,
             text: content?.options[letter] ?? '',
             active: isActive,
-            enabled: !locked,
+            enabled: true,
             onTap: () {
               _prepareUserDrivenScroll();
               session.chooseAulaAnswer(label);
@@ -1731,7 +1730,7 @@ class _FeedbackBoxState extends State<_FeedbackBox>
                 Expanded(
                   child: _FeedbackActionButton(
                     label: widget.doubtLabel,
-                    enabled: !widget.busy,
+                    enabled: true,
                     primary: false,
                     onTap: widget.onAskDoubt,
                   ),
@@ -1740,7 +1739,7 @@ class _FeedbackBoxState extends State<_FeedbackBox>
                 Expanded(
                   child: _FeedbackActionButton(
                     label: widget.nextLabel,
-                    enabled: !widget.busy,
+                    enabled: true,
                     primary: true,
                     onTap: widget.onNext,
                   ),
@@ -1757,14 +1756,14 @@ class _FeedbackBoxState extends State<_FeedbackBox>
                       children: [
                         _FeedbackActionButton(
                           label: widget.doubtLabel,
-                          enabled: !widget.busy,
+                          enabled: true,
                           primary: false,
                           onTap: widget.onAskDoubt,
                         ),
                         const SizedBox(height: 10),
                         _FeedbackActionButton(
                           label: widget.nextLabel,
-                          enabled: !widget.busy,
+                          enabled: true,
                           primary: true,
                           onTap: widget.onNext,
                         ),

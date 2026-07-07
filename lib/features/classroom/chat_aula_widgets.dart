@@ -1039,21 +1039,19 @@ class _ChatAulaMessageBody extends StatelessWidget {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final compact = constraints.maxWidth < 360;
-                  final enabled =
-                      message.deliveryStatus != ChatLessonDeliveryStatus.read;
                   final doubtButton = _ChatActionButton(
                     key: const Key('chat-feedback-doubt-button'),
                     label: t('aula_doubt_about_question'),
-                    enabled: enabled && !pendingActionKeys.contains('doubt'),
-                    busy: pendingActionKeys.contains('doubt'),
+                    enabled: true,
+                    busy: false,
                     primary: false,
                     onPressed: onOpenDoubt,
                   );
                   final nextButton = _ChatActionButton(
                     key: const Key('chat-feedback-next-button'),
                     label: t(message.actionKey ?? 'aula_next'),
-                    enabled: enabled && !pendingActionKeys.contains('next'),
-                    busy: pendingActionKeys.contains('next'),
+                    enabled: true,
+                    busy: false,
                     onPressed: onNext,
                   );
                   if (compact) {
@@ -1082,8 +1080,8 @@ class _ChatAulaMessageBody extends StatelessWidget {
       ChatLessonMessageKind.doubtAction => _ChatActionButton(
         key: const Key('chat-doubt-action'),
         label: message.text ?? t('aula_doubt'),
-        enabled: !pendingActionKeys.contains('doubt'),
-        busy: pendingActionKeys.contains('doubt'),
+        enabled: true,
+        busy: false,
         onPressed: onOpenDoubt,
       ),
       ChatLessonMessageKind.studentAnswer ||
@@ -1490,8 +1488,7 @@ class _ChatOptions extends StatelessWidget {
                 label: option.letter.name,
                 text: option.text,
                 active: option.selected,
-                enabled:
-                    option.enabled && !pendingActionKeys.contains('answer'),
+                enabled: true,
                 onTap: () => onChooseAnswer(option.letter),
               ),
               if (option.selected && message.signals.isNotEmpty)
@@ -1530,7 +1527,7 @@ class _InlineSignalChoices extends StatelessWidget {
       ),
       child: _SignalButtonGroup(
         signals: signals,
-        busy: pendingActionKeys.contains('signal'),
+        busy: false,
         onSignal: onSignal,
       ),
     );
@@ -1555,7 +1552,7 @@ class _ChatSignals extends StatelessWidget {
       children: [
         _SignalButtonGroup(
           signals: message.signals,
-          busy: pendingActionKeys.contains('signal'),
+          busy: false,
           onSignal: onSignal,
         ),
       ],

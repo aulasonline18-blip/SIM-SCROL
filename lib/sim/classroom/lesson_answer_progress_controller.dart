@@ -37,10 +37,6 @@ class LessonAnswerProgressController {
   final AmparoController _amparo = const AmparoController();
 
   void selecionar(LessonPositionState position, AnswerLetter letter) {
-    if (position.phase.type != ClassroomPhaseType.lendo &&
-        position.phase.type != ClassroomPhaseType.expandida) {
-      return;
-    }
     audioCore?.stop();
     position.phase = ClassroomPhase.expanded(letter);
   }

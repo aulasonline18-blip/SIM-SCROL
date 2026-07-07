@@ -65,9 +65,6 @@ LessonMainViewModel buildLessonMainViewModel({
             text: conteudo.options[AnswerLetter.C] ?? '',
           ),
         ];
-  final locked = phase.type == ClassroomPhaseType.processando ||
-      phase.type == ClassroomPhaseType.concluido ||
-      phase.type == ClassroomPhaseType.carregando;
   final nextLabel = phase.type == ClassroomPhaseType.concluido
       ? nextButtonLabel(
           isReview: isReviewAtivo,
@@ -82,7 +79,7 @@ LessonMainViewModel buildLessonMainViewModel({
     progress: progress,
     headerLabel: headerLabel,
     options: options,
-    locked: locked,
+    locked: false,
     nextLabel: nextLabel,
   );
 }
