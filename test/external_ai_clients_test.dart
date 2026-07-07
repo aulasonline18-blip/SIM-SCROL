@@ -84,10 +84,16 @@ void main() {
     accessTokenProvider: () async => 'user-token',
   );
 
-  test('T00 inicia o orquestrador server-classroom com ficha e bearer', () async {
+  test('T00 consome /api/bootstrap-t00 por SSE com ficha e bearer', () async {
     final transport = RecordingTransport()
-      ..jsonBody =
-          '{"session":{"lessonLocalId":"lesson-1","profile":{"raw":"ok"},"curriculum":{"items":[{"order":1,"marker":"M1","title":"Frações","purpose":"Aprender frações","text":"Frações"}]},"ready":{"0:L1":{"status":"ready"}}},"firstSlot":{"status":"ready"}}';
+      ..streamLines = const [
+        ': hb',
+        'data: {"type":"t00_profile","profile":"ok","ficha_for_next":{"objetivo":"Aprender frações"}}',
+        'data: {"type":"t00_item_partial","item":{"order":1,"marker":"M1","title":"Frações","purpose":"Aprender frações","text":"Frações"},"order":1,"marker":"M1"}',
+        'data: {"type":"t00_partial_ready","count":1}',
+        'data: {"type":"t00_final","curriculo":[{"order":1,"marker":"M1","title":"Frações","purpose":"Aprender frações","text":"Frações"}],"raw_complete":true}',
+        'data: {"type":"done","ok":true}',
+      ];
     final client = SimServerT00Client(config: config(), transport: transport);
 
     final chunks = await client
@@ -106,22 +112,15 @@ void main() {
 
     expect(
       transport.lastUri.toString(),
-      'https://gemini-aid-pal.lovable.app/api/server-classroom/start',
+      'https://gemini-aid-pal.lovable.app/api/bootstrap-t00',
     );
     expect(transport.lastHeaders?['authorization'], 'Bearer user-token');
     expect(
       (transport.lastBody as Map)['ficha']['free_text'],
       'Aprender frações',
     );
-    expect((transport.lastBody as Map)['interfaceLocale'], 'en');
-    expect((transport.lastBody as Map)['learningLocale'], 'es');
-    expect((transport.lastBody as Map)['explanationLanguage'], 'Spanish');
-    expect((transport.lastBody as Map)['ficha']['interfaceLocale'], 'en');
-    expect((transport.lastBody as Map)['ficha']['learningLocale'], 'es');
-    expect(
-      (transport.lastBody as Map)['ficha']['explanationLanguage'],
-      'Spanish',
-    );
+    expect((transport.lastBody as Map)['ficha']['language'], 'pt-BR');
+    expect((transport.lastBody as Map)['ficha']['stableLang'], 'Spanish');
     expect(chunks.map((chunk) => chunk.type), [
       't00_profile',
       't00_item_partial',

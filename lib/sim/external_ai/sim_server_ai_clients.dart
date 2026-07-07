@@ -9,12 +9,12 @@ import '../media/lesson_visual_pipeline.dart';
 import '../lesson/lesson_content_validator.dart';
 import '../localization/sim_locale_contract.dart';
 import '../modules/pedagogical_module_contracts.dart';
+import '../experience/bootstrap_payload.dart';
 import '../state/student_learning_state.dart';
 import 'sim_ai_server_config.dart';
 import 'sim_http_transport.dart';
 
 const String simT00BootstrapPath = '/api/bootstrap-t00';
-const String simServerClassroomStartPath = '/api/server-classroom/start';
 const String simServerClassroomSlotPath = '/api/server-classroom/slot';
 const String simWarmupPath = '/api/warmup';
 const String simLessonImagePath = '/api/generate-lesson-image';
@@ -50,84 +50,29 @@ class SimServerT00Client implements T00BootstrapClient {
       if (request.onboarding['free_text'] == null)
         'free_text': request.onboarding['objetivo'] ?? '',
     };
-    final response = await transport.postJson(
-      config.uri(simServerClassroomStartPath),
+    final body = buildT00Phase1Body(
+      data: ficha,
+      lang: request.lang,
+      academic: request.academic,
+    );
+    await for (final line in transport.postEventStream(
+      config.uri(simT00BootstrapPath),
       headers: await config.jsonHeaders(),
-      body: {
-        'lessonLocalId': request.lessonLocalId,
-        'ficha': ficha,
-        ...locale,
-        'timeoutMs': timeout.inMilliseconds,
-      },
+      body: body,
       timeout: timeout,
-    );
-    if (!response.ok) {
+    )) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty || trimmed.startsWith(':')) continue;
+      if (!trimmed.startsWith('data:')) continue;
+      final raw = trimmed.substring(5).trim();
+      if (raw.isEmpty || raw == '[DONE]') continue;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) continue;
       yield T00BootstrapChunk(
-        type: 'fatal',
-        payload: {
-          'error': response.body,
-          'code': 'SERVER_CLASSROOM_START_FAILED',
-        },
-      );
-      return;
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      yield const T00BootstrapChunk(
-        type: 'fatal',
-        payload: {'error': 'server classroom retornou resposta invalida'},
-      );
-      return;
-    }
-    final session = decoded['session'] is Map
-        ? JsonMap.from(decoded['session'] as Map)
-        : JsonMap.from(decoded);
-    final profile = session['profile'] is Map
-        ? JsonMap.from(session['profile'] as Map)
-        : const <String, dynamic>{};
-    final rawProfile = profile['raw']?.toString() ?? '';
-    yield T00BootstrapChunk(
-      type: 't00_profile',
-      payload: {
-        'profile': rawProfile,
-        'ficha_for_next': {
-          ...ficha,
-          ...profile,
-          'bootstrap_engine': 'server-classroom',
-          'bootstrap_status': 'complete',
-        },
-      },
-    );
-    final curriculum = session['curriculum'] is Map
-        ? JsonMap.from(session['curriculum'] as Map)
-        : const <String, dynamic>{};
-    final rawItems = curriculum['items'];
-    final items = rawItems is List ? rawItems : const [];
-    for (final raw in items) {
-      if (raw is! Map) continue;
-      yield T00BootstrapChunk(
-        type: 't00_item_partial',
-        payload: {
-          'item': JsonMap.from(raw),
-          'order': raw['order'],
-          'marker': raw['marker'],
-        },
+        type: decoded['type']?.toString() ?? 'message',
+        payload: JsonMap.from(decoded),
       );
     }
-    if (items.isNotEmpty) {
-      yield T00BootstrapChunk(type: 't00_partial_ready', payload: {'count': 1});
-    }
-    yield T00BootstrapChunk(
-      type: 't00_final',
-      payload: {
-        'curriculo': items,
-        'curriculum': items,
-        'profile': rawProfile,
-        'raw_complete': true,
-        'model': 'server-classroom',
-      },
-    );
-    yield const T00BootstrapChunk(type: 'done', payload: {'ok': true});
   }
 }
 
