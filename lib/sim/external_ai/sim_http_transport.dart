@@ -88,7 +88,7 @@ class DartIoSimHttpTransport implements SimHttpTransport {
       final text = await utf8.decoder.bind(response).join().timeout(timeout);
       if (response.statusCode >= 400) {
         _debug(
-          '[SIM_HTTP] postJson erro ${response.statusCode}: ${text.length > 500 ? text.substring(0, 500) : text}',
+          '[SIM_HTTP] postJson erro ${response.statusCode}: bodyBytes=${utf8.encode(text).length}',
         );
       }
       final outHeaders = <String, String>{};
@@ -138,7 +138,7 @@ class DartIoSimHttpTransport implements SimHttpTransport {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final text = await utf8.decoder.bind(response).join().timeout(timeout);
       _debug(
-        '[SIM_HTTP] postEventStream erro ${response.statusCode}: ${text.length > 500 ? text.substring(0, 500) : text}',
+        '[SIM_HTTP] postEventStream erro ${response.statusCode}: bodyBytes=${utf8.encode(text).length}',
       );
       throw HttpException('HTTP ${response.statusCode}: $text', uri: uri);
     }

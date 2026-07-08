@@ -94,10 +94,7 @@ class SimServerPaymentsClient implements PaymentsFunctions {
       timeout: timeout,
     );
     if (!response.ok) {
-      throw SimExternalAiException(
-        response.body,
-        statusCode: response.statusCode,
-      );
+      throw _safeBillingException(response);
     }
     final decoded = jsonDecode(response.body);
     return decoded is Map ? JsonMap.from(decoded) : <String, dynamic>{};
@@ -150,10 +147,7 @@ class SimServerCreditsClient implements CreditsFunctions {
       timeout: timeout,
     );
     if (!response.ok) {
-      throw SimExternalAiException(
-        response.body,
-        statusCode: response.statusCode,
-      );
+      throw _safeBillingException(response);
     }
     final decoded = jsonDecode(response.body);
     return decoded is Map ? JsonMap.from(decoded) : <String, dynamic>{};
@@ -192,10 +186,7 @@ class SimServerPlayBillingGrantClient implements PlayBillingGrantGateway {
       timeout: timeout,
     );
     if (!response.ok) {
-      throw SimExternalAiException(
-        response.body,
-        statusCode: response.statusCode,
-      );
+      throw _safeBillingException(response);
     }
     final decoded = jsonDecode(response.body);
     final data = decoded is Map ? JsonMap.from(decoded) : <String, dynamic>{};
@@ -236,10 +227,54 @@ class SimServerAccountDeletionGateway implements AccountDeletionGateway {
       timeout: timeout,
     );
     if (!response.ok) {
-      throw SimExternalAiException(
-        response.body,
-        statusCode: response.statusCode,
-      );
+      throw _safeBillingException(response);
     }
   }
+}
+
+SimExternalAiException _safeBillingException(SimHttpResponse response) {
+  var code = 'SERVER_ERROR';
+  String? requestId;
+  var retryable = response.statusCode >= 500 || response.statusCode == 429;
+  try {
+    final decoded = jsonDecode(response.body);
+    if (decoded is Map) {
+      code = (decoded['code'] ?? decoded['error'] ?? code).toString();
+      requestId = decoded['requestId']?.toString();
+      if (decoded['retryable'] is bool) {
+        retryable = decoded['retryable'] as bool;
+      }
+    }
+  } catch (_) {
+    // Corpo invalido fica oculto para a UI.
+  }
+  return SimExternalAiException(
+    _humanBillingError(response.statusCode),
+    statusCode: response.statusCode,
+    requestId: requestId,
+    code: _safePublicCode(code),
+    retryable: retryable,
+  );
+}
+
+String _safePublicCode(String code) {
+  final raw = code.trim();
+  if (!RegExp(r'^[A-Z0-9_]{3,80}$').hasMatch(raw)) return 'SERVER_ERROR';
+  return raw;
+}
+
+String _humanBillingError(int statusCode) {
+  if (statusCode == 401) {
+    return 'Sua sessão expirou. Entre novamente para continuar.';
+  }
+  if (statusCode == 403) {
+    return 'Não foi possível confirmar sua autorização para esta ação.';
+  }
+  if (statusCode == 409) {
+    return 'Não foi possível concluir esta ação agora. Tente novamente.';
+  }
+  if (statusCode == 429) {
+    return 'Muitas tentativas em pouco tempo. Aguarde um instante e tente novamente.';
+  }
+  return 'Não conseguimos concluir esta operação agora. Tente novamente.';
 }
