@@ -41,12 +41,12 @@ class AuxRoomProfile {
   final JsonMap extra;
 
   JsonMap toJson() => {
-        ...extra,
-        if (stableLang != null) 'stableLang': stableLang,
-        if (academicLevel != null) 'academicLevel': academicLevel,
-        if (preferredName != null) 'preferredName': preferredName,
-        if (notes != null) 'notes': notes,
-      };
+    ...extra,
+    if (stableLang != null) 'stableLang': stableLang,
+    if (academicLevel != null) 'academicLevel': academicLevel,
+    if (preferredName != null) 'preferredName': preferredName,
+    if (notes != null) 'notes': notes,
+  };
 }
 
 class AuxRoomItem {
@@ -70,11 +70,11 @@ class AuxRoomContent {
   final String explanation;
 
   factory AuxRoomContent.fromLesson(LessonContent content) => AuxRoomContent(
-        question: content.question,
-        options: content.options,
-        correctAnswer: content.correctAnswer,
-        explanation: content.explanation,
-      );
+    question: content.question,
+    options: content.options,
+    correctAnswer: content.correctAnswer,
+    explanation: content.explanation,
+  );
 }
 
 class ReviewRoomContext {
@@ -183,6 +183,8 @@ class RecoveryRoomView {
     this.resultMsg,
     this.errMsg,
     this.restartRequired = false,
+    this.serverRecoveryId,
+    this.serverMarker,
   });
 
   final RecoveryRoomStatus status;
@@ -195,6 +197,8 @@ class RecoveryRoomView {
   final String? resultMsg;
   final String? errMsg;
   final bool restartRequired;
+  final String? serverRecoveryId;
+  final String? serverMarker;
 
   RecoveryRoomView copyWith({
     RecoveryRoomStatus? status,
@@ -207,6 +211,8 @@ class RecoveryRoomView {
     String? resultMsg,
     String? errMsg,
     bool? restartRequired,
+    String? serverRecoveryId,
+    String? serverMarker,
   }) {
     return RecoveryRoomView(
       status: status ?? this.status,
@@ -219,6 +225,8 @@ class RecoveryRoomView {
       resultMsg: resultMsg ?? this.resultMsg,
       errMsg: errMsg ?? this.errMsg,
       restartRequired: restartRequired ?? this.restartRequired,
+      serverRecoveryId: serverRecoveryId ?? this.serverRecoveryId,
+      serverMarker: serverMarker ?? this.serverMarker,
     );
   }
 }
