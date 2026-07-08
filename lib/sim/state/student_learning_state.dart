@@ -526,12 +526,16 @@ class StudentLearningEvent {
 class StudentMasteryTruth {
   const StudentMasteryTruth({
     this.masteryEvidence = const [],
+    this.weaknessRecords = const [],
+    this.conquestRecords = const [],
     this.falseMasteryFlags = const [],
     this.needsRetestFlags = const [],
     this.itemConsolidationStatus = const {},
   });
 
   final List<JsonMap> masteryEvidence;
+  final List<JsonMap> weaknessRecords;
+  final List<JsonMap> conquestRecords;
   final List<String> falseMasteryFlags;
   final List<String> needsRetestFlags;
   final Map<String, String> itemConsolidationStatus;
@@ -540,6 +544,8 @@ class StudentMasteryTruth {
 
   JsonMap toJson() => {
     'mastery_evidence': masteryEvidence,
+    'weakness_records': weaknessRecords,
+    'conquest_records': conquestRecords,
     'false_mastery_flags': falseMasteryFlags,
     'needs_retest_flags': needsRetestFlags,
     'item_consolidation_status': itemConsolidationStatus,
@@ -548,6 +554,14 @@ class StudentMasteryTruth {
   factory StudentMasteryTruth.fromJson(JsonMap json) {
     return StudentMasteryTruth(
       masteryEvidence: (json['mastery_evidence'] as List? ?? const [])
+          .whereType<Map>()
+          .map((entry) => JsonMap.from(entry))
+          .toList(),
+      weaknessRecords: (json['weakness_records'] as List? ?? const [])
+          .whereType<Map>()
+          .map((entry) => JsonMap.from(entry))
+          .toList(),
+      conquestRecords: (json['conquest_records'] as List? ?? const [])
           .whereType<Map>()
           .map((entry) => JsonMap.from(entry))
           .toList(),
@@ -569,12 +583,16 @@ class StudentMasteryTruth {
 
   StudentMasteryTruth copyWith({
     List<JsonMap>? masteryEvidence,
+    List<JsonMap>? weaknessRecords,
+    List<JsonMap>? conquestRecords,
     List<String>? falseMasteryFlags,
     List<String>? needsRetestFlags,
     Map<String, String>? itemConsolidationStatus,
   }) {
     return StudentMasteryTruth(
       masteryEvidence: masteryEvidence ?? this.masteryEvidence,
+      weaknessRecords: weaknessRecords ?? this.weaknessRecords,
+      conquestRecords: conquestRecords ?? this.conquestRecords,
       falseMasteryFlags: falseMasteryFlags ?? this.falseMasteryFlags,
       needsRetestFlags: needsRetestFlags ?? this.needsRetestFlags,
       itemConsolidationStatus:
@@ -1118,12 +1136,11 @@ StudentLearningState mergeStudentLearningStateFromCloud(
         remote.currentLessonMaterial,
     readyLessonMaterials: readyLessonMaterials,
     auxRooms: base.auxRooms ?? local.auxRooms ?? remote.auxRooms,
-    truth:
-        base.truth.masteryEvidence.isNotEmpty ||
-            base.truth.itemConsolidationStatus.isNotEmpty
+    truth: _hasServerMasteryTruth(remote.truth)
+        ? remote.truth
+        : _hasServerMasteryTruth(base.truth)
         ? base.truth
-        : local.truth.masteryEvidence.isNotEmpty ||
-              local.truth.itemConsolidationStatus.isNotEmpty
+        : _hasServerMasteryTruth(local.truth)
         ? local.truth
         : remote.truth,
     audio: base.audio.status != 'idle'
@@ -1136,3 +1153,9 @@ StudentLearningState mergeStudentLearningStateFromCloud(
         : remote.updatedAt,
   );
 }
+
+bool _hasServerMasteryTruth(StudentMasteryTruth truth) =>
+    truth.masteryEvidence.isNotEmpty ||
+    truth.weaknessRecords.isNotEmpty ||
+    truth.conquestRecords.isNotEmpty ||
+    truth.itemConsolidationStatus.isNotEmpty;
