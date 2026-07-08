@@ -49,6 +49,10 @@ class LessonVisualTrigger {
     this.renderStrategy,
     this.svgPayload,
     this.aspectRatio,
+    this.lessonLocalId,
+    this.marker,
+    this.itemIdx,
+    this.layer,
   });
 
   final bool needsImage;
@@ -65,6 +69,10 @@ class LessonVisualTrigger {
   final String? renderStrategy; // "software" | "ai"
   final String? svgPayload;
   final String? aspectRatio;
+  final String? lessonLocalId;
+  final String? marker;
+  final int? itemIdx;
+  final int? layer;
 
   factory LessonVisualTrigger.fromJson(Object? value) {
     if (value is! Map) return const LessonVisualTrigger();
@@ -92,6 +100,12 @@ class LessonVisualTrigger {
           value['aspect_ratio']?.toString() ??
           value['aspectRatio']?.toString() ??
           value['image_aspect_ratio']?.toString(),
+      lessonLocalId: value['lessonLocalId']?.toString(),
+      marker: value['marker']?.toString(),
+      itemIdx: value['itemIdx'] is num
+          ? (value['itemIdx'] as num).toInt()
+          : null,
+      layer: value['layer'] is num ? (value['layer'] as num).toInt() : null,
     );
   }
 
@@ -110,6 +124,10 @@ class LessonVisualTrigger {
     if (renderStrategy != null) 'render_strategy': renderStrategy,
     if (svgPayload != null) 'svg_payload': svgPayload,
     if (aspectRatio != null) 'aspect_ratio': aspectRatio,
+    if (lessonLocalId != null) 'lessonLocalId': lessonLocalId,
+    if (marker != null) 'marker': marker,
+    if (itemIdx != null) 'itemIdx': itemIdx,
+    if (layer != null) 'layer': layer,
   };
 
   LessonVisualTrigger copyWith({
@@ -126,6 +144,10 @@ class LessonVisualTrigger {
     String? renderStrategy,
     String? svgPayload,
     String? aspectRatio,
+    String? lessonLocalId,
+    String? marker,
+    int? itemIdx,
+    int? layer,
   }) {
     return LessonVisualTrigger(
       needsImage: needsImage ?? this.needsImage,
@@ -141,6 +163,10 @@ class LessonVisualTrigger {
       renderStrategy: renderStrategy ?? this.renderStrategy,
       svgPayload: svgPayload ?? this.svgPayload,
       aspectRatio: aspectRatio ?? this.aspectRatio,
+      lessonLocalId: lessonLocalId ?? this.lessonLocalId,
+      marker: marker ?? this.marker,
+      itemIdx: itemIdx ?? this.itemIdx,
+      layer: layer ?? this.layer,
     );
   }
 }

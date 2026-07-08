@@ -1,16 +1,19 @@
 import '../state/student_learning_state.dart';
 import 'audio_core.dart';
 import 'lesson_audio_api_contract.dart';
+import 'slot_media_contract.dart';
 
 class LessonMediaPosition {
   const LessonMediaPosition({
     required this.lessonLocalId,
     this.itemMarker,
+    this.itemIdx,
     this.layer,
   });
 
   final String lessonLocalId;
   final String? itemMarker;
+  final int? itemIdx;
   final LessonLayer? layer;
 }
 
@@ -65,6 +68,27 @@ class StudentLessonMediaService {
     if (lessonKey != null) payload['lessonKey'] = lessonKey;
     if (language != null) payload['language'] = language;
     if (voice != null) payload['voice'] = voice;
+    final marker = position.itemMarker;
+    final layer = position.layer;
+    if (marker != null && layer != null) {
+      payload['slotMedia'] = SlotMediaContract(
+        lessonLocalId: position.lessonLocalId,
+        marker: marker,
+        itemIdx: position.itemIdx ?? 0,
+        layer: layer,
+        mediaType: SlotMediaType.audio,
+        status: 'ready',
+        source: 'tts-generated',
+        createdAt: DateTime.now().toIso8601String(),
+        cacheKey: slotMediaCacheKey(
+          lessonLocalId: position.lessonLocalId,
+          marker: marker,
+          itemIdx: position.itemIdx ?? 0,
+          layer: layer,
+          mediaType: SlotMediaType.audio,
+        ),
+      ).toJson();
+    }
     _appendMediaEvent(
       position,
       'AUDIO_READY',

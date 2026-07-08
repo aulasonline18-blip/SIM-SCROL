@@ -237,6 +237,10 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       topic: enrichedTopic.isEmpty ? null : enrichedTopic,
       visualType: inferredVisualType,
       imagePrompt: enrichedPrompt.isEmpty ? null : enrichedPrompt,
+      lessonLocalId: params.lessonLocalId,
+      marker: params.marker,
+      itemIdx: params.itemIdx,
+      layer: params.layer.value,
     );
   }
 
@@ -256,12 +260,35 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       conteudo: base.conteudo,
       imagem: imageData,
       audioText: base.audioText,
-      imageMetadata: imageMetadata,
+      imageMetadata: _slotImageMetadata(params, key, imageMetadata),
     );
     cache.put(key, updated);
     onImageReady?.call(params, updated);
     bus.clearPaidImageOffer(key);
     bus.notify(key, updated);
+  }
+
+  LessonImageGenerationMetadata? _slotImageMetadata(
+    CompleteLessonParams params,
+    String key,
+    LessonImageGenerationMetadata? metadata,
+  ) {
+    final marker = params.marker;
+    final itemIdx = params.itemIdx;
+    if (marker == null || marker.trim().isEmpty || itemIdx == null) {
+      return metadata;
+    }
+    return (metadata ?? const LessonImageGenerationMetadata()).withSlot(
+      lessonLocalId: params.lessonLocalId,
+      marker: marker,
+      itemIdx: itemIdx,
+      layer: params.layer.value,
+      cacheKey: key,
+      status: 'ready',
+      mediaType: 'image',
+      source: metadata?.source ?? 'server_visual',
+      createdAt: DateTime.now().toIso8601String(),
+    );
   }
 
   @override
