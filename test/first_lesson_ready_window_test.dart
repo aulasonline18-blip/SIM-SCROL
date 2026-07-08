@@ -977,6 +977,13 @@ void main() {
     expect(service.read('cyber-ready')?.readyLessonMaterials.length, 4);
   });
 
+  test('prepared material key contains item marker and layer', () {
+    expect(
+      preparedLessonMaterialKey(2, 'M3', LessonLayer.l2),
+      'I2::M3::L2::l2',
+    );
+  });
+
   test(
     'invalid ready state material is discarded and T02 is called again',
     () async {
@@ -1090,47 +1097,51 @@ void main() {
     ]);
   });
 
-  test('ready window from L3 keeps next item L1/L2/L3 possible experiences', () {
-    final service = StudentLearningStateService();
-    service.ensure(lessonLocalId: 'cyber-window-l3');
-    final orchestrator = LessonOrchestrator(
-      t02Client: FakeT02Client(),
-      cache: LessonMaterialCache(),
-      bus: LessonEventBus(),
-      visualPipeline: fakeVisualPipeline(),
-    );
-    final materialService = StudentLessonMaterialService(
-      stateService: service,
-      orchestrator: orchestrator,
-      readyWindowEngine: DopamineReadyWindowEngine(
-        service: service,
+  test(
+    'ready window from L3 keeps next item L1/L2/L3 possible experiences',
+    () {
+      final service = StudentLearningStateService();
+      service.ensure(lessonLocalId: 'cyber-window-l3');
+      final orchestrator = LessonOrchestrator(
+        t02Client: FakeT02Client(),
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+        visualPipeline: fakeVisualPipeline(),
+      );
+      final materialService = StudentLessonMaterialService(
+        stateService: service,
         orchestrator: orchestrator,
-      ),
-    );
+        readyWindowEngine: DopamineReadyWindowEngine(
+          service: service,
+          orchestrator: orchestrator,
+        ),
+      );
 
-    materialService.maintainLessonReadyWindow(
-      lessonLocalId: 'cyber-window-l3',
-      topic: 'Funções',
-      itemIdx: 0,
-      layer: LessonLayer.l3,
-      source: 'test-window-l3',
-      items: const [
-        DopamineWindowItem(text: 'Item 1', marker: 'M1'),
-        DopamineWindowItem(text: 'Item 2', marker: 'M2'),
-      ],
-    );
+      materialService.maintainLessonReadyWindow(
+        lessonLocalId: 'cyber-window-l3',
+        topic: 'Funções',
+        itemIdx: 0,
+        layer: LessonLayer.l3,
+        source: 'test-window-l3',
+        items: const [
+          DopamineWindowItem(text: 'Item 1', marker: 'M1'),
+          DopamineWindowItem(text: 'Item 2', marker: 'M2'),
+        ],
+      );
 
-    final event = service.read('cyber-window-l3')?.events.singleWhere(
-          (event) => event.type == 'CACHE_WINDOW_UPDATED',
-        );
-    expect(event?.payload['windowSize'], 4);
-    expect(event?.payload['windowMarkers'], [
-      {'marker': 'M1', 'layer': 3, 'offset': 0},
-      {'marker': 'M2', 'layer': 1, 'offset': 1},
-      {'marker': 'M2', 'layer': 2, 'offset': 2},
-      {'marker': 'M2', 'layer': 3, 'offset': 3},
-    ]);
-  });
+      final event = service
+          .read('cyber-window-l3')
+          ?.events
+          .singleWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
+      expect(event?.payload['windowSize'], 4);
+      expect(event?.payload['windowMarkers'], [
+        {'marker': 'M1', 'layer': 3, 'offset': 0},
+        {'marker': 'M2', 'layer': 1, 'offset': 1},
+        {'marker': 'M2', 'layer': 2, 'offset': 2},
+        {'marker': 'M2', 'layer': 3, 'offset': 3},
+      ]);
+    },
+  );
 
   test('maintainLessonReadyWindow does not duplicate active jobs', () {
     final service = StudentLearningStateService();
@@ -1176,75 +1187,75 @@ void main() {
     );
   });
 
-  test('loaded active lesson keeps current plus three next slots queued', () async {
-    final service = StudentLearningStateService();
-    service.ensure(lessonLocalId: 'cyber-loaded-window');
-    final orchestrator = LessonOrchestrator(
-      t02Client: FakeT02Client(),
-      cache: LessonMaterialCache(),
-      bus: LessonEventBus(),
-      visualPipeline: fakeVisualPipeline(),
-    );
-    final materialService = StudentLessonMaterialService(
-      stateService: service,
-      orchestrator: orchestrator,
-      readyWindowEngine: DopamineReadyWindowEngine(
-        service: service,
+  test(
+    'loaded active lesson keeps current plus three next slots queued',
+    () async {
+      final service = StudentLearningStateService();
+      service.ensure(lessonLocalId: 'cyber-loaded-window');
+      final orchestrator = LessonOrchestrator(
+        t02Client: FakeT02Client(),
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+        visualPipeline: fakeVisualPipeline(),
+      );
+      final materialService = StudentLessonMaterialService(
+        stateService: service,
         orchestrator: orchestrator,
-      ),
-    );
-    final controller = LessonMaterialController(
-      stateService: service,
-      materialService: materialService,
-    );
-    final items = const [
-      PlannedItem(marker: 'M1', text: 'Item 1'),
-      PlannedItem(marker: 'M2', text: 'Item 2'),
-    ];
-    final position = LessonPositionState(
-      itemIdx: 0,
-      layer: LessonLayer.l1,
-      erros: 0,
-      historia: const [],
-      history: const [],
-      mainAdvances: 0,
-      loadingLayer: LessonLayer.l1,
-      conteudo: null,
-      phase: const ClassroomPhase.loading(),
-      imagem: null,
-      teoriaPronta: false,
-      items: items,
-    );
+        readyWindowEngine: DopamineReadyWindowEngine(
+          service: service,
+          orchestrator: orchestrator,
+        ),
+      );
+      final controller = LessonMaterialController(
+        stateService: service,
+        materialService: materialService,
+      );
+      final items = const [
+        PlannedItem(marker: 'M1', text: 'Item 1'),
+        PlannedItem(marker: 'M2', text: 'Item 2'),
+      ];
+      final position = LessonPositionState(
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        erros: 0,
+        historia: const [],
+        history: const [],
+        mainAdvances: 0,
+        loadingLayer: LessonLayer.l1,
+        conteudo: null,
+        phase: const ClassroomPhase.loading(),
+        imagem: null,
+        teoriaPronta: false,
+        items: items,
+      );
 
-    await controller.carregar(
-      lessonLocalId: 'cyber-loaded-window',
-      topic: 'Funções',
-      position: position,
-      idioma: 'pt-BR',
-      academic: 'fundamental',
-      mode: LessonMode.session,
-      baseItems: items,
-    );
+      await controller.carregar(
+        lessonLocalId: 'cyber-loaded-window',
+        topic: 'Funções',
+        position: position,
+        idioma: 'pt-BR',
+        academic: 'fundamental',
+        mode: LessonMode.session,
+        baseItems: items,
+      );
 
-    final state = service.read('cyber-loaded-window');
-    expect(position.teoriaPronta, isTrue);
-    expect(state?.queuedActions, hasLength(1));
-    expect(state?.queuedActions.single['type'], 'PREPARE_READY_WINDOW');
-    expect(
-      state?.queuedActions.single['source'],
-      'cyber.aula.loaded-window',
-    );
-    final event = state?.events.lastWhere(
-      (event) => event.type == 'CACHE_WINDOW_UPDATED',
-    );
-    expect(event?.payload['windowSize'], 4);
-    expect(event?.payload['windowMarkers'], [
-      {'marker': 'M1', 'layer': 1, 'offset': 0},
-      {'marker': 'M1', 'layer': 2, 'offset': 1},
-      {'marker': 'M1', 'layer': 3, 'offset': 2},
-      {'marker': 'M2', 'layer': 1, 'offset': 3},
-    ]);
-  });
+      final state = service.read('cyber-loaded-window');
+      expect(position.teoriaPronta, isTrue);
+      expect(state?.queuedActions, hasLength(1));
+      expect(state?.queuedActions.single['type'], 'PREPARE_READY_WINDOW');
+      expect(state?.queuedActions.single['source'], 'cyber.aula.loaded-window');
+      final event = state?.events.lastWhere(
+        (event) => event.type == 'CACHE_WINDOW_UPDATED',
+      );
+      expect(event?.payload['windowSize'], 4);
+      expect(event?.payload['windowMarkers'], [
+        {'marker': 'M1', 'layer': 1, 'offset': 0},
+        {'marker': 'M1', 'layer': 2, 'offset': 1},
+        {'marker': 'M1', 'layer': 3, 'offset': 2},
+        {'marker': 'M2', 'layer': 1, 'offset': 3},
+      ]);
+    },
+  );
 
   test('invalid persistent cache entries are ignored', () async {
     SharedPreferences.setMockInitialValues({
@@ -1599,7 +1610,11 @@ void main() {
       );
       expect(
         beforeFinal?.readyLessonMaterials.keys,
-        containsAll(['M1::L1::l1', 'M1::L2::l2', 'M1::L3::l3']),
+        containsAll([
+          preparedLessonMaterialKey(0, 'M1', LessonLayer.l1),
+          preparedLessonMaterialKey(0, 'M1', LessonLayer.l2),
+          preparedLessonMaterialKey(0, 'M1', LessonLayer.l3),
+        ]),
       );
 
       releaseFinal.complete();

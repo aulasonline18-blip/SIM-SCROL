@@ -1,4 +1,5 @@
 import '../core/signal_tracker.dart';
+import '../auxiliary/student_aux_rooms.dart' as aux_state;
 import '../constitution/sim_constitutional_contract.dart';
 import '../lesson/dopamine_ready_window_engine.dart';
 import '../lesson/lesson_models.dart';
@@ -157,7 +158,13 @@ class LessonAnswerProgressController {
         savedAfterAmparo,
         evidence,
       );
-      final savedTruthState = stateService.write(truthState);
+      final reviewState = aux_state.scheduleReviewFromEvidence(
+        truthState,
+        evidence,
+        layer: position.layer,
+        signal: signal,
+      );
+      final savedTruthState = stateService.write(reviewState);
       _appendMasteryEvaluatedEvent(
         lessonLocalId: lessonLocalId,
         state: savedTruthState,

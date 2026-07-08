@@ -123,7 +123,9 @@ class MasteryTruthEngine {
       );
     }
 
-    if ((reviewed || recovered) && last.correct) {
+    if ((reviewed || recovered) &&
+        last.correct &&
+        last.sinal != DecisionSignal.three) {
       return MasteryEvidence(
         marker: marker,
         status: MasteryStatus.mastered,

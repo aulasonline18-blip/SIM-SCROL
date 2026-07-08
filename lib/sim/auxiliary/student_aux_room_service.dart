@@ -1,16 +1,15 @@
 import '../state/student_learning_state.dart';
+import '../state/mastery_truth_engine.dart';
 import 'aux_room_models.dart';
 import 'aux_room_t02_caller.dart';
 import 'student_aux_rooms.dart' as aux_state;
 
 class PreparedAuxRoomQuestion {
-  const PreparedAuxRoomQuestion.ok(this.conteudo)
-      : ok = true,
-        error = null;
+  const PreparedAuxRoomQuestion.ok(this.conteudo) : ok = true, error = null;
 
   const PreparedAuxRoomQuestion.failed(this.error)
-      : ok = false,
-        conteudo = null;
+    : ok = false,
+      conteudo = null;
 
   final bool ok;
   final AuxRoomContent? conteudo;
@@ -22,13 +21,15 @@ class StudentAuxRoomService {
     required this.readState,
     required this.writeState,
     required this.t02Caller,
+    MasteryTruthEngine? truthEngine,
     this.auxRoomsEnabled = true,
     this.recoveryRoomEnabled = true,
-  });
+  }) : truthEngine = truthEngine ?? const MasteryTruthEngine();
 
   final StudentLearningState Function(String lessonLocalId) readState;
   final StudentLearningState Function(StudentLearningState state) writeState;
   final AuxRoomT02Caller t02Caller;
+  final MasteryTruthEngine truthEngine;
   final bool auxRoomsEnabled;
   final bool recoveryRoomEnabled;
 
@@ -69,10 +70,8 @@ class StudentAuxRoomService {
           provisional: false,
           items: normalized
               .map(
-                (item) => CurriculumItem(
-                  marker: item.marker!,
-                  text: item.text!,
-                ),
+                (item) =>
+                    CurriculumItem(marker: item.marker!, text: item.text!),
               )
               .toList(growable: false),
         ),
@@ -80,8 +79,16 @@ class StudentAuxRoomService {
     }
     var queue = aux_state.buildReviewQueue(state, count);
     final now = DateTime.now().millisecondsSinceEpoch;
+    final aux = aux_state.ensureAuxRooms(state);
+    final review = JsonMap.of(aux['review'] as JsonMap)
+      ..['currentQueue'] = queue
+      ..['currentIndex'] = 0
+      ..['requestedCount'] = count.clamp(0, 10)
+      ..['sourceLessonLocalId'] = lessonLocalId
+      ..['updatedAt'] = now;
+    aux['review'] = review;
     state = state.copyWith(
-      auxRooms: aux_state.ensureAuxRooms(state),
+      auxRooms: aux,
       events: [
         ...state.events,
         StudentLearningEvent(
@@ -106,7 +113,7 @@ class StudentAuxRoomService {
   }
 
   ({List<String> queue, Map<String, DecisionSignal> signalByMarker})
-      buildRecoveryQueueForLesson({
+  buildRecoveryQueueForLesson({
     required String lessonLocalId,
     required String topic,
     required List<AuxRoomItem> items,
@@ -121,13 +128,16 @@ class StudentAuxRoomService {
           generatedAt: DateTime.now().millisecondsSinceEpoch,
           provisional: false,
           items: normalized
-              .map((item) => CurriculumItem(marker: item.marker!, text: item.text!))
+              .map(
+                (item) =>
+                    CurriculumItem(marker: item.marker!, text: item.text!),
+              )
               .toList(growable: false),
         ),
       );
     }
     final queue = aux_state.buildRecoveryQueue(state);
-    final aux = aux_state.ensureAuxRooms(state);
+    var aux = aux_state.ensureAuxRooms(state);
     final signalByMarker = <String, DecisionSignal>{};
     for (final entry in aux_state.pendingMapOf(aux)) {
       if (entry['status'] == 'pending') {
@@ -136,17 +146,44 @@ class StudentAuxRoomService {
       }
     }
     final now = DateTime.now().millisecondsSinceEpoch;
-    writeState(state.copyWith(
-      auxRooms: aux,
-      events: [
-        ...state.events,
-        StudentLearningEvent(
-          type: 'RECOVERY_QUEUE_PREPARED',
-          ts: now,
-          payload: {'queueLength': queue.length},
-        ),
-      ],
-    ));
+    final pendingItems = aux_state
+        .pendingMapOf(aux)
+        .where((entry) => entry['status'] == 'pending')
+        .map(
+          (entry) => {
+            'marker': (entry['marker'] ?? '').toString(),
+            'itemIdx': entry['itemIdx'],
+            'layer': entry['layer'],
+            'reason': (entry['reason'] ?? '').toString(),
+            'priority': (entry['priority'] ?? 'medium').toString(),
+            'origin': (entry['origin'] ?? 'pending_map').toString(),
+            'event': 'RECOVERY_REQUIRED',
+            'timestamp': entry['lastUpdatedAt'] ?? entry['firstRegisteredAt'],
+            'lessonLocalId': entry['lessonLocalId'] ?? lessonLocalId,
+            'signal': entry['signal'],
+          },
+        )
+        .toList();
+    final recovery = JsonMap.of(aux['recovery'] as JsonMap)
+      ..['currentQueue'] = queue
+      ..['currentItems'] = pendingItems
+      ..['currentIndex'] = 0
+      ..['sourceLessonLocalId'] = lessonLocalId
+      ..['updatedAt'] = now;
+    aux = JsonMap.of(aux)..['recovery'] = recovery;
+    writeState(
+      state.copyWith(
+        auxRooms: aux,
+        events: [
+          ...state.events,
+          StudentLearningEvent(
+            type: 'RECOVERY_QUEUE_PREPARED',
+            ts: now,
+            payload: {'queueLength': queue.length},
+          ),
+        ],
+      ),
+    );
     return (queue: queue, signalByMarker: signalByMarker);
   }
 
@@ -158,8 +195,7 @@ class StudentAuxRoomService {
     required String? marker,
     required DecisionSignal signal,
   }) async {
-    final picked =
-        marker == null ? null : pickAuxRoomItem(marker, items);
+    final picked = marker == null ? null : pickAuxRoomItem(marker, items);
     if (picked == null) {
       return const PreparedAuxRoomQuestion.failed('no item for marker');
     }
@@ -212,19 +248,53 @@ class StudentAuxRoomService {
     required String source,
   }) {
     var state = readState(lessonLocalId);
+    final ts = DateTime.now().millisecondsSinceEpoch;
     final attempt = LessonAttempt(
       marker: marker,
       layer: layer,
       letra: letra,
       sinal: sinal,
       correct: letra == conteudo.correctAnswer,
-      ts: DateTime.now().millisecondsSinceEpoch,
+      ts: ts,
     );
     state = aux_state.mirrorAttemptToAuxRooms(
       state.copyWith(attempts: [...state.attempts, attempt]),
       attempt,
     );
-    writeState(state);
+    final eventType = source.startsWith('review')
+        ? 'REVIEW_ANSWER_RECORDED'
+        : source.startsWith('recovery')
+        ? 'RECOVERY_ANSWER_RECORDED'
+        : 'AUX_ROOM_ANSWER_RECORDED';
+    var nextState = state.copyWith(
+      events: [
+        ...state.events,
+        StudentLearningEvent(
+          type: eventType,
+          ts: ts,
+          payload: {
+            'marker': marker,
+            'type': source.startsWith('review') ? 'review' : source,
+            'slot': source,
+            'layer': layer.value,
+            'question': conteudo.question,
+            'letra': letra.name,
+            'sinal': sinal.value,
+            'correct': attempt.correct,
+          },
+        ),
+      ],
+    );
+    if (source.startsWith('review') || source.startsWith('recovery')) {
+      final evidence = truthEngine.evaluateMarker(
+        nextState,
+        marker,
+        reviewed: source.startsWith('review'),
+        recovered: source.startsWith('recovery'),
+      );
+      nextState = truthEngine.writeTruthToState(nextState, evidence);
+    }
+    writeState(nextState);
   }
 
   void completeReviewSession(String lessonLocalId) {
@@ -237,7 +307,8 @@ class StudentAuxRoomService {
           type: 'REVIEW_CURSOR_UPDATED',
           ts: DateTime.now().millisecondsSinceEpoch,
           payload: {
-            'sequentialCursor': (review?['sequentialCursor'] as num?)?.toInt() ?? 0,
+            'sequentialCursor':
+                (review?['sequentialCursor'] as num?)?.toInt() ?? 0,
             'currentIndex': (review?['currentIndex'] as num?)?.toInt() ?? 0,
           },
         ),

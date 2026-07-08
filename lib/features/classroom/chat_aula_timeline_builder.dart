@@ -231,7 +231,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         id: 'engine-error',
         role: ChatLessonMessageRole.system,
         kind: ChatLessonMessageKind.error,
-        text: _studentFacingRuntimeError(phase?.message ?? input.runtimeError),
+        text: studentFacingRuntimeError(phase?.message ?? input.runtimeError),
         actionKey: 'retry',
         deliveryStatus: ChatLessonDeliveryStatus.failed,
       ),
@@ -241,9 +241,12 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
   return _withSequenceIndexes(messages);
 }
 
-String? _studentFacingRuntimeError(String? raw) {
+String? studentFacingRuntimeError(String? raw) {
   final text = raw?.trim();
   if (text == null || text.isEmpty) return null;
+  if (text.startsWith('aula_fb_')) return feedbackText(text);
+  final translated = t(text);
+  if (translated != text) return translated;
   final lower = text.toLowerCase();
   if (lower.contains('lessonlocalid ausente')) {
     return t('aula_choose_goal');
@@ -262,7 +265,7 @@ String? _studentFacingRuntimeError(String? raw) {
       lower.contains('timeout')) {
     return t('aula_server_unavailable');
   }
-  return text;
+  return t('aula_gen_fail');
 }
 
 String _activeMessageId(

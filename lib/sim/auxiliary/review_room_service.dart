@@ -8,11 +8,11 @@ class ReviewRoomService {
   final StudentAuxRoomService service;
 
   ReviewRoomView createReviewChoiceView() => const ReviewRoomView(
-        status: ReviewRoomStatus.choose,
-        count: 5,
-        queue: [],
-        idx: 0,
-      );
+    status: ReviewRoomStatus.choose,
+    count: 5,
+    queue: [],
+    idx: 0,
+  );
 
   Future<ReviewRoomView> startReviewRoom(
     ReviewRoomContext context,
@@ -101,7 +101,7 @@ class ReviewRoomService {
       conteudo: conteudo,
       letra: letra,
       sinal: sinal,
-      source: 'cyber.aula',
+      source: 'review:${view.idx}',
     );
     return view.copyWith(
       status: ReviewRoomStatus.result,

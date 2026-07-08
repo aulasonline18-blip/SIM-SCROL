@@ -87,7 +87,7 @@ String preparedLessonMaterialKey(
   String? marker,
   LessonLayer layer,
 ) {
-  return '${marker ?? ''}::L${layer.value}::${layer.name}';
+  return 'I$itemIdx::${marker ?? ''}::L${layer.value}::${layer.name}';
 }
 
 String firstLessonMaterialKey(String? marker) {

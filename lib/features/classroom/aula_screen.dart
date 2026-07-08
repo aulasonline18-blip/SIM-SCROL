@@ -56,6 +56,7 @@ import '../classroom/aux_room_screens.dart';
 import '../classroom/aula_widgets.dart';
 import '../billing/billing_and_simple_pages.dart';
 import '../../shared/widgets/shared_widgets.dart';
+import 'chat_aula_timeline_builder.dart';
 import 'doubt_input_sheet_widget.dart';
 
 class AulaLabScreen extends StatefulWidget {
@@ -1061,7 +1062,8 @@ class _AulaLabScreenState extends State<AulaLabScreen>
                             if (phase?.message != null) ...[
                               const SizedBox(height: 8),
                               Text(
-                                phase!.message!,
+                                studentFacingRuntimeError(phase!.message) ??
+                                    t('aula_gen_fail'),
                                 style: TextStyle(
                                   color: palette.muted,
                                   fontSize: 14,

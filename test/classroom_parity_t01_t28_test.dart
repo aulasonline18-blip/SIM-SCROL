@@ -20,6 +20,7 @@ import 'package:sim_mobile/sim/media/audio_core.dart';
 import 'package:sim_mobile/sim/media/audio_preference.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/learning_decision_engine.dart';
+import 'package:sim_mobile/sim/state/live_entry_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
 import 'package:sim_mobile/sim/state/student_lesson_executor.dart';
@@ -145,22 +146,26 @@ class _FakeSession implements SupabaseSessionProvider {
 }
 
 class _FakeT02 implements T02LessonClient {
+  int calls = 0;
+
   @override
-  Future<T02LessonMaterial> completeLesson(T02LessonRequest req) async =>
-      T02LessonMaterial(
-        explanation: 'Exp ${req.marker}',
-        question: 'Q ${req.marker}?',
-        options: const {
-          AnswerLetter.A: 'A',
-          AnswerLetter.B: 'B',
-          AnswerLetter.C: 'C',
-        },
-        correctAnswer: AnswerLetter.A,
-        whyCorrect: 'ok',
-        whyWrong: null,
-        generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
-        source: 'fake',
-      );
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest req) async {
+    calls += 1;
+    return T02LessonMaterial(
+      explanation: 'Exp ${req.marker}',
+      question: 'Q ${req.marker}?',
+      options: const {
+        AnswerLetter.A: 'A',
+        AnswerLetter.B: 'B',
+        AnswerLetter.C: 'C',
+      },
+      correctAnswer: AnswerLetter.A,
+      whyCorrect: 'ok',
+      whyWrong: null,
+      generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
+      source: 'fake',
+    );
+  }
 
   @override
   Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest req) =>
@@ -271,7 +276,7 @@ void main() {
   // -------------------------------------------------------------------------
   // T03 – T01 depois acerto L3 sinal 1 → avança item
   // -------------------------------------------------------------------------
-  test('T03: T01→answer(A,1,A) em L3 → itemIdx=1, concluidos=[M-1]', () {
+  test('T03: T01→answer(A,1,A) em L3 → itemIdx=1 sem conquista falsa', () {
     final after01 = _answer(
       _state0(),
       AnswerLetter.A,
@@ -288,7 +293,7 @@ void main() {
     expect(next.progress?.itemIdx, 1);
     expect(next.progress?.layer, LessonLayer.l1);
     expect(next.progress?.erros, 0);
-    expect(next.progress?.concluidos, contains('M-1'));
+    expect(next.progress?.concluidos, isNot(contains('M-1')));
   });
 
   // -------------------------------------------------------------------------
@@ -445,7 +450,7 @@ void main() {
     );
     expect(a2.progress?.itemIdx, 1);
     expect(a2.progress?.mainAdvances, greaterThanOrEqualTo(1));
-    expect(a2.progress?.concluidos, contains('M-1'));
+    expect(a2.progress?.concluidos, isNot(contains('M-1')));
     final appliedEvents = a2.events.where(
       (e) => e.type == 'STUDENT_EXECUTOR_APPLIED',
     );
@@ -669,7 +674,7 @@ void main() {
     svc.mutate('L1', (s) {
       return s.copyWith(
         readyLessonMaterials: {
-          'M-1::L1::l1': {
+          preparedLessonMaterialKey(0, 'M-1', LessonLayer.l1): {
             'text_status': 'ready',
             'for_itemIdx': 1,
             'for_layer': 'l1',
@@ -729,7 +734,7 @@ void main() {
     svc.mutate('L1', (s) {
       return s.copyWith(
         readyLessonMaterials: {
-          'M-1::L1::l1': {
+          preparedLessonMaterialKey(0, 'M-1', LessonLayer.l1): {
             'text_status': 'ready',
             'for_itemIdx': 0,
             'for_layer': 'l1',
@@ -743,22 +748,19 @@ void main() {
       );
     });
 
+    final t02 = _FakeT02();
+    final orchestrator = LessonOrchestrator(
+      t02Client: t02,
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+      visualPipeline: fakeVisualPipeline(),
+    );
     final mat = StudentLessonMaterialService(
       stateService: svc,
-      orchestrator: LessonOrchestrator(
-        t02Client: _FakeT02(),
-        cache: LessonMaterialCache(),
-        bus: LessonEventBus(),
-        visualPipeline: fakeVisualPipeline(),
-      ),
+      orchestrator: orchestrator,
       readyWindowEngine: DopamineReadyWindowEngine(
         service: svc,
-        orchestrator: LessonOrchestrator(
-          t02Client: _FakeT02(),
-          cache: LessonMaterialCache(),
-          bus: LessonEventBus(),
-          visualPipeline: fakeVisualPipeline(),
-        ),
+        orchestrator: orchestrator,
       ),
     );
 
@@ -781,7 +783,12 @@ void main() {
       ),
     );
     expect(result, isNotNull);
+    expect(result?.source, LessonMaterialSource.studentState);
+    expect(result?.waitedMs, 0);
     expect(result?.conteudo.question, 'Q');
+    expect(t02.calls, 0);
+    expect(svc.read('L1')?.currentLessonMaterial?['question'], 'Q');
+    expect(svc.read('L1')?.currentLessonMaterial?['for_itemIdx'], 0);
   });
 
   // -------------------------------------------------------------------------
@@ -1024,6 +1031,106 @@ void main() {
         .toList();
     expect(completionEvents, hasLength(1));
   });
+
+  test(
+    'S12: resposta, sinal, feedback, proxima experiencia e restore',
+    () async {
+      final svc = StudentLearningStateService(seed: {'L1': _state0()});
+      final ctrl = _controller(svc);
+      final pos = LessonPositionState(
+        items: _items
+            .map((item) => PlannedItem(marker: item.marker, text: item.text))
+            .toList(),
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        erros: 0,
+        historia: const [],
+        history: const [],
+        mainAdvances: 0,
+        loadingLayer: LessonLayer.l1,
+        conteudo: const LessonContent(
+          explanation: 'Texto inicial',
+          question: 'Pergunta inicial?',
+          options: {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+          whyCorrect: 'ok',
+        ),
+        imagem: null,
+        teoriaPronta: true,
+        phase: const ClassroomPhase.reading(),
+      );
+
+      ctrl.selecionar(pos, AnswerLetter.B);
+      expect(pos.phase.type, ClassroomPhaseType.expandida);
+      expect(pos.phase.letter, AnswerLetter.B);
+
+      await ctrl.enviarSinal(
+        lessonLocalId: 'L1',
+        topic: 'Cinematica',
+        position: pos,
+        signal: DecisionSignal.two,
+        baseItems: pos.items,
+      );
+
+      expect(pos.phase.type, ClassroomPhaseType.concluido);
+      expect(pos.phase.signal, DecisionSignal.two);
+      expect(pos.phase.message, 'aula_fb_wrong_uncertain');
+      expect(svc.read('L1')?.current?.itemIdx, 0);
+      expect(svc.read('L1')?.current?.layer, LessonLayer.l2);
+      expect(svc.read('L1')?.attempts.single.letra, AnswerLetter.B);
+
+      await ctrl.avancar(
+        lessonLocalId: 'L1',
+        topic: 'Cinematica',
+        position: pos,
+        baseItems: pos.items,
+        idioma: 'Portuguese',
+        academic: 'fundamental',
+      );
+
+      expect(pos.itemIdx, 0);
+      expect(pos.layer, LessonLayer.l2);
+      expect(pos.phase.type, ClassroomPhaseType.lendo);
+      expect(pos.conteudo?.question, 'Q M-1?');
+      expect(pos.imagem, isNull);
+      expect(svc.read('L1')?.currentLessonMaterial?['text_status'], 'ready');
+      expect(svc.read('L1')?.currentLessonMaterial?['for_itemIdx'], 0);
+      expect(svc.read('L1')?.currentLessonMaterial?['for_marker'], 'M-1');
+      expect(svc.read('L1')?.currentLessonMaterial?['for_layer'], 'l2');
+
+      final key = preparedLessonMaterialKey(0, 'M-1', LessonLayer.l2);
+      expect(svc.read('L1')?.readyLessonMaterials[key]?['question'], 'Q M-1?');
+      expect(
+        svc.read('L1')?.events.map((event) => event.type),
+        contains('LESSON_TEXT_READY'),
+      );
+      expect(
+        svc.read('L1')?.events.map((event) => event.type),
+        contains('CACHE_WINDOW_UPDATED'),
+      );
+
+      final restored = StudentLearningState.fromJson(svc.read('L1')!.toJson());
+      final reopened = StudentLearningStateService(seed: {'L1': restored});
+      expect(reopened.read('L1')?.current?.itemIdx, 0);
+      expect(reopened.read('L1')?.current?.layer, LessonLayer.l2);
+      expect(
+        reopened.read('L1')?.readyLessonMaterials[key]?['question'],
+        'Q M-1?',
+      );
+
+      final rawUiLeak = [
+        pos.phase.message,
+        reopened.read('L1')?.currentLessonMaterial?['question'],
+      ].join(' ');
+      expect(rawUiLeak, isNot(contains('HTTP ')));
+      expect(rawUiLeak, isNot(contains('{"error"')));
+      expect(rawUiLeak, isNot(contains('aula_fb_correct')));
+    },
+  );
 
   // -------------------------------------------------------------------------
   // T28 – hash estável ignora updatedAt / cacheInfo / syncInfo

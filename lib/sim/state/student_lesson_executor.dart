@@ -73,9 +73,6 @@ ApplyDecisionResult applyStudentDecision(
   String? marker,
 }) {
   final concluidos = inputProgress.concluidos;
-  final concluidosWithCurrent = marker != null && !concluidos.contains(marker)
-      ? [...concluidos, marker]
-      : concluidos;
 
   switch (decision.actionType) {
     case DecisionActionType.showCompletion:
@@ -84,7 +81,7 @@ ApplyDecisionResult applyStudentDecision(
           itemIdx: totalItems,
           layer: LessonLayer.l1,
           erros: 0,
-          concluidos: concluidosWithCurrent,
+          concluidos: concluidos,
           mainAdvances: totalItems,
           pctAvanco: 100,
         ),
@@ -98,7 +95,7 @@ ApplyDecisionResult applyStudentDecision(
             itemIdx: proposed,
             layer: LessonLayer.l1,
             erros: 0,
-            concluidos: concluidosWithCurrent,
+            concluidos: concluidos,
             mainAdvances: [
               inputProgress.mainAdvances + 1,
               proposed,
@@ -247,12 +244,23 @@ StudentLearningState processAnswerWithEngine(
     'appliedProgress': applied.nextProgress.toJson(),
     'ts': ts,
     'reason': decision.reason,
+    'marker': item.marker,
     'fromItemIdx': idx,
     'fromLayer': progress.layer.value,
     'toItemIdx': applied.nextProgress.itemIdx,
     'toLayer': applied.nextProgress.layer.value,
+    'letra': context.letra.name,
     'correct': correct,
     'sinal': context.sinal.value,
+    'advanced':
+        decision.actionType == DecisionActionType.advanceItem ||
+        decision.actionType == DecisionActionType.showCompletion,
+    'review': true,
+    'recovery': decision.actionType == DecisionActionType.needsReinforcement,
+    'blocked':
+        !applied.applied ||
+        decision.actionType == DecisionActionType.noSafeDecision ||
+        decision.actionType == DecisionActionType.needsReinforcement,
   };
   final decisionEvent = StudentLearningEvent(
     type: applied.applied

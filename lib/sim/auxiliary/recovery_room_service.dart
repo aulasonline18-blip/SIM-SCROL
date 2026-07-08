@@ -28,7 +28,8 @@ class RecoveryRoomService {
       );
     }
     service.registerRecoveryStarted(context.lessonLocalId, built.queue);
-    final signal = built.signalByMarker[built.queue.first] ?? DecisionSignal.three;
+    final signal =
+        built.signalByMarker[built.queue.first] ?? DecisionSignal.three;
     final prepared = await _prepare(
       context: context,
       queue: built.queue,
@@ -103,7 +104,7 @@ class RecoveryRoomService {
       conteudo: conteudo,
       letra: letra,
       sinal: sinal,
-      source: 'cyber.aula',
+      source: 'recovery:${view.idx}',
     );
     return view.copyWith(
       status: RecoveryRoomStatus.result,
@@ -125,8 +126,14 @@ class RecoveryRoomService {
       service.registerRecoveryCompleted(context.lessonLocalId);
       return view.copyWith(status: RecoveryRoomStatus.done);
     }
-    final signal = built.signalByMarker[built.queue.first] ?? DecisionSignal.three;
-    return _prepare(context: context, queue: built.queue, idx: 0, signal: signal);
+    final signal =
+        built.signalByMarker[built.queue.first] ?? DecisionSignal.three;
+    return _prepare(
+      context: context,
+      queue: built.queue,
+      idx: 0,
+      signal: signal,
+    );
   }
 
   RecoveryRoomView finishRecoveryRoom(

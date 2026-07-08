@@ -241,6 +241,52 @@ class SimConstitutionalContract {
     );
   }
 
+  AnswerLetter validateAnswerLetter(Object? value) {
+    final raw = value is AnswerLetter ? value.name : value?.toString().trim();
+    final answer = AnswerLetter.values.where((letter) => letter.name == raw);
+    if (answer.length != 1) {
+      throw const SimConstitutionViolation(
+        SimConstitutionalLaw.notSuperficialQuiz,
+        'resposta principal precisa ser A, B ou C',
+      );
+    }
+    return answer.single;
+  }
+
+  DecisionSignal validateDecisionSignal(Object? value) {
+    if (value is DecisionSignal) return value;
+    final signal = value is num
+        ? value.toInt()
+        : int.tryParse(value?.toString().trim() ?? '');
+    return switch (signal) {
+      1 => DecisionSignal.one,
+      2 => DecisionSignal.two,
+      3 => DecisionSignal.three,
+      _ => throw const SimConstitutionViolation(
+        SimConstitutionalLaw.advanceRequiresEvidence,
+        'sinal de confianca precisa ser 1, 2 ou 3',
+      ),
+    };
+  }
+
+  LessonAttempt validateAttempt(LessonAttempt attempt) {
+    if (attempt.marker.trim().isEmpty) {
+      throw const SimConstitutionViolation(
+        SimConstitutionalLaw.advanceRequiresEvidence,
+        'tentativa exige marker/itemId',
+      );
+    }
+    if (attempt.ts <= 0) {
+      throw const SimConstitutionViolation(
+        SimConstitutionalLaw.advanceRequiresEvidence,
+        'tentativa exige timestamp valido',
+      );
+    }
+    validateAnswerLetter(attempt.letra);
+    validateDecisionSignal(attempt.sinal);
+    return attempt;
+  }
+
   SimAnswerEvidence validateEvidence(SimAnswerEvidence evidence) {
     if (evidence.marker.trim().isEmpty) {
       throw const SimConstitutionViolation(

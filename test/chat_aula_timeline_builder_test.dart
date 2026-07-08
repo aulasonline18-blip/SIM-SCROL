@@ -250,9 +250,36 @@ void main() {
       ),
     );
     expect(error.last.kind, ChatLessonMessageKind.error);
-    expect(error.last.text, 'T02 indisponivel');
+    expect(error.last.text, t('aula_gen_fail'));
     expect(error.last.actionKey, 'retry');
     expect(error.last.deliveryStatus, ChatLessonDeliveryStatus.failed);
+  });
+
+  test('technical runtime errors are controlled and do not leak raw keys', () {
+    final feedbackKeyError = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.engineError('aula_fb_correct'),
+        ),
+      ),
+    );
+    expect(feedbackKeyError.last.text, t('aula_fb_correct'));
+    expect(feedbackKeyError.last.text, isNot('aula_fb_correct'));
+
+    final rawHttpError = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.engineError(
+            'HTTP 500: {"error":"server-classroom failed"}',
+          ),
+        ),
+      ),
+    );
+    expect(rawHttpError.last.kind, ChatLessonMessageKind.error);
+    expect(rawHttpError.last.text, t('aula_gen_fail'));
+    expect(rawHttpError.last.text, isNot(contains('HTTP 500')));
+    expect(rawHttpError.last.text, isNot(contains('{"error"')));
+    expect(rawHttpError.last.actionKey, 'retry');
   });
 
   test('chat messages carry universal conversational delivery states', () {
