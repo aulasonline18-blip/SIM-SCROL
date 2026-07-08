@@ -17,15 +17,15 @@ Base oficial consultada em 04/07/2026:
 | Assinatura release configuravel | FEITO | `android/key.properties` ou `SIM_ANDROID_*` |
 | Falhar se assinatura Play faltar | FEITO | `SIM_REQUIRE_RELEASE_SIGNING=true` |
 | Cleartext off no manifest main | FEITO | main manifest sem `usesCleartextTraffic=true` |
-| Privacy policy publica | PARCIAL | Documento criado; falta publicar URL final |
-| Account deletion publica | PARCIAL | Documento criado; falta publicar URL final |
-| Delete account in-app | PARCIAL | App chama endpoint; servidor precisa executar exclusao real |
+| Privacy policy publica | FEITO | Documento e rota publica `/privacy-policy`; apontar URL HTTPS final no Play Console |
+| Account deletion publica | FEITO | Documento e rota publica `/account-deletion`; apontar URL HTTPS final no Play Console |
+| Delete account in-app | FEITO | App chama endpoint autenticado; servidor apaga/anonimiza estado e creditos |
 | Auth gate para conta/creditos | FEITO | Guard no roteador central |
 | Role gate para `/pai` | PARCIAL | App exige role em metadata/claim; servidor precisa emitir role |
 | Observabilidade | PARCIAL | ErrorWidget/FlutterError existem; falta Sentry/Crashlytics real |
 | Billing Play no app | FEITO | `GooglePlayBillingFunctions` + `SIM_BILLING_PROVIDER=google_play` obrigatorio em production |
 | Produtos Play Console | BLOQUEADO EXTERNO | Criar `sim_credits_100`, `sim_credits_200`, `sim_credits_500` como consumiveis |
-| Validacao Play no servidor | BLOQUEADO EXTERNO | API deve implementar `POST /api/play-billing/consume-credit-pack` |
+| Validacao Play no servidor | FEITO | `POST /api/play-billing/consume-credit-pack` valida Android Publisher API e concede idempotente |
 | API level 35+ | A VERIFICAR | Depende do Flutter/Android Gradle instalado no build |
 
 ## Comando Play release esperado

@@ -39,11 +39,11 @@ Todos devem ser configurados como produtos consumiveis no Play Console.
 5. O app inicia compra consumivel com `autoConsume: false`.
 6. O app recebe a compra pelo `purchaseStream`.
 7. O app envia `packId`, `productId`, `purchaseToken`, `verificationSource`, `localVerificationData` e `purchaseId` para a API.
-8. A API deve validar a compra com Google Play Developer API e conceder os creditos.
+8. A API valida a compra com Google Play Developer API e concede os creditos.
 9. So depois da concessao a compra e consumida/finalizada no Android.
 10. O app recarrega saldo do servidor.
 
-## Contrato esperado da API
+## Contrato da API
 
 Endpoint:
 
@@ -75,6 +75,13 @@ Resposta esperada:
 }
 ```
 
+## Servidor M17
+
+O servidor registra `POST /api/play-billing/consume-credit-pack`, valida a
+relacao `productId`/`packId`, consulta a Android Publisher API por token de
+compra, concede credito de forma idempotente e retorna erro humano controlado
+sem expor `purchaseToken`.
+
 ## Proibicoes
 
 - Nao conceder credito localmente no Flutter.
@@ -89,3 +96,5 @@ Resposta esperada:
 - `LabSession` usa fluxo Google Play para compra em vez de Stripe.
 - Login obrigatorio antes de iniciar billing.
 - Estados pendente e cancelado do Google Play sobem para a UI.
+- M17 adiciona teste servidor para validacao Play, idempotencia, mismatch de
+  produto/pacote e erro humano sem vazamento de token.
