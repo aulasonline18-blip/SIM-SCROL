@@ -1,11 +1,13 @@
 import '../state/student_learning_state.dart';
 import 'aux_room_models.dart';
+import 'server_review_contract.dart';
 import 'student_aux_room_service.dart';
 
 class ReviewRoomService {
-  const ReviewRoomService(this.service);
+  const ReviewRoomService(this.service, {this.serverReviewClient});
 
   final StudentAuxRoomService service;
+  final ServerReviewClient? serverReviewClient;
 
   ReviewRoomView createReviewChoiceView() => const ReviewRoomView(
     status: ReviewRoomStatus.choose,
@@ -18,6 +20,42 @@ class ReviewRoomService {
     ReviewRoomContext context,
     int count,
   ) async {
+    final server = serverReviewClient;
+    if (server != null) {
+      try {
+        final item = await server.next(
+          lessonLocalId: context.lessonLocalId,
+          idempotencyKey: '${context.lessonLocalId}:review:open',
+        );
+        if (item == null) {
+          return ReviewRoomView(
+            status: ReviewRoomStatus.failed,
+            count: 1,
+            queue: const [],
+            idx: 0,
+            errMsg: 'Sem revisao pendente agora.',
+          );
+        }
+        return ReviewRoomView(
+          status: item.ready ? ReviewRoomStatus.ready : ReviewRoomStatus.failed,
+          count: 1,
+          queue: [item.marker],
+          idx: 0,
+          conteudo: _contentFromServer(item),
+          errMsg: item.humanError?['message']?.toString(),
+          serverReviewId: item.reviewId,
+          serverMarker: item.marker,
+        );
+      } catch (_) {
+        return ReviewRoomView(
+          status: ReviewRoomStatus.failed,
+          count: 1,
+          queue: const [],
+          idx: 0,
+          errMsg: 'Nao consegui abrir a revisao agora. Sua aula foi preservada.',
+        );
+      }
+    }
     final boundedCount = count == 10 ? 10 : 5;
     final queue = service.buildReviewQueueForLesson(
       lessonLocalId: context.lessonLocalId,
@@ -110,6 +148,48 @@ class ReviewRoomService {
     );
   }
 
+  Future<ReviewRoomView> answerServerReviewRoom(
+    ReviewRoomContext context,
+    ReviewRoomView view,
+    DecisionSignal sinal,
+  ) async {
+    final server = serverReviewClient;
+    final conteudo = view.conteudo;
+    final letra = view.letra;
+    if (server == null) return answerReviewRoom(context, view, sinal);
+    if (conteudo == null || letra == null || view.queue.isEmpty) {
+      return view.copyWith(
+        status: ReviewRoomStatus.failed,
+        errMsg: 'Resposta de revisao incompleta.',
+      );
+    }
+    try {
+      final result = await server.answer(
+        ServerReviewAnswerRequest(
+          lessonLocalId: context.lessonLocalId,
+          reviewId: view.serverReviewId ?? view.queue.first,
+          marker: view.serverMarker ?? view.queue.first,
+          selectedOption: letra,
+          signal: sinal,
+          idempotencyKey:
+              '${context.lessonLocalId}:${view.serverReviewId ?? view.queue.first}:review:${letra.name}:${sinal.value}',
+          timestamp: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      return view.copyWith(
+        status: result.accepted ? ReviewRoomStatus.result : ReviewRoomStatus.failed,
+        sinal: sinal,
+        resultCorrect: result.correct,
+        errMsg: result.humanError?['message']?.toString(),
+      );
+    } catch (_) {
+      return view.copyWith(
+        status: ReviewRoomStatus.failed,
+        errMsg: 'Nao consegui enviar a revisao agora. Sua aula foi preservada.',
+      );
+    }
+  }
+
   Future<ReviewRoomView> nextReviewRoom(
     ReviewRoomContext context,
     ReviewRoomView view,
@@ -124,6 +204,15 @@ class ReviewRoomService {
       queue: view.queue,
       idx: nextIdx,
       count: view.count,
+    );
+  }
+
+  AuxRoomContent _contentFromServer(ServerReviewItem item) {
+    return AuxRoomContent(
+      question: item.question,
+      options: item.options,
+      correctAnswer: item.correctOption,
+      explanation: item.explanation,
     );
   }
 }

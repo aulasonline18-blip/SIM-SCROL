@@ -123,6 +123,8 @@ class ReviewRoomView {
     this.resultCorrect,
     this.resultMsg,
     this.errMsg,
+    this.serverReviewId,
+    this.serverMarker,
   });
 
   final ReviewRoomStatus status;
@@ -135,6 +137,8 @@ class ReviewRoomView {
   final bool? resultCorrect;
   final String? resultMsg;
   final String? errMsg;
+  final String? serverReviewId;
+  final String? serverMarker;
 
   ReviewRoomView copyWith({
     ReviewRoomStatus? status,
@@ -147,6 +151,8 @@ class ReviewRoomView {
     bool? resultCorrect,
     String? resultMsg,
     String? errMsg,
+    String? serverReviewId,
+    String? serverMarker,
   }) {
     return ReviewRoomView(
       status: status ?? this.status,
@@ -159,6 +165,8 @@ class ReviewRoomView {
       resultCorrect: resultCorrect ?? this.resultCorrect,
       resultMsg: resultMsg ?? this.resultMsg,
       errMsg: errMsg ?? this.errMsg,
+      serverReviewId: serverReviewId ?? this.serverReviewId,
+      serverMarker: serverMarker ?? this.serverMarker,
     );
   }
 }
