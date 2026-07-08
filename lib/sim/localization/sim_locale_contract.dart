@@ -61,7 +61,7 @@ class SimLocaleSettings {
       explanationLanguage: simLanguageNameForLocale(learning),
       targetLanguage: targetLanguage?.trim().isEmpty ?? true
           ? null
-          : targetLanguage!.trim(),
+          : normalizeSimTargetLanguage(targetLanguage),
     );
   }
 
@@ -145,6 +145,28 @@ String simLanguageNameForLocale(String? raw) {
     'es' => 'Spanish',
     _ => 'Portuguese',
   };
+}
+
+String normalizeSimTargetLanguage(String? raw) {
+  final value = (raw ?? '').trim();
+  if (value.isEmpty) return '';
+  final lower = value.toLowerCase().replaceAll('_', '-');
+  if (lower == 'pt' ||
+      lower == 'pt-br' ||
+      lower.contains('portugu') ||
+      lower.contains('brasil')) {
+    return 'Portuguese';
+  }
+  if (lower == 'en' || lower.startsWith('en-') || lower.contains('english')) {
+    return 'English';
+  }
+  if (lower == 'es' ||
+      lower.startsWith('es-') ||
+      lower.contains('spanish') ||
+      lower.contains('español')) {
+    return 'Spanish';
+  }
+  return value;
 }
 
 String simUiCodeForLocaleTag(String? raw) {

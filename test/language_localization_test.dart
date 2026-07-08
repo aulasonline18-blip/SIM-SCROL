@@ -84,6 +84,40 @@ void main() {
     },
   );
 
+  test('language contract separates interface lesson and target languages', () {
+    final settings = const SimLocaleSettings(
+      followDeviceInterface: false,
+      manualInterfaceLocale: 'en',
+      learningLocale: 'pt-BR',
+      targetLanguage: 'en',
+    );
+
+    final contract = settings.contract();
+    expect(contract.interfaceLocale, 'en');
+    expect(contract.learningLocale, 'pt-BR');
+    expect(contract.explanationLanguage, 'Portuguese');
+    expect(contract.targetLanguage, 'English');
+    expect(contract.toJson(), {
+      'interfaceLocale': 'en',
+      'learningLocale': 'pt-BR',
+      'explanationLanguage': 'Portuguese',
+      'targetLanguage': 'English',
+    });
+  });
+
+  test('invalid or missing locale data falls back safely', () {
+    final settings = const SimLocaleSettings(
+      followDeviceInterface: false,
+      manualInterfaceLocale: 'klingon',
+      learningLocale: 'unknown',
+    );
+
+    expect(settings.contract().interfaceLocale, 'pt-BR');
+    expect(settings.contract().learningLocale, 'pt-BR');
+    expect(settings.contract().explanationLanguage, 'Portuguese');
+    expect(normalizeSimTargetLanguage('Italian'), 'Italian');
+  });
+
   test(
     'new lesson stores pedagogical locale without rewriting interface locale',
     () async {
@@ -112,6 +146,91 @@ void main() {
       session.dispose();
     },
   );
+
+  test(
+    'historical lesson preserves original pedagogical language after changes',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final session = LabSession(prefs: prefs);
+
+      await session.setInterfaceLanguage(
+        followDevice: false,
+        localeTag: 'pt-BR',
+      );
+      await session.setLearningLanguage(localeTag: 'pt-BR');
+      session.freeText = 'Quero estudar proporções com exemplos simples';
+
+      expect(session.saveObjectiveEntry(), isTrue);
+      final id = session.lessonLocalId!;
+      final before = session.canonicalStore?.readState(id);
+
+      await session.setInterfaceLanguage(followDevice: false, localeTag: 'en');
+      await session.setLearningLanguage(
+        localeTag: 'es',
+        targetLanguage: 'English',
+      );
+      final after = session.canonicalStore?.readState(id);
+
+      expect(session.interfaceLocaleTag, 'en');
+      expect(session.learningLocaleTag, 'es');
+      expect(before?.profile.extra['learningLocale'], 'pt-BR');
+      expect(after?.profile.language, 'pt-BR');
+      expect(after?.profile.stableLang, 'Portuguese');
+      expect(after?.profile.extra['interfaceLocale'], 'pt-BR');
+      expect(after?.profile.extra['learningLocale'], 'pt-BR');
+      expect(after?.profile.extra['explanationLanguage'], 'Portuguese');
+      expect(after?.profile.extra['targetLanguage'], isNull);
+
+      session.dispose();
+    },
+  );
+
+  test('fixed technical states are localized and do not expose raw keys', () {
+    expect(
+      debugSimLocalizedValue('en', 'aula_gen_fail'),
+      isNot('aula_gen_fail'),
+    );
+    expect(
+      debugSimLocalizedValue('es', 'aula_audio_unavailable'),
+      isNot('aula_audio_unavailable'),
+    );
+    expect(
+      debugSimLocalizedValue('pt-BR', 'aula_image_unavailable'),
+      contains('Imagem'),
+    );
+    expect(
+      debugSimLocalizedValue('en', 'aula_image_unavailable'),
+      contains('Image'),
+    );
+    expect(
+      debugSimLocalizedValue('es', 'aula_image_unavailable'),
+      contains('Imagen'),
+    );
+  });
+
+  test('accessibility labels follow the interface language', () {
+    expect(
+      debugSimLocalizedValue('pt-BR', 'aula_audio_play'),
+      'Tocar áudio da aula',
+    );
+    expect(
+      debugSimLocalizedValue('en', 'aula_audio_play'),
+      'Play lesson audio',
+    );
+    expect(
+      debugSimLocalizedValue('es', 'aula_audio_play'),
+      'Reproducir audio de la clase',
+    );
+    expect(
+      debugSimLocalizedValue('en', 'aula_image_expand_lesson'),
+      'Expand lesson image',
+    );
+    expect(
+      debugSimLocalizedValue('es', 'aula_image_expand_lesson'),
+      'Ampliar imagen de la clase',
+    );
+  });
 
   testWidgets(
     'language screen shows separate app and lesson language controls',
