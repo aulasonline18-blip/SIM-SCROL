@@ -93,6 +93,124 @@ void main() {
     expect(chosen, AnswerLetter.B);
   });
 
+  testWidgets('dead history actions are rendered inert by message contract', (
+    tester,
+  ) async {
+    var answers = 0;
+    var signals = 0;
+    var retries = 0;
+    var next = 0;
+    var doubts = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            messages: const [
+              ChatLessonMessage(
+                id: 'old-options',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.options,
+                isHistorical: true,
+                isActionable: false,
+                selectedAnswer: AnswerLetter.A,
+                options: [
+                  ChatLessonOption(
+                    letter: AnswerLetter.A,
+                    text: 'Alternativa antiga A',
+                    selected: true,
+                    enabled: true,
+                  ),
+                ],
+                signals: [
+                  ChatLessonSignal(
+                    value: 1,
+                    labelKey: 'aula_sig_certeza',
+                    enabled: true,
+                  ),
+                ],
+              ),
+              ChatLessonMessage(
+                id: 'old-feedback',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.feedback,
+                text: 'Feedback antigo',
+                actionKey: 'aula_next_item',
+                isHistorical: true,
+                isActionable: false,
+                deliveryStatus: ChatLessonDeliveryStatus.read,
+              ),
+              ChatLessonMessage(
+                id: 'old-error',
+                role: ChatLessonMessageRole.system,
+                kind: ChatLessonMessageKind.error,
+                text: 'Erro antigo',
+                actionKey: 'retry',
+                isHistorical: true,
+                isActionable: false,
+                deliveryStatus: ChatLessonDeliveryStatus.read,
+              ),
+            ],
+            onChooseAnswer: (_) => answers++,
+            onSignal: (_) => signals++,
+            onRetry: () => retries++,
+            onNext: () => next++,
+            onOpenDoubt: () => doubts++,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Alternativa antiga A'));
+    await tester.tap(find.text(t('aula_sig_certeza')));
+    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
+    await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
+    expect(find.text(t('aula_try_again_2')), findsNothing);
+
+    expect(answers, 0);
+    expect(signals, 0);
+    expect(next, 0);
+    expect(doubts, 0);
+    expect(retries, 0);
+
+    final optionNode = tester.getSemantics(find.text('Alternativa antiga A'));
+    expect(optionNode.flagsCollection.isEnabled.toString(), 'Tristate.isFalse');
+  });
+
+  testWidgets('dead history semantics do not announce active actions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            messages: const [
+              ChatLessonMessage(
+                id: 'old-explanation',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.explanation,
+                text: 'Texto antigo preservado.',
+                isHistorical: true,
+                isActionable: false,
+                deliveryStatus: ChatLessonDeliveryStatus.read,
+              ),
+            ],
+            onChooseAnswer: (_) {},
+            onSignal: (_) {},
+            onRetry: () {},
+            onNext: () {},
+            onOpenDoubt: () {},
+          ),
+        ),
+      ),
+    );
+
+    final semantics = tester.getSemantics(find.byType(ChatAulaMessageBubble));
+    expect(semantics.label, contains('Histórico preservado'));
+    expect(semantics.label, contains('Sem ação ativa'));
+    expect(semantics.label, isNot(contains('botão')));
+  });
+
   testWidgets('chat timeline renders a clear empty state', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

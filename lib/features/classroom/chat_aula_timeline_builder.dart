@@ -19,6 +19,7 @@ class ChatLessonTimelineInput {
     this.doubtProgress = 0,
     this.doubtResponse,
     this.doubtError,
+    this.lessonLocalId,
   });
 
   final LessonRuntimeSnapshot? snapshot;
@@ -32,6 +33,7 @@ class ChatLessonTimelineInput {
   final int doubtProgress;
   final String? doubtResponse;
   final String? doubtError;
+  final String? lessonLocalId;
 }
 
 List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
@@ -39,6 +41,9 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
   final snapshot = input.snapshot;
   final content = snapshot?.conteudo;
   final phase = snapshot?.phase;
+  final marker = snapshot?.itemMarker;
+  final itemIdx = _itemIdxFromHeader(snapshot?.viewModel?.headerLabel);
+  final layer = _layerFromHeader(snapshot?.viewModel?.headerLabel);
 
   for (var i = 0; i < (snapshot?.history.length ?? 0); i++) {
     final entry = snapshot!.history[i];
@@ -63,6 +68,13 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           imageData: entry.imageUrl,
           selectedAnswer: entry.chosenOptionId,
           isCorrect: entry.correct,
+          lessonLocalId: input.lessonLocalId,
+          marker: marker,
+          itemIdx: itemIdx,
+          layer: layer,
+          createdAt: entry.answeredAt,
+          isHistorical: true,
+          isActionable: false,
           deliveryStatus: ChatLessonDeliveryStatus.read,
           timestampLabel: timestampLabel,
         ),
@@ -75,6 +87,13 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           text: entry.chosenOptionId.name,
           selectedAnswer: entry.chosenOptionId,
           isCorrect: entry.correct,
+          lessonLocalId: input.lessonLocalId,
+          marker: marker,
+          itemIdx: itemIdx,
+          layer: layer,
+          createdAt: entry.answeredAt,
+          isHistorical: true,
+          isActionable: false,
           deliveryStatus: ChatLessonDeliveryStatus.read,
           timestampLabel: timestampLabel,
         ),
@@ -88,6 +107,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         role: ChatLessonMessageRole.system,
         kind: ChatLessonMessageKind.loading,
         actionKey: 'retry',
+        isActionable: true,
         deliveryStatus: ChatLessonDeliveryStatus.processing,
       ),
     );
@@ -101,6 +121,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.explanation,
         text: content.explanation,
+        lessonLocalId: input.lessonLocalId,
+        marker: marker,
+        itemIdx: itemIdx,
+        layer: layer,
+        isActionable: false,
         deliveryStatus: ChatLessonDeliveryStatus.delivered,
       ),
     );
@@ -113,6 +138,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           kind: ChatLessonMessageKind.loading,
           text: t('aula_doubt_processing'),
           progress: input.doubtProgress,
+          lessonLocalId: input.lessonLocalId,
+          marker: marker,
+          itemIdx: itemIdx,
+          layer: layer,
+          isActionable: false,
           deliveryStatus: ChatLessonDeliveryStatus.processing,
         ),
       );
@@ -123,6 +153,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           role: ChatLessonMessageRole.system,
           kind: ChatLessonMessageKind.error,
           text: input.doubtError,
+          lessonLocalId: input.lessonLocalId,
+          marker: marker,
+          itemIdx: itemIdx,
+          layer: layer,
+          isActionable: false,
           deliveryStatus: ChatLessonDeliveryStatus.failed,
         ),
       );
@@ -133,6 +168,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           role: ChatLessonMessageRole.sim,
           kind: ChatLessonMessageKind.feedback,
           text: input.doubtResponse,
+          lessonLocalId: input.lessonLocalId,
+          marker: marker,
+          itemIdx: itemIdx,
+          layer: layer,
+          isActionable: false,
           deliveryStatus: ChatLessonDeliveryStatus.delivered,
         ),
       );
@@ -154,6 +194,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           imageStatus: input.imageStatus,
           hasPaidImageOffer: input.hasPaidImageOffer,
           actionKey: input.hasPaidImageOffer ? 'paid-image-offer' : null,
+          lessonLocalId: input.lessonLocalId,
+          marker: marker,
+          itemIdx: itemIdx,
+          layer: layer,
+          isActionable: input.hasPaidImageOffer,
           deliveryStatus: input.imageStatus == 'loading'
               ? ChatLessonDeliveryStatus.processing
               : (input.imageError ?? '').trim().isNotEmpty
@@ -169,6 +214,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.question,
         text: content.question,
+        lessonLocalId: input.lessonLocalId,
+        marker: marker,
+        itemIdx: itemIdx,
+        layer: layer,
+        isActionable: false,
         deliveryStatus: ChatLessonDeliveryStatus.delivered,
       ),
     );
@@ -184,6 +234,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         signals: phase?.type == ClassroomPhaseType.expandida
             ? _signals(enabled: true)
             : const [],
+        lessonLocalId: input.lessonLocalId,
+        marker: marker,
+        itemIdx: itemIdx,
+        layer: layer,
+        isActionable: true,
         deliveryStatus: ChatLessonDeliveryStatus.delivered,
       ),
     );
@@ -195,6 +250,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           role: ChatLessonMessageRole.system,
           kind: ChatLessonMessageKind.processing,
           text: t('aula_registering'),
+          lessonLocalId: input.lessonLocalId,
+          marker: marker,
+          itemIdx: itemIdx,
+          layer: layer,
+          isActionable: false,
           deliveryStatus: ChatLessonDeliveryStatus.processing,
         ),
       );
@@ -207,6 +267,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           text: feedbackText(phase?.message ?? ''),
           isCorrect: phase?.wasCorrect,
           actionKey: snapshot?.viewModel?.nextLabel,
+          lessonLocalId: input.lessonLocalId,
+          marker: marker,
+          itemIdx: itemIdx,
+          layer: layer,
+          isActionable: (snapshot?.viewModel?.nextLabel ?? '').isNotEmpty,
           deliveryStatus: ChatLessonDeliveryStatus.delivered,
         ),
       );
@@ -217,6 +282,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
             role: ChatLessonMessageRole.system,
             kind: ChatLessonMessageKind.loading,
             text: t('preparing_next_lesson'),
+            lessonLocalId: input.lessonLocalId,
+            marker: marker,
+            itemIdx: itemIdx,
+            layer: layer,
+            isActionable: false,
             deliveryStatus: ChatLessonDeliveryStatus.processing,
           ),
         );
@@ -233,12 +303,30 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         kind: ChatLessonMessageKind.error,
         text: studentFacingRuntimeError(phase?.message ?? input.runtimeError),
         actionKey: 'retry',
+        lessonLocalId: input.lessonLocalId,
+        marker: marker,
+        itemIdx: itemIdx,
+        layer: layer,
+        isActionable: true,
         deliveryStatus: ChatLessonDeliveryStatus.failed,
       ),
     );
   }
 
   return _withSequenceIndexes(messages);
+}
+
+int? _itemIdxFromHeader(String? headerLabel) {
+  final match = RegExp(r'aula_item_of:(\d+)/').firstMatch(headerLabel ?? '');
+  if (match == null) return null;
+  final oneBased = int.tryParse(match.group(1) ?? '');
+  if (oneBased == null || oneBased <= 0) return null;
+  return oneBased - 1;
+}
+
+int? _layerFromHeader(String? headerLabel) {
+  final match = RegExp(r'aula_layer_(\d+)').firstMatch(headerLabel ?? '');
+  return int.tryParse(match?.group(1) ?? '');
 }
 
 String? studentFacingRuntimeError(String? raw) {

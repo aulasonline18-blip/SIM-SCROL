@@ -324,6 +324,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
           doubtProgress: session.doubt.progress,
           doubtResponse: session.doubt.response?.explanation,
           doubtError: session.doubt.error,
+          lessonLocalId: session.lessonLocalId,
         ),
       ),
     );
@@ -407,6 +408,9 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         if (_shouldArchiveAsNewTurn(current, message)) {
           _conversationMessages[index] = current.copyWith(
             id: _archivedMessageId(current.id),
+            deliveryStatus: ChatLessonDeliveryStatus.read,
+            isHistorical: true,
+            isActionable: false,
           );
           _conversationMessages.add(message);
           continue;
@@ -451,6 +455,8 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
                 _turnIdFor(_conversationMessages[i]) != latestTurnId))
           _conversationMessages[i].copyWith(
             deliveryStatus: ChatLessonDeliveryStatus.read,
+            isHistorical: true,
+            isActionable: false,
           )
         else
           _conversationMessages[i],

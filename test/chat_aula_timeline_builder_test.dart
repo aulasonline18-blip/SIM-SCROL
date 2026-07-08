@@ -164,6 +164,7 @@ void main() {
   test('history is represented as old sim and student messages', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(
+        lessonLocalId: 'lesson-m9',
         snapshot: _snapshot(
           phase: const ClassroomPhase.reading(),
           history: const [
@@ -186,6 +187,13 @@ void main() {
     );
 
     expect(messages.first.kind, ChatLessonMessageKind.historyQuestion);
+    expect(messages.first.lessonLocalId, 'lesson-m9');
+    expect(messages.first.marker, 'M1');
+    expect(messages.first.itemIdx, 0);
+    expect(messages.first.layer, 1);
+    expect(messages.first.isHistorical, isTrue);
+    expect(messages.first.isActionable, isFalse);
+    expect(messages.first.createdAt, 1767344700000);
     expect(messages.first.imageData, isNotNull);
     expect(messages.first.options, hasLength(3));
     expect(
@@ -193,11 +201,108 @@ void main() {
       AnswerLetter.C,
     );
     expect(messages.first.options.every((option) => option.enabled), isFalse);
+    expect(messages.first.hasInteractiveOptions, isFalse);
     expect(messages.first.timestampLabel, '09:05');
     expect(messages[1].kind, ChatLessonMessageKind.historyAnswer);
+    expect(messages[1].isHistorical, isTrue);
+    expect(messages[1].isActionable, isFalse);
     expect(messages[1].selectedAnswer, AnswerLetter.C);
     expect(messages[1].isCorrect, isFalse);
     expect(messages[1].timestampLabel, '09:05');
+  });
+
+  test('active and historical messages are distinguished by contract', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        lessonLocalId: 'lesson-m9',
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.completed(
+            message: 'aula_fb_correct',
+            wasCorrect: true,
+            signal: DecisionSignal.one,
+          ),
+          history: const [
+            QuestionHistoryEntry(
+              id: 'h1',
+              text: 'Pergunta antiga?',
+              options: [
+                QuestionOptionEntry(id: AnswerLetter.A, text: 'Alpha'),
+                QuestionOptionEntry(id: AnswerLetter.B, text: 'Beta'),
+                QuestionOptionEntry(id: AnswerLetter.C, text: 'Gamma'),
+              ],
+              chosenOptionId: AnswerLetter.A,
+              correct: true,
+              answeredAt: 1767344700000,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final historical = messages.where((message) => message.isHistorical);
+    expect(historical, isNotEmpty);
+    expect(historical.every((message) => !message.isActionable), isTrue);
+    expect(
+      historical.every(
+        (message) =>
+            message.lessonLocalId == 'lesson-m9' &&
+            message.marker == 'M1' &&
+            message.itemIdx == 0 &&
+            message.layer == 1,
+      ),
+      isTrue,
+    );
+
+    final activeOptions = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.options,
+    );
+    final activeFeedback = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.feedback,
+    );
+    expect(activeOptions.isHistorical, isFalse);
+    expect(activeOptions.isActionable, isTrue);
+    expect(activeOptions.hasInteractiveOptions, isTrue);
+    expect(activeFeedback.isHistorical, isFalse);
+    expect(activeFeedback.isActionable, isTrue);
+    expect(activeFeedback.actionKey, 'aula_next');
+  });
+
+  test('message contract serializes identity actionability and status', () {
+    const message = ChatLessonMessage(
+      id: 'm9-contract',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.options,
+      lessonLocalId: 'lesson-m9',
+      marker: 'M1',
+      itemIdx: 0,
+      layer: 2,
+      createdAt: 1767344700000,
+      isHistorical: true,
+      isActionable: false,
+      actionKey: 'old-action',
+      deliveryStatus: ChatLessonDeliveryStatus.read,
+      options: [
+        ChatLessonOption(
+          letter: AnswerLetter.A,
+          text: 'A',
+          selected: true,
+          enabled: false,
+        ),
+      ],
+    );
+
+    final restored = ChatLessonMessage.fromJson(message.toJson());
+    expect(restored, isNotNull);
+    expect(restored!.lessonLocalId, 'lesson-m9');
+    expect(restored.marker, 'M1');
+    expect(restored.itemIdx, 0);
+    expect(restored.layer, 2);
+    expect(restored.createdAt, 1767344700000);
+    expect(restored.isHistorical, isTrue);
+    expect(restored.isActionable, isFalse);
+    expect(restored.actionKey, 'old-action');
+    expect(restored.deliveryStatus, ChatLessonDeliveryStatus.read);
+    expect(restored.hasInteractiveOptions, isFalse);
   });
 
   test('active messages use distinct ids across layers in the same item', () {
@@ -371,6 +476,60 @@ void main() {
     }
   });
 
+  test('advancing experience preserves old text and image as dead history', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        lessonLocalId: 'lesson-m9',
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.reading(),
+          explanation: 'Explicacao nova.',
+          question: 'Pergunta nova?',
+          imagem: 'data:image/png;base64,NOVA',
+          history: const [
+            QuestionHistoryEntry(
+              id: 'old-m1',
+              text: 'Pergunta antiga?',
+              options: [
+                QuestionOptionEntry(id: AnswerLetter.A, text: 'Alpha antiga'),
+                QuestionOptionEntry(id: AnswerLetter.B, text: 'Beta antiga'),
+                QuestionOptionEntry(id: AnswerLetter.C, text: 'Gamma antiga'),
+              ],
+              chosenOptionId: AnswerLetter.B,
+              correct: false,
+              imageUrl: 'data:image/png;base64,ANTIGA',
+              answeredAt: 1767344700000,
+            ),
+          ],
+        ),
+        showImagePanel: true,
+        imageStatus: 'ready',
+      ),
+    );
+
+    final oldQuestion = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.historyQuestion,
+    );
+    final newQuestion = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.question,
+    );
+    final newImage = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.image,
+    );
+
+    expect(oldQuestion.text, 'Pergunta antiga?');
+    expect(oldQuestion.imageData, 'data:image/png;base64,ANTIGA');
+    expect(oldQuestion.options.map((option) => option.text), [
+      'Alpha antiga',
+      'Beta antiga',
+      'Gamma antiga',
+    ]);
+    expect(oldQuestion.isHistorical, isTrue);
+    expect(oldQuestion.isActionable, isFalse);
+    expect(newQuestion.text, 'Pergunta nova?');
+    expect(newImage.imageData, 'data:image/png;base64,NOVA');
+    expect(newImage.isHistorical, isFalse);
+  });
+
   test('doubt processing response and error are represented in timeline', () {
     final processing = buildChatLessonMessages(
       ChatLessonTimelineInput(
@@ -407,6 +566,74 @@ void main() {
       'Dúvida indisponível.',
     );
   });
+
+  test(
+    'doubt messages stay inside the conversation without progress action',
+    () {
+      final response = buildChatLessonMessages(
+        ChatLessonTimelineInput(
+          lessonLocalId: 'lesson-m9',
+          snapshot: _snapshot(
+            phase: const ClassroomPhase.expanded(AnswerLetter.B),
+            headerLabel: 'aula_item_of:2/5:aula_layer_2',
+          ),
+          doubtResponse: 'Resposta auxiliar da dúvida.',
+        ),
+      );
+
+      final doubt = response.singleWhere(
+        (message) => message.id == 'doubt-response',
+      );
+      final options = response.singleWhere(
+        (message) => message.kind == ChatLessonMessageKind.options,
+      );
+      expect(doubt.kind, ChatLessonMessageKind.feedback);
+      expect(doubt.lessonLocalId, 'lesson-m9');
+      expect(doubt.itemIdx, 1);
+      expect(doubt.layer, 2);
+      expect(doubt.isActionable, isFalse);
+      expect(doubt.actionKey, isNull);
+      expect(options.selectedAnswer, AnswerLetter.B);
+      expect(options.isActionable, isTrue);
+    },
+  );
+
+  test(
+    'review and recovery messages have their own conversational identity',
+    () {
+      const review = ChatLessonMessage(
+        id: 'review-m1',
+        role: ChatLessonMessageRole.sim,
+        kind: ChatLessonMessageKind.review,
+        text: 'Revisao de M1',
+        lessonLocalId: 'lesson-m9',
+        marker: 'M1',
+        itemIdx: 0,
+        layer: 1,
+        isActionable: false,
+      );
+      const recovery = ChatLessonMessage(
+        id: 'recovery-m1',
+        role: ChatLessonMessageRole.sim,
+        kind: ChatLessonMessageKind.recovery,
+        text: 'Recuperacao de M1',
+        lessonLocalId: 'lesson-m9',
+        marker: 'M1',
+        itemIdx: 0,
+        layer: 1,
+        isActionable: false,
+      );
+
+      final restoredReview = ChatLessonMessage.fromJson(review.toJson());
+      final restoredRecovery = ChatLessonMessage.fromJson(recovery.toJson());
+      expect(restoredReview?.kind, ChatLessonMessageKind.review);
+      expect(restoredRecovery?.kind, ChatLessonMessageKind.recovery);
+      expect(restoredReview?.marker, 'M1');
+      expect(restoredRecovery?.marker, 'M1');
+      expect(restoredReview?.isActionable, isFalse);
+      expect(restoredRecovery?.isActionable, isFalse);
+    },
+  );
 
   test('system chat messages follow the active app language', () {
     addTearDown(() => setSimActiveLanguage('en'));

@@ -841,6 +841,8 @@ class ChatAulaMessageBubble extends StatelessWidget {
     final media = mediaName.isEmpty ? _mediaStatusText(message) : mediaName;
     final parts = [
       owner,
+      if (message.isHistorical) 'Histórico preservado',
+      if (!message.isActionable) 'Sem ação ativa',
       if (timestamp != null && timestamp.isNotEmpty) timestamp,
       'Status: $status',
       if (text.isNotEmpty) text,
@@ -974,7 +976,6 @@ class _ChatAulaMessageBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = SimThemeScope.paletteOf(context);
     return switch (message.kind) {
       ChatLessonMessageKind.options => _ChatOptions(
         message: message,
@@ -1004,84 +1005,36 @@ class _ChatAulaMessageBody extends StatelessWidget {
                 text: message.text ?? t('preparing_lesson'),
                 loading: true,
                 retryPending: pendingActionKeys.contains('retry'),
-                onRetry: message.actionKey == 'retry' ? onRetry : null,
+                onRetry: message.isActionable && message.actionKey == 'retry'
+                    ? onRetry
+                    : null,
               ),
       ChatLessonMessageKind.error => _StatusMessage(
         text: message.text ?? t('aula_gen_fail'),
         loading: false,
         warn: true,
         retryPending: pendingActionKeys.contains('retry'),
-        onRetry: message.actionKey == 'retry' ? onRetry : null,
+        onRetry: message.isActionable && message.actionKey == 'retry'
+            ? onRetry
+            : null,
       ),
       ChatLessonMessageKind.feedback => _ChatFeedbackActionReveal(
         messageId: message.id,
         enabled:
             (message.actionKey ?? '').isNotEmpty &&
+            message.isActionable &&
             message.deliveryStatus != ChatLessonDeliveryStatus.read,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  message.isCorrect == false
-                      ? Icons.info_outline
-                      : Icons.check_circle_outline,
-                  size: 20,
-                  color: message.isCorrect == false ? simWarn : palette.primary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: _TextMessage(message.text ?? '')),
-              ],
-            ),
-            if ((message.actionKey ?? '').isNotEmpty) ...[
-              const SizedBox(height: 14),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 360;
-                  final doubtButton = _ChatActionButton(
-                    key: const Key('chat-feedback-doubt-button'),
-                    label: t('aula_doubt_about_question'),
-                    enabled: true,
-                    busy: false,
-                    primary: false,
-                    onPressed: onOpenDoubt,
-                  );
-                  final nextButton = _ChatActionButton(
-                    key: const Key('chat-feedback-next-button'),
-                    label: nextBtnText(message.actionKey ?? 'aula_next'),
-                    enabled: true,
-                    busy: false,
-                    onPressed: onNext,
-                  );
-                  if (compact) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        doubtButton,
-                        const SizedBox(height: 10),
-                        nextButton,
-                      ],
-                    );
-                  }
-                  return Row(
-                    children: [
-                      Expanded(child: doubtButton),
-                      const SizedBox(width: 10),
-                      Expanded(child: nextButton),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ],
+        child: _FeedbackMessageActions(
+          message: message,
+          pendingActionKeys: pendingActionKeys,
+          onOpenDoubt: onOpenDoubt,
+          onNext: onNext,
         ),
       ),
       ChatLessonMessageKind.doubtAction => _ChatActionButton(
         key: const Key('chat-doubt-action'),
         label: message.text ?? t('aula_doubt'),
-        enabled: true,
+        enabled: message.isActionable,
         busy: false,
         onPressed: onOpenDoubt,
       ),
@@ -1098,6 +1051,93 @@ class _ChatAulaMessageBody extends StatelessWidget {
       ),
       _ => _TextMessage(message.text ?? ''),
     };
+  }
+}
+
+class _FeedbackMessageActions extends StatelessWidget {
+  const _FeedbackMessageActions({
+    required this.message,
+    required this.pendingActionKeys,
+    required this.onOpenDoubt,
+    required this.onNext,
+  });
+
+  final ChatLessonMessage message;
+  final Set<String> pendingActionKeys;
+  final VoidCallback onOpenDoubt;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final effectiveActionable =
+        message.isActionable &&
+        message.deliveryStatus != ChatLessonDeliveryStatus.read;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              message.isCorrect == false
+                  ? Icons.info_outline
+                  : Icons.check_circle_outline,
+              size: 20,
+              color: message.isCorrect == false ? simWarn : palette.primary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: _TextMessage(message.text ?? '')),
+          ],
+        ),
+        if ((message.actionKey ?? '').isNotEmpty) ...[
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 360;
+              final doubtBusy = pendingActionKeys.contains('doubt');
+              final nextBusy = pendingActionKeys.contains('next');
+              final doubtButton = _ChatActionButton(
+                key: const Key('chat-feedback-doubt-button'),
+                label: doubtBusy
+                    ? t('aula_doubt_processing')
+                    : t('aula_doubt_about_question'),
+                enabled: effectiveActionable && !doubtBusy,
+                busy: doubtBusy,
+                primary: false,
+                onPressed: onOpenDoubt,
+              );
+              final nextButton = _ChatActionButton(
+                key: const Key('chat-feedback-next-button'),
+                label: nextBusy
+                    ? t('preparing_next_lesson')
+                    : nextBtnText(message.actionKey ?? 'aula_next'),
+                enabled: effectiveActionable && !nextBusy,
+                busy: nextBusy,
+                onPressed: onNext,
+              );
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    doubtButton,
+                    const SizedBox(height: 10),
+                    nextButton,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: doubtButton),
+                  const SizedBox(width: 10),
+                  Expanded(child: nextButton),
+                ],
+              );
+            },
+          ),
+        ],
+      ],
+    );
   }
 }
 
@@ -1478,6 +1518,10 @@ class _ChatOptions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final answerEnabled =
+        message.isActionable && !pendingActionKeys.contains('answer');
+    final signalEnabled =
+        message.isActionable && !pendingActionKeys.contains('signal');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1489,12 +1533,21 @@ class _ChatOptions extends StatelessWidget {
                 label: option.letter.name,
                 text: option.text,
                 active: option.selected,
-                enabled: true,
+                enabled: answerEnabled && option.enabled,
                 onTap: () => onChooseAnswer(option.letter),
               ),
               if (option.selected && message.signals.isNotEmpty)
                 _InlineSignalChoices(
-                  signals: message.signals,
+                  signals: signalEnabled
+                      ? message.signals
+                      : [
+                          for (final signal in message.signals)
+                            ChatLessonSignal(
+                              value: signal.value,
+                              labelKey: signal.labelKey,
+                              enabled: false,
+                            ),
+                        ],
                   onSignal: onSignal,
                   pendingActionKeys: pendingActionKeys,
                 ),
@@ -1552,7 +1605,16 @@ class _ChatSignals extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SignalButtonGroup(
-          signals: message.signals,
+          signals: message.isActionable && !pendingActionKeys.contains('signal')
+              ? message.signals
+              : [
+                  for (final signal in message.signals)
+                    ChatLessonSignal(
+                      value: signal.value,
+                      labelKey: signal.labelKey,
+                      enabled: false,
+                    ),
+                ],
           busy: false,
           onSignal: onSignal,
         ),

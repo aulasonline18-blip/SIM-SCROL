@@ -16,6 +16,8 @@ enum ChatLessonMessageKind {
   historyQuestion,
   historyAnswer,
   studentDoubt,
+  review,
+  recovery,
   explanation,
   image,
   question,
@@ -112,6 +114,13 @@ class ChatLessonMessage {
     this.selectedSignal,
     this.isCorrect,
     this.actionKey,
+    this.lessonLocalId,
+    this.marker,
+    this.itemIdx,
+    this.layer,
+    this.createdAt,
+    this.isHistorical = false,
+    this.isActionable = true,
     this.imageStatus = 'idle',
     this.hasPaidImageOffer = false,
     this.progress,
@@ -134,6 +143,13 @@ class ChatLessonMessage {
   final DecisionSignal? selectedSignal;
   final bool? isCorrect;
   final String? actionKey;
+  final String? lessonLocalId;
+  final String? marker;
+  final int? itemIdx;
+  final int? layer;
+  final int? createdAt;
+  final bool isHistorical;
+  final bool isActionable;
   final String imageStatus;
   final bool hasPaidImageOffer;
   final int? progress;
@@ -142,10 +158,14 @@ class ChatLessonMessage {
   final int? sequenceIndex;
 
   bool get hasInteractiveOptions =>
-      kind == ChatLessonMessageKind.options && options.isNotEmpty;
+      isActionable &&
+      kind == ChatLessonMessageKind.options &&
+      options.any((option) => option.enabled);
 
   bool get hasInteractiveSignals =>
-      kind == ChatLessonMessageKind.signals && signals.isNotEmpty;
+      isActionable &&
+      kind == ChatLessonMessageKind.signals &&
+      signals.any((signal) => signal.enabled);
 
   ChatLessonMessage copyWith({
     String? id,
@@ -162,6 +182,13 @@ class ChatLessonMessage {
     DecisionSignal? selectedSignal,
     bool? isCorrect,
     String? actionKey,
+    String? lessonLocalId,
+    String? marker,
+    int? itemIdx,
+    int? layer,
+    int? createdAt,
+    bool? isHistorical,
+    bool? isActionable,
     String? imageStatus,
     bool? hasPaidImageOffer,
     int? progress,
@@ -184,6 +211,13 @@ class ChatLessonMessage {
       selectedSignal: selectedSignal ?? this.selectedSignal,
       isCorrect: isCorrect ?? this.isCorrect,
       actionKey: actionKey ?? this.actionKey,
+      lessonLocalId: lessonLocalId ?? this.lessonLocalId,
+      marker: marker ?? this.marker,
+      itemIdx: itemIdx ?? this.itemIdx,
+      layer: layer ?? this.layer,
+      createdAt: createdAt ?? this.createdAt,
+      isHistorical: isHistorical ?? this.isHistorical,
+      isActionable: isActionable ?? this.isActionable,
       imageStatus: imageStatus ?? this.imageStatus,
       hasPaidImageOffer: hasPaidImageOffer ?? this.hasPaidImageOffer,
       progress: progress ?? this.progress,
@@ -208,6 +242,13 @@ class ChatLessonMessage {
     'selectedSignal': selectedSignal?.name,
     'isCorrect': isCorrect,
     'actionKey': actionKey,
+    'lessonLocalId': lessonLocalId,
+    'marker': marker,
+    'itemIdx': itemIdx,
+    'layer': layer,
+    'createdAt': createdAt,
+    'isHistorical': isHistorical,
+    'isActionable': isActionable,
     'imageStatus': imageStatus,
     'hasPaidImageOffer': hasPaidImageOffer,
     'progress': progress,
@@ -237,6 +278,17 @@ class ChatLessonMessage {
       selectedSignal: _enumByName(DecisionSignal.values, raw['selectedSignal']),
       isCorrect: raw['isCorrect'] is bool ? raw['isCorrect'] as bool : null,
       actionKey: _stringOrNull(raw['actionKey']),
+      lessonLocalId: _stringOrNull(raw['lessonLocalId']),
+      marker: _stringOrNull(raw['marker']),
+      itemIdx: _intOrNull(raw['itemIdx']),
+      layer: _intOrNull(raw['layer']),
+      createdAt: _intOrNull(raw['createdAt']),
+      isHistorical: raw['isHistorical'] is bool
+          ? raw['isHistorical'] as bool
+          : false,
+      isActionable: raw['isActionable'] is bool
+          ? raw['isActionable'] as bool
+          : true,
       imageStatus: _stringOrNull(raw['imageStatus']) ?? 'idle',
       hasPaidImageOffer: raw['hasPaidImageOffer'] is bool
           ? raw['hasPaidImageOffer'] as bool

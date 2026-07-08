@@ -309,10 +309,11 @@ void showAulaMenu(
       final sw = MediaQuery.of(ctx).size.width;
       final drawerW = (sw * 0.88).clamp(0.0, 360.0);
       final palette = SimThemeScope.paletteOf(ctx);
+      final drawerTextScale = textScale.clamp(1.0, 1.18).toDouble();
       return MediaQuery(
         data: MediaQuery.of(
           ctx,
-        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        ).copyWith(textScaler: TextScaler.linear(drawerTextScale)),
         child: Align(
           alignment: Alignment.centerLeft,
           child: AnimatedBuilder(
