@@ -1,6 +1,7 @@
 // MIRROR OF: src/sim/state/studentLearningStateService.ts (Web, source of truth)
 import 'dart:async';
 
+import 'student_state_contract.dart';
 import 'student_learning_state.dart';
 
 typedef StudentStateMutator =
@@ -100,6 +101,8 @@ class StudentLearningStateService {
   StudentLearningStateService({Map<String, StudentLearningState>? seed})
     : _states = Map.of(seed ?? const {});
 
+  static const StudentStateContract _stateContract = StudentStateContract();
+
   final Map<String, StudentLearningState> _states;
   final List<void Function(String)> _writeListeners = [];
 
@@ -166,7 +169,13 @@ class StudentLearningStateService {
     StudentLearningState state, {
     bool scheduleShadow = true,
   }) {
-    _states[state.lessonLocalId] = state.copyWith(
+    final existing = _states[state.lessonLocalId];
+    final protectedState =
+        existing != null &&
+            _stateContract.isRegression(existing: existing, incoming: state)
+        ? mergeStudentLearningStateFromCloud(existing, state)
+        : state;
+    _states[state.lessonLocalId] = protectedState.copyWith(
       updatedAt: DateTime.now().millisecondsSinceEpoch,
     );
     _notifyWrite(state.lessonLocalId, scheduleShadow: scheduleShadow);

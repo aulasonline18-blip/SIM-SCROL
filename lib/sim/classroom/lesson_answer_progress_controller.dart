@@ -1,4 +1,5 @@
 import '../core/signal_tracker.dart';
+import '../constitution/sim_constitutional_contract.dart';
 import '../lesson/dopamine_ready_window_engine.dart';
 import '../lesson/lesson_models.dart';
 import '../lesson/student_lesson_material_service.dart';
@@ -24,8 +25,11 @@ class LessonAnswerProgressController {
     this.audioCore,
     SignalTracker? signalTracker,
     MasteryTruthEngine? truthEngine,
+    SimConstitutionalContract? constitutionalContract,
   }) : signalTracker = signalTracker ?? SignalTracker(stateService),
-       truthEngine = truthEngine ?? const MasteryTruthEngine();
+       truthEngine = truthEngine ?? const MasteryTruthEngine(),
+       constitutionalContract =
+           constitutionalContract ?? const SimConstitutionalContract();
 
   final StudentLearningStateService stateService;
   final StudentLessonMaterialService materialService;
@@ -34,6 +38,7 @@ class LessonAnswerProgressController {
   final AudioCore? audioCore;
   final SignalTracker signalTracker;
   final MasteryTruthEngine truthEngine;
+  final SimConstitutionalContract constitutionalContract;
   final AmparoController _amparo = const AmparoController();
 
   void selecionar(LessonPositionState position, AnswerLetter letter) {
@@ -59,8 +64,18 @@ class LessonAnswerProgressController {
     }
 
     audioCore?.stop();
+    constitutionalContract.assertLessonMaterial(content);
     final letter = phase.letter!;
     final correct = letter == content.correctAnswer;
+    final constitutionalEvidence = SimAnswerEvidence(
+      marker: item.marker,
+      layer: position.layer,
+      selectedAnswer: letter,
+      signal: signal,
+      correct: correct,
+      validatedBySoftware: true,
+    );
+    constitutionalContract.validateEvidence(constitutionalEvidence);
     final questionId = [
       item.marker,
       'layer-${position.layer.value}',
@@ -159,6 +174,7 @@ class LessonAnswerProgressController {
         lessonLocalId: lessonLocalId,
         state: postMasteryState,
         evidence: evidence,
+        answerEvidence: constitutionalEvidence,
       );
       final view = activeLessonView(decidedState);
       if (view != null && !view.ended) {
@@ -190,11 +206,11 @@ class LessonAnswerProgressController {
       wasCorrect: correct,
       signal: signal,
     );
-    stateService.appendEvent(
-      lessonLocalId,
+    final submittedAt = DateTime.now().millisecondsSinceEpoch;
+    stateService.appendEvents(lessonLocalId, [
       StudentLearningEvent(
         type: 'ANSWER_SUBMITTED',
-        ts: DateTime.now().millisecondsSinceEpoch,
+        ts: submittedAt,
         payload: {
           'marker': item.marker,
           'layer': position.layer.value,
@@ -204,13 +220,24 @@ class LessonAnswerProgressController {
           'isReview': position.isReviewAtivo,
         },
       ),
-    );
+      StudentLearningEvent(
+        type: 'SIGNAL_SUBMITTED',
+        ts: submittedAt,
+        payload: {
+          'marker': item.marker,
+          'layer': position.layer.value,
+          'sinal': signal.value,
+          'letra': letter.name,
+        },
+      ),
+    ]);
   }
 
   StudentLearningState _applyPostMasteryDecision({
     required String lessonLocalId,
     required StudentLearningState state,
     required MasteryEvidence evidence,
+    required SimAnswerEvidence answerEvidence,
   }) {
     final curriculum = state.curriculum;
     final progress = state.progress;
@@ -218,8 +245,12 @@ class LessonAnswerProgressController {
     final itemIdx = progress.itemIdx;
     if (itemIdx < 0 || itemIdx >= curriculum.items.length) return state;
     final marker = curriculum.items[itemIdx].marker;
+    final gate = constitutionalContract.evaluateAdvanceGate(
+      evidence: answerEvidence,
+      masteryEvidence: evidence,
+    );
     final stateForDecision =
-        evidence.status == MasteryStatus.mastered &&
+        gate.allowAdvance &&
             evidence.marker == marker &&
             !(progress.concluidos.contains(evidence.marker))
         ? state.copyWith(
@@ -261,6 +292,7 @@ class LessonAnswerProgressController {
           'to_layer': nextProgress.layer.value,
           'mastery_status': evidence.status.name,
           'needs_reinforcement': evidence.needsReinforcement,
+          'constitutional_gate': gate.reason,
         },
       },
     );
@@ -418,6 +450,21 @@ class LessonAnswerProgressController {
       position.phase = const ClassroomPhase.doneEnd();
       return;
     }
+    if (!_hasEvidenceForCurrentPosition(state, position)) {
+      stateService.appendEvent(
+        lessonLocalId,
+        StudentLearningEvent(
+          type: 'ADVANCE_REJECTED_BY_CONSTITUTION',
+          ts: DateTime.now().millisecondsSinceEpoch,
+          payload: {
+            'itemIdx': position.itemIdx,
+            'layer': position.layer.value,
+            'reason': 'advance_requires_evidence',
+          },
+        ),
+      );
+      return;
+    }
     final activeState = state;
     if (!view.ended &&
         view.itemIdx == position.itemIdx &&
@@ -501,5 +548,16 @@ class LessonAnswerProgressController {
       return LessonMode.reforco;
     }
     return LessonMode.session;
+  }
+
+  bool _hasEvidenceForCurrentPosition(
+    StudentLearningState state,
+    LessonPositionState position,
+  ) {
+    final marker = position.itemAtivo?.marker ?? state.current?.marker;
+    if (marker == null || marker.trim().isEmpty) return false;
+    return state.attempts.any(
+      (attempt) => attempt.marker == marker && attempt.layer == position.layer,
+    );
   }
 }

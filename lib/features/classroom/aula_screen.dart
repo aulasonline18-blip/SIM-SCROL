@@ -1022,7 +1022,9 @@ class _AulaLabScreenState extends State<AulaLabScreen>
                               session.doubt.status == DoubtStatus.processing
                               ? t('aula_doubt_processing')
                               : t('aula_doubt_about_question'),
-                          nextLabel: t(viewModel?.nextLabel ?? 'aula_next'),
+                          nextLabel: nextBtnText(
+                            viewModel?.nextLabel ?? 'aula_next',
+                          ),
                           busy: session.doubt.status == DoubtStatus.processing,
                           onAskDoubt: () {
                             _prepareUserDrivenScroll();

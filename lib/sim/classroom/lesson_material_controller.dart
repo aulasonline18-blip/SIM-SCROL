@@ -1,3 +1,4 @@
+import '../constitution/sim_constitutional_contract.dart';
 import '../lesson/dopamine_ready_window_engine.dart';
 import '../lesson/lesson_models.dart';
 import '../lesson/student_lesson_material_service.dart';
@@ -11,10 +12,13 @@ class LessonMaterialController {
   LessonMaterialController({
     required this.stateService,
     required this.materialService,
-  });
+    SimConstitutionalContract? constitutionalContract,
+  }) : constitutionalContract =
+           constitutionalContract ?? const SimConstitutionalContract();
 
   final StudentLearningStateService stateService;
   final StudentLessonMaterialService materialService;
+  final SimConstitutionalContract constitutionalContract;
 
   Future<void> carregar({
     required String lessonLocalId,
@@ -143,6 +147,7 @@ class LessonMaterialController {
     LessonPositionState position,
     ResolveLessonMaterialResult material,
   ) {
+    constitutionalContract.assertLessonMaterial(material.conteudo);
     position.conteudo = material.conteudo;
     position.imagem = material.imagem;
     position.imageMetadata = material.imageMetadata;

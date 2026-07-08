@@ -11,6 +11,7 @@ import '../../sim/ui/responsive/sim_responsive.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/doubt_progress_bar.dart';
 import '../session/lab_session.dart';
+import '../onboarding/preparation_and_placement.dart';
 import 'aula_widgets.dart';
 import 'chat_aula_messages.dart';
 
@@ -1049,7 +1050,7 @@ class _ChatAulaMessageBody extends StatelessWidget {
                   );
                   final nextButton = _ChatActionButton(
                     key: const Key('chat-feedback-next-button'),
-                    label: t(message.actionKey ?? 'aula_next'),
+                    label: nextBtnText(message.actionKey ?? 'aula_next'),
                     enabled: true,
                     busy: false,
                     onPressed: onNext,

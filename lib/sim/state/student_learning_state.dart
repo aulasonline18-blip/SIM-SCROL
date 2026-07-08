@@ -1097,11 +1097,40 @@ StudentLearningState mergeStudentLearningStateFromCloud(
   }
   final curriculum = local.curriculum ?? remote.curriculum;
   final base = _progressRank(lp) >= _progressRank(rp) ? local : remote;
+  final localCurrentRank = _progressRank(local.progress);
+  final remoteCurrentRank = _progressRank(remote.progress);
+  final current = localCurrentRank >= remoteCurrentRank
+      ? local.current ?? remote.current
+      : remote.current ?? local.current;
+  final readyLessonMaterials = {
+    ...remote.readyLessonMaterials,
+    ...local.readyLessonMaterials,
+  };
   return base.copyWith(
     curriculum: curriculum,
+    current: current,
     progress: mergedProgress,
     attempts: mergedAttempts,
     events: mergedEvents,
+    currentLessonMaterial:
+        base.currentLessonMaterial ??
+        local.currentLessonMaterial ??
+        remote.currentLessonMaterial,
+    readyLessonMaterials: readyLessonMaterials,
+    auxRooms: base.auxRooms ?? local.auxRooms ?? remote.auxRooms,
+    truth:
+        base.truth.masteryEvidence.isNotEmpty ||
+            base.truth.itemConsolidationStatus.isNotEmpty
+        ? base.truth
+        : local.truth.masteryEvidence.isNotEmpty ||
+              local.truth.itemConsolidationStatus.isNotEmpty
+        ? local.truth
+        : remote.truth,
+    audio: base.audio.status != 'idle'
+        ? base.audio
+        : local.audio.status != 'idle'
+        ? local.audio
+        : remote.audio,
     updatedAt: local.updatedAt > remote.updatedAt
         ? local.updatedAt
         : remote.updatedAt,

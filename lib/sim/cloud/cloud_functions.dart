@@ -17,12 +17,13 @@ class PersistStudentStateInput {
   final int schemaVersion;
 
   JsonMap toJson() => {
-        'lessonLocalId': lessonLocalId,
-        'state': state.toJson(),
-        'clientUpdatedAt': clientUpdatedAt,
-        'clientScore': clientScore,
-        'schemaVersion': schemaVersion,
-      };
+    'lessonLocalId': lessonLocalId,
+    'source': 'software',
+    'state': state.toJson(),
+    'clientUpdatedAt': clientUpdatedAt,
+    'clientScore': clientScore,
+    'schemaVersion': schemaVersion,
+  };
 }
 
 class PersistStudentStateResult {
@@ -31,20 +32,20 @@ class PersistStudentStateResult {
     required this.highWaterMark,
     required this.schemaVersion,
     this.updatedAt,
-  })  : rejected = false,
-        remoteState = null,
-        remoteHighWaterMark = null,
-        remoteUpdatedAt = null;
+  }) : rejected = false,
+       remoteState = null,
+       remoteHighWaterMark = null,
+       remoteUpdatedAt = null;
 
   const PersistStudentStateResult.rejectedRegression({
     required this.remoteState,
     required this.remoteHighWaterMark,
     this.remoteUpdatedAt,
-  })  : rejected = true,
-        lessonLocalId = '',
-        highWaterMark = 0,
-        schemaVersion = 1,
-        updatedAt = null;
+  }) : rejected = true,
+       lessonLocalId = '',
+       highWaterMark = 0,
+       schemaVersion = 1,
+       updatedAt = null;
 
   final bool rejected;
   final String lessonLocalId;
@@ -133,7 +134,9 @@ int scoreOfStudentLearningState(StudentLearningState? state) {
   if (state == null) return -1;
   final progress = state.progress;
   if (progress == null) return 0;
-  return progress.mainAdvances * 1000 + progress.itemIdx * 10 + progress.layer.value;
+  return progress.mainAdvances * 1000 +
+      progress.itemIdx * 10 +
+      progress.layer.value;
 }
 
 StudentStateSummaryRow? summarizeStudentStateRow(StudentStateRow row) {
@@ -145,7 +148,8 @@ StudentStateSummaryRow? summarizeStudentStateRow(StudentStateRow row) {
   final current = state.current;
   final itemIdx = progress?.itemIdx ?? current?.itemIdx ?? 0;
   final items = curriculum?.items ?? const <CurriculumItem>[];
-  final deleted = state.extra['deletedAt'] != null ||
+  final deleted =
+      state.extra['deletedAt'] != null ||
       (state.extra['syncInfo'] is Map &&
           (state.extra['syncInfo'] as Map)['deletedAt'] != null);
   return StudentStateSummaryRow(
@@ -157,9 +161,12 @@ StudentStateSummaryRow? summarizeStudentStateRow(StudentStateRow row) {
     createdAt: state.createdAt > 0
         ? DateTime.fromMillisecondsSinceEpoch(state.createdAt).toIso8601String()
         : null,
-    updatedAt: row.updatedAt ??
+    updatedAt:
+        row.updatedAt ??
         (state.updatedAt > 0
-            ? DateTime.fromMillisecondsSinceEpoch(state.updatedAt).toIso8601String()
+            ? DateTime.fromMillisecondsSinceEpoch(
+                state.updatedAt,
+              ).toIso8601String()
             : null),
     totalItens: items.length > (progress?.totalItems ?? 0)
         ? items.length
@@ -171,7 +178,8 @@ StudentStateSummaryRow? summarizeStudentStateRow(StudentStateRow row) {
       progress?.concluidos.length ?? 0,
     ].reduce((a, b) => a > b ? a : b),
     finalizada: state.extra['finalizada'] == true,
-    markerAtual: current?.marker ??
+    markerAtual:
+        current?.marker ??
         (itemIdx >= 0 && itemIdx < items.length ? items[itemIdx].marker : null),
     deleted: deleted,
   );
