@@ -210,43 +210,10 @@ class AulaTopBar extends StatelessWidget {
                                       child: Center(
                                         child: SizedBox(
                                           width: badgeMaxWidth,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 6,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: palette.surface,
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              border: Border.all(
-                                                color: palette.border,
-                                              ),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: palette.shadow,
-                                                  blurRadius: 8,
-                                                  offset: Offset(0, 2),
-                                                ),
-                                              ],
-                                            ),
-                                            child: FittedBox(
-                                              fit: BoxFit.scaleDown,
-                                              child: Text(
-                                                (headerLabel ??
-                                                        (session.stableLang ??
-                                                            'SIM'))
-                                                    .toUpperCase(),
-                                                maxLines: 1,
-                                                style: TextStyle(
-                                                  fontFamily: kMono,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: palette.text,
-                                                  letterSpacing: 0.14 * 10,
-                                                ),
-                                              ),
-                                            ),
+                                          child: _HeaderProgressBadge(
+                                            label:
+                                                headerLabel ??
+                                                (session.stableLang ?? 'SIM'),
                                           ),
                                         ),
                                       ),
@@ -351,6 +318,76 @@ class AulaTopBar extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _HeaderProgressBadge extends StatelessWidget {
+  const _HeaderProgressBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final parts = label.split(' · ');
+    final firstLine = parts.isNotEmpty ? parts.first : label;
+    final secondLine = parts.length > 1 ? parts.sublist(1).join(' · ') : null;
+    return Container(
+      height: SimTouch.min,
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(SimRadius.md),
+        border: Border.all(color: palette.border),
+        boxShadow: [
+          BoxShadow(
+            color: palette.shadow,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _HeaderProgressBadgeText(firstLine),
+            if (secondLine != null) ...[
+              const SizedBox(height: 2),
+              _HeaderProgressBadgeText(secondLine),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderProgressBadgeText extends StatelessWidget {
+  const _HeaderProgressBadgeText(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        text.toUpperCase(),
+        maxLines: 1,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontFamily: kMono,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          color: palette.text,
+          letterSpacing: 0,
+        ),
+      ),
     );
   }
 }
