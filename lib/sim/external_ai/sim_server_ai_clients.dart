@@ -20,6 +20,7 @@ const String simWarmupPath = '/api/warmup';
 const String simLessonImagePath = '/api/generate-lesson-image';
 const String simLessonAudioPath = '/api/generate-lesson-audio';
 const String simVisualRoutePath = '/api/visual-route';
+const String simDoubtPath = '/api/doubt';
 
 class SimServerT00Client implements T00BootstrapClient {
   SimServerT00Client({
@@ -632,7 +633,7 @@ class SimServerT02Client implements T02LessonClient {
 
   @override
   Future<T02LessonMaterial> doubt(T02LessonRequest request) {
-    return _call(request, mode: 'doubt');
+    return _callDoubt(request);
   }
 
   @override
@@ -692,6 +693,54 @@ class SimServerT02Client implements T02LessonClient {
         statusCode: 502,
       );
     }
+  }
+
+  Future<T02LessonMaterial> _callDoubt(T02LessonRequest request) async {
+    final locale = _localeFieldsForT02(request);
+    final response = await transport.postJson(
+      config.uri(simDoubtPath),
+      headers: await config.jsonHeaders(),
+      body: {
+        'lessonLocalId': request.lessonLocalId,
+        'marker': request.marker,
+        'itemIdx': request.itemIdx ?? 0,
+        'layer': request.layer.value,
+        'currentQuestion': request.item,
+        'currentOptions':
+            request.profile['currentOptions'] ??
+            request.profile['options'] ??
+            {},
+        'selectedOption':
+            request.profile['selectedOption'] ??
+            request.profile['student_answer'],
+        'signal':
+            request.profile['signal'] ?? request.profile['student_signal'],
+        'currentFeedback': request.profile['currentFeedback'] ?? {},
+        'studentQuestion':
+            request.profile['student_doubt'] ??
+            (request.history.isEmpty ? '' : request.history.last),
+        'attachment': request.profile['doubt_image'],
+        ...locale,
+        'language': locale['learningLocale'] ?? request.lang,
+        'idempotencyKey':
+            request.profile['idempotencyKey'] ??
+            'doubt:${request.lessonLocalId}:${request.marker ?? request.item}:${request.layer.value}:${request.history.length}',
+        'currentState': request.profile['currentState'] ?? {},
+        'history': request.history,
+      },
+      timeout: timeout,
+    );
+    if (!response.ok) {
+      throw SimExternalAiException(
+        response.body,
+        statusCode: response.statusCode,
+      );
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw const SimExternalAiException('doubt retornou resposta invalida.');
+    }
+    return _parseDoubtResponse(JsonMap.from(decoded));
   }
 
   Future<T02LessonMaterial> _callServerClassroomSlot(
@@ -801,6 +850,34 @@ class SimServerT02Client implements T02LessonClient {
       imageId: imageId == null || imageId.trim().isEmpty
           ? null
           : imageId.trim(),
+    );
+  }
+
+  T02LessonMaterial _parseDoubtResponse(JsonMap json) {
+    final answer = (json['answerText'] ?? json['answer'] ?? '')
+        .toString()
+        .trim();
+    if (json['ok'] != true || answer.isEmpty) {
+      final human = json['humanError'];
+      final message = human is Map
+          ? (human['message'] ?? 'Nao conseguimos responder essa duvida agora.')
+                .toString()
+          : 'Nao conseguimos responder essa duvida agora.';
+      throw SimExternalAiException(message, statusCode: 502);
+    }
+    return T02LessonMaterial(
+      explanation: answer,
+      question: '',
+      options: const {
+        AnswerLetter.A: '',
+        AnswerLetter.B: '',
+        AnswerLetter.C: '',
+      },
+      correctAnswer: AnswerLetter.A,
+      whyCorrect: '',
+      whyWrong: const {},
+      generatedAt: DateTime.now(),
+      source: (json['source'] ?? 'server-doubt-room').toString(),
     );
   }
 }
