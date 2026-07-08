@@ -16,6 +16,7 @@ import 'classroom_models.dart';
 import 'lesson_answer_feedback.dart';
 import 'lesson_material_controller.dart';
 import 'lesson_position_engine.dart';
+import 'server_advance_gate.dart';
 
 class LessonAnswerProgressController {
   LessonAnswerProgressController({
@@ -27,6 +28,7 @@ class LessonAnswerProgressController {
     SignalTracker? signalTracker,
     MasteryTruthEngine? truthEngine,
     SimConstitutionalContract? constitutionalContract,
+    this.serverAdvanceGateClient,
   }) : signalTracker = signalTracker ?? SignalTracker(stateService),
        truthEngine = truthEngine ?? const MasteryTruthEngine(),
        constitutionalContract =
@@ -40,6 +42,7 @@ class LessonAnswerProgressController {
   final SignalTracker signalTracker;
   final MasteryTruthEngine truthEngine;
   final SimConstitutionalContract constitutionalContract;
+  final ServerAdvanceGateClient? serverAdvanceGateClient;
   final AmparoController _amparo = const AmparoController();
 
   void selecionar(LessonPositionState position, AnswerLetter letter) {
@@ -123,6 +126,74 @@ class LessonAnswerProgressController {
       return;
     }
     final currentState = stateService.read(lessonLocalId);
+    final remoteClient = serverAdvanceGateClient;
+    if (remoteClient != null &&
+        currentState != null &&
+        !position.isReviewAtivo) {
+      final request = ServerAdvanceGateRequest(
+        lessonLocalId: lessonLocalId,
+        userId: currentState.userId,
+        marker: item.marker,
+        itemIdx: position.itemIdx,
+        layer: position.layer,
+        selectedOption: letter,
+        signal: signal,
+        correct: correct,
+        attempts: currentState.attempts,
+        history: position.historia,
+        highWaterMark: currentState.syncStatus?.highWaterMark,
+        pending: currentState.auxRooms ?? const {},
+        currentState: currentState,
+        idempotencyKey: [
+          lessonLocalId,
+          item.marker,
+          position.layer.value,
+          letter.name,
+          signal.value,
+          questionId,
+        ].join(':'),
+      );
+      try {
+        final decision = await remoteClient.decide(request);
+        final nextState = applyServerAdvanceGateDecision(
+          state: currentState,
+          request: request,
+          decision: decision,
+        );
+        final savedState = stateService.write(nextState);
+        final view = activeLessonView(savedState);
+        if (view != null && !view.ended) {
+          materialService.maintainLessonReadyWindow(
+            lessonLocalId: lessonLocalId,
+            topic: topic,
+            itemIdx: view.itemIdx,
+            layer: view.layer,
+            items: dopamineItemsFromCurriculum(baseItems),
+            source: 'cyber.aula.server-advance-gate',
+            priority: 'active',
+            reason: 'server_decision_prepares_next_experience',
+          );
+        }
+      } catch (error) {
+        final pending = recordPendingServerAdvanceGate(
+          state: currentState,
+          request: request,
+          error: error,
+        );
+        stateService.write(pending);
+      }
+      final message = buildLessonAnswerFeedback(
+        correct: correct,
+        signal: signal,
+        isReview: position.isReviewAtivo,
+      );
+      position.phase = ClassroomPhase.completed(
+        message: message,
+        wasCorrect: correct,
+        signal: signal,
+      );
+      return;
+    }
     if (currentState != null && !position.isReviewAtivo) {
       final nextState = processAnswerWithEngine(
         currentState,
