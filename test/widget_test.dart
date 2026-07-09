@@ -51,8 +51,7 @@ void main() {
     expect(find.byType(ChatAulaScreen), findsNothing);
     expect(
       _textAny([
-        'What should we build together?',
-        'O que vamos construir juntos?',
+        'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
       ]),
       findsOneWidget,
     );
@@ -105,53 +104,23 @@ void main() {
     await tester.tap(_textAny(['Start', 'Começar', 'Commencer']));
     await tester.pumpAndSettle();
     expect(
-      _textAny([
-        'Choose your language',
-        'Escolha seu idioma',
-        'Choisissez votre langue',
-      ]),
+      _textAny(['SIM: Em que idioma você quer usar o SIM?']),
       findsOneWidget,
     );
 
-    await tester.tap(find.textContaining('Português').last);
+    await tester.tap(find.byKey(const Key('sim-entry-language-button')));
     await tester.pumpAndSettle();
-    expect(find.text('O que vamos construir juntos?'), findsOneWidget);
-    expect(
-      _textAny([
-        'Responda com suas palavras. Você pode anexar arquivo ou foto e explicar o que quer aprender com ele.',
-        'Answer in your own words. You can attach a file or photo and explain what SIM should help you learn from it.',
-      ]),
-      findsOneWidget,
-    );
-    expect(session.selectedLanguageCode, 'pt');
-    expect(session.stableLang, 'Portuguese');
-
-    final spanish = LabSession()
-      ..authed = true
-      ..authReady = true
-      ..route = '/cyber/idioma';
-    await tester.pumpWidget(
-      SimMobileApp(key: UniqueKey(), initialSession: spanish),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Español').last);
+    await tester.tap(find.text('Português').last);
     await tester.pumpAndSettle();
     expect(
-      _textAny([
-        'What should we build together?',
-        'O que vamos construir juntos?',
-      ]),
+      find.text(
+        'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
+      ),
       findsOneWidget,
     );
-    expect(
-      _textAny([
-        'Responda com suas palavras. Você pode anexar arquivo ou foto e explicar o que quer aprender com ele.',
-        'Answer in your own words. You can attach a file or photo and explain what SIM should help you learn from it.',
-      ]),
-      findsOneWidget,
-    );
-    expect(spanish.selectedLanguageCode, 'es');
-    expect(spanish.stableLang, 'Spanish');
+    expect(_textAny(['Tenho material', 'Quero que o SIM monte']), findsWidgets);
+    expect(session.learningLocaleTag, 'pt-BR');
+    expect(session.explanationLanguage, 'Portuguese');
   });
 
   testWidgets('Portal alterna e persiste dark mode', (
@@ -200,7 +169,7 @@ void main() {
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
     expect(scaffold.backgroundColor, const Color(0xFF05070D));
     expect(
-      _textAny(['Choose your language', 'Escolha seu idioma']),
+      _textAny(['SIM: Em que idioma você quer usar o SIM?']),
       findsOneWidget,
     );
   });
@@ -247,53 +216,35 @@ void main() {
     await tester.pumpWidget(SimMobileApp(initialSession: session));
     await tester.tap(find.text('Start'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('English').last);
+    await tester.tap(find.byKey(const Key('sim-entry-language-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English'));
     await tester.pumpAndSettle();
     expect(
       _textAny([
-        'What should we build together?',
-        'O que vamos construir juntos?',
+        'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
       ]),
       findsOneWidget,
     );
-    await tester.tap(find.byIcon(Icons.attach_file));
+    await tester.tap(find.text('Tenho material'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Attach file'));
+    await tester.ensureVisible(find.text('Livro/PDF'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Livro/PDF'));
     await tester.pumpAndSettle();
     expect(find.textContaining('lista-da-prova.pdf'), findsOneWidget);
     await tester.enterText(
-      find.byType(TextField).first,
+      find.byKey(const Key('sim-entry-material-notes')),
       'Quero estudar essa lista para a prova de matemática.',
     );
     await tester.pumpAndSettle();
-    Future<void> tapProgressiveContinue() async {
-      final arrow = find.byIcon(Icons.arrow_forward).last;
-      await tester.ensureVisible(arrow);
-      await tester.pumpAndSettle();
-      await tester.tap(arrow);
-      await tester.pumpAndSettle();
-    }
-
-    await tapProgressiveContinue();
-    expect(
-      _textAny([
-        'What should I call you? You can skip this.',
-        'Como devo chamar você? Pode pular se quiser.',
-      ]),
-      findsOneWidget,
-    );
-    await tapProgressiveContinue();
-    expect(find.text('What result do you want?'), findsOneWidget);
-    for (var i = 0; i < 6; i++) {
-      await tapProgressiveContinue();
-    }
     await tester.scrollUntilVisible(
-      find.text('Save and continue'),
+      find.text('Preparar minha aula'),
       320,
       scrollable: find.byType(Scrollable).last,
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Save and continue'));
+    await tester.tap(find.text('Preparar minha aula'));
     await tester.pump(const Duration(milliseconds: 220));
     expect(t00Called, isTrue, reason: 'clicar continuar deve iniciar T00');
     await tester.pump(const Duration(seconds: 1));
@@ -476,8 +427,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       _textAny([
-        'What should we build together?',
-        'O que vamos construir juntos?',
+        'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
       ]),
       findsOneWidget,
     );

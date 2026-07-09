@@ -43,7 +43,7 @@ void main() {
   test('device locale fallback only returns supported interface locales', () {
     expect(
       const SimLocaleSettings().resolveInterfaceLocale(const Locale('fr')),
-      'pt-BR',
+      'fr',
     );
     expect(
       const SimLocaleSettings().resolveInterfaceLocale(

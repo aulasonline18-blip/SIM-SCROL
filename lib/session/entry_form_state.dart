@@ -78,6 +78,16 @@ class EntryFormState extends ChangeNotifier {
   String studentProfileNotes = '';
   String? attachmentError;
   Map<String, String> guidedAnswers = {};
+  String ageRange = '';
+  String entryPath = '';
+  String materialType = '';
+  String subject = '';
+  String topic = '';
+  String academicLevel = '';
+  String countryCurriculum = '';
+  String deadline = '';
+  String difficulties = '';
+  String learningPreference = '';
 
   void updateFreeText(String value) {
     freeText = value.length > entryFormMaxFreeText
@@ -100,6 +110,124 @@ class EntryFormState extends ChangeNotifier {
       if (cleanValue.isNotEmpty) cleanKey: cleanValue,
     }..removeWhere((_, v) => v.trim().isEmpty);
     notifyListeners();
+  }
+
+  void updatePedagogicalField(String key, String value) {
+    final clean = value.trim();
+    switch (key) {
+      case 'age_range':
+        ageRange = clean;
+        break;
+      case 'entry_path':
+        entryPath = clean;
+        break;
+      case 'material_type':
+        materialType = clean;
+        break;
+      case 'subject':
+        subject = clean;
+        break;
+      case 'topic':
+        topic = clean;
+        break;
+      case 'academic_level':
+        academicLevel = clean;
+        break;
+      case 'country_curriculum':
+        countryCurriculum = clean;
+        break;
+      case 'deadline':
+        deadline = clean;
+        break;
+      case 'difficulties':
+        difficulties = clean;
+        break;
+      case 'learning_preference':
+        learningPreference = clean;
+        break;
+      default:
+        return;
+    }
+    notifyListeners();
+  }
+
+  Map<String, dynamic> buildPedagogicalFicha({
+    required String appLocale,
+    required String lessonLocale,
+    required String explanationLanguage,
+    String? targetLanguage,
+  }) {
+    final materialReceived = <String, dynamic>{
+      'types': [
+        if (materialType.trim().isNotEmpty) materialType.trim(),
+        for (final attachment in attachments) attachment.type,
+      ],
+      'attachments': [
+        for (final attachment in attachments)
+          {
+            'id': attachment.id,
+            'name': attachment.name,
+            'type': attachment.type,
+            'status': attachment.status,
+            if ((attachment.method ?? '').trim().isNotEmpty)
+              'method': attachment.method,
+          },
+      ],
+      if (attachmentsText.trim().isNotEmpty) 'extractedText': attachmentsText,
+      if (freeText.trim().isNotEmpty) 'freeText': freeText.trim(),
+    };
+    final ficha =
+        <String, dynamic>{
+          'preferred_name': preferredName.trim(),
+          'app_locale': appLocale,
+          'interfaceLocale': appLocale,
+          'lesson_locale': lessonLocale,
+          'learningLocale': lessonLocale,
+          'explanationLanguage': explanationLanguage,
+          if ((targetLanguage ?? '').trim().isNotEmpty)
+            'targetLanguage': targetLanguage!.trim(),
+          'age_range': ageRange.trim(),
+          'entry_path': entryPath.trim(),
+          'material_type': materialType.trim(),
+          'material_received': materialReceived,
+          'subject': subject.trim(),
+          'topic': topic.trim(),
+          'academic_level': academicLevel.trim(),
+          'country_curriculum': countryCurriculum.trim(),
+          'objective': freeText.trim(),
+          'deadline': deadline.trim(),
+          'difficulties': difficulties.trim(),
+          'learning_preference': learningPreference.trim(),
+        }..removeWhere((key, value) {
+          if (value == null) return true;
+          if (value is String) return value.trim().isEmpty;
+          if (value is List) return value.isEmpty;
+          if (value is Map) return value.isEmpty;
+          return false;
+        });
+    ficha['human_summary'] = humanPedagogicalSummary(ficha);
+    return ficha;
+  }
+
+  String humanPedagogicalSummary(Map<String, dynamic> ficha) {
+    final name = (ficha['preferred_name'] ?? '').toString().trim();
+    final age = (ficha['age_range'] ?? '').toString().trim();
+    final lesson = (ficha['lesson_locale'] ?? ficha['learningLocale'] ?? '')
+        .toString()
+        .trim();
+    final objective = (ficha['objective'] ?? '').toString().trim();
+    final deadlineValue = (ficha['deadline'] ?? '').toString().trim();
+    final difficulty = (ficha['difficulties'] ?? '').toString().trim();
+    final preference = (ficha['learning_preference'] ?? '').toString().trim();
+    return [
+      [name, age, lesson].where((value) => value.isNotEmpty).join(' · '),
+      if (objective.isNotEmpty)
+        deadlineValue.isEmpty
+            ? 'Objetivo: $objective'
+            : 'Objetivo: $objective · Prazo: $deadlineValue',
+      if (difficulty.isNotEmpty) 'Dificuldade: $difficulty',
+      if (preference.isNotEmpty) 'Preferencia: $preference',
+    ].where((line) => line.trim().isNotEmpty).join('\n');
   }
 
   void updateLanguage(String code, String name) {

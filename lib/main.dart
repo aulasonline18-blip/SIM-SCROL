@@ -268,9 +268,9 @@ class _SimAppState extends State<SimApp> {
       case '/login':
         screen = LoginScreen(session: session);
       case '/cyber/idioma':
-        screen = IdiomaScreen(session: session);
+        screen = ConversationalEntryScreen(session: session);
       case '/cyber/objeto':
-        screen = ObjetoScreen(session: session);
+        screen = ConversationalEntryScreen(session: session);
       case '/cyber/curriculo':
         screen = PhaseBoundaryScreen(session: session);
       case '/cyber/placement':
@@ -328,6 +328,9 @@ class _SimAppState extends State<SimApp> {
           Locale('pt', 'BR'),
           Locale('en'),
           Locale('es'),
+          Locale('fr'),
+          Locale('de'),
+          Locale('it'),
         ],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         themeMode: _darkMode ? ThemeMode.dark : ThemeMode.light,
@@ -348,7 +351,7 @@ Widget _guardActiveLesson(LabSession session, {required Widget child}) {
   if (guarded != child) return guarded;
   final id = session.lessonLocalId;
   if (id == null || id.trim().isEmpty) {
-    return ObjetoScreen(session: session);
+    return ConversationalEntryScreen(session: session);
   }
   return child;
 }

@@ -11,6 +11,8 @@ Locale get simActiveLocale => switch (_activeLanguageCode) {
   'pt' => const Locale('pt', 'BR'),
   'es' => const Locale('es'),
   'fr' => const Locale('fr'),
+  'de' => const Locale('de'),
+  'it' => const Locale('it'),
   'ja' => const Locale('ja'),
   _ => const Locale('en'),
 };
@@ -30,6 +32,12 @@ String normalizeSimLanguageCode(String? codeOrName) {
   if (raw == 'fr' || raw.contains('french') || raw.contains('français')) {
     return 'fr';
   }
+  if (raw == 'de' || raw.contains('german') || raw.contains('deutsch')) {
+    return 'de';
+  }
+  if (raw == 'it' || raw.contains('italian') || raw.contains('italiano')) {
+    return 'it';
+  }
   if (raw == 'ja' || raw.contains('japanese') || raw.contains('日本')) {
     return 'ja';
   }
@@ -46,6 +54,8 @@ String stableLangLabelFor(String code, String fallbackName) {
     'pt' => 'Portuguese',
     'es' => 'Spanish',
     'fr' => 'French',
+    'de' => 'German',
+    'it' => 'Italian',
     'ja' => 'Japanese',
     'en' => 'English',
     _ => fallbackName.trim().isEmpty ? 'English' : fallbackName.trim(),

@@ -2,7 +2,14 @@ import 'dart:ui';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-const List<String> simSupportedLocaleTags = ['pt-BR', 'en', 'es'];
+const List<String> simSupportedLocaleTags = [
+  'pt-BR',
+  'en',
+  'es',
+  'fr',
+  'de',
+  'it',
+];
 const String simDefaultInterfaceLocaleTag = 'pt-BR';
 const String simDefaultLearningLocaleTag = 'pt-BR';
 
@@ -136,6 +143,24 @@ String normalizeSimLocaleTag(String? raw) {
       value.contains('español')) {
     return 'es';
   }
+  if (value == 'fr' ||
+      value.startsWith('fr-') ||
+      value.contains('french') ||
+      value.contains('français')) {
+    return 'fr';
+  }
+  if (value == 'de' ||
+      value.startsWith('de-') ||
+      value.contains('german') ||
+      value.contains('deutsch')) {
+    return 'de';
+  }
+  if (value == 'it' ||
+      value.startsWith('it-') ||
+      value.contains('italian') ||
+      value.contains('italiano')) {
+    return 'it';
+  }
   return simDefaultInterfaceLocaleTag;
 }
 
@@ -143,6 +168,9 @@ String simLanguageNameForLocale(String? raw) {
   return switch (normalizeSimLocaleTag(raw)) {
     'en' => 'English',
     'es' => 'Spanish',
+    'fr' => 'French',
+    'de' => 'German',
+    'it' => 'Italian',
     _ => 'Portuguese',
   };
 }
@@ -166,6 +194,24 @@ String normalizeSimTargetLanguage(String? raw) {
       lower.contains('español')) {
     return 'Spanish';
   }
+  if (lower == 'fr' ||
+      lower.startsWith('fr-') ||
+      lower.contains('french') ||
+      lower.contains('français')) {
+    return 'French';
+  }
+  if (lower == 'de' ||
+      lower.startsWith('de-') ||
+      lower.contains('german') ||
+      lower.contains('deutsch')) {
+    return 'German';
+  }
+  if (lower == 'it' ||
+      lower.startsWith('it-') ||
+      lower.contains('italian') ||
+      lower.contains('italiano')) {
+    return 'Italian';
+  }
   return value;
 }
 
@@ -173,6 +219,9 @@ String simUiCodeForLocaleTag(String? raw) {
   return switch (normalizeSimLocaleTag(raw)) {
     'en' => 'en',
     'es' => 'es',
+    'fr' => 'fr',
+    'de' => 'de',
+    'it' => 'it',
     _ => 'pt',
   };
 }

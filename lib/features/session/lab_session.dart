@@ -235,6 +235,16 @@ class LabSession extends ChangeNotifier {
   String get studentProfileNotes => entryForm.studentProfileNotes;
   String? get attachmentError => entryForm.attachmentError;
   Map<String, String> get guidedAnswers => entryForm.guidedAnswers;
+  String get ageRange => entryForm.ageRange;
+  String get entryPath => entryForm.entryPath;
+  String get materialType => entryForm.materialType;
+  String get subject => entryForm.subject;
+  String get topic => entryForm.topic;
+  String get academicLevel => entryForm.academicLevel;
+  String get countryCurriculum => entryForm.countryCurriculum;
+  String get deadline => entryForm.deadline;
+  String get difficulties => entryForm.difficulties;
+  String get learningPreference => entryForm.learningPreference;
 
   String? get lessonLocalId => lessonUiState.lessonLocalId;
   set lessonLocalId(String? value) => lessonUiState.lessonLocalId = value;
@@ -644,6 +654,27 @@ class LabSession extends ChangeNotifier {
     entryForm.updateGuidedAnswer(key, value);
   }
 
+  void setPedagogicalEntryField(String key, String value) {
+    entryForm.updatePedagogicalField(key, value);
+  }
+
+  JsonMap buildPedagogicalFicha({String? objectiveOverride}) {
+    final previous = entryForm.freeText;
+    if (objectiveOverride != null) {
+      entryForm.freeText = objectiveOverride;
+    }
+    final ficha = entryForm.buildPedagogicalFicha(
+      appLocale: interfaceLocaleTag,
+      lessonLocale: learningLocaleTag,
+      explanationLanguage: explanationLanguage,
+      targetLanguage: localeContract.targetLanguage,
+    );
+    if (objectiveOverride != null) {
+      entryForm.freeText = previous;
+    }
+    return JsonMap.from(ficha);
+  }
+
   void addLabAttachment(String source) => entryForm.addLabAttachment(source);
 
   Future<String?> pickLabAttachment(String source) async {
@@ -738,13 +769,17 @@ class LabSession extends ChangeNotifier {
         ? freeTrim.substring(0, maxFreeText)
         : freeTrim;
     entryForm.attachmentsText = entryForm.buildAttachmentsText();
-    final guided = _guidedProfileFields(clipped);
+    final ficha = buildPedagogicalFicha(objectiveOverride: clipped);
+    final guided = _guidedProfileFields(clipped, ficha: ficha);
     final language = explanationLanguage;
     final id = _deriveLessonLocalId(clipped, learningLocaleTag);
     lessonLocalId = id;
     entryForm.studentProfileNotes = _studentProfileNotes(
       objective: clipped,
-      guidedSummary: guided['guided_summary']?.toString() ?? '',
+      guidedSummary:
+          (guided['human_entry_summary'] ?? guided['guided_summary'])
+              ?.toString() ??
+          '',
       attachments: attachmentsText,
     );
     entryForm.freeText = clipped;
@@ -817,7 +852,8 @@ class LabSession extends ChangeNotifier {
         }
       }
       debugPrint('[SIM] T00_STARTED lessonLocalId=$id');
-      final guidedProfile = _guidedProfileFields(freeText.trim());
+      final ficha = buildPedagogicalFicha();
+      final guidedProfile = _guidedProfileFields(freeText.trim(), ficha: ficha);
       final academic = _academicFromOnboarding(guidedProfile);
       final onboarding = <String, dynamic>{
         'objetivo': freeText.trim(),
@@ -832,6 +868,7 @@ class LabSession extends ChangeNotifier {
         'nivel': academic,
         'target_topic': freeText.trim(),
         'TARGET_TOPIC': freeText.trim(),
+        'pedagogical_entry_ficha': ficha,
         ...guidedProfile,
         if (preferredName.trim().isNotEmpty)
           'preferred_name': preferredName.trim(),
@@ -1136,7 +1173,7 @@ class LabSession extends ChangeNotifier {
     );
   }
 
-  JsonMap _guidedProfileFields(String objective) {
+  JsonMap _guidedProfileFields(String objective, {JsonMap ficha = const {}}) {
     final answers = guidedAnswers;
     String? value(String key) {
       final raw = answers[key]?.trim();
@@ -1144,10 +1181,10 @@ class LabSession extends ChangeNotifier {
     }
 
     final purpose = value('purpose');
-    final level = value('level');
-    final blocker = value('blocker');
-    final deadline = value('deadline');
-    final style = value('style');
+    final level = value('level') ?? _cleanOrNull(academicLevel);
+    final blocker = value('blocker') ?? _cleanOrNull(difficulties);
+    final deadline = value('deadline') ?? _cleanOrNull(this.deadline);
+    final style = value('style') ?? _cleanOrNull(learningPreference);
     final start = value('start');
 
     final summaryLines = [
@@ -1187,7 +1224,29 @@ class LabSession extends ChangeNotifier {
     }
     if (start != null) fields['prior_knowledge'] = start;
     if (answers.isNotEmpty) fields['guided_answers'] = JsonMap.from(answers);
+    if (ficha.isNotEmpty) {
+      fields['pedagogical_entry_ficha'] = ficha;
+      for (final key in const [
+        'entry_path',
+        'age_range',
+        'material_type',
+        'subject',
+        'topic',
+        'country_curriculum',
+        'human_summary',
+      ]) {
+        final value = ficha[key];
+        if (value != null && value.toString().trim().isNotEmpty) {
+          fields[key == 'human_summary' ? 'human_entry_summary' : key] = value;
+        }
+      }
+    }
     return fields;
+  }
+
+  String? _cleanOrNull(String value) {
+    final clean = value.trim();
+    return clean.isEmpty ? null : clean;
   }
 
   String _academicFromOnboarding(JsonMap guidedProfile) {
