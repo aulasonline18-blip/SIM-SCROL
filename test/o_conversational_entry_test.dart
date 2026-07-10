@@ -29,6 +29,51 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _completeProfileGroup(
+  WidgetTester tester, {
+  String name = 'Lucas',
+  String? age = '12',
+  List<String> difficulties = const ['Falta de base', 'Concentração'],
+  String? observation = 'Aprendo melhor com exemplos curtos.',
+}) async {
+  await tester.enterText(find.byKey(const Key('sim-entry-name-input')), name);
+  await tester.pumpAndSettle();
+  await _tapVisible(tester, find.byKey(const Key('sim-entry-name-submit')));
+
+  if (age == null) {
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-age-skip')));
+  } else {
+    await tester.enterText(find.byKey(const Key('sim-entry-age-input')), age);
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-age-submit')));
+  }
+
+  for (final difficulty in difficulties) {
+    await _tapVisible(tester, find.text(difficulty));
+  }
+  await _tapVisible(
+    tester,
+    find.byKey(const Key('sim-entry-difficulty-submit')),
+  );
+
+  if (observation == null) {
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('sim-entry-observation-skip')),
+    );
+  } else {
+    await tester.enterText(
+      find.byKey(const Key('sim-entry-observation-input')),
+      observation,
+    );
+    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('sim-entry-observation-submit')),
+    );
+  }
+}
+
 void main() {
   setUpAll(() async {
     final fontBytes = File(
@@ -129,12 +174,7 @@ void main() {
 
     await _pumpEntry(tester, session);
 
-    await tester.enterText(
-      find.byKey(const Key('sim-entry-name-input')),
-      'Lucas',
-    );
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.text('Criança'));
+    await _completeProfileGroup(tester);
     await _tapVisible(tester, find.text('Quero que o SIM monte'));
     await _tapVisible(tester, find.text('Matemática'));
     await tester.enterText(
@@ -150,7 +190,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await _tapVisible(tester, find.text('Esta semana'));
-    await _tapVisible(tester, find.text('Falta de base'));
+    await _tapVisible(tester, find.text('Falta de base').last);
     await _tapVisible(tester, find.text('Com imagem'));
 
     await _tapVisible(
@@ -158,15 +198,22 @@ void main() {
       find.byKey(const Key('sim-entry-prepare-button')),
     );
     await tester.pump(const Duration(milliseconds: 500));
-    if (capturedOnboarding == null) {
-      await session.launchExperience();
-    }
+    await tester.pumpAndSettle();
 
     final ficha =
         capturedOnboarding?['pedagogical_entry_ficha'] as Map<String, dynamic>?;
     expect(ficha, isNotNull);
     expect(ficha?['preferred_name'], 'Lucas');
-    expect(ficha?['age_range'], 'Criança');
+    expect(ficha?['student_age'], '12');
+    expect(ficha?['age_declared'], isTrue);
+    expect(ficha?['profile_difficulties'], contains('Falta de base'));
+    expect(ficha?['profile_difficulties'], contains('Concentração'));
+    expect(
+      ficha?['profile_observation'],
+      'Aprendo melhor com exemplos curtos.',
+    );
+    expect(ficha?['profile_summary'], contains('Lucas'));
+    expect(ficha?['initial_adaptation_guidance'], contains('Concentração'));
     expect(ficha?['entry_path'], 'sim_monta');
     expect(ficha?['subject'], 'Matemática');
     expect(ficha?['topic'], 'Frações equivalentes');
@@ -197,21 +244,61 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('SIM: Como posso chamar você?'), findsOneWidget);
-    expect(find.text('SIM: Quem vai estudar?'), findsOneWidget);
-    expect(find.text('Tenho material'), findsOneWidget);
-    expect(find.text('Quero que o SIM monte'), findsOneWidget);
+    expect(
+      find.text('SIM: Quer me dizer sua idade? Pode pular.'),
+      findsNothing,
+    );
+    expect(find.text('Tenho material'), findsNothing);
+    expect(find.text('Quero que o SIM monte'), findsNothing);
 
     await tester.enterText(
       find.byKey(const Key('sim-entry-name-input')),
       'Lucas',
     );
     await tester.pumpAndSettle();
-    await _tapVisible(tester, find.text('Adolescente'));
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-name-submit')));
+    expect(
+      find.text('SIM: Quer me dizer sua idade? Pode pular.'),
+      findsOneWidget,
+    );
+    expect(find.text('Tenho material'), findsNothing);
+    final nameField = tester.widget<TextField>(
+      find.byKey(const Key('sim-entry-name-input')),
+    );
+    expect(nameField.enabled, isFalse);
+
+    await tester.enterText(find.byKey(const Key('sim-entry-age-input')), '13');
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-age-submit')));
+    expect(
+      find.text('SIM: Quando você estuda, o que mais atrapalha?'),
+      findsOneWidget,
+    );
+    await _tapVisible(tester, find.text('Falta de base').last);
+    await _tapVisible(tester, find.text('Travo em exercícios'));
+    expect(session.profileDifficulties, contains('Falta de base'));
+    expect(session.profileDifficulties, contains('Travo em exercícios'));
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('sim-entry-difficulty-submit')),
+    );
+    expect(
+      find.text(
+        'SIM: Quer me contar algo que ajude o SIM a te orientar melhor?',
+      ),
+      findsOneWidget,
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('sim-entry-observation-skip')),
+    );
+    expect(find.text('Tenho material'), findsOneWidget);
+    expect(find.text('Quero que o SIM monte'), findsOneWidget);
     await _tapVisible(tester, find.text('Tenho material'));
     await _tapVisible(tester, find.text('Lista de exercícios'));
 
     expect(find.text('Lucas'), findsWidgets);
-    expect(find.text('Adolescente'), findsWidgets);
+    expect(find.text('13'), findsWidgets);
     expect(find.text('Caminho A:'), findsOneWidget);
     expect(find.text('Foto do caderno'), findsOneWidget);
     expect(find.text('Livro/PDF'), findsOneWidget);
@@ -222,6 +309,65 @@ void main() {
     expect(session.materialType, 'Lista de exercícios');
   });
 
+  testWidgets('O.9 ficha nao inventa idade nem observacao puladas', (
+    tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..route = '/cyber/idioma';
+
+    await _pumpEntry(tester, session);
+    await _completeProfileGroup(
+      tester,
+      age: null,
+      difficulties: const ['Não sei dizer'],
+      observation: null,
+    );
+
+    final ficha = session.buildPedagogicalFicha();
+    expect(ficha['preferred_name'], 'Lucas');
+    expect(ficha['age_declared'], isFalse);
+    expect(ficha.containsKey('student_age'), isFalse);
+    expect(ficha['profile_difficulties'], ['Não sei dizer']);
+    expect(ficha.containsKey('profile_observation'), isFalse);
+    expect(ficha['profile_summary'], isNot(contains('anos')));
+    expect(find.text('Tenho material'), findsOneWidget);
+  });
+
+  testWidgets('O.12 Grupo 1 quebra opcoes sem overflow em celular e tablet', (
+    tester,
+  ) async {
+    for (final size in [const Size(360, 900), const Size(920, 900)]) {
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..route = '/cyber/idioma';
+
+      await _pumpEntry(tester, session, size: size);
+      await tester.enterText(
+        find.byKey(const Key('sim-entry-name-input')),
+        'Lucas',
+      );
+      await tester.pumpAndSettle();
+      await _tapVisible(tester, find.byKey(const Key('sim-entry-name-submit')));
+      await tester.enterText(
+        find.byKey(const Key('sim-entry-age-input')),
+        '12',
+      );
+      await tester.pumpAndSettle();
+      await _tapVisible(tester, find.byKey(const Key('sim-entry-age-submit')));
+
+      expect(
+        find.text('SIM: Quando você estuda, o que mais atrapalha?'),
+        findsOneWidget,
+      );
+      expect(find.text('Não sei por onde começar'), findsOneWidget);
+      expect(find.text('Fico nervoso em prova'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('O.15 prova visual da timeline conversacional', (tester) async {
     final session = LabSession()
       ..authed = true
@@ -229,12 +375,7 @@ void main() {
       ..route = '/cyber/idioma';
 
     await _pumpEntry(tester, session, size: const Size(430, 3400));
-    await tester.enterText(
-      find.byKey(const Key('sim-entry-name-input')),
-      'Lucas',
-    );
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.text('Criança'));
+    await _completeProfileGroup(tester);
     await _tapVisible(tester, find.text('Quero que o SIM monte'));
     await _tapVisible(tester, find.text('Matemática'));
     await tester.enterText(
@@ -250,7 +391,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await _tapVisible(tester, find.text('Esta semana'));
-    await _tapVisible(tester, find.text('Falta de base'));
+    await _tapVisible(tester, find.text('Falta de base').last);
     await _tapVisible(tester, find.text('Com imagem'));
 
     await tester.pumpWidget(

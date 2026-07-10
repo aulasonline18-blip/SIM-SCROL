@@ -78,6 +78,14 @@ class EntryFormState extends ChangeNotifier {
   String studentProfileNotes = '';
   String? attachmentError;
   Map<String, String> guidedAnswers = {};
+  bool profileNameSubmitted = false;
+  bool profileAgeSubmitted = false;
+  bool profileDifficultiesSubmitted = false;
+  bool profileObservationSubmitted = false;
+  String studentAge = '';
+  bool ageNotDeclared = false;
+  List<String> profileDifficulties = [];
+  String profileObservation = '';
   String ageRange = '';
   String entryPath = '';
   String materialType = '';
@@ -98,6 +106,63 @@ class EntryFormState extends ChangeNotifier {
 
   void updatePreferredName(String value) {
     preferredName = value;
+    if (value.trim().isEmpty) profileNameSubmitted = false;
+    notifyListeners();
+  }
+
+  void submitProfileName() {
+    if (preferredName.trim().isEmpty) return;
+    profileNameSubmitted = true;
+    notifyListeners();
+  }
+
+  void updateStudentAge(String value) {
+    studentAge = value.trim();
+    if (studentAge.isNotEmpty) ageNotDeclared = false;
+    notifyListeners();
+  }
+
+  void submitStudentAge({bool notDeclared = false}) {
+    ageNotDeclared = notDeclared;
+    if (notDeclared) studentAge = '';
+    profileAgeSubmitted = true;
+    notifyListeners();
+  }
+
+  void toggleProfileDifficulty(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    if (clean == 'Não sei dizer') {
+      profileDifficulties = profileDifficulties.contains(clean) ? [] : [clean];
+    } else {
+      final next = profileDifficulties
+          .where((item) => item != 'Não sei dizer')
+          .toList();
+      if (next.contains(clean)) {
+        next.remove(clean);
+      } else {
+        next.add(clean);
+      }
+      profileDifficulties = next;
+    }
+    profileDifficultiesSubmitted = false;
+    notifyListeners();
+  }
+
+  void submitProfileDifficulties() {
+    if (profileDifficulties.isEmpty) return;
+    profileDifficultiesSubmitted = true;
+    notifyListeners();
+  }
+
+  void updateProfileObservation(String value) {
+    profileObservation = value.trim();
+    notifyListeners();
+  }
+
+  void submitProfileObservation({bool skipped = false}) {
+    if (skipped) profileObservation = '';
+    profileObservationSubmitted = true;
     notifyListeners();
   }
 
@@ -117,6 +182,13 @@ class EntryFormState extends ChangeNotifier {
     switch (key) {
       case 'age_range':
         ageRange = clean;
+        break;
+      case 'student_age':
+        studentAge = clean;
+        ageNotDeclared = false;
+        break;
+      case 'profile_observation':
+        profileObservation = clean;
         break;
       case 'entry_path':
         entryPath = clean;
@@ -187,6 +259,12 @@ class EntryFormState extends ChangeNotifier {
           if ((targetLanguage ?? '').trim().isNotEmpty)
             'targetLanguage': targetLanguage!.trim(),
           'age_range': ageRange.trim(),
+          'student_age': studentAge.trim(),
+          if (profileAgeSubmitted) 'age_declared': !ageNotDeclared,
+          'profile_difficulties': profileDifficulties,
+          'profile_observation': profileObservation.trim(),
+          'profile_summary': _profileSummary(),
+          'initial_adaptation_guidance': _initialAdaptationGuidance(),
           'entry_path': entryPath.trim(),
           'material_type': materialType.trim(),
           'material_received': materialReceived,
@@ -211,13 +289,20 @@ class EntryFormState extends ChangeNotifier {
 
   String humanPedagogicalSummary(Map<String, dynamic> ficha) {
     final name = (ficha['preferred_name'] ?? '').toString().trim();
-    final age = (ficha['age_range'] ?? '').toString().trim();
+    final age = (ficha['student_age'] ?? ficha['age_range'] ?? '')
+        .toString()
+        .trim();
     final lesson = (ficha['lesson_locale'] ?? ficha['learningLocale'] ?? '')
         .toString()
         .trim();
     final objective = (ficha['objective'] ?? '').toString().trim();
     final deadlineValue = (ficha['deadline'] ?? '').toString().trim();
-    final difficulty = (ficha['difficulties'] ?? '').toString().trim();
+    final profileDifficulty = ficha['profile_difficulties'] is List
+        ? (ficha['profile_difficulties'] as List).join(', ')
+        : '';
+    final difficulty = profileDifficulty.isNotEmpty
+        ? profileDifficulty
+        : (ficha['difficulties'] ?? '').toString().trim();
     final preference = (ficha['learning_preference'] ?? '').toString().trim();
     return [
       [name, age, lesson].where((value) => value.isNotEmpty).join(' · '),
@@ -228,6 +313,31 @@ class EntryFormState extends ChangeNotifier {
       if (difficulty.isNotEmpty) 'Dificuldade: $difficulty',
       if (preference.isNotEmpty) 'Preferencia: $preference',
     ].where((line) => line.trim().isNotEmpty).join('\n');
+  }
+
+  String _profileSummary() {
+    return [
+      if (preferredName.trim().isNotEmpty) 'Nome: ${preferredName.trim()}',
+      if (studentAge.trim().isNotEmpty) 'Idade: ${studentAge.trim()}',
+      if (ageNotDeclared) 'Idade: nao declarada',
+      if (profileDifficulties.isNotEmpty)
+        'Dificuldades: ${profileDifficulties.join(', ')}',
+      if (profileObservation.trim().isNotEmpty)
+        'Observacao: ${profileObservation.trim()}',
+    ].join('\n');
+  }
+
+  String _initialAdaptationGuidance() {
+    final guidance = <String>[
+      if (profileDifficulties.isNotEmpty)
+        'Adaptar condução para: ${profileDifficulties.join(', ')}.',
+      if (studentAge.trim().isNotEmpty)
+        'Considerar idade informada pelo aluno: ${studentAge.trim()}.',
+      if (ageNotDeclared) 'Não inferir idade; usar linguagem neutra.',
+      if (profileObservation.trim().isNotEmpty)
+        'Usar observação livre como contexto leve, sem diagnóstico.',
+    ];
+    return guidance.join(' ');
   }
 
   void updateLanguage(String code, String name) {

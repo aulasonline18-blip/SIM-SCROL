@@ -253,6 +253,11 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
   late final TextEditingController nameController = TextEditingController(
     text: widget.session.preferredName,
   );
+  late final TextEditingController ageController = TextEditingController(
+    text: widget.session.studentAge,
+  );
+  late final TextEditingController observationController =
+      TextEditingController(text: widget.session.profileObservation);
   late final TextEditingController objectiveController = TextEditingController(
     text: widget.session.freeText,
   );
@@ -271,6 +276,8 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
   @override
   void dispose() {
     nameController.dispose();
+    ageController.dispose();
+    observationController.dispose();
     objectiveController.dispose();
     materialNotesController.dispose();
     topicController.dispose();
@@ -300,6 +307,36 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
 
   void _setObjective(String value) {
     widget.session.setFreeText(value);
+    setState(() => error = null);
+  }
+
+  int _group1Step(LabSession session) {
+    if (!session.profileNameSubmitted) return 0;
+    if (!session.profileAgeSubmitted) return 1;
+    if (!session.profileDifficultiesSubmitted) return 2;
+    if (!session.profileObservationSubmitted) return 3;
+    return 4;
+  }
+
+  void _submitName() {
+    if (widget.session.preferredName.trim().isEmpty) return;
+    widget.session.submitProfileName();
+    setState(() => error = null);
+  }
+
+  void _submitAge({bool notDeclared = false}) {
+    widget.session.submitStudentAge(notDeclared: notDeclared);
+    setState(() => error = null);
+  }
+
+  void _submitDifficulties() {
+    widget.session.submitProfileDifficulties();
+    setState(() => error = null);
+  }
+
+  void _submitObservation({bool skipped = false}) {
+    widget.session.submitProfileObservation(skipped: skipped);
+    if (skipped) observationController.clear();
     setState(() => error = null);
   }
 
@@ -351,6 +388,8 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     final path = session.entryPath;
     final isMaterialPath = path == 'tenho_material';
     final isSimPath = path == 'sim_monta';
+    final group1Step = _group1Step(session);
+    final group1Complete = group1Step >= 4;
     return CyberStepShell(
       step: 1,
       total: 5,
@@ -378,122 +417,118 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
           ),
           _TimelineTurn(
             number: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SimChatBubble(text: 'SIM: Como posso chamar você?'),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SimInput(
-                        key: const Key('sim-entry-name-input'),
-                        hint: 'Lucas',
-                        controller: nameController,
-                        onChanged: (value) {
-                          session.setPreferredName(value);
-                          setState(() {});
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () {
-                        nameController.clear();
-                        session.setPreferredName('');
-                        setState(() {});
-                      },
-                      child: const Text('Pular'),
-                    ),
-                  ],
-                ),
-                if (session.preferredName.trim().isNotEmpty)
-                  _StudentAnswerBubble(text: session.preferredName.trim()),
-              ],
+            child: _ProfileNameCard(
+              controller: nameController,
+              active: group1Step == 0,
+              completed: session.profileNameSubmitted,
+              onChanged: (value) {
+                session.setPreferredName(value);
+                setState(() {});
+              },
+              onSubmit: _submitName,
             ),
           ),
-          _TimelineTurn(
-            number: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SimChatBubble(text: 'SIM: Quem vai estudar?'),
-                const SizedBox(height: 10),
-                SimChatChoiceWrap(
-                  children: [
-                    for (final option in const [
-                      'Criança',
-                      'Adolescente',
-                      'Adulto',
-                      'Prefiro não dizer',
-                    ])
-                      SimChatChoiceChip(
-                        label: option,
-                        selected: session.ageRange == option,
-                        onTap: () => _setEntryField('age_range', option),
-                      ),
-                  ],
-                ),
-                if (session.ageRange.isNotEmpty)
-                  _StudentAnswerBubble(text: session.ageRange),
-              ],
+          if (group1Step >= 1)
+            _TimelineTurn(
+              number: 3,
+              child: _ProfileAgeCard(
+                controller: ageController,
+                active: group1Step == 1,
+                completed: session.profileAgeSubmitted,
+                ageNotDeclared: session.ageNotDeclared,
+                onChanged: (value) {
+                  session.setStudentAge(value);
+                  setState(() {});
+                },
+                onSubmit: () => _submitAge(),
+                onSkip: () => _submitAge(notDeclared: true),
+              ),
             ),
-          ),
-          _TimelineTurn(
-            number: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SimChatBubble(
-                  text:
-                      'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
-                ),
-                const SizedBox(height: 12),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final narrow = constraints.maxWidth < 520;
-                    final materialButton = _EntryPathButton(
-                      icon: Icons.photo_camera_outlined,
-                      title: 'Tenho material',
-                      subtitle: 'Tutor particular com material',
-                      selected: isMaterialPath,
-                      onTap: () =>
-                          _setEntryField('entry_path', 'tenho_material'),
-                    );
-                    final simButton = _EntryPathButton(
-                      icon: Icons.account_tree_outlined,
-                      title: 'Quero que o SIM monte',
-                      subtitle: 'SIM monta a travessia',
-                      selected: isSimPath,
-                      onTap: () => _setEntryField('entry_path', 'sim_monta'),
-                    );
-                    if (narrow) {
-                      return Column(
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: materialButton,
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(width: double.infinity, child: simButton),
-                        ],
-                      );
-                    }
-                    return Row(
-                      children: [
-                        Expanded(child: materialButton),
-                        const SizedBox(width: 10),
-                        Expanded(child: simButton),
-                      ],
-                    );
-                  },
-                ),
-              ],
+          if (group1Step >= 2)
+            _TimelineTurn(
+              number: 4,
+              child: _ProfileDifficultiesCard(
+                selected: session.profileDifficulties,
+                active: group1Step == 2,
+                completed: session.profileDifficultiesSubmitted,
+                onToggle: (value) {
+                  session.toggleProfileDifficulty(value);
+                  setState(() {});
+                },
+                onSubmit: _submitDifficulties,
+              ),
             ),
-          ),
-          if (isMaterialPath)
+          if (group1Step >= 3)
             _TimelineTurn(
               number: 5,
+              child: _ProfileObservationCard(
+                controller: observationController,
+                active: group1Step == 3,
+                completed: session.profileObservationSubmitted,
+                onChanged: (value) {
+                  session.setProfileObservation(value);
+                  setState(() {});
+                },
+                onSubmit: () => _submitObservation(),
+                onSkip: () => _submitObservation(skipped: true),
+              ),
+            ),
+          if (group1Complete)
+            _TimelineTurn(
+              number: 6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SimChatBubble(
+                    text:
+                        'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
+                  ),
+                  const SizedBox(height: 12),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final narrow = constraints.maxWidth < 520;
+                      final materialButton = _EntryPathButton(
+                        icon: Icons.photo_camera_outlined,
+                        title: 'Tenho material',
+                        subtitle: 'Tutor particular com material',
+                        selected: isMaterialPath,
+                        onTap: () =>
+                            _setEntryField('entry_path', 'tenho_material'),
+                      );
+                      final simButton = _EntryPathButton(
+                        icon: Icons.account_tree_outlined,
+                        title: 'Quero que o SIM monte',
+                        subtitle: 'SIM monta a travessia',
+                        selected: isSimPath,
+                        onTap: () => _setEntryField('entry_path', 'sim_monta'),
+                      );
+                      if (narrow) {
+                        return Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: materialButton,
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(width: double.infinity, child: simButton),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: materialButton),
+                          const SizedBox(width: 10),
+                          Expanded(child: simButton),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          if (group1Complete && isMaterialPath)
+            _TimelineTurn(
+              number: 7,
               child: _MaterialPathCard(
                 session: session,
                 attachmentMenuOpen: attachmentMenuOpen,
@@ -510,9 +545,9 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                     setState(() => session.removeAttachment(index)),
               ),
             ),
-          if (isSimPath)
+          if (group1Complete && isSimPath)
             _TimelineTurn(
-              number: 5,
+              number: 7,
               child: _SimBuildPathCard(
                 session: session,
                 objectiveController: objectiveController,
@@ -521,28 +556,30 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 onObjectiveChanged: _setObjective,
               ),
             ),
-          _TimelineTurn(
-            number: 6,
-            child: _FichaSummaryCard(
-              ficha: ficha,
-              canPrepare: canPrepare,
-              sending: sending,
-              error: error == null ? null : t(error!),
-              onPrepare: _prepareLesson,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 44),
-            child: Text(
-              'Uma timeline. Duas entradas fortes. Uma ficha pedagógica estruturada.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: palette.muted,
-                fontSize: 14,
-                height: 1.35,
+          if (group1Complete)
+            _TimelineTurn(
+              number: 8,
+              child: _FichaSummaryCard(
+                ficha: ficha,
+                canPrepare: canPrepare,
+                sending: sending,
+                error: error == null ? null : t(error!),
+                onPrepare: _prepareLesson,
               ),
             ),
-          ),
+          if (group1Complete)
+            Padding(
+              padding: const EdgeInsets.only(left: 44),
+              child: Text(
+                'Uma timeline. Duas entradas fortes. Uma ficha pedagógica estruturada.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: palette.muted,
+                  fontSize: 14,
+                  height: 1.35,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -714,34 +751,377 @@ class _LanguageSelector extends StatelessWidget {
   }
 }
 
-class _StudentAnswerBubble extends StatelessWidget {
-  const _StudentAnswerBubble({required this.text});
+class _ProfileNameCard extends StatelessWidget {
+  const _ProfileNameCard({
+    required this.controller,
+    required this.active,
+    required this.completed,
+    required this.onChanged,
+    required this.onSubmit,
+  });
 
-  final String text;
+  final TextEditingController controller;
+  final bool active;
+  final bool completed;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SequentialProfileCard(
+      question: 'Como posso chamar você?',
+      active: active,
+      completed: completed,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              key: const Key('sim-entry-name-input'),
+              controller: controller,
+              enabled: active && !completed,
+              decoration: const InputDecoration(
+                hintText: 'Digite nome ou apelido...',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: onChanged,
+            ),
+          ),
+          const SizedBox(width: 8),
+          _InlineSendButton(
+            key: const Key('sim-entry-name-submit'),
+            enabled: active && !completed && controller.text.trim().isNotEmpty,
+            onPressed: onSubmit,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileAgeCard extends StatelessWidget {
+  const _ProfileAgeCard({
+    required this.controller,
+    required this.active,
+    required this.completed,
+    required this.ageNotDeclared,
+    required this.onChanged,
+    required this.onSubmit,
+    required this.onSkip,
+  });
+
+  final TextEditingController controller;
+  final bool active;
+  final bool completed;
+  final bool ageNotDeclared;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onSubmit;
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SequentialProfileCard(
+      question: 'Quer me dizer sua idade? Pode pular.',
+      active: active,
+      completed: completed,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('sim-entry-age-input'),
+                  controller: controller,
+                  enabled: active && !completed && !ageNotDeclared,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: ageNotDeclared
+                        ? 'Prefiro não declarar'
+                        : 'Digite sua idade...',
+                    border: const OutlineInputBorder(),
+                  ),
+                  onChanged: onChanged,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _InlineSendButton(
+                key: const Key('sim-entry-age-submit'),
+                enabled:
+                    active &&
+                    !completed &&
+                    (controller.text.trim().isNotEmpty || ageNotDeclared),
+                onPressed: onSubmit,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            key: const Key('sim-entry-age-skip'),
+            onPressed: active && !completed ? onSkip : null,
+            child: const Text('Prefiro não declarar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileDifficultiesCard extends StatelessWidget {
+  const _ProfileDifficultiesCard({
+    required this.selected,
+    required this.active,
+    required this.completed,
+    required this.onToggle,
+    required this.onSubmit,
+  });
+
+  static const options = [
+    'Falta de base',
+    'Concentração',
+    'Esqueço rápido',
+    'Travo em exercícios',
+    'Leio e não entendo',
+    'Fico nervoso em prova',
+    'Erro conta',
+    'Não sei por onde começar',
+    'Não sei dizer',
+  ];
+
+  final List<String> selected;
+  final bool active;
+  final bool completed;
+  final ValueChanged<String> onToggle;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SequentialProfileCard(
+      question: 'Quando você estuda, o que mais atrapalha?',
+      active: active,
+      completed: completed,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final option in options)
+                _CompactCheckOption(
+                  label: option,
+                  selected: selected.contains(option),
+                  enabled: active && !completed,
+                  onTap: () => onToggle(option),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _InlineSendButton(
+              key: const Key('sim-entry-difficulty-submit'),
+              enabled: active && !completed && selected.isNotEmpty,
+              onPressed: onSubmit,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileObservationCard extends StatelessWidget {
+  const _ProfileObservationCard({
+    required this.controller,
+    required this.active,
+    required this.completed,
+    required this.onChanged,
+    required this.onSubmit,
+    required this.onSkip,
+  });
+
+  final TextEditingController controller;
+  final bool active;
+  final bool completed;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onSubmit;
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SequentialProfileCard(
+      question: 'Quer me contar algo que ajude o SIM a te orientar melhor?',
+      active: active,
+      completed: completed,
+      child: Column(
+        children: [
+          TextField(
+            key: const Key('sim-entry-observation-input'),
+            controller: controller,
+            enabled: active && !completed,
+            minLines: 1,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Escreva do seu jeito...',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: onChanged,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              TextButton(
+                key: const Key('sim-entry-observation-skip'),
+                onPressed: active && !completed ? onSkip : null,
+                child: const Text('Pular'),
+              ),
+              const Spacer(),
+              _InlineSendButton(
+                key: const Key('sim-entry-observation-submit'),
+                enabled: active && !completed,
+                onPressed: onSubmit,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SequentialProfileCard extends StatelessWidget {
+  const _SequentialProfileCard({
+    required this.question,
+    required this.active,
+    required this.completed,
+    required this.child,
+  });
+
+  final String question;
+  final bool active;
+  final bool completed;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: palette.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: palette.primary.withValues(alpha: 0.35)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Text(
-              text,
-              style: TextStyle(
-                color: palette.text,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
+    final content = SimChatInputCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'SIM: $question',
+            style: TextStyle(
+              color: palette.text,
+              fontSize: 16,
+              height: 1.28,
+              fontWeight: FontWeight.w900,
             ),
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+    return Opacity(
+      opacity: completed ? 0.55 : 1,
+      child: IgnorePointer(ignoring: completed, child: content),
+    );
+  }
+}
+
+class _InlineSendButton extends StatelessWidget {
+  const _InlineSendButton({
+    required this.enabled,
+    required this.onPressed,
+    super.key,
+  });
+
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return IconButton.filled(
+      tooltip: 'Enviar resposta',
+      onPressed: enabled ? onPressed : null,
+      icon: const Icon(Icons.arrow_forward),
+      color: palette.onPrimary,
+      style: IconButton.styleFrom(
+        backgroundColor: palette.primary,
+        disabledBackgroundColor: palette.surfaceSoft,
+        minimumSize: const Size(SimTouch.min, SimTouch.min),
+      ),
+    );
+  }
+}
+
+class _CompactCheckOption extends StatelessWidget {
+  const _CompactCheckOption({
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Material(
+      color: selected
+          ? palette.primary.withValues(alpha: 0.08)
+          : palette.surface,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 34),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected ? palette.primary : palette.border,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 13,
+                height: 13,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected ? palette.primary : palette.muted,
+                    width: 1.4,
+                  ),
+                  color: selected ? palette.primary : Colors.transparent,
+                ),
+                child: selected
+                    ? Icon(Icons.check, size: 9, color: palette.onPrimary)
+                    : null,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  softWrap: true,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

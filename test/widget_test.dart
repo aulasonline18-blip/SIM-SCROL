@@ -19,6 +19,34 @@ Finder _textAny(List<String> labels) {
   return find.text(labels.first);
 }
 
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _completeProfileGroup(WidgetTester tester) async {
+  await tester.enterText(
+    find.byKey(const Key('sim-entry-name-input')),
+    'Lucas',
+  );
+  await tester.pumpAndSettle();
+  await _tapVisible(tester, find.byKey(const Key('sim-entry-name-submit')));
+  await tester.enterText(find.byKey(const Key('sim-entry-age-input')), '12');
+  await tester.pumpAndSettle();
+  await _tapVisible(tester, find.byKey(const Key('sim-entry-age-submit')));
+  await _tapVisible(tester, find.text('Falta de base'));
+  await _tapVisible(
+    tester,
+    find.byKey(const Key('sim-entry-difficulty-submit')),
+  );
+  await _tapVisible(
+    tester,
+    find.byKey(const Key('sim-entry-observation-skip')),
+  );
+}
+
 void main() {
   setUp(() => setSimActiveLanguage('en'));
 
@@ -49,12 +77,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatAulaScreen), findsNothing);
-    expect(
-      _textAny([
-        'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
-      ]),
-      findsOneWidget,
-    );
+    expect(find.text('SIM: Como posso chamar você?'), findsOneWidget);
   });
 
   testWidgets('Portal shows SIM entry point', (WidgetTester tester) async {
@@ -112,13 +135,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Português').last);
     await tester.pumpAndSettle();
+    expect(find.text('SIM: Como posso chamar você?'), findsOneWidget);
     expect(
       find.text(
         'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
       ),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(_textAny(['Tenho material', 'Quero que o SIM monte']), findsWidgets);
     expect(session.learningLocaleTag, 'pt-BR');
     expect(session.explanationLanguage, 'Portuguese');
   });
@@ -220,18 +243,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('English'));
     await tester.pumpAndSettle();
-    expect(
-      _textAny([
-        'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
-      ]),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Tenho material'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Livro/PDF'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Livro/PDF'));
-    await tester.pumpAndSettle();
+    await _completeProfileGroup(tester);
+    await _tapVisible(tester, find.text('Tenho material'));
+    await _tapVisible(tester, find.text('Livro/PDF'));
     expect(find.textContaining('lista-da-prova.pdf'), findsOneWidget);
     await tester.enterText(
       find.byKey(const Key('sim-entry-material-notes')),
@@ -425,12 +439,7 @@ void main() {
     expect(find.text('Volte e monte um novo currículo.'), findsOneWidget);
     await tester.tap(find.text('Voltar ao currículo'));
     await tester.pumpAndSettle();
-    expect(
-      _textAny([
-        'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
-      ]),
-      findsOneWidget,
-    );
+    expect(find.text('SIM: Como posso chamar você?'), findsOneWidget);
   });
 
   testWidgets('Drawer lista, busca, renomeia e apaga aulas locais', (

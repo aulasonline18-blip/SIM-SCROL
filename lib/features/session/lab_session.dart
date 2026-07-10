@@ -235,6 +235,15 @@ class LabSession extends ChangeNotifier {
   String get studentProfileNotes => entryForm.studentProfileNotes;
   String? get attachmentError => entryForm.attachmentError;
   Map<String, String> get guidedAnswers => entryForm.guidedAnswers;
+  bool get profileNameSubmitted => entryForm.profileNameSubmitted;
+  bool get profileAgeSubmitted => entryForm.profileAgeSubmitted;
+  bool get profileDifficultiesSubmitted =>
+      entryForm.profileDifficultiesSubmitted;
+  bool get profileObservationSubmitted => entryForm.profileObservationSubmitted;
+  String get studentAge => entryForm.studentAge;
+  bool get ageNotDeclared => entryForm.ageNotDeclared;
+  List<String> get profileDifficulties => entryForm.profileDifficulties;
+  String get profileObservation => entryForm.profileObservation;
   String get ageRange => entryForm.ageRange;
   String get entryPath => entryForm.entryPath;
   String get materialType => entryForm.materialType;
@@ -649,6 +658,24 @@ class LabSession extends ChangeNotifier {
   void setFreeText(String value) => entryForm.updateFreeText(value);
 
   void setPreferredName(String value) => entryForm.updatePreferredName(value);
+
+  void submitProfileName() => entryForm.submitProfileName();
+
+  void setStudentAge(String value) => entryForm.updateStudentAge(value);
+
+  void submitStudentAge({bool notDeclared = false}) =>
+      entryForm.submitStudentAge(notDeclared: notDeclared);
+
+  void toggleProfileDifficulty(String value) =>
+      entryForm.toggleProfileDifficulty(value);
+
+  void submitProfileDifficulties() => entryForm.submitProfileDifficulties();
+
+  void setProfileObservation(String value) =>
+      entryForm.updateProfileObservation(value);
+
+  void submitProfileObservation({bool skipped = false}) =>
+      entryForm.submitProfileObservation(skipped: skipped);
 
   void setGuidedAnswer(String key, String value) {
     entryForm.updateGuidedAnswer(key, value);
