@@ -58,6 +58,165 @@ List<CurriculumItem> normalizeCurriculumItems(Object? raw) {
   return out;
 }
 
+List<CurriculumItem> dedupeCurriculumBatchItems(List<CurriculumItem> items) {
+  final seenMarkers = <String>{};
+  final seenGlobalIndexes = <int>{};
+  final out = <CurriculumItem>[];
+  for (final item in items) {
+    final markerKey = item.marker.trim().toLowerCase();
+    final globalIndex = _intFrom(item.extra['global_item_index']);
+    if (markerKey.isNotEmpty && seenMarkers.contains(markerKey)) {
+      continue;
+    }
+    if (globalIndex != null && seenGlobalIndexes.contains(globalIndex)) {
+      continue;
+    }
+    if (markerKey.isNotEmpty) seenMarkers.add(markerKey);
+    if (globalIndex != null) seenGlobalIndexes.add(globalIndex);
+    out.add(item);
+  }
+  return out;
+}
+
+CurriculumGlobalPlan? normalizeCurriculumGlobalPlan({
+  required Object? rawCurriculum,
+  required Object? rawQualityCheck,
+  required int localItemCount,
+}) {
+  final fromCurriculum = _planMapFrom(rawCurriculum);
+  if (fromCurriculum != null) {
+    return CurriculumGlobalPlan.fromJson(fromCurriculum, localItemCount);
+  }
+  final fromQuality = _planMapFrom(rawQualityCheck);
+  if (fromQuality != null) {
+    return CurriculumGlobalPlan.fromJson(fromQuality, localItemCount);
+  }
+  return null;
+}
+
+JsonMap? buildCurriculumContinuationRequest(StudentLearningState state) {
+  final curriculum = state.curriculum;
+  final plan = curriculum?.globalPlan;
+  if (curriculum == null || plan == null || !plan.continuationNeeded) {
+    return null;
+  }
+  final next = plan.nextGlobalItemToRequest;
+  if (next == null || next <= plan.batchEndItem) return null;
+  return {
+    'lessonLocalId': state.lessonLocalId,
+    'topic': curriculum.topic,
+    'partNumber': (plan.partNumber ?? 1) + 1,
+    'previousBatch': {
+      'start': plan.batchStartItem,
+      'end': plan.batchEndItem,
+      'items': curriculum.items.length,
+    },
+    'nextGlobalItemToRequest': next,
+    'globalTotalItems': plan.globalTotalItems,
+    'unitsPending': plan.unitsPending,
+    'continuationInstruction': plan.continuationInstruction,
+    'profile': state.profile.toJson(),
+  };
+}
+
+JsonMap? _planMapFrom(Object? value) {
+  if (value is! Map) return null;
+  final map = JsonMap.from(value);
+  final direct =
+      map['curriculum_plan'] ?? map['globalPlan'] ?? map['global_plan'];
+  if (direct is Map) return JsonMap.from(direct);
+  final values = map['values'];
+  if (values is Map) return _planMapFromQualityValues(JsonMap.from(values));
+  return _planMapFromQualityValues(map);
+}
+
+JsonMap? _planMapFromQualityValues(JsonMap values) {
+  String pick(String key) {
+    final direct = values[key];
+    if (direct != null && direct.toString().trim().isNotEmpty) {
+      return direct.toString().trim();
+    }
+    for (final entry in values.entries) {
+      if (entry.key.toLowerCase() == key.toLowerCase() &&
+          entry.value.toString().trim().isNotEmpty) {
+        return entry.value.toString().trim();
+      }
+    }
+    return '';
+  }
+
+  final estimated = pick('Estimated global total items');
+  final limit = pick('Operational batch limit used');
+  final range = pick('Current batch global range');
+  final part = pick('Current part title/number');
+  final covered = pick('Units covered in this batch');
+  final pending = pick('Units pending after this batch');
+  final next = pick('Next global item to request');
+  final continuation = pick('Continuation needed');
+  final instruction = pick('Continuation instruction for software');
+  if ([
+    estimated,
+    limit,
+    range,
+    part,
+    covered,
+    pending,
+    next,
+    continuation,
+    instruction,
+  ].every((value) => value.isEmpty)) {
+    return null;
+  }
+  final parsedRange = _rangeFrom(range);
+  return {
+    'globalTotalItems': _intFrom(estimated),
+    'operationalBatchLimit': _intFrom(limit),
+    'batchStartItem': parsedRange.$1,
+    'batchEndItem': parsedRange.$2,
+    'partNumber': _intFrom(part),
+    'partTitle': part,
+    'unitsCovered': covered,
+    'unitsPending': pending,
+    'nextGlobalItemToRequest': _intFrom(next),
+    'continuationNeeded': _boolFrom(continuation),
+    'continuationInstruction': instruction,
+  }..removeWhere((_, value) => value == null || value == '');
+}
+
+int? _intFrom(Object? value) {
+  if (value is num) return value.toInt();
+  final match = RegExp(r'\d+').firstMatch(value?.toString() ?? '');
+  return match == null ? null : int.tryParse(match.group(0)!);
+}
+
+(int?, int?) _rangeFrom(String value) {
+  final match = RegExp(
+    r'(\d+)\s*(?:-|–|—|to|até|a)\s*(\d+)',
+    caseSensitive: false,
+  ).firstMatch(value);
+  if (match == null) return (null, null);
+  return (int.tryParse(match.group(1)!), int.tryParse(match.group(2)!));
+}
+
+bool? _boolFrom(String value) {
+  final clean = value.trim().toLowerCase();
+  if ([
+    'yes',
+    'sim',
+    'true',
+    'required',
+    'necessaria',
+    'necessária',
+    'needed',
+  ].any(clean.contains)) {
+    return true;
+  }
+  if (['no', 'não', 'nao', 'false', 'none', 'not needed'].any(clean.contains)) {
+    return false;
+  }
+  return null;
+}
+
 String _firstText(
   Object? a,
   Object? b,

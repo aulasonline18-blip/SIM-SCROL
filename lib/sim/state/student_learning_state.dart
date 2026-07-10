@@ -1,5 +1,19 @@
 typedef JsonMap = Map<String, dynamic>;
 
+int? _intValue(Object? value) {
+  if (value is num) return value.toInt();
+  if (value is String) {
+    final match = RegExp(r'\d+').firstMatch(value);
+    return match == null ? null : int.tryParse(match.group(0)!);
+  }
+  return null;
+}
+
+String? _stringValue(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
 const int studentLearningStateSchemaVersion = 1;
 const String studentLearningStateKey = 'sim-student-learning-state-v1';
 
@@ -191,6 +205,110 @@ class CurriculumItem {
   );
 }
 
+class CurriculumGlobalPlan {
+  const CurriculumGlobalPlan({
+    required this.globalTotalItems,
+    required this.batchStartItem,
+    required this.batchEndItem,
+    this.operationalBatchLimit,
+    this.partNumber,
+    this.partTitle,
+    this.unitsCovered,
+    this.unitsPending,
+    this.nextGlobalItemToRequest,
+    this.continuationNeeded = false,
+    this.continuationInstruction,
+  });
+
+  final int globalTotalItems;
+  final int batchStartItem;
+  final int batchEndItem;
+  final int? operationalBatchLimit;
+  final int? partNumber;
+  final String? partTitle;
+  final String? unitsCovered;
+  final String? unitsPending;
+  final int? nextGlobalItemToRequest;
+  final bool continuationNeeded;
+  final String? continuationInstruction;
+
+  int globalItemNumberForLocalIndex(int localIndex) {
+    return batchStartItem + localIndex.clamp(0, batchSize).toInt();
+  }
+
+  int get batchSize {
+    final size = batchEndItem - batchStartItem + 1;
+    return size > 0 ? size : 0;
+  }
+
+  bool get isMultiPart {
+    return globalTotalItems > batchEndItem ||
+        continuationNeeded ||
+        (partNumber ?? 1) > 1;
+  }
+
+  String get displayPartTitle {
+    final clean = partTitle?.trim();
+    if (clean != null && clean.isNotEmpty) return clean;
+    final number = partNumber ?? 1;
+    return 'Parte $number';
+  }
+
+  JsonMap toJson() => {
+    'globalTotalItems': globalTotalItems,
+    'batchStartItem': batchStartItem,
+    'batchEndItem': batchEndItem,
+    if (operationalBatchLimit != null)
+      'operationalBatchLimit': operationalBatchLimit,
+    if (partNumber != null) 'partNumber': partNumber,
+    if (partTitle != null) 'partTitle': partTitle,
+    if (unitsCovered != null) 'unitsCovered': unitsCovered,
+    if (unitsPending != null) 'unitsPending': unitsPending,
+    if (nextGlobalItemToRequest != null)
+      'nextGlobalItemToRequest': nextGlobalItemToRequest,
+    'continuationNeeded': continuationNeeded,
+    if (continuationInstruction != null)
+      'continuationInstruction': continuationInstruction,
+  };
+
+  factory CurriculumGlobalPlan.fromJson(JsonMap json, int localItemCount) {
+    final globalTotal =
+        _intValue(
+          json['globalTotalItems'] ??
+              json['global_total_items'] ??
+              json['estimatedGlobalTotalItems'] ??
+              json['estimated_global_total_items'],
+        ) ??
+        localItemCount;
+    final start =
+        _intValue(json['batchStartItem'] ?? json['batch_start_item']) ?? 1;
+    final end =
+        _intValue(json['batchEndItem'] ?? json['batch_end_item']) ??
+        (start + localItemCount - 1);
+    return CurriculumGlobalPlan(
+      globalTotalItems: globalTotal,
+      operationalBatchLimit: _intValue(
+        json['operationalBatchLimit'] ?? json['operational_batch_limit'],
+      ),
+      batchStartItem: start,
+      batchEndItem: end,
+      partNumber: _intValue(json['partNumber'] ?? json['part_number']),
+      partTitle: _stringValue(json['partTitle'] ?? json['part_title']),
+      unitsCovered: _stringValue(json['unitsCovered'] ?? json['units_covered']),
+      unitsPending: _stringValue(json['unitsPending'] ?? json['units_pending']),
+      nextGlobalItemToRequest: _intValue(
+        json['nextGlobalItemToRequest'] ?? json['next_global_item_to_request'],
+      ),
+      continuationNeeded:
+          json['continuationNeeded'] == true ||
+          json['continuation_needed'] == true,
+      continuationInstruction: _stringValue(
+        json['continuationInstruction'] ?? json['continuation_instruction'],
+      ),
+    );
+  }
+}
+
 class StudentCurriculum {
   const StudentCurriculum({
     required this.topic,
@@ -198,6 +316,7 @@ class StudentCurriculum {
     required this.generatedAt,
     required this.provisional,
     required this.items,
+    this.globalPlan,
   });
 
   final String topic;
@@ -205,6 +324,18 @@ class StudentCurriculum {
   final int? generatedAt;
   final bool provisional;
   final List<CurriculumItem> items;
+  final CurriculumGlobalPlan? globalPlan;
+
+  int get displayTotalItems => globalPlan?.globalTotalItems ?? totalItems;
+
+  int displayItemNumberForLocalIndex(int localIndex) {
+    return globalPlan?.globalItemNumberForLocalIndex(localIndex) ??
+        (localIndex + 1);
+  }
+
+  bool get isPartOfGlobalPlan => globalPlan?.isMultiPart == true;
+
+  String get displayPartTitle => globalPlan?.displayPartTitle ?? '';
 
   JsonMap toJson() => {
     'topic': topic,
@@ -212,6 +343,7 @@ class StudentCurriculum {
     'generatedAt': generatedAt,
     'provisional': provisional,
     'items': items.map((item) => item.toJson()).toList(),
+    if (globalPlan != null) 'globalPlan': globalPlan!.toJson(),
   };
 
   factory StudentCurriculum.fromJson(JsonMap json) {
@@ -219,12 +351,20 @@ class StudentCurriculum {
         .whereType<Map>()
         .map((item) => CurriculumItem.fromJson(JsonMap.from(item)))
         .toList();
+    final rawGlobalPlan =
+        json['globalPlan'] ?? json['global_plan'] ?? json['curriculum_plan'];
     return StudentCurriculum(
       topic: (json['topic'] ?? '').toString(),
       totalItems: (json['totalItems'] as num?)?.toInt() ?? items.length,
       generatedAt: (json['generatedAt'] as num?)?.toInt(),
       provisional: json['provisional'] == true,
       items: items,
+      globalPlan: rawGlobalPlan is Map
+          ? CurriculumGlobalPlan.fromJson(
+              JsonMap.from(rawGlobalPlan),
+              items.length,
+            )
+          : null,
     );
   }
 }

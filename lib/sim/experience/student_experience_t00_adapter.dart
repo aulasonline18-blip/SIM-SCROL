@@ -232,14 +232,22 @@ class StudentExperienceT00Adapter {
           case 't01_final':
             final rawCurriculum =
                 chunk.payload['curriculo'] ?? chunk.payload['curriculum'];
-            final finalItems = normalizeCurriculumItems(rawCurriculum);
+            final finalItems = dedupeCurriculumBatchItems(
+              normalizeCurriculumItems(rawCurriculum),
+            );
             if (finalItems.isNotEmpty) {
+              final globalPlan = normalizeCurriculumGlobalPlan(
+                rawCurriculum: rawCurriculum,
+                rawQualityCheck: chunk.payload['quality_check'],
+                localItemCount: finalItems.length,
+              );
               final curriculum = StudentCurriculum(
                 topic: topic,
                 totalItems: finalItems.length,
                 generatedAt: DateTime.now().millisecondsSinceEpoch,
                 provisional: false,
                 items: finalItems,
+                globalPlan: globalPlan,
               );
               service.mutate(args.lessonLocalId, (state) {
                 return state.copyWith(
@@ -252,12 +260,14 @@ class StudentExperienceT00Adapter {
                     initialCount: partialItems.isEmpty
                         ? 1
                         : partialItems.length,
-                    totalCount: finalItems.length,
+                    totalCount: curriculum.displayTotalItems,
                   ),
                   profile: state.profile.copyWith(
                     extra: {
                       ...state.profile.extra,
                       'bootstrap_status': 'complete',
+                      if (globalPlan != null)
+                        'curriculum_global_plan': globalPlan.toJson(),
                     },
                   ),
                 );
@@ -266,7 +276,11 @@ class StudentExperienceT00Adapter {
                 service,
                 args.lessonLocalId,
                 StudentExperienceEventType.t00FinalCurriculumReceived,
-                {'items': finalItems.length},
+                {
+                  'items': finalItems.length,
+                  if (globalPlan != null)
+                    'curriculum_global_plan': globalPlan.toJson(),
+                },
               );
               _notifyCurriculumExpanded(
                 args.lessonLocalId,

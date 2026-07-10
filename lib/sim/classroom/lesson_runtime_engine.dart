@@ -291,6 +291,7 @@ class LessonRuntimeEngine {
       phase: position.phase,
       conteudo: position.conteudo,
       items: position.items,
+      globalPlan: session.curriculum?.globalPlan,
     );
     return LessonRuntimeSnapshot(
       authReady: true,

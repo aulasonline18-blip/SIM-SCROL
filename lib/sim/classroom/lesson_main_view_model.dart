@@ -36,19 +36,33 @@ LessonMainViewModel buildLessonMainViewModel({
   required ClassroomPhase phase,
   required LessonContent? conteudo,
   required List<PlannedItem> items,
+  CurriculumGlobalPlan? globalPlan,
 }) {
   final totalBase = baseItems.length;
   final concluidosBase = mainAdvances > totalBase ? totalBase : mainAdvances;
-  final progress = totalBase == 0 ? 0.0 : (concluidosBase / totalBase) * 100;
+  final displayTotal = globalPlan?.globalTotalItems ?? totalBase;
+  final displayAdvances = globalPlan == null
+      ? concluidosBase
+      : (globalPlan.batchStartItem - 1 + concluidosBase)
+            .clamp(0, displayTotal)
+            .toInt();
+  final progress = displayTotal == 0
+      ? 0.0
+      : (displayAdvances / displayTotal) * 100;
   final nivelStr = isReviewAtivo
       ? 'aula_review_lbl_${itemAtivo?.reviewLayer?.value ?? 1}'
       : 'aula_layer_${layer.value}';
   final safeIdx = totalBase == 0
       ? concluidosBase + 1
       : (concluidosBase + 1 > totalBase ? totalBase : concluidosBase + 1);
+  final displayIdx = globalPlan == null
+      ? safeIdx
+      : globalPlan.globalItemNumberForLocalIndex(
+          (safeIdx - 1).clamp(0, totalBase == 0 ? 0 : totalBase - 1).toInt(),
+        );
   final headerLabel = isReviewAtivo
       ? 'aula_review_review:$nivelStr'
-      : 'aula_item_of:$safeIdx/$totalBase:$nivelStr';
+      : 'aula_item_of:$displayIdx/$displayTotal:$nivelStr';
   final options = conteudo == null
       ? <LessonOptionModel>[]
       : [

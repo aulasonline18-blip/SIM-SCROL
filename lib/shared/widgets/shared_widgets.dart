@@ -709,7 +709,7 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
         .toList(growable: false);
     final shownRows = visibleCloud.length + visibleStates.length;
     final hasMoreLessons = shownRows < totalRows;
-    final total = state?.curriculum?.totalItems ?? 0;
+    final total = state?.curriculum?.displayTotalItems ?? 0;
     final advances = state?.progress?.mainAdvances ?? 0;
 
     return Column(
@@ -1258,7 +1258,11 @@ class _AulaDrawerContentState extends State<_AulaDrawerContent> {
 String _lessonTitle(StudentLearningState state) {
   final title = state.profile.objetivo ?? state.curriculum?.topic;
   final clean = title?.trim();
-  if (clean != null && clean.isNotEmpty) return clean;
+  if (clean != null && clean.isNotEmpty) {
+    final part = state.curriculum?.globalPlan;
+    if (part?.isMultiPart == true) return '$clean — ${part!.displayPartTitle}';
+    return clean;
+  }
   return state.lessonLocalId;
 }
 
@@ -1291,8 +1295,14 @@ class _DrawerLessonRow extends StatelessWidget {
     final border = palette.border;
     final text = palette.text;
     final muted = palette.muted;
-    final total = state.curriculum?.totalItems ?? 0;
-    final advances = state.progress?.itemIdx ?? 0;
+    final curriculum = state.curriculum;
+    final total = curriculum?.displayTotalItems ?? 0;
+    final localAdvances = state.progress?.itemIdx ?? 0;
+    final advances = curriculum?.globalPlan == null
+        ? localAdvances
+        : (curriculum!.globalPlan!.batchStartItem - 1 + localAdvances)
+              .clamp(0, total)
+              .toInt();
     final pct = total > 0 ? ((advances / total) * 100).round() : 0;
     final pending = state.progress?.pendentesMarkers.length ?? 0;
     if (renaming) {
