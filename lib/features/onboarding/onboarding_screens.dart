@@ -54,187 +54,6 @@ import '../classroom/aula_widgets.dart';
 import '../billing/billing_and_simple_pages.dart';
 import '../../shared/widgets/shared_widgets.dart';
 
-class IdiomaScreen extends StatefulWidget {
-  const IdiomaScreen({required this.session, super.key});
-
-  final LabSession session;
-
-  @override
-  State<IdiomaScreen> createState() => _IdiomaScreenState();
-}
-
-class _IdiomaScreenState extends State<IdiomaScreen> {
-  void _pick(String code, String name) {
-    if (code == 'other') {
-      widget.session.chooseLanguage(code, widget.session.otherLanguage.trim());
-    } else {
-      widget.session.chooseLanguage(code, name);
-      Future.delayed(const Duration(milliseconds: 160), () {
-        if (mounted) {
-          // navigation is handled by session state change â€” just trigger it
-        }
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final session = widget.session;
-    return CyberStepShell(
-      step: 1,
-      total: 5,
-      child: OnboardingChatFlow(
-        semanticLabel: t('onboarding_chat_region'),
-        children: [
-          SimChatReveal(
-            child: SimChatBubble(
-              text: t('language_chat_intro'),
-              supportingText: t('language_body'),
-            ),
-          ),
-          SimChatReveal(
-            delay: const Duration(milliseconds: 80),
-            child: SimChatBubble(
-              text: t('language_app_title'),
-              supportingText: t('language_app_body'),
-            ),
-          ),
-          SimChatChoiceWrap.staggered(
-            children: [
-              SimChatChoiceChip(
-                label: t('language_follow_device'),
-                selected: session.localeSettings.followDeviceInterface,
-                onTap: () =>
-                    unawaited(session.setInterfaceLanguage(followDevice: true)),
-              ),
-              for (final language in supportedLangs.where(
-                (lang) => const {'pt', 'en', 'es'}.contains(lang.code),
-              ))
-                SimChatChoiceChip(
-                  label: language.native.isEmpty
-                      ? language.name
-                      : '${language.native} · ${language.name}',
-                  selected:
-                      !session.localeSettings.followDeviceInterface &&
-                      session.interfaceLocaleTag ==
-                          switch (language.code) {
-                            'pt' => 'pt-BR',
-                            'es' => 'es',
-                            _ => 'en',
-                          },
-                  onTap: () => unawaited(
-                    session.setInterfaceLanguage(
-                      followDevice: false,
-                      localeTag: language.code,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          SimChatReveal(
-            delay: const Duration(milliseconds: 120),
-            child: SimChatBubble(
-              text: t('language_lessons_title'),
-              supportingText: t('language_lessons_body'),
-            ),
-          ),
-          SimChatChoiceWrap.staggered(
-            children: [
-              for (final language in supportedLangs.where(
-                (lang) => const {'pt', 'en', 'es'}.contains(lang.code),
-              ))
-                SimChatChoiceChip(
-                  label: language.native.isEmpty
-                      ? language.name
-                      : '${language.native} · ${language.name}',
-                  selected:
-                      session.learningLocaleTag ==
-                      switch (language.code) {
-                        'pt' => 'pt-BR',
-                        'es' => 'es',
-                        _ => 'en',
-                      },
-                  onTap: () => _pick(language.code, language.name),
-                ),
-              SimChatChoiceChip(
-                label: t('language_other'),
-                selected: session.selectedLanguageCode == 'other',
-                onTap: () => _pick('other', session.otherLanguage.trim()),
-              ),
-            ],
-          ),
-          if (session.selectedLanguageCode == 'other') ...[
-            const SizedBox(height: 8),
-            SimChatReveal(
-              delay: const Duration(milliseconds: 120),
-              child: OtherLanguageBox(session: session),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class OtherLanguageBox extends StatefulWidget {
-  const OtherLanguageBox({required this.session, super.key});
-
-  final LabSession session;
-
-  @override
-  State<OtherLanguageBox> createState() => _OtherLanguageBoxState();
-}
-
-class _OtherLanguageBoxState extends State<OtherLanguageBox> {
-  late final TextEditingController controller = TextEditingController(
-    text: widget.session.otherLanguage,
-  );
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final value = controller.text.trim();
-    return SimChatInputCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SimChatFieldLabel(t('language_type')),
-          TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: t('language_hint'),
-              border: InputBorder.none,
-            ),
-            style: const TextStyle(fontSize: 18),
-            onChanged: (v) {
-              widget.session.setOtherLanguage(v);
-              setState(() {});
-            },
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: SizedBox(
-              height: 56,
-              child: FilledButton(
-                onPressed: value.isEmpty
-                    ? null
-                    : () => widget.session.chooseLanguage('other', value),
-                child: Text(t('continue')),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class ConversationalEntryScreen extends StatefulWidget {
   const ConversationalEntryScreen({required this.session, super.key});
 
@@ -246,7 +65,8 @@ class ConversationalEntryScreen extends StatefulWidget {
 }
 
 class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
-  bool languageMenuOpen = false;
+  bool interfaceLanguageMenuOpen = false;
+  bool learningLanguageMenuOpen = false;
   bool attachmentMenuOpen = false;
   bool sending = false;
   String? error;
@@ -295,7 +115,7 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     super.dispose();
   }
 
-  Future<void> _selectLanguage(_EntryLanguageOption option) async {
+  Future<void> _selectInterfaceLanguage(_EntryLanguageOption option) async {
     if (option.followDevice) {
       await widget.session.setInterfaceLanguage(followDevice: true);
       await widget.session.setLearningLanguage(
@@ -308,7 +128,17 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
       );
       await widget.session.setLearningLanguage(localeTag: option.localeTag);
     }
-    if (mounted) setState(() => languageMenuOpen = false);
+    widget.session.submitInterfaceLanguage();
+    if (mounted) setState(() => interfaceLanguageMenuOpen = false);
+  }
+
+  Future<void> _selectLearningLanguage(_EntryLanguageOption option) async {
+    final localeTag = option.followDevice
+        ? widget.session.interfaceLocaleTag
+        : option.localeTag;
+    await widget.session.setLearningLanguage(localeTag: localeTag);
+    widget.session.submitLearningLanguage();
+    if (mounted) setState(() => learningLanguageMenuOpen = false);
   }
 
   void _setEntryField(String key, String value) {
@@ -432,6 +262,8 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     final isMaterialPath = path == 'tenho_material';
     final isSimPath = path == 'sim_monta';
     final group1Step = _group1Step(session);
+    final languagesComplete =
+        session.interfaceLanguageSubmitted && session.learningLanguageSubmitted;
     final group1Complete = group1Step >= 4;
     final simPathReady =
         isSimPath &&
@@ -454,39 +286,58 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
         children: [
           _TimelineTurn(
             number: 1,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SimChatBubble(
-                  text: 'SIM: Em que idioma você quer usar o SIM?',
+            child: _LanguageStepCard(
+              question: t('entry_app_language_question'),
+              completed: session.interfaceLanguageSubmitted,
+              child: _LanguageSelector(
+                currentLocaleTag: session.interfaceLocaleTag,
+                buttonKey: const Key('sim-entry-interface-language-button'),
+                listKey: const Key('sim-entry-interface-language-list'),
+                expanded: interfaceLanguageMenuOpen,
+                onToggle: () => setState(
+                  () => interfaceLanguageMenuOpen = !interfaceLanguageMenuOpen,
                 ),
-                const SizedBox(height: 10),
-                _LanguageSelector(
-                  session: session,
-                  expanded: languageMenuOpen,
-                  onToggle: () =>
-                      setState(() => languageMenuOpen = !languageMenuOpen),
-                  onSelect: (option) => unawaited(_selectLanguage(option)),
-                ),
-              ],
+                onSelect: (option) =>
+                    unawaited(_selectInterfaceLanguage(option)),
+              ),
             ),
           ),
-          _TimelineTurn(
-            number: 2,
-            child: _ProfileNameCard(
-              controller: nameController,
-              active: group1Step == 0,
-              completed: session.profileNameSubmitted,
-              onChanged: (value) {
-                session.setPreferredName(value);
-                setState(() {});
-              },
-              onSubmit: _submitName,
+          if (session.interfaceLanguageSubmitted)
+            _TimelineTurn(
+              number: 2,
+              child: _LanguageStepCard(
+                question: t('entry_lesson_language_question'),
+                completed: session.learningLanguageSubmitted,
+                child: _LanguageSelector(
+                  currentLocaleTag: session.learningLocaleTag,
+                  buttonKey: const Key('sim-entry-learning-language-button'),
+                  listKey: const Key('sim-entry-learning-language-list'),
+                  expanded: learningLanguageMenuOpen,
+                  onToggle: () => setState(
+                    () => learningLanguageMenuOpen = !learningLanguageMenuOpen,
+                  ),
+                  onSelect: (option) =>
+                      unawaited(_selectLearningLanguage(option)),
+                ),
+              ),
             ),
-          ),
-          if (group1Step >= 1)
+          if (languagesComplete)
             _TimelineTurn(
               number: 3,
+              child: _ProfileNameCard(
+                controller: nameController,
+                active: group1Step == 0,
+                completed: session.profileNameSubmitted,
+                onChanged: (value) {
+                  session.setPreferredName(value);
+                  setState(() {});
+                },
+                onSubmit: _submitName,
+              ),
+            ),
+          if (languagesComplete && group1Step >= 1)
+            _TimelineTurn(
+              number: 4,
               child: _ProfileAgeCard(
                 controller: ageController,
                 active: group1Step == 1,
@@ -500,9 +351,9 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 onSkip: () => _submitAge(notDeclared: true),
               ),
             ),
-          if (group1Step >= 2)
+          if (languagesComplete && group1Step >= 2)
             _TimelineTurn(
-              number: 4,
+              number: 5,
               child: _ProfileDifficultiesCard(
                 selected: session.profileDifficulties,
                 active: group1Step == 2,
@@ -514,9 +365,9 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 onSubmit: _submitDifficulties,
               ),
             ),
-          if (group1Step >= 3)
+          if (languagesComplete && group1Step >= 3)
             _TimelineTurn(
-              number: 5,
+              number: 6,
               child: _ProfileObservationCard(
                 controller: observationController,
                 active: group1Step == 3,
@@ -529,9 +380,9 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 onSkip: () => _submitObservation(skipped: true),
               ),
             ),
-          if (group1Complete)
+          if (languagesComplete && group1Complete)
             _TimelineTurn(
-              number: 6,
+              number: 7,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -588,9 +439,9 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 ],
               ),
             ),
-          if (group1Complete && isMaterialPath)
+          if (languagesComplete && group1Complete && isMaterialPath)
             _TimelineTurn(
-              number: 7,
+              number: 8,
               child: _MaterialPathCard(
                 session: session,
                 attachmentMenuOpen: attachmentMenuOpen,
@@ -607,9 +458,9 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                     setState(() => session.removeAttachment(index)),
               ),
             ),
-          if (group1Complete && isSimPath)
+          if (languagesComplete && group1Complete && isSimPath)
             _TimelineTurn(
-              number: 7,
+              number: 8,
               child: _SimBuildPathCard(
                 session: session,
                 topicController: topicController,
@@ -630,9 +481,9 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 onSubmitTraversalExpectedResult: _submitTraversalExpectedResult,
               ),
             ),
-          if (group1Complete && showSummary)
+          if (languagesComplete && group1Complete && showSummary)
             _TimelineTurn(
-              number: 8,
+              number: 9,
               child: _FichaSummaryCard(
                 ficha: ficha,
                 canPrepare: canPrepare,
@@ -641,7 +492,7 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 onPrepare: _prepareLesson,
               ),
             ),
-          if (group1Complete)
+          if (languagesComplete && group1Complete)
             Padding(
               padding: const EdgeInsets.only(left: 44),
               child: Text(
@@ -697,6 +548,10 @@ String _entryLanguageLabel(String localeTag) {
   };
 }
 
+String _entryLanguageOptionLabel(_EntryLanguageOption option) {
+  return option.followDevice ? t('language_follow_device') : option.label;
+}
+
 class _TimelineTurn extends StatelessWidget {
   const _TimelineTurn({required this.number, required this.child});
 
@@ -748,13 +603,17 @@ class _TimelineTurn extends StatelessWidget {
 
 class _LanguageSelector extends StatelessWidget {
   const _LanguageSelector({
-    required this.session,
+    required this.currentLocaleTag,
+    required this.buttonKey,
+    required this.listKey,
     required this.expanded,
     required this.onToggle,
     required this.onSelect,
   });
 
-  final LabSession session;
+  final String currentLocaleTag;
+  final Key buttonKey;
+  final Key listKey;
   final bool expanded;
   final VoidCallback onToggle;
   final ValueChanged<_EntryLanguageOption> onSelect;
@@ -762,7 +621,7 @@ class _LanguageSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    final current = _entryLanguageLabel(session.learningLocaleTag);
+    final current = _entryLanguageLabel(currentLocaleTag);
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
@@ -771,7 +630,7 @@ class _LanguageSelector extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             OutlinedButton.icon(
-              key: const Key('sim-entry-language-button'),
+              key: buttonKey,
               onPressed: onToggle,
               icon: const Icon(Icons.language),
               label: Text('$current  ▾'),
@@ -794,7 +653,7 @@ class _LanguageSelector extends StatelessWidget {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 292),
                   child: ListView(
-                    key: const Key('sim-entry-language-list'),
+                    key: listKey,
                     shrinkWrap: true,
                     children: [
                       for (final option in _entryLanguageOptions)
@@ -805,10 +664,10 @@ class _LanguageSelector extends StatelessWidget {
                                 ? Icons.phone_android
                                 : Icons.language,
                           ),
-                          title: Text(option.label),
+                          title: Text(_entryLanguageOptionLabel(option)),
                           trailing:
                               !option.followDevice &&
-                                  option.localeTag == session.learningLocaleTag
+                                  option.localeTag == currentLocaleTag
                               ? Icon(Icons.check, color: palette.primary)
                               : null,
                           onTap: () => onSelect(option),
@@ -821,6 +680,34 @@ class _LanguageSelector extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LanguageStepCard extends StatelessWidget {
+  const _LanguageStepCard({
+    required this.question,
+    required this.completed,
+    required this.child,
+  });
+
+  final String question;
+  final bool completed;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SimChatBubble(text: 'SIM: $question'),
+        const SizedBox(height: 10),
+        child,
+      ],
+    );
+    return Opacity(
+      opacity: completed ? 0.55 : 1,
+      child: IgnorePointer(ignoring: completed, child: content),
     );
   }
 }

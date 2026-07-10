@@ -233,7 +233,7 @@ void main() {
   });
 
   testWidgets(
-    'language screen shows separate app and lesson language controls',
+    'conversational entry shows separate app and lesson language controls',
     (tester) async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
@@ -241,13 +241,34 @@ void main() {
       setSimActiveLanguage('pt-BR');
 
       await tester.pumpWidget(
-        MaterialApp(home: IdiomaScreen(session: session)),
+        MaterialApp(home: ConversationalEntryScreen(session: session)),
       );
       await tester.pumpAndSettle(const Duration(milliseconds: 50));
 
-      expect(find.text('Idioma do app'), findsOneWidget);
-      expect(find.text('Idioma das aulas'), findsOneWidget);
+      expect(
+        find.text('SIM: Em que idioma você quer usar o SIM?'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('sim-entry-interface-language-button')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const Key('sim-entry-interface-language-button')),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Seguir dispositivo'), findsOneWidget);
+      await tester.tap(find.text('Português').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('SIM: Em que idioma você quer que eu ensine as aulas?'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('sim-entry-learning-language-button')),
+        findsOneWidget,
+      );
 
       session.dispose();
       await tester.pumpWidget(const SizedBox.shrink());

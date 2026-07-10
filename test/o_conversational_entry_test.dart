@@ -43,6 +43,41 @@ Future<void> _scrollUntilText(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
+Finder _languageOption(Key listKey, String label) =>
+    find.descendant(of: find.byKey(listKey), matching: find.text(label));
+
+void _seedCompletedLanguageGroup(LabSession session) {
+  session.entryForm.interfaceLanguageSubmitted = true;
+  session.entryForm.learningLanguageSubmitted = true;
+}
+
+Future<void> _completeLanguageGroup(WidgetTester tester) async {
+  await tester.tap(
+    find.byKey(const Key('sim-entry-interface-language-button')),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(
+    _languageOption(
+      const Key('sim-entry-interface-language-list'),
+      'Português',
+    ),
+    warnIfMissed: false,
+  );
+  await tester.pumpAndSettle();
+  expect(
+    find.byKey(const Key('sim-entry-learning-language-button')),
+    findsOneWidget,
+  );
+  await tester.tap(find.byKey(const Key('sim-entry-learning-language-button')));
+  await tester.pumpAndSettle();
+  await tester.tap(
+    _languageOption(const Key('sim-entry-learning-language-list'), 'Português'),
+    warnIfMissed: false,
+  );
+  await tester.pumpAndSettle();
+  expect(find.byKey(const Key('sim-entry-name-input')), findsOneWidget);
+}
+
 Future<void> _completeProfileGroup(
   WidgetTester tester, {
   String name = 'Lucas',
@@ -157,7 +192,7 @@ void main() {
     setSimActiveLanguage('pt-BR');
   });
 
-  testWidgets('O.3 abre lista rolavel de idioma e atualiza locale', (
+  testWidgets('G0.3-G0.6 idiomas usam cards sequenciais e liberam Grupo 1', (
     tester,
   ) async {
     final session = LabSession()
@@ -168,36 +203,81 @@ void main() {
     await _pumpEntry(tester, session);
 
     expect(find.byType(ConversationalEntryScreen), findsOneWidget);
+    expect(
+      find.text('SIM: Em que idioma você quer usar o SIM?'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('SIM: Em que idioma você quer que eu ensine as aulas?'),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('sim-entry-name-input')), findsNothing);
     expect(find.textContaining('Português'), findsWidgets);
 
-    await tester.tap(find.byKey(const Key('sim-entry-language-button')));
+    await tester.tap(
+      find.byKey(const Key('sim-entry-interface-language-button')),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('sim-entry-language-list')), findsOneWidget);
+    expect(
+      find.byKey(const Key('sim-entry-interface-language-list')),
+      findsOneWidget,
+    );
     expect(find.text('Seguir dispositivo'), findsOneWidget);
     expect(find.text('English'), findsOneWidget);
     expect(find.text('Español'), findsOneWidget);
     expect(find.text('Français'), findsOneWidget);
     expect(find.text('Deutsch'), findsOneWidget);
     await tester.drag(
-      find.byKey(const Key('sim-entry-language-list')),
+      find.byKey(const Key('sim-entry-interface-language-list')),
       const Offset(0, -180),
     );
     await tester.pumpAndSettle();
     expect(find.text('Italiano'), findsOneWidget);
 
     await tester.drag(
-      find.byKey(const Key('sim-entry-language-list')),
+      find.byKey(const Key('sim-entry-interface-language-list')),
       const Offset(0, 180),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Português'));
+    await tester.tap(
+      _languageOption(
+        const Key('sim-entry-interface-language-list'),
+        'Português',
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(session.interfaceLocaleTag, 'pt-BR');
-    expect(session.learningLocaleTag, 'pt-BR');
-    expect(session.explanationLanguage, 'Portuguese');
+    expect(session.interfaceLanguageSubmitted, isTrue);
     expect(find.textContaining('Português'), findsWidgets);
+    expect(
+      find.text('SIM: Em que idioma você quer que eu ensine as aulas?'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('sim-entry-name-input')), findsNothing);
+
+    await tester.tap(
+      find.byKey(const Key('sim-entry-learning-language-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('sim-entry-learning-language-list')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      _languageOption(const Key('sim-entry-learning-language-list'), 'English'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(session.learningLocaleTag, 'en');
+    expect(session.explanationLanguage, 'English');
+    expect(session.learningLanguageSubmitted, isTrue);
+    expect(
+      find.byKey(const Key('sim-entry-learning-language-list')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('sim-entry-name-input')), findsOneWidget);
   });
 
   testWidgets('O.2/O.11 ficha pedagogica chega completa ao payload T00', (
@@ -230,8 +310,9 @@ void main() {
     await session.setInterfaceLanguage(followDevice: false, localeTag: 'pt-BR');
     await session.setLearningLanguage(localeTag: 'pt-BR');
 
-    await _pumpEntry(tester, session, interfaceLocale: 'en');
+    await _pumpEntry(tester, session);
 
+    await _completeLanguageGroup(tester);
     await _completeProfileGroup(tester);
     await _completeSimBuildPathWithG3(tester, session: session);
 
@@ -287,6 +368,8 @@ void main() {
       find.text('SIM: Em que idioma você quer usar o SIM?'),
       findsOneWidget,
     );
+    expect(find.text('SIM: Como posso chamar você?'), findsNothing);
+    await _completeLanguageGroup(tester);
     expect(find.text('SIM: Como posso chamar você?'), findsOneWidget);
     expect(
       find.text('SIM: Quer me dizer sua idade? Pode pular.'),
@@ -365,6 +448,7 @@ void main() {
       ..route = '/cyber/idioma';
 
     await _pumpEntry(tester, session);
+    await _completeLanguageGroup(tester);
     await _completeProfileGroup(
       tester,
       age: null,
@@ -391,6 +475,7 @@ void main() {
       ..route = '/cyber/idioma';
 
     await _pumpEntry(tester, session, size: const Size(760, 1200));
+    await _completeLanguageGroup(tester);
     await _completeProfileGroup(tester);
 
     final firstButton = find.text('Quero que o SIM monte minhas aulas');
@@ -495,6 +580,7 @@ void main() {
       ..route = '/cyber/idioma';
 
     await _pumpEntry(tester, session);
+    await _completeLanguageGroup(tester);
     await _completeProfileGroup(tester);
 
     expect(
@@ -542,6 +628,7 @@ void main() {
       ..route = '/cyber/idioma';
 
     await _pumpEntry(tester, session);
+    await _completeLanguageGroup(tester);
     await _completeProfileGroup(tester);
     await _tapVisible(tester, find.text('Quero que o SIM monte minhas aulas'));
     await tester.enterText(
@@ -577,6 +664,7 @@ void main() {
         ..authed = true
         ..authReady = true
         ..route = '/cyber/idioma';
+      _seedCompletedLanguageGroup(session);
 
       await _pumpEntry(tester, session, size: size);
       await tester.enterText(
@@ -609,6 +697,7 @@ void main() {
       ..route = '/cyber/idioma';
 
     await _pumpEntry(tester, session, size: const Size(430, 3400));
+    await _completeLanguageGroup(tester);
     await _completeProfileGroup(tester);
     await _completeSimBuildPathWithG3(
       tester,
@@ -629,12 +718,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.byKey(const Key('sim-entry-language-button')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('sim-entry-language-button')));
-    await tester.pumpAndSettle();
 
     await expectLater(
       find.byType(ConversationalEntryScreen),
@@ -649,6 +732,7 @@ void main() {
       ..route = '/cyber/idioma';
 
     await _pumpEntry(tester, session, size: const Size(430, 2500));
+    await _completeLanguageGroup(tester);
     await _completeProfileGroup(tester);
     await _tapVisible(tester, find.text('Quero mostrar meu material ao SIM'));
     await _tapVisible(tester, find.text('Questão'));

@@ -107,7 +107,7 @@ const simRouteContract = <SimRouteContractEntry>[
   SimRouteContractEntry(
     name: 'language',
     path: '/cyber/idioma',
-    destination: 'IdiomaScreen',
+    destination: 'ConversationalEntryScreen',
     access: SimRouteAccess.protected,
     surface: SimRouteSurface.screen,
     preconditions: [
@@ -128,7 +128,7 @@ const simRouteContract = <SimRouteContractEntry>[
   SimRouteContractEntry(
     name: 'objective',
     path: '/cyber/objeto',
-    destination: 'ObjetoScreen',
+    destination: 'ConversationalEntryScreen',
     access: SimRouteAccess.protected,
     surface: SimRouteSurface.screen,
     preconditions: [

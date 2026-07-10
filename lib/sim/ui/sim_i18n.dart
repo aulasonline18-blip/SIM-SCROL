@@ -86,6 +86,9 @@ const Map<String, String> _simStrings = {
   // Idioma
   // (language names are hardcoded in the buttons)
   'onboarding_chat_region': 'Conversa de entrada do SIM',
+  'entry_app_language_question': 'Em que idioma você quer usar o SIM?',
+  'entry_lesson_language_question':
+      'Em que idioma você quer que eu ensine as aulas?',
   'language_chat_intro': 'Choose your language',
   'language_app_title': 'App language',
   'language_app_body': 'Menus, buttons, errors and fixed app text.',
@@ -539,6 +542,9 @@ const Map<String, String> _enStrings = {
   'guided_from_zero': 'From zero',
   'guided_find_point': 'Find my point',
   'guided_direct_exam': 'Go straight to what matters',
+  'entry_app_language_question': 'What language do you want to use SIM in?',
+  'entry_lesson_language_question':
+      'What language do you want me to teach the lessons in?',
   'g3_real_goal_question': 'What are you studying this for?',
   'g3_real_goal_custom_hint': 'If you want, write your goal in your own words.',
   'g3_deadline_question': 'Do you have a deadline?',
@@ -989,6 +995,9 @@ const Map<String, String> _ptStrings = {
   'guided_from_zero': 'Do zero',
   'guided_find_point': 'Descobrir meu ponto',
   'guided_direct_exam': 'Ir direto para o que cai',
+  'entry_app_language_question': 'Em que idioma você quer usar o SIM?',
+  'entry_lesson_language_question':
+      'Em que idioma você quer que eu ensine as aulas?',
   'g3_real_goal_question': 'Para que você está estudando isso?',
   'g3_real_goal_custom_hint':
       'Se quiser, escreva seu objetivo com suas palavras.',

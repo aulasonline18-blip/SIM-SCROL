@@ -72,6 +72,8 @@ class EntryFormState extends ChangeNotifier {
   String otherLanguage = '';
   String? selectedLanguageCode;
   String? stableLang;
+  bool interfaceLanguageSubmitted = false;
+  bool learningLanguageSubmitted = false;
   bool allowPaidImages = false;
   List<AttachmentDraft> attachments = [];
   String attachmentsText = '';
@@ -183,6 +185,16 @@ class EntryFormState extends ChangeNotifier {
       ...guidedAnswers,
       if (cleanValue.isNotEmpty) cleanKey: cleanValue,
     }..removeWhere((_, v) => v.trim().isEmpty);
+    notifyListeners();
+  }
+
+  void submitInterfaceLanguage() {
+    interfaceLanguageSubmitted = true;
+    notifyListeners();
+  }
+
+  void submitLearningLanguage() {
+    learningLanguageSubmitted = true;
     notifyListeners();
   }
 
@@ -362,6 +374,9 @@ class EntryFormState extends ChangeNotifier {
     final age = (ficha['student_age'] ?? ficha['age_range'] ?? '')
         .toString()
         .trim();
+    final app = (ficha['interfaceLocale'] ?? ficha['app_locale'] ?? '')
+        .toString()
+        .trim();
     final lesson = (ficha['lesson_locale'] ?? ficha['learningLocale'] ?? '')
         .toString()
         .trim();
@@ -378,7 +393,11 @@ class EntryFormState extends ChangeNotifier {
         : (ficha['difficulties'] ?? '').toString().trim();
     final preference = (ficha['learning_preference'] ?? '').toString().trim();
     return [
-      [name, age, lesson].where((value) => value.isNotEmpty).join(' · '),
+      [name, age].where((value) => value.isNotEmpty).join(' · '),
+      [
+        if (app.isNotEmpty) 'Idioma do app: $app',
+        if (lesson.isNotEmpty) 'Idioma da aula: $lesson',
+      ].join(' · '),
       if (objective.isNotEmpty)
         deadlineValue.isEmpty
             ? 'Objetivo: $objective'

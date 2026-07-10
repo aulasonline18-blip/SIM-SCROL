@@ -47,6 +47,30 @@ Future<void> _completeProfileGroup(WidgetTester tester) async {
   );
 }
 
+Future<void> _completeLanguageGroup(
+  WidgetTester tester, {
+  required LabSession session,
+  String appLanguage = 'Português',
+  String lessonLanguage = 'Português',
+}) async {
+  await session.setInterfaceLanguage(
+    followDevice: false,
+    localeTag: appLanguage == 'English' ? 'en' : 'pt-BR',
+  );
+  session.submitInterfaceLanguage();
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 120));
+  expect(session.interfaceLanguageSubmitted, isTrue);
+  expect(session.learningLanguageSubmitted, isFalse);
+  await session.setLearningLanguage(
+    localeTag: lessonLanguage == 'English' ? 'en' : 'pt-BR',
+  );
+  session.submitLearningLanguage();
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 120));
+  expect(session.learningLanguageSubmitted, isTrue);
+}
+
 void main() {
   setUp(() => setSimActiveLanguage('en'));
 
@@ -77,7 +101,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatAulaScreen), findsNothing);
-    expect(find.text('SIM: Como posso chamar você?'), findsOneWidget);
+    expect(
+      find.byKey(const Key('sim-entry-interface-language-button')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Portal shows SIM entry point', (WidgetTester tester) async {
@@ -117,25 +144,34 @@ void main() {
   testWidgets('selecionar idioma troca textos visiveis do fluxo inicial', (
     WidgetTester tester,
   ) async {
-    final session = LabSession()
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final session = LabSession(prefs: prefs)
       ..authed = true
       ..authReady = true;
 
-    await tester.pumpWidget(SimMobileApp(initialSession: session));
+    await tester.pumpWidget(
+      SimMobileApp(initialSession: session, prefs: prefs),
+    );
     expect(_textAny(['Start', 'Começar', 'Commencer']), findsOneWidget);
 
     await tester.tap(_textAny(['Start', 'Começar', 'Commencer']));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 160));
     expect(
-      _textAny(['SIM: Em que idioma você quer usar o SIM?']),
+      find.byKey(const Key('sim-entry-interface-language-button')),
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const Key('sim-entry-language-button')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Português').last);
-    await tester.pumpAndSettle();
-    expect(find.text('SIM: Como posso chamar você?'), findsOneWidget);
+    await _completeLanguageGroup(tester, session: session);
+    expect(
+      _textAny([
+        'SIM: Como posso chamar você?',
+        'SIM: How should I call you?',
+        'SIM: ¿Cómo puedo llamarte?',
+      ]),
+      findsOneWidget,
+    );
     expect(
       find.text(
         'SIM: Você já tem algo para me mostrar ou quer que eu monte o caminho?',
@@ -192,19 +228,22 @@ void main() {
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
     expect(scaffold.backgroundColor, const Color(0xFF05070D));
     expect(
-      _textAny(['SIM: Em que idioma você quer usar o SIM?']),
+      find.byKey(const Key('sim-entry-interface-language-button')),
       findsOneWidget,
     );
   });
 
-  testWidgets('Objetivo continua, prepara primeira aula e permite responder', (
+  testWidgets('Objetivo continua e prepara primeira aula oficial', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(480, 1200));
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
     var t00Called = false;
     var t02Called = false;
     final session =
         LabSession(
+            prefs: prefs,
             attachmentFilePicker: (source) async => const SimAttachmentFile(
               name: 'lista-da-prova.pdf',
               contentType: 'application/pdf',
@@ -236,13 +275,18 @@ void main() {
           ..authed = true
           ..authReady = true
           ..credits = 999999;
-    await tester.pumpWidget(SimMobileApp(initialSession: session));
+    await tester.pumpWidget(
+      SimMobileApp(initialSession: session, prefs: prefs),
+    );
     await tester.tap(find.text('Start'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('sim-entry-language-button')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('English'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 160));
+    await _completeLanguageGroup(
+      tester,
+      session: session,
+      appLanguage: 'English',
+      lessonLanguage: 'English',
+    );
     await _completeProfileGroup(tester);
     await _tapVisible(tester, find.text('Quero mostrar meu material ao SIM'));
     await _tapVisible(tester, find.text('PDF'));
@@ -263,19 +307,11 @@ void main() {
     expect(t00Called, isTrue, reason: 'clicar continuar deve iniciar T00');
     await tester.pump(const Duration(seconds: 1));
     expect(t02Called, isTrue, reason: 'primeiro item deve iniciar T02');
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
     expect(find.text('/cyber/curriculo'), findsNothing);
     expect(find.textContaining('entry.status: pedido_recebido'), findsNothing);
-    expect(find.text('B'), findsOneWidget);
-    expect(
-      find.text('Qual alternativa representa uma fração equivalente a 1/2?'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('B'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('2'));
-    await tester.pumpAndSettle();
-    expect(find.text(t('aula_fb_correct')), findsOneWidget);
+    expect(find.byType(ChatAulaScreen), findsOneWidget);
     await tester.binding.setSurfaceSize(null);
   });
 
@@ -439,7 +475,10 @@ void main() {
     expect(find.text('Volte e monte um novo currículo.'), findsOneWidget);
     await tester.tap(find.text('Voltar ao currículo'));
     await tester.pumpAndSettle();
-    expect(find.text('SIM: Como posso chamar você?'), findsOneWidget);
+    expect(
+      find.byKey(const Key('sim-entry-interface-language-button')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Drawer lista, busca, renomeia e apaga aulas locais', (

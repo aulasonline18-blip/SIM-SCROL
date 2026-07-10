@@ -235,6 +235,8 @@ class LabSession extends ChangeNotifier {
   String get studentProfileNotes => entryForm.studentProfileNotes;
   String? get attachmentError => entryForm.attachmentError;
   Map<String, String> get guidedAnswers => entryForm.guidedAnswers;
+  bool get interfaceLanguageSubmitted => entryForm.interfaceLanguageSubmitted;
+  bool get learningLanguageSubmitted => entryForm.learningLanguageSubmitted;
   bool get profileNameSubmitted => entryForm.profileNameSubmitted;
   bool get profileAgeSubmitted => entryForm.profileAgeSubmitted;
   bool get profileDifficultiesSubmitted =>
@@ -690,6 +692,10 @@ class LabSession extends ChangeNotifier {
   void setGuidedAnswer(String key, String value) {
     entryForm.updateGuidedAnswer(key, value);
   }
+
+  void submitInterfaceLanguage() => entryForm.submitInterfaceLanguage();
+
+  void submitLearningLanguage() => entryForm.submitLearningLanguage();
 
   void setPedagogicalEntryField(String key, String value) {
     entryForm.updatePedagogicalField(key, value);
