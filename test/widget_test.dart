@@ -244,8 +244,8 @@ void main() {
     await tester.tap(find.text('English'));
     await tester.pumpAndSettle();
     await _completeProfileGroup(tester);
-    await _tapVisible(tester, find.text('Tenho material'));
-    await _tapVisible(tester, find.text('Livro/PDF'));
+    await _tapVisible(tester, find.text('Quero mostrar meu material ao SIM'));
+    await _tapVisible(tester, find.text('PDF'));
     expect(find.textContaining('lista-da-prova.pdf'), findsOneWidget);
     await tester.enterText(
       find.byKey(const Key('sim-entry-material-notes')),

@@ -175,22 +175,20 @@ void main() {
     await _pumpEntry(tester, session);
 
     await _completeProfileGroup(tester);
-    await _tapVisible(tester, find.text('Quero que o SIM monte'));
-    await _tapVisible(tester, find.text('Matemática'));
+    await _tapVisible(tester, find.text('Quero que o SIM monte minhas aulas'));
     await tester.enterText(
       find.byKey(const Key('sim-entry-topic-input')),
       'Frações equivalentes',
     );
     await tester.pumpAndSettle();
-    await _tapVisible(tester, find.text('Fundamental'));
-    await _tapVisible(tester, find.text('Brasil'));
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-topic-submit')));
     await tester.enterText(
-      find.byKey(const Key('sim-entry-objective-input')),
-      'Quero passar na prova da escola esta semana.',
+      find.byKey(const Key('sim-entry-level-input')),
+      '5º ano, Brasil',
     );
     await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-level-submit')));
     await _tapVisible(tester, find.text('Esta semana'));
-    await _tapVisible(tester, find.text('Falta de base').last);
     await _tapVisible(tester, find.text('Com imagem'));
 
     await _tapVisible(
@@ -215,13 +213,10 @@ void main() {
     expect(ficha?['profile_summary'], contains('Lucas'));
     expect(ficha?['initial_adaptation_guidance'], contains('Concentração'));
     expect(ficha?['entry_path'], 'sim_monta');
-    expect(ficha?['subject'], 'Matemática');
     expect(ficha?['topic'], 'Frações equivalentes');
-    expect(ficha?['academic_level'], 'Fundamental');
-    expect(ficha?['country_curriculum'], 'Brasil');
-    expect(ficha?['objective'], contains('prova da escola'));
+    expect(ficha?['academic_level'], '5º ano, Brasil');
+    expect(ficha?['objective'], contains('Frações equivalentes'));
     expect(ficha?['deadline'], 'Esta semana');
-    expect(ficha?['difficulties'], 'Falta de base');
     expect(ficha?['learning_preference'], 'Com imagem');
     expect(ficha?['interfaceLocale'], 'pt-BR');
     expect(ficha?['learningLocale'], 'pt-BR');
@@ -248,8 +243,8 @@ void main() {
       find.text('SIM: Quer me dizer sua idade? Pode pular.'),
       findsNothing,
     );
-    expect(find.text('Tenho material'), findsNothing);
-    expect(find.text('Quero que o SIM monte'), findsNothing);
+    expect(find.text('Quero que o SIM monte minhas aulas'), findsNothing);
+    expect(find.text('Quero mostrar meu material ao SIM'), findsNothing);
 
     await tester.enterText(
       find.byKey(const Key('sim-entry-name-input')),
@@ -261,7 +256,7 @@ void main() {
       find.text('SIM: Quer me dizer sua idade? Pode pular.'),
       findsOneWidget,
     );
-    expect(find.text('Tenho material'), findsNothing);
+    expect(find.text('Quero mostrar meu material ao SIM'), findsNothing);
     final nameField = tester.widget<TextField>(
       find.byKey(const Key('sim-entry-name-input')),
     );
@@ -292,21 +287,24 @@ void main() {
       tester,
       find.byKey(const Key('sim-entry-observation-skip')),
     );
-    expect(find.text('Tenho material'), findsOneWidget);
-    expect(find.text('Quero que o SIM monte'), findsOneWidget);
-    await _tapVisible(tester, find.text('Tenho material'));
-    await _tapVisible(tester, find.text('Lista de exercícios'));
+    expect(find.text('Quero que o SIM monte minhas aulas'), findsOneWidget);
+    expect(find.text('Quero mostrar meu material ao SIM'), findsOneWidget);
+    await _tapVisible(tester, find.text('Quero mostrar meu material ao SIM'));
+    await _tapVisible(tester, find.text('Lista'));
 
     expect(find.text('Lucas'), findsWidgets);
     expect(find.text('13'), findsWidgets);
-    expect(find.text('Caminho A:'), findsOneWidget);
+    expect(
+      find.text('SIM: Envie ou descreva o material que você quer estudar.'),
+      findsOneWidget,
+    );
     expect(find.text('Foto do caderno'), findsOneWidget);
-    expect(find.text('Livro/PDF'), findsOneWidget);
-    expect(find.text('Dúvida específica'), findsOneWidget);
+    expect(find.text('PDF'), findsOneWidget);
+    expect(find.text('Questão'), findsOneWidget);
     expect(find.text('Resumo da ficha'), findsOneWidget);
     expect(find.text('Preparar minha aula'), findsOneWidget);
     expect(session.entryPath, 'tenho_material');
-    expect(session.materialType, 'Lista de exercícios');
+    expect(session.materialType, 'Lista');
   });
 
   testWidgets('O.9 ficha nao inventa idade nem observacao puladas', (
@@ -332,7 +330,110 @@ void main() {
     expect(ficha['profile_difficulties'], ['Não sei dizer']);
     expect(ficha.containsKey('profile_observation'), isFalse);
     expect(ficha['profile_summary'], isNot(contains('anos')));
-    expect(find.text('Tenho material'), findsOneWidget);
+    expect(find.text('Quero mostrar meu material ao SIM'), findsOneWidget);
+  });
+
+  testWidgets('G2.3-G2.7 Fluxo 1 usa dois cards minimos e continua', (
+    tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..route = '/cyber/idioma';
+
+    await _pumpEntry(tester, session, size: const Size(760, 1200));
+    await _completeProfileGroup(tester);
+
+    final firstButton = find.text('Quero que o SIM monte minhas aulas');
+    final secondButton = find.text('Quero mostrar meu material ao SIM');
+    expect(firstButton, findsOneWidget);
+    expect(secondButton, findsOneWidget);
+    expect(
+      tester.getCenter(firstButton).dx,
+      lessThan(tester.getCenter(secondButton).dx),
+    );
+    expect(
+      find.text(
+        'Conte o que você precisa aprender. O SIM organiza o plano, cria microaulas e exercícios para te conduzir do ponto certo até o objetivo.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Você diz o objetivo. O SIM monta o caminho.'),
+      findsOneWidget,
+    );
+
+    await _tapVisible(tester, firstButton);
+    expect(find.text('SIM: O que você quer aprender?'), findsOneWidget);
+    expect(find.text('SIM: Qual nível devo considerar?'), findsNothing);
+    await tester.enterText(
+      find.byKey(const Key('sim-entry-topic-input')),
+      'Sistema digestivo',
+    );
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-topic-submit')));
+    final topicField = tester.widget<TextField>(
+      find.byKey(const Key('sim-entry-topic-input')),
+    );
+    expect(topicField.enabled, isFalse);
+    expect(find.text('SIM: Qual nível devo considerar?'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('sim-entry-level-input')),
+      '5º ano, Brasil',
+    );
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-level-submit')));
+    expect(session.entryPath, 'sim_monta');
+    expect(session.topic, 'Sistema digestivo');
+    expect(session.academicLevel, '5º ano, Brasil');
+    expect(find.text('Prazo'), findsOneWidget);
+    expect(find.text('Resumo da ficha'), findsOneWidget);
+  });
+
+  testWidgets('G2.4-G2.10 Fluxo 2 material e final sem Grupo 3 obrigatorio', (
+    tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..route = '/cyber/idioma';
+
+    await _pumpEntry(tester, session);
+    await _completeProfileGroup(tester);
+
+    expect(
+      find.text(
+        'Envie foto, lista, livro, caderno, prova, PDF, questão ou resposta que tentou fazer. O SIM olha seu material e te ensina a resolver aquilo.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Você mostra o material. O SIM te ajuda com ele.'),
+      findsOneWidget,
+    );
+    await _tapVisible(tester, find.text('Quero mostrar meu material ao SIM'));
+    expect(
+      find.text('SIM: Envie ou descreva o material que você quer estudar.'),
+      findsOneWidget,
+    );
+    await _tapVisible(tester, find.text('Questão'));
+    await tester.enterText(
+      find.byKey(const Key('sim-entry-material-notes')),
+      'Tenho esta questão da lista e quero entender como resolver.',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('SIM: O que você quer aprender?'), findsNothing);
+    expect(find.text('SIM: Qual nível devo considerar?'), findsNothing);
+    expect(find.text('Resumo da ficha'), findsOneWidget);
+    final ficha = session.buildPedagogicalFicha();
+    expect(ficha['entry_path'], 'tenho_material');
+    expect(ficha['material_type'], 'Questão');
+    expect(ficha['objective'], contains('questão da lista'));
+    expect(
+      (ficha['material_received'] as Map)['freeText'],
+      contains('questão'),
+    );
   });
 
   testWidgets('O.12 Grupo 1 quebra opcoes sem overflow em celular e tablet', (
@@ -376,22 +477,20 @@ void main() {
 
     await _pumpEntry(tester, session, size: const Size(430, 3400));
     await _completeProfileGroup(tester);
-    await _tapVisible(tester, find.text('Quero que o SIM monte'));
-    await _tapVisible(tester, find.text('Matemática'));
+    await _tapVisible(tester, find.text('Quero que o SIM monte minhas aulas'));
     await tester.enterText(
       find.byKey(const Key('sim-entry-topic-input')),
       'Frações',
     );
     await tester.pumpAndSettle();
-    await _tapVisible(tester, find.text('Fundamental'));
-    await _tapVisible(tester, find.text('Brasil'));
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-topic-submit')));
     await tester.enterText(
-      find.byKey(const Key('sim-entry-objective-input')),
-      'Prova da escola esta semana.',
+      find.byKey(const Key('sim-entry-level-input')),
+      '5º ano, Brasil',
     );
     await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-level-submit')));
     await _tapVisible(tester, find.text('Esta semana'));
-    await _tapVisible(tester, find.text('Falta de base').last);
     await _tapVisible(tester, find.text('Com imagem'));
 
     await tester.pumpWidget(
@@ -415,6 +514,30 @@ void main() {
     await expectLater(
       find.byType(ConversationalEntryScreen),
       matchesGoldenFile('goldens/o_conversational_entry.png'),
+    );
+  });
+
+  testWidgets('G2.15 prova visual do Fluxo 2 material proprio', (tester) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..route = '/cyber/idioma';
+
+    await _pumpEntry(tester, session, size: const Size(430, 2500));
+    await _completeProfileGroup(tester);
+    await _tapVisible(tester, find.text('Quero mostrar meu material ao SIM'));
+    await _tapVisible(tester, find.text('Questão'));
+    await tester.enterText(
+      find.byKey(const Key('sim-entry-material-notes')),
+      'Tenho esta questão e quero entender a resolução.',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Anexar material'));
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(ConversationalEntryScreen),
+      matchesGoldenFile('goldens/g2_material_path.png'),
     );
   });
 }

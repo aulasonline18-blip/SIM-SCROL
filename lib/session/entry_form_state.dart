@@ -88,6 +88,8 @@ class EntryFormState extends ChangeNotifier {
   String profileObservation = '';
   String ageRange = '';
   String entryPath = '';
+  bool simLearningGoalSubmitted = false;
+  bool simLearningLevelSubmitted = false;
   String materialType = '';
   String subject = '';
   String topic = '';
@@ -201,9 +203,11 @@ class EntryFormState extends ChangeNotifier {
         break;
       case 'topic':
         topic = clean;
+        simLearningGoalSubmitted = false;
         break;
       case 'academic_level':
         academicLevel = clean;
+        simLearningLevelSubmitted = false;
         break;
       case 'country_curriculum':
         countryCurriculum = clean;
@@ -220,6 +224,18 @@ class EntryFormState extends ChangeNotifier {
       default:
         return;
     }
+    notifyListeners();
+  }
+
+  void submitSimLearningGoal() {
+    if (topic.trim().isEmpty) return;
+    simLearningGoalSubmitted = true;
+    notifyListeners();
+  }
+
+  void submitSimLearningLevel() {
+    if (academicLevel.trim().isEmpty) return;
+    simLearningLevelSubmitted = true;
     notifyListeners();
   }
 

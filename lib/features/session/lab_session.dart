@@ -246,6 +246,8 @@ class LabSession extends ChangeNotifier {
   String get profileObservation => entryForm.profileObservation;
   String get ageRange => entryForm.ageRange;
   String get entryPath => entryForm.entryPath;
+  bool get simLearningGoalSubmitted => entryForm.simLearningGoalSubmitted;
+  bool get simLearningLevelSubmitted => entryForm.simLearningLevelSubmitted;
   String get materialType => entryForm.materialType;
   String get subject => entryForm.subject;
   String get topic => entryForm.topic;
@@ -684,6 +686,10 @@ class LabSession extends ChangeNotifier {
   void setPedagogicalEntryField(String key, String value) {
     entryForm.updatePedagogicalField(key, value);
   }
+
+  void submitSimLearningGoal() => entryForm.submitSimLearningGoal();
+
+  void submitSimLearningLevel() => entryForm.submitSimLearningLevel();
 
   JsonMap buildPedagogicalFicha({String? objectiveOverride}) {
     final previous = entryForm.freeText;

@@ -266,6 +266,9 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
   late final TextEditingController topicController = TextEditingController(
     text: widget.session.topic,
   );
+  late final TextEditingController levelController = TextEditingController(
+    text: widget.session.academicLevel,
+  );
 
   bool get waitingAttachment => widget.session.attachments.any(
     (a) => a.status == 'uploading' || a.status == 'processing',
@@ -281,6 +284,7 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     objectiveController.dispose();
     materialNotesController.dispose();
     topicController.dispose();
+    levelController.dispose();
     super.dispose();
   }
 
@@ -349,6 +353,23 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     materialNotesController.text = seed;
   }
 
+  void _submitSimLearningGoal() {
+    if (widget.session.topic.trim().isEmpty) return;
+    final goal = widget.session.topic.trim();
+    if (widget.session.freeText.trim().length < 10) {
+      widget.session.setFreeText('Quero aprender: $goal.');
+      objectiveController.text = widget.session.freeText;
+    }
+    widget.session.submitSimLearningGoal();
+    setState(() => error = null);
+  }
+
+  void _submitSimLearningLevel() {
+    if (widget.session.academicLevel.trim().isEmpty) return;
+    widget.session.submitSimLearningLevel();
+    setState(() => error = null);
+  }
+
   Future<void> _addAttachment(String source, String materialLabel) async {
     if (widget.session.attachments.length >= maxAttachments) {
       setState(() => error = 'attachment_limit');
@@ -390,6 +411,16 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     final isSimPath = path == 'sim_monta';
     final group1Step = _group1Step(session);
     final group1Complete = group1Step >= 4;
+    final simPathReady =
+        isSimPath &&
+        session.simLearningGoalSubmitted &&
+        session.simLearningLevelSubmitted;
+    final materialPathReady =
+        isMaterialPath &&
+        (session.materialType.trim().isNotEmpty ||
+            session.attachments.isNotEmpty ||
+            session.freeText.trim().length >= 10);
+    final showSummary = simPathReady || materialPathReady;
     return CyberStepShell(
       step: 1,
       total: 5,
@@ -487,38 +518,44 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final narrow = constraints.maxWidth < 520;
+                      final simButton = _EntryPathButton(
+                        icon: Icons.account_tree_outlined,
+                        title: 'Quero que o SIM monte minhas aulas',
+                        description:
+                            'Conte o que você precisa aprender. O SIM organiza o plano, cria microaulas e exercícios para te conduzir do ponto certo até o objetivo.',
+                        shortPhrase:
+                            'Você diz o objetivo. O SIM monta o caminho.',
+                        selected: isSimPath,
+                        onTap: () => _setEntryField('entry_path', 'sim_monta'),
+                      );
                       final materialButton = _EntryPathButton(
                         icon: Icons.photo_camera_outlined,
-                        title: 'Tenho material',
-                        subtitle: 'Tutor particular com material',
+                        title: 'Quero mostrar meu material ao SIM',
+                        description:
+                            'Envie foto, lista, livro, caderno, prova, PDF, questão ou resposta que tentou fazer. O SIM olha seu material e te ensina a resolver aquilo.',
+                        shortPhrase:
+                            'Você mostra o material. O SIM te ajuda com ele.',
                         selected: isMaterialPath,
                         onTap: () =>
                             _setEntryField('entry_path', 'tenho_material'),
                       );
-                      final simButton = _EntryPathButton(
-                        icon: Icons.account_tree_outlined,
-                        title: 'Quero que o SIM monte',
-                        subtitle: 'SIM monta a travessia',
-                        selected: isSimPath,
-                        onTap: () => _setEntryField('entry_path', 'sim_monta'),
-                      );
                       if (narrow) {
                         return Column(
                           children: [
+                            SizedBox(width: double.infinity, child: simButton),
+                            const SizedBox(height: 10),
                             SizedBox(
                               width: double.infinity,
                               child: materialButton,
                             ),
-                            const SizedBox(height: 10),
-                            SizedBox(width: double.infinity, child: simButton),
                           ],
                         );
                       }
                       return Row(
                         children: [
-                          Expanded(child: materialButton),
-                          const SizedBox(width: 10),
                           Expanded(child: simButton),
+                          const SizedBox(width: 10),
+                          Expanded(child: materialButton),
                         ],
                       );
                     },
@@ -550,13 +587,20 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
               number: 7,
               child: _SimBuildPathCard(
                 session: session,
-                objectiveController: objectiveController,
                 topicController: topicController,
+                levelController: levelController,
                 onField: _setEntryField,
-                onObjectiveChanged: _setObjective,
+                onGoalChanged: (value) {
+                  _setEntryField('topic', value);
+                  if (value.trim().isNotEmpty) {
+                    _setObjective('Quero aprender: ${value.trim()}.');
+                  }
+                },
+                onSubmitGoal: _submitSimLearningGoal,
+                onSubmitLevel: _submitSimLearningLevel,
               ),
             ),
-          if (group1Complete)
+          if (group1Complete && showSummary)
             _TimelineTurn(
               number: 8,
               child: _FichaSummaryCard(
@@ -1133,14 +1177,16 @@ class _EntryPathButton extends StatelessWidget {
   const _EntryPathButton({
     required this.icon,
     required this.title,
-    required this.subtitle,
+    required this.description,
+    required this.shortPhrase,
     required this.selected,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
-  final String subtitle;
+  final String description;
+  final String shortPhrase;
   final bool selected;
   final VoidCallback onTap;
 
@@ -1160,7 +1206,7 @@ class _EntryPathButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
           child: Container(
-            constraints: const BoxConstraints(minHeight: 96),
+            constraints: const BoxConstraints(minHeight: 154),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
@@ -1178,17 +1224,27 @@ class _EntryPathButton extends StatelessWidget {
                   title,
                   style: TextStyle(
                     color: palette.text,
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 6),
                 Text(
-                  subtitle,
+                  description,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 12,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  shortPhrase,
                   style: TextStyle(
                     color: palette.muted,
                     fontSize: 12,
                     height: 1.25,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
@@ -1227,10 +1283,8 @@ class _MaterialPathCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(
-            badge: 'A',
-            title: 'Caminho A:',
-            subtitle: 'Tutor particular com material',
+          const SimChatBubble(
+            text: 'SIM: Envie ou descreva o material que você quer estudar.',
           ),
           const SizedBox(height: 12),
           AttachmentPreviewList(
@@ -1245,15 +1299,21 @@ class _MaterialPathCard extends StatelessWidget {
           ),
           _MaterialAction(
             icon: Icons.format_list_bulleted,
-            label: 'Lista de exercícios',
-            selected: session.materialType == 'Lista de exercícios',
-            onTap: () => onMaterialType('Lista de exercícios'),
+            label: 'Lista',
+            selected: session.materialType == 'Lista',
+            onTap: () => onMaterialType('Lista'),
           ),
           _MaterialAction(
             icon: Icons.menu_book_outlined,
-            label: 'Livro/PDF',
-            selected: session.materialType == 'Livro/PDF',
-            onTap: () => onPickAttachment('document', 'Livro/PDF'),
+            label: 'Livro',
+            selected: session.materialType == 'Livro',
+            onTap: () => onMaterialType('Livro'),
+          ),
+          _MaterialAction(
+            icon: Icons.edit_note_outlined,
+            label: 'Caderno',
+            selected: session.materialType == 'Caderno',
+            onTap: () => onMaterialType('Caderno'),
           ),
           _MaterialAction(
             icon: Icons.description_outlined,
@@ -1262,16 +1322,22 @@ class _MaterialPathCard extends StatelessWidget {
             onTap: () => onMaterialType('Prova'),
           ),
           _MaterialAction(
+            icon: Icons.picture_as_pdf_outlined,
+            label: 'PDF',
+            selected: session.materialType == 'PDF',
+            onTap: () => onPickAttachment('document', 'PDF'),
+          ),
+          _MaterialAction(
+            icon: Icons.quiz_outlined,
+            label: 'Questão',
+            selected: session.materialType == 'Questão',
+            onTap: () => onMaterialType('Questão'),
+          ),
+          _MaterialAction(
             icon: Icons.edit_outlined,
             label: 'Resposta que tentei fazer',
             selected: session.materialType == 'Resposta que tentei fazer',
             onTap: () => onMaterialType('Resposta que tentei fazer'),
-          ),
-          _MaterialAction(
-            icon: Icons.help_outline,
-            label: 'Dúvida específica',
-            selected: session.materialType == 'Dúvida específica',
-            onTap: () => onMaterialType('Dúvida específica'),
           ),
           const SizedBox(height: 10),
           TextField(
@@ -1313,113 +1379,129 @@ class _MaterialPathCard extends StatelessWidget {
 class _SimBuildPathCard extends StatelessWidget {
   const _SimBuildPathCard({
     required this.session,
-    required this.objectiveController,
     required this.topicController,
+    required this.levelController,
     required this.onField,
-    required this.onObjectiveChanged,
+    required this.onGoalChanged,
+    required this.onSubmitGoal,
+    required this.onSubmitLevel,
   });
 
   final LabSession session;
-  final TextEditingController objectiveController;
   final TextEditingController topicController;
+  final TextEditingController levelController;
   final void Function(String key, String value) onField;
-  final ValueChanged<String> onObjectiveChanged;
+  final ValueChanged<String> onGoalChanged;
+  final VoidCallback onSubmitGoal;
+  final VoidCallback onSubmitLevel;
 
   @override
   Widget build(BuildContext context) {
-    return SimChatInputCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionTitle(
-            badge: 'B',
-            title: 'Caminho B:',
-            subtitle: 'SIM monta a travessia',
-          ),
-          const SizedBox(height: 12),
-          _ChoiceLine(
-            icon: Icons.menu_book_outlined,
-            label: 'Matéria',
-            selected: session.subject,
-            options: const ['Matemática', 'Português', 'Ciências', 'História'],
-            onSelected: (value) => onField('subject', value),
-          ),
-          TextField(
-            key: const Key('sim-entry-topic-input'),
-            controller: topicController,
-            decoration: const InputDecoration(
-              labelText: 'Assunto',
-              hintText: 'Ex: frações, fotossíntese, redação',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (value) => onField('topic', value),
-          ),
-          const SizedBox(height: 12),
-          _ChoiceLine(
-            icon: Icons.school_outlined,
-            label: 'Ano/nível',
-            selected: session.academicLevel,
-            options: const ['Fundamental', 'Médio', 'Faculdade', 'Adulto'],
-            onSelected: (value) => onField('academic_level', value),
-          ),
-          _ChoiceLine(
-            icon: Icons.public,
-            label: 'País/currículo',
-            selected: session.countryCurriculum,
-            options: const ['Brasil', 'ENEM', 'Escola', 'Outro'],
-            onSelected: (value) => onField('country_curriculum', value),
-          ),
-          TextField(
-            key: const Key('sim-entry-objective-input'),
-            controller: objectiveController,
-            minLines: 2,
-            maxLines: 4,
-            maxLength: maxFreeText,
-            decoration: const InputDecoration(
-              labelText: 'Objetivo',
-              hintText: 'Ex: passar na prova da escola esta semana',
-              border: OutlineInputBorder(),
-              counterText: '',
-            ),
-            onChanged: onObjectiveChanged,
-          ),
-          const SizedBox(height: 12),
-          _ChoiceLine(
-            icon: Icons.event_outlined,
-            label: 'Prazo',
-            selected: session.deadline,
-            options: const ['Hoje', 'Esta semana', 'Este mês', 'Sem prazo'],
-            onSelected: (value) => onField('deadline', value),
-          ),
-          _ChoiceLine(
-            icon: Icons.warning_amber_outlined,
-            label: 'Dificuldades',
-            selected: session.difficulties,
-            options: const [
-              'Falta de base',
-              'Erro em exercícios',
-              'Memorização',
-              'Concentração',
+    return Column(
+      children: [
+        _SequentialProfileCard(
+          question: 'O que você quer aprender?',
+          active: !session.simLearningGoalSubmitted,
+          completed: session.simLearningGoalSubmitted,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('sim-entry-topic-input'),
+                  controller: topicController,
+                  enabled: !session.simLearningGoalSubmitted,
+                  decoration: const InputDecoration(
+                    hintText:
+                        'Ex: sistema digestivo, equação do segundo grau, inglês para viagem...',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: onGoalChanged,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _InlineSendButton(
+                key: const Key('sim-entry-topic-submit'),
+                enabled:
+                    !session.simLearningGoalSubmitted &&
+                    topicController.text.trim().isNotEmpty,
+                onPressed: onSubmitGoal,
+              ),
             ],
-            onSelected: (value) => onField('difficulties', value),
           ),
-          _ChoiceLine(
-            icon: Icons.groups_outlined,
-            label: 'Como prefere aprender',
-            selected: session.learningPreference,
-            options: const [
-              'Passo a passo',
-              'Com imagem',
-              'Com áudio',
-              'Direto ao ponto',
-            ],
-            onSelected: (value) => onField('learning_preference', value),
-          ),
-          const _InfoStrip(
-            text: 'SIM monta o plano ideal e guia seu aprendizado.',
+        ),
+        if (session.simLearningGoalSubmitted) ...[
+          const SizedBox(height: 10),
+          _SequentialProfileCard(
+            question: 'Qual nível devo considerar?',
+            active: !session.simLearningLevelSubmitted,
+            completed: session.simLearningLevelSubmitted,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const Key('sim-entry-level-input'),
+                    controller: levelController,
+                    enabled: !session.simLearningLevelSubmitted,
+                    decoration: const InputDecoration(
+                      hintText:
+                          'Ex: 5º ano, ensino médio, concurso, iniciante, Brasil...',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) => onField('academic_level', value),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _InlineSendButton(
+                  key: const Key('sim-entry-level-submit'),
+                  enabled:
+                      !session.simLearningLevelSubmitted &&
+                      levelController.text.trim().isNotEmpty,
+                  onPressed: onSubmitLevel,
+                ),
+              ],
+            ),
           ),
         ],
-      ),
+        if (session.simLearningLevelSubmitted) ...[
+          const SizedBox(height: 10),
+          SimChatInputCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _InfoStrip(
+                  text:
+                      'SIM continua a coleta pelo caminho guiado e monta o plano ideal.',
+                ),
+                const SizedBox(height: 12),
+                _ChoiceLine(
+                  icon: Icons.event_outlined,
+                  label: 'Prazo',
+                  selected: session.deadline,
+                  options: const [
+                    'Hoje',
+                    'Esta semana',
+                    'Este mês',
+                    'Sem prazo',
+                  ],
+                  onSelected: (value) => onField('deadline', value),
+                ),
+                _ChoiceLine(
+                  icon: Icons.groups_outlined,
+                  label: 'Como prefere aprender',
+                  selected: session.learningPreference,
+                  options: const [
+                    'Passo a passo',
+                    'Com imagem',
+                    'Com áudio',
+                    'Direto ao ponto',
+                  ],
+                  onSelected: (value) => onField('learning_preference', value),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1502,59 +1584,6 @@ class _MaterialAction extends StatelessWidget {
         trailing: selected ? Icon(Icons.check, color: palette.primary) : null,
         onTap: onTap,
       ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({
-    required this.badge,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String badge;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = SimThemeScope.paletteOf(context);
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 16,
-          backgroundColor: palette.primary,
-          foregroundColor: palette.onPrimary,
-          child: Text(
-            badge,
-            style: const TextStyle(fontWeight: FontWeight.w900),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: palette.muted,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
