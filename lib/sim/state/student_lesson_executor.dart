@@ -73,6 +73,10 @@ ApplyDecisionResult applyStudentDecision(
   String? marker,
 }) {
   final concluidos = inputProgress.concluidos;
+  final completedWithCurrent =
+      marker != null && marker.isNotEmpty && !concluidos.contains(marker)
+      ? [...concluidos, marker]
+      : concluidos;
 
   switch (decision.actionType) {
     case DecisionActionType.showCompletion:
@@ -81,7 +85,7 @@ ApplyDecisionResult applyStudentDecision(
           itemIdx: totalItems,
           layer: LessonLayer.l1,
           erros: 0,
-          concluidos: concluidos,
+          concluidos: completedWithCurrent,
           mainAdvances: totalItems,
           pctAvanco: 100,
         ),
@@ -95,7 +99,7 @@ ApplyDecisionResult applyStudentDecision(
             itemIdx: proposed,
             layer: LessonLayer.l1,
             erros: 0,
-            concluidos: concluidos,
+            concluidos: completedWithCurrent,
             mainAdvances: [
               inputProgress.mainAdvances + 1,
               proposed,

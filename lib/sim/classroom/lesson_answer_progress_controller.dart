@@ -338,16 +338,17 @@ class LessonAnswerProgressController {
           )
         : state;
     final decision = decideNextActionFromState(stateForDecision);
+    final decisionProgress = stateForDecision.progress ?? progress;
     final applied = applyStudentDecision(
-      progress,
+      decisionProgress,
       decision,
       itemIdx: itemIdx,
-      layer: progress.layer,
+      layer: decisionProgress.layer,
       totalItems: curriculum.items.length,
       marker: marker,
     );
     final nextProgress = applied.nextProgress;
-    final nextState = state.copyWith(
+    final nextState = stateForDecision.copyWith(
       progress: nextProgress,
       current: LessonCurrent(
         itemIdx: nextProgress.itemIdx,

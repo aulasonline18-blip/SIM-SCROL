@@ -79,7 +79,9 @@ LessonMainViewModel buildLessonMainViewModel({
     progress: progress,
     headerLabel: headerLabel,
     options: options,
-    locked: false,
+    locked:
+        phase.type == ClassroomPhaseType.concluido ||
+        phase.type == ClassroomPhaseType.processando,
     nextLabel: nextLabel,
   );
 }

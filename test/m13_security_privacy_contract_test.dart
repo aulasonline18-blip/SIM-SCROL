@@ -5,8 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/billing/account_deletion.dart';
 import 'package:sim_mobile/sim/billing/play_billing_functions.dart';
 import 'package:sim_mobile/sim/billing/sim_server_billing_clients.dart';
+import 'package:sim_mobile/sim/cloud/cloud_functions.dart';
+import 'package:sim_mobile/sim/cloud/sim_server_cloud_functions.dart';
+import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/external_ai/sim_http_transport.dart';
+import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
 void main() {
   test('M13 app production sources do not contain server secrets', () {
@@ -147,6 +151,38 @@ void main() {
       expect(thrown.toString(), isNot(contains('purchase-token-secret')));
     },
   );
+
+  test('M13 student-state 409 regression returns remoteState contract', () async {
+    final remote = StudentLearningState.empty(lessonLocalId: 'lesson-409')
+        .copyWith(updatedAt: 10);
+    final transport = _FakeTransport(
+      statusCode: 409,
+      body: jsonEncode({
+        'rejected': true,
+        'reason': 'STATE_EVENTS_REGRESSION',
+        'remoteState': remote.toJson(),
+        'remoteHighWaterMark': 77,
+      }),
+    );
+    final client = SimServerCloudFunctions(
+      config: _config(),
+      transport: transport,
+    );
+
+    final result = await client.persistStudentState(
+      PersistStudentStateInput(
+        lessonLocalId: 'lesson-409',
+        state: StudentLearningState.empty(lessonLocalId: 'lesson-409'),
+        clientUpdatedAt: 1,
+        clientScore: 1,
+      ),
+      const SupabaseSession(accessToken: 'token', userId: 'u1'),
+    );
+
+    expect(result.rejected, isTrue);
+    expect(result.remoteState?.lessonLocalId, 'lesson-409');
+    expect(result.remoteHighWaterMark, 77);
+  });
 }
 
 bool _isTextProjectFile(String path) {

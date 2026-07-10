@@ -119,13 +119,22 @@ class SimServerCloudFunctions implements StudentStateCloudFunctions {
         statusCode: 408,
       );
     }
-    if (!response.ok) {
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      decoded = null;
+    }
+    final rejectedRegression =
+        response.statusCode == 409 &&
+        decoded is Map &&
+        decoded['rejected'] == true;
+    if (!response.ok && !rejectedRegression) {
       throw SimExternalAiException(
         response.body,
         statusCode: response.statusCode,
       );
     }
-    final decoded = jsonDecode(response.body);
     return decoded is Map ? JsonMap.from(decoded) : <String, dynamic>{};
   }
 

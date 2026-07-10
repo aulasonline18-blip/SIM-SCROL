@@ -187,7 +187,7 @@ void main() {
     );
 
     expect(next.progress?.itemIdx, 1);
-    expect(next.progress?.concluidos, isEmpty);
+    expect(next.progress?.concluidos, contains('M1'));
     expect(next.truth.masteryEvidence, isEmpty);
     expect(next.events.last.type, 'ADVANCE_GATE_DECIDED');
   });

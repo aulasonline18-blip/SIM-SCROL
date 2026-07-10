@@ -273,10 +273,14 @@ LessonProgress _progressFromDecision(
     return progress.copyWith(erros: errors);
   }
   if (decision.decision == 'complete') {
+    final completed = progress.concluidos.contains(request.marker)
+        ? progress.concluidos
+        : [...progress.concluidos, request.marker];
     return progress.copyWith(
       itemIdx: curriculum.items.length,
       layer: LessonLayer.l1,
       erros: 0,
+      concluidos: completed,
       mainAdvances: curriculum.items.length,
       pctAvanco: 100,
     );
@@ -285,10 +289,14 @@ LessonProgress _progressFromDecision(
     final nextIdx = decision.nextItemIdx
         .clamp(0, curriculum.items.length)
         .toInt();
+    final completed = progress.concluidos.contains(request.marker)
+        ? progress.concluidos
+        : [...progress.concluidos, request.marker];
     return progress.copyWith(
       itemIdx: nextIdx,
       layer: decision.nextLayer,
       erros: 0,
+      concluidos: completed,
       mainAdvances: [
         progress.mainAdvances + 1,
         nextIdx,

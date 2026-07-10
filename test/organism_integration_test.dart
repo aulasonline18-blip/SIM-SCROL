@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
+import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
 import 'package:sim_mobile/sim/media/audio_core.dart';
 import 'package:sim_mobile/sim/organism/sim_organism.dart';
 import 'package:sim_mobile/sim/organism/sim_organism_router.dart';
@@ -67,6 +68,15 @@ void main() {
     expect(
       organism.health.serverOnlyOrgans,
       contains('/api/public/payments/webhook'),
+    );
+  });
+
+  test('organismo de producao injeta advance gate remoto na aula', () async {
+    final organism = await _makeOrganism(id: 'remote-advance-organism');
+
+    expect(
+      organism.lessonRuntimeEngine.answerController.serverAdvanceGateClient,
+      isA<SimServerAdvanceGateClient>(),
     );
   });
 
