@@ -269,6 +269,11 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
   late final TextEditingController levelController = TextEditingController(
     text: widget.session.academicLevel,
   );
+  late final TextEditingController goalCustomController = TextEditingController(
+    text: widget.session.traversalGoalCustom,
+  );
+  late final TextEditingController deadlineCustomController =
+      TextEditingController(text: widget.session.deadlineCustom);
 
   bool get waitingAttachment => widget.session.attachments.any(
     (a) => a.status == 'uploading' || a.status == 'processing',
@@ -285,6 +290,8 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     materialNotesController.dispose();
     topicController.dispose();
     levelController.dispose();
+    goalCustomController.dispose();
+    deadlineCustomController.dispose();
     super.dispose();
   }
 
@@ -370,6 +377,21 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     setState(() => error = null);
   }
 
+  void _submitTraversalGoal() {
+    widget.session.submitTraversalGoal();
+    setState(() => error = null);
+  }
+
+  void _submitTraversalDeadline() {
+    widget.session.submitTraversalDeadline();
+    setState(() => error = null);
+  }
+
+  void _submitTraversalExpectedResult({bool skipped = false}) {
+    widget.session.submitTraversalExpectedResult(skipped: skipped);
+    setState(() => error = null);
+  }
+
   Future<void> _addAttachment(String source, String materialLabel) async {
     if (widget.session.attachments.length >= maxAttachments) {
       setState(() => error = 'attachment_limit');
@@ -414,7 +436,10 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     final simPathReady =
         isSimPath &&
         session.simLearningGoalSubmitted &&
-        session.simLearningLevelSubmitted;
+        session.simLearningLevelSubmitted &&
+        session.traversalGoalSubmitted &&
+        session.traversalDeadlineSubmitted &&
+        session.traversalExpectedResultSubmitted;
     final materialPathReady =
         isMaterialPath &&
         (session.materialType.trim().isNotEmpty ||
@@ -589,6 +614,8 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 session: session,
                 topicController: topicController,
                 levelController: levelController,
+                goalCustomController: goalCustomController,
+                deadlineCustomController: deadlineCustomController,
                 onField: _setEntryField,
                 onGoalChanged: (value) {
                   _setEntryField('topic', value);
@@ -598,6 +625,9 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 },
                 onSubmitGoal: _submitSimLearningGoal,
                 onSubmitLevel: _submitSimLearningLevel,
+                onSubmitTraversalGoal: _submitTraversalGoal,
+                onSubmitTraversalDeadline: _submitTraversalDeadline,
+                onSubmitTraversalExpectedResult: _submitTraversalExpectedResult,
               ),
             ),
           if (group1Complete && showSummary)
@@ -1381,19 +1411,29 @@ class _SimBuildPathCard extends StatelessWidget {
     required this.session,
     required this.topicController,
     required this.levelController,
+    required this.goalCustomController,
+    required this.deadlineCustomController,
     required this.onField,
     required this.onGoalChanged,
     required this.onSubmitGoal,
     required this.onSubmitLevel,
+    required this.onSubmitTraversalGoal,
+    required this.onSubmitTraversalDeadline,
+    required this.onSubmitTraversalExpectedResult,
   });
 
   final LabSession session;
   final TextEditingController topicController;
   final TextEditingController levelController;
+  final TextEditingController goalCustomController;
+  final TextEditingController deadlineCustomController;
   final void Function(String key, String value) onField;
   final ValueChanged<String> onGoalChanged;
   final VoidCallback onSubmitGoal;
   final VoidCallback onSubmitLevel;
+  final VoidCallback onSubmitTraversalGoal;
+  final VoidCallback onSubmitTraversalDeadline;
+  final void Function({bool skipped}) onSubmitTraversalExpectedResult;
 
   @override
   Widget build(BuildContext context) {
@@ -1464,38 +1504,147 @@ class _SimBuildPathCard extends StatelessWidget {
         ],
         if (session.simLearningLevelSubmitted) ...[
           const SizedBox(height: 10),
-          SimChatInputCard(
+          _SequentialProfileCard(
+            question: t('g3_real_goal_question'),
+            active: !session.traversalGoalSubmitted,
+            completed: session.traversalGoalSubmitted,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _InfoStrip(
-                  text:
-                      'SIM continua a coleta pelo caminho guiado e monta o plano ideal.',
-                ),
-                const SizedBox(height: 12),
-                _ChoiceLine(
-                  icon: Icons.event_outlined,
-                  label: 'Prazo',
-                  selected: session.deadline,
-                  options: const [
-                    'Hoje',
-                    'Esta semana',
-                    'Este mês',
-                    'Sem prazo',
+                SimChatChoiceWrap(
+                  children: [
+                    for (final option in _g3GoalOptions)
+                      SimChatChoiceChip(
+                        label: option,
+                        selected: session.traversalGoal == option,
+                        onTap: () {
+                          if (!session.traversalGoalSubmitted) {
+                            onField('traversal_goal', option);
+                          }
+                        },
+                      ),
                   ],
-                  onSelected: (value) => onField('deadline', value),
                 ),
-                _ChoiceLine(
-                  icon: Icons.groups_outlined,
-                  label: 'Como prefere aprender',
-                  selected: session.learningPreference,
-                  options: const [
-                    'Passo a passo',
-                    'Com imagem',
-                    'Com áudio',
-                    'Direto ao ponto',
+                const SizedBox(height: 10),
+                TextField(
+                  key: const Key('sim-entry-g3-goal-custom'),
+                  controller: goalCustomController,
+                  enabled: !session.traversalGoalSubmitted,
+                  decoration: InputDecoration(
+                    hintText: t('g3_real_goal_custom_hint'),
+                    border: const OutlineInputBorder(),
+                  ),
+                  onChanged: (value) => onField('traversal_goal_custom', value),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _InlineSendButton(
+                    key: const Key('sim-entry-g3-goal-submit'),
+                    enabled:
+                        !session.traversalGoalSubmitted &&
+                        (session.traversalGoal.trim().isNotEmpty ||
+                            goalCustomController.text.trim().isNotEmpty),
+                    onPressed: onSubmitTraversalGoal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (session.traversalGoalSubmitted) ...[
+          const SizedBox(height: 10),
+          _SequentialProfileCard(
+            question: t('g3_deadline_question'),
+            active: !session.traversalDeadlineSubmitted,
+            completed: session.traversalDeadlineSubmitted,
+            child: Column(
+              children: [
+                SimChatChoiceWrap(
+                  children: [
+                    for (final option in _g3DeadlineOptions)
+                      SimChatChoiceChip(
+                        label: option,
+                        selected: session.deadline == option,
+                        onTap: () {
+                          if (!session.traversalDeadlineSubmitted) {
+                            onField('deadline', option);
+                          }
+                        },
+                      ),
                   ],
-                  onSelected: (value) => onField('learning_preference', value),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  key: const Key('sim-entry-g3-deadline-custom'),
+                  controller: deadlineCustomController,
+                  enabled:
+                      !session.traversalDeadlineSubmitted &&
+                      session.deadline == t('g3_deadline_write_date'),
+                  decoration: InputDecoration(
+                    hintText: t('g3_deadline_custom_hint'),
+                    border: const OutlineInputBorder(),
+                  ),
+                  onChanged: (value) => onField('deadline_custom', value),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _InlineSendButton(
+                    key: const Key('sim-entry-g3-deadline-submit'),
+                    enabled:
+                        !session.traversalDeadlineSubmitted &&
+                        (session.deadline.trim().isNotEmpty ||
+                            deadlineCustomController.text.trim().isNotEmpty),
+                    onPressed: onSubmitTraversalDeadline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (session.traversalDeadlineSubmitted) ...[
+          const SizedBox(height: 10),
+          _SequentialProfileCard(
+            question: t('g3_expected_result_question'),
+            active: !session.traversalExpectedResultSubmitted,
+            completed: session.traversalExpectedResultSubmitted,
+            child: Column(
+              children: [
+                SimChatChoiceWrap(
+                  children: [
+                    for (final option in _g3ExpectedResultOptions)
+                      SimChatChoiceChip(
+                        label: option,
+                        selected: session.expectedResult == option,
+                        onTap: () {
+                          if (!session.traversalExpectedResultSubmitted) {
+                            onField('expected_result', option);
+                          }
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    TextButton(
+                      key: const Key('sim-entry-g3-result-skip'),
+                      onPressed: session.traversalExpectedResultSubmitted
+                          ? null
+                          : () =>
+                                onSubmitTraversalExpectedResult(skipped: true),
+                      child: Text(t('g3_skip')),
+                    ),
+                    const Spacer(),
+                    _InlineSendButton(
+                      key: const Key('sim-entry-g3-result-submit'),
+                      enabled:
+                          !session.traversalExpectedResultSubmitted &&
+                          session.expectedResult.trim().isNotEmpty,
+                      onPressed: () =>
+                          onSubmitTraversalExpectedResult(skipped: false),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1506,51 +1655,35 @@ class _SimBuildPathCard extends StatelessWidget {
   }
 }
 
-class _ChoiceLine extends StatelessWidget {
-  const _ChoiceLine({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.options,
-    required this.onSelected,
-  });
+List<String> get _g3GoalOptions => [
+  t('g3_goal_test'),
+  t('g3_goal_school_work'),
+  t('g3_goal_review'),
+  t('g3_goal_learn_better'),
+  t('g3_goal_admission_exam'),
+  t('g3_goal_certification'),
+  t('g3_goal_work'),
+  t('g3_goal_curiosity'),
+  t('g3_goal_other'),
+];
 
-  final IconData icon;
-  final String label;
-  final String selected;
-  final List<String> options;
-  final ValueChanged<String> onSelected;
+List<String> get _g3DeadlineOptions => [
+  t('g3_deadline_today'),
+  t('g3_deadline_week'),
+  t('g3_deadline_month'),
+  t('g3_deadline_none'),
+  t('g3_deadline_write_date'),
+];
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 20),
-              const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SimChatChoiceWrap(
-            children: [
-              for (final option in options)
-                SimChatChoiceChip(
-                  label: option,
-                  selected: selected == option,
-                  onTap: () => onSelected(option),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
+List<String> get _g3ExpectedResultOptions => [
+  t('g3_result_theory'),
+  t('g3_result_exercises'),
+  t('g3_result_test'),
+  t('g3_result_quick_review'),
+  t('g3_result_practice'),
+  t('g3_result_foundation'),
+  t('g3_result_other'),
+];
 
 class _MaterialAction extends StatelessWidget {
   const _MaterialAction({

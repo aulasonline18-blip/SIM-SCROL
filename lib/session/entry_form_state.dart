@@ -96,6 +96,13 @@ class EntryFormState extends ChangeNotifier {
   String academicLevel = '';
   String countryCurriculum = '';
   String deadline = '';
+  String deadlineCustom = '';
+  bool traversalGoalSubmitted = false;
+  bool traversalDeadlineSubmitted = false;
+  bool traversalExpectedResultSubmitted = false;
+  String traversalGoal = '';
+  String traversalGoalCustom = '';
+  String expectedResult = '';
   String difficulties = '';
   String learningPreference = '';
 
@@ -214,6 +221,23 @@ class EntryFormState extends ChangeNotifier {
         break;
       case 'deadline':
         deadline = clean;
+        traversalDeadlineSubmitted = false;
+        break;
+      case 'deadline_custom':
+        deadlineCustom = clean;
+        traversalDeadlineSubmitted = false;
+        break;
+      case 'traversal_goal':
+        traversalGoal = clean;
+        traversalGoalSubmitted = false;
+        break;
+      case 'traversal_goal_custom':
+        traversalGoalCustom = clean;
+        traversalGoalSubmitted = false;
+        break;
+      case 'expected_result':
+        expectedResult = clean;
+        traversalExpectedResultSubmitted = false;
         break;
       case 'difficulties':
         difficulties = clean;
@@ -236,6 +260,27 @@ class EntryFormState extends ChangeNotifier {
   void submitSimLearningLevel() {
     if (academicLevel.trim().isEmpty) return;
     simLearningLevelSubmitted = true;
+    notifyListeners();
+  }
+
+  void submitTraversalGoal() {
+    if (traversalGoal.trim().isEmpty && traversalGoalCustom.trim().isEmpty) {
+      return;
+    }
+    traversalGoalSubmitted = true;
+    notifyListeners();
+  }
+
+  void submitTraversalDeadline() {
+    if (deadline.trim().isEmpty && deadlineCustom.trim().isEmpty) return;
+    traversalDeadlineSubmitted = true;
+    notifyListeners();
+  }
+
+  void submitTraversalExpectedResult({bool skipped = false}) {
+    if (!skipped && expectedResult.trim().isEmpty) return;
+    if (skipped) expectedResult = '';
+    traversalExpectedResultSubmitted = true;
     notifyListeners();
   }
 
@@ -289,7 +334,16 @@ class EntryFormState extends ChangeNotifier {
           'academic_level': academicLevel.trim(),
           'country_curriculum': countryCurriculum.trim(),
           'objective': freeText.trim(),
+          'learning_goal': topic.trim(),
+          'traversal_goal': traversalGoal.trim(),
+          'traversal_goal_custom': traversalGoalCustom.trim(),
+          'goal_summary': _goalSummary(),
+          if (_isExamGoal) 'exam_goal': _effectiveTraversalGoal,
+          if (_isRealUseGoal) 'real_use_goal': _effectiveTraversalGoal,
           'deadline': deadline.trim(),
+          'deadline_custom': deadlineCustom.trim(),
+          if (_effectiveDeadline.isNotEmpty) 'session_goal': _effectiveDeadline,
+          'expected_result': expectedResult.trim(),
           'difficulties': difficulties.trim(),
           'learning_preference': learningPreference.trim(),
         }..removeWhere((key, value) {
@@ -312,7 +366,10 @@ class EntryFormState extends ChangeNotifier {
         .toString()
         .trim();
     final objective = (ficha['objective'] ?? '').toString().trim();
-    final deadlineValue = (ficha['deadline'] ?? '').toString().trim();
+    final goal = (ficha['traversal_goal'] ?? '').toString().trim();
+    final deadlineValue = (ficha['session_goal'] ?? ficha['deadline'] ?? '')
+        .toString()
+        .trim();
     final profileDifficulty = ficha['profile_difficulties'] is List
         ? (ficha['profile_difficulties'] as List).join(', ')
         : '';
@@ -326,6 +383,7 @@ class EntryFormState extends ChangeNotifier {
         deadlineValue.isEmpty
             ? 'Objetivo: $objective'
             : 'Objetivo: $objective · Prazo: $deadlineValue',
+      if (goal.isNotEmpty) 'Alvo real: $goal',
       if (difficulty.isNotEmpty) 'Dificuldade: $difficulty',
       if (preference.isNotEmpty) 'Preferencia: $preference',
     ].where((line) => line.trim().isNotEmpty).join('\n');
@@ -354,6 +412,44 @@ class EntryFormState extends ChangeNotifier {
         'Usar observação livre como contexto leve, sem diagnóstico.',
     ];
     return guidance.join(' ');
+  }
+
+  String get _effectiveTraversalGoal {
+    final custom = traversalGoalCustom.trim();
+    if (custom.isNotEmpty) return custom;
+    return traversalGoal.trim();
+  }
+
+  String get _effectiveDeadline {
+    final custom = deadlineCustom.trim();
+    if (custom.isNotEmpty) return custom;
+    return deadline.trim();
+  }
+
+  bool get _isExamGoal {
+    final goal = traversalGoal.trim().toLowerCase();
+    return goal.contains('prova') ||
+        goal.contains('teste') ||
+        goal.contains('exame') ||
+        goal.contains('vestibular') ||
+        goal.contains('certificação') ||
+        goal.contains('certificacao');
+  }
+
+  bool get _isRealUseGoal {
+    final goal = traversalGoal.trim().toLowerCase();
+    return goal.contains('trabalho') || goal.contains('prática');
+  }
+
+  String _goalSummary() {
+    return [
+      if (topic.trim().isNotEmpty) 'Conteudo: ${topic.trim()}',
+      if (_effectiveTraversalGoal.isNotEmpty)
+        'Objetivo real: $_effectiveTraversalGoal',
+      if (_effectiveDeadline.isNotEmpty) 'Prazo: $_effectiveDeadline',
+      if (expectedResult.trim().isNotEmpty)
+        'Resultado esperado: ${expectedResult.trim()}',
+    ].join('\n');
   }
 
   void updateLanguage(String code, String name) {

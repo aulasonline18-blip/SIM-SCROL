@@ -254,6 +254,14 @@ class LabSession extends ChangeNotifier {
   String get academicLevel => entryForm.academicLevel;
   String get countryCurriculum => entryForm.countryCurriculum;
   String get deadline => entryForm.deadline;
+  String get deadlineCustom => entryForm.deadlineCustom;
+  bool get traversalGoalSubmitted => entryForm.traversalGoalSubmitted;
+  bool get traversalDeadlineSubmitted => entryForm.traversalDeadlineSubmitted;
+  bool get traversalExpectedResultSubmitted =>
+      entryForm.traversalExpectedResultSubmitted;
+  String get traversalGoal => entryForm.traversalGoal;
+  String get traversalGoalCustom => entryForm.traversalGoalCustom;
+  String get expectedResult => entryForm.expectedResult;
   String get difficulties => entryForm.difficulties;
   String get learningPreference => entryForm.learningPreference;
 
@@ -690,6 +698,13 @@ class LabSession extends ChangeNotifier {
   void submitSimLearningGoal() => entryForm.submitSimLearningGoal();
 
   void submitSimLearningLevel() => entryForm.submitSimLearningLevel();
+
+  void submitTraversalGoal() => entryForm.submitTraversalGoal();
+
+  void submitTraversalDeadline() => entryForm.submitTraversalDeadline();
+
+  void submitTraversalExpectedResult({bool skipped = false}) =>
+      entryForm.submitTraversalExpectedResult(skipped: skipped);
 
   JsonMap buildPedagogicalFicha({String? objectiveOverride}) {
     final previous = entryForm.freeText;

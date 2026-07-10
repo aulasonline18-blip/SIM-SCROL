@@ -15,7 +15,14 @@ Future<void> _pumpEntry(
   WidgetTester tester,
   LabSession session, {
   Size size = const Size(430, 1100),
+  String interfaceLocale = 'pt-BR',
 }) async {
+  await session.setInterfaceLanguage(
+    followDevice: false,
+    localeTag: interfaceLocale,
+  );
+  await session.setLearningLanguage(localeTag: interfaceLocale);
+  expect(session.interfaceLocaleTag, interfaceLocale);
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(SimMobileApp(initialSession: session));
@@ -26,6 +33,13 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
   await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _scrollUntilText(WidgetTester tester, String label) async {
+  final target = find.text(label);
+  expect(target, findsOneWidget);
+  await tester.ensureVisible(target);
   await tester.pumpAndSettle();
 }
 
@@ -72,6 +86,45 @@ Future<void> _completeProfileGroup(
       find.byKey(const Key('sim-entry-observation-submit')),
     );
   }
+}
+
+Future<void> _completeSimBuildPathWithG3(
+  WidgetTester tester, {
+  required LabSession session,
+  String topic = 'Frações equivalentes',
+  String level = 'Ensino médio, internacional',
+  String goal = 'Prova ou teste',
+  String deadline = 'Esta semana',
+  String expectedResult = 'Resolver exercícios',
+}) async {
+  await _tapVisible(tester, find.text('Quero que o SIM monte minhas aulas'));
+  await tester.enterText(find.byKey(const Key('sim-entry-topic-input')), topic);
+  await tester.pumpAndSettle();
+  await _tapVisible(tester, find.byKey(const Key('sim-entry-topic-submit')));
+  await tester.enterText(find.byKey(const Key('sim-entry-level-input')), level);
+  await tester.pumpAndSettle();
+  session.localeSettings = session.localeSettings.copyWith(
+    followDeviceInterface: false,
+    manualInterfaceLocale: 'pt-BR',
+    learningLocale: 'pt-BR',
+  );
+  setSimActiveLanguage('pt-BR');
+  await _tapVisible(tester, find.byKey(const Key('sim-entry-level-submit')));
+  await _scrollUntilText(tester, goal);
+  await _tapVisible(tester, find.text(goal));
+  await _tapVisible(tester, find.byKey(const Key('sim-entry-g3-goal-submit')));
+  await _scrollUntilText(tester, deadline);
+  await _tapVisible(tester, find.text(deadline));
+  await _tapVisible(
+    tester,
+    find.byKey(const Key('sim-entry-g3-deadline-submit')),
+  );
+  await _scrollUntilText(tester, expectedResult);
+  await _tapVisible(tester, find.text(expectedResult));
+  await _tapVisible(
+    tester,
+    find.byKey(const Key('sim-entry-g3-result-submit')),
+  );
 }
 
 void main() {
@@ -133,13 +186,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Italiano'), findsOneWidget);
 
-    await tester.tap(find.text('Italiano'));
+    await tester.drag(
+      find.byKey(const Key('sim-entry-language-list')),
+      const Offset(0, 180),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Português'));
     await tester.pumpAndSettle();
 
-    expect(session.interfaceLocaleTag, 'it');
-    expect(session.learningLocaleTag, 'it');
-    expect(session.explanationLanguage, 'Italian');
-    expect(find.textContaining('Italiano'), findsWidgets);
+    expect(session.interfaceLocaleTag, 'pt-BR');
+    expect(session.learningLocaleTag, 'pt-BR');
+    expect(session.explanationLanguage, 'Portuguese');
+    expect(find.textContaining('Português'), findsWidgets);
   });
 
   testWidgets('O.2/O.11 ficha pedagogica chega completa ao payload T00', (
@@ -172,24 +230,10 @@ void main() {
     await session.setInterfaceLanguage(followDevice: false, localeTag: 'pt-BR');
     await session.setLearningLanguage(localeTag: 'pt-BR');
 
-    await _pumpEntry(tester, session);
+    await _pumpEntry(tester, session, interfaceLocale: 'en');
 
     await _completeProfileGroup(tester);
-    await _tapVisible(tester, find.text('Quero que o SIM monte minhas aulas'));
-    await tester.enterText(
-      find.byKey(const Key('sim-entry-topic-input')),
-      'Frações equivalentes',
-    );
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.byKey(const Key('sim-entry-topic-submit')));
-    await tester.enterText(
-      find.byKey(const Key('sim-entry-level-input')),
-      '5º ano, Brasil',
-    );
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.byKey(const Key('sim-entry-level-submit')));
-    await _tapVisible(tester, find.text('Esta semana'));
-    await _tapVisible(tester, find.text('Com imagem'));
+    await _completeSimBuildPathWithG3(tester, session: session);
 
     await _tapVisible(
       tester,
@@ -214,10 +258,15 @@ void main() {
     expect(ficha?['initial_adaptation_guidance'], contains('Concentração'));
     expect(ficha?['entry_path'], 'sim_monta');
     expect(ficha?['topic'], 'Frações equivalentes');
-    expect(ficha?['academic_level'], '5º ano, Brasil');
+    expect(ficha?['academic_level'], 'Ensino médio, internacional');
     expect(ficha?['objective'], contains('Frações equivalentes'));
+    expect(ficha?['learning_goal'], 'Frações equivalentes');
+    expect(ficha?['traversal_goal'], 'Prova ou teste');
+    expect(ficha?['exam_goal'], 'Prova ou teste');
     expect(ficha?['deadline'], 'Esta semana');
-    expect(ficha?['learning_preference'], 'Com imagem');
+    expect(ficha?['session_goal'], 'Esta semana');
+    expect(ficha?['expected_result'], 'Resolver exercícios');
+    expect(ficha?['goal_summary'], contains('Objetivo real: Prova ou teste'));
     expect(ficha?['interfaceLocale'], 'pt-BR');
     expect(ficha?['learningLocale'], 'pt-BR');
     expect(ficha?['explanationLanguage'], 'Portuguese');
@@ -333,7 +382,7 @@ void main() {
     expect(find.text('Quero mostrar meu material ao SIM'), findsOneWidget);
   });
 
-  testWidgets('G2.3-G2.7 Fluxo 1 usa dois cards minimos e continua', (
+  testWidgets('G2.3-G3.8 Fluxo 1 usa dois cards minimos e Grupo 3 universal', (
     tester,
   ) async {
     final session = LabSession()
@@ -379,15 +428,62 @@ void main() {
     expect(find.text('SIM: Qual nível devo considerar?'), findsOneWidget);
     await tester.enterText(
       find.byKey(const Key('sim-entry-level-input')),
-      '5º ano, Brasil',
+      'Ensino médio, currículo local',
     );
     await tester.pumpAndSettle();
+    setSimActiveLanguage('pt-BR');
     await _tapVisible(tester, find.byKey(const Key('sim-entry-level-submit')));
     expect(session.entryPath, 'sim_monta');
     expect(session.topic, 'Sistema digestivo');
-    expect(session.academicLevel, '5º ano, Brasil');
-    expect(find.text('Prazo'), findsOneWidget);
+    expect(session.academicLevel, 'Ensino médio, currículo local');
+    expect(session.simLearningLevelSubmitted, isTrue);
+    await _scrollUntilText(tester, 'SIM: Para que você está estudando isso?');
+    expect(
+      find.text('SIM: Para que você está estudando isso?'),
+      findsOneWidget,
+    );
+    expect(find.text('Prova ou teste'), findsOneWidget);
+    expect(find.text('Exame de entrada ou vestibular'), findsOneWidget);
+    expect(find.text('ENEM'), findsNothing);
+    expect(find.text('Resumo da ficha'), findsNothing);
+    await _tapVisible(tester, find.text('Uso no trabalho'));
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('sim-entry-g3-goal-submit')),
+    );
+    await _scrollUntilText(tester, 'SIM: Você tem prazo?');
+    expect(find.text('SIM: Você tem prazo?'), findsOneWidget);
+    await _tapVisible(tester, find.text('Quero escrever uma data'));
+    await tester.enterText(
+      find.byKey(const Key('sim-entry-g3-deadline-custom')),
+      '15 de agosto',
+    );
+    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('sim-entry-g3-deadline-submit')),
+    );
+    await _scrollUntilText(
+      tester,
+      'SIM: O que você quer conseguir fazer no final?',
+    );
+    expect(
+      find.text('SIM: O que você quer conseguir fazer no final?'),
+      findsOneWidget,
+    );
+    await _tapVisible(tester, find.text('Aplicar na prática'));
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('sim-entry-g3-result-submit')),
+    );
     expect(find.text('Resumo da ficha'), findsOneWidget);
+    final ficha = session.buildPedagogicalFicha();
+    expect(ficha['entry_path'], 'sim_monta');
+    expect(ficha['learning_goal'], 'Sistema digestivo');
+    expect(ficha['real_use_goal'], 'Uso no trabalho');
+    expect(ficha['deadline_custom'], '15 de agosto');
+    expect(ficha['session_goal'], '15 de agosto');
+    expect(ficha['expected_result'], 'Aplicar na prática');
   });
 
   testWidgets('G2.4-G2.10 Fluxo 2 material e final sem Grupo 3 obrigatorio', (
@@ -425,6 +521,8 @@ void main() {
 
     expect(find.text('SIM: O que você quer aprender?'), findsNothing);
     expect(find.text('SIM: Qual nível devo considerar?'), findsNothing);
+    expect(find.text('SIM: Para que você está estudando isso?'), findsNothing);
+    expect(find.text('SIM: Você tem prazo?'), findsNothing);
     expect(find.text('Resumo da ficha'), findsOneWidget);
     final ficha = session.buildPedagogicalFicha();
     expect(ficha['entry_path'], 'tenho_material');
@@ -434,6 +532,41 @@ void main() {
       (ficha['material_received'] as Map)['freeText'],
       contains('questão'),
     );
+  });
+
+  testWidgets('G3.9 Grupo 3 usa textos localizaveis em ingles', (tester) async {
+    setSimActiveLanguage('en');
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..route = '/cyber/idioma';
+
+    await _pumpEntry(tester, session);
+    await _completeProfileGroup(tester);
+    await _tapVisible(tester, find.text('Quero que o SIM monte minhas aulas'));
+    await tester.enterText(
+      find.byKey(const Key('sim-entry-topic-input')),
+      'Digestive system',
+    );
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-topic-submit')));
+    await tester.enterText(
+      find.byKey(const Key('sim-entry-level-input')),
+      'Beginner',
+    );
+    await tester.pumpAndSettle();
+    session.localeSettings = session.localeSettings.copyWith(
+      followDeviceInterface: false,
+      manualInterfaceLocale: 'en',
+      learningLocale: 'en',
+    );
+    setSimActiveLanguage('en');
+    await _tapVisible(tester, find.byKey(const Key('sim-entry-level-submit')));
+
+    await _scrollUntilText(tester, 'SIM: What are you studying this for?');
+    expect(find.text('SIM: What are you studying this for?'), findsOneWidget);
+    expect(find.text('Para que você está estudando isso?'), findsNothing);
+    expect(find.text('Entrance or admission exam'), findsOneWidget);
   });
 
   testWidgets('O.12 Grupo 1 quebra opcoes sem overflow em celular e tablet', (
@@ -477,21 +610,13 @@ void main() {
 
     await _pumpEntry(tester, session, size: const Size(430, 3400));
     await _completeProfileGroup(tester);
-    await _tapVisible(tester, find.text('Quero que o SIM monte minhas aulas'));
-    await tester.enterText(
-      find.byKey(const Key('sim-entry-topic-input')),
-      'Frações',
+    await _completeSimBuildPathWithG3(
+      tester,
+      session: session,
+      topic: 'Frações',
+      level: '5º ano, currículo local',
+      expectedResult: 'Resolver exercícios',
     );
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.byKey(const Key('sim-entry-topic-submit')));
-    await tester.enterText(
-      find.byKey(const Key('sim-entry-level-input')),
-      '5º ano, Brasil',
-    );
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.byKey(const Key('sim-entry-level-submit')));
-    await _tapVisible(tester, find.text('Esta semana'));
-    await _tapVisible(tester, find.text('Com imagem'));
 
     await tester.pumpWidget(
       SimThemeScope(
