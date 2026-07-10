@@ -5,8 +5,9 @@ JsonMap buildT00Phase1Body({
   required String lang,
   required String academic,
 }) {
-  final attachmentsText =
-      data['attachments_text'] is String ? data['attachments_text'] : '';
+  final attachmentsText = data['attachments_text'] is String
+      ? data['attachments_text']
+      : '';
 
   return {
     'ficha': {
@@ -24,8 +25,7 @@ JsonMap buildT00Phase1Body({
       'age_range': data['age_range'],
       'school_year': data['school_year'],
       'country_or_curriculum': data['country_or_curriculum'],
-      'official_curriculum_reference':
-          data['official_curriculum_reference'],
+      'official_curriculum_reference': data['official_curriculum_reference'],
       'GEOGRAPHIC_ZONE': data['GEOGRAPHIC_ZONE'],
       'subject': data['subject'],
       'target_topic': data['target_topic'],
@@ -42,10 +42,24 @@ JsonMap buildT00Phase1Body({
       'emotional_learning_context': data['emotional_learning_context'],
       'cognitive_learning_context': data['cognitive_learning_context'],
       'learning_care_notes': data['learning_care_notes'],
-      'student_profile_public_summary':
-          data['student_profile_public_summary'],
+      'student_profile_public_summary': data['student_profile_public_summary'],
       'student_profile_internal': data['student_profile_internal'],
       'interpreted_fields': data['interpreted_fields'],
+      'curriculum_continuation': data['curriculum_continuation'],
+      'rootLessonLocalId': data['rootLessonLocalId'],
+      'previousLessonLocalId': data['previousLessonLocalId'],
+      'partNumber': data['partNumber'],
+      'part_number': data['part_number'],
+      'previousBatch': data['previousBatch'],
+      'previous_batch': data['previous_batch'],
+      'nextGlobalItemToRequest': data['nextGlobalItemToRequest'],
+      'next_global_item_to_request': data['next_global_item_to_request'],
+      'globalTotalItems': data['globalTotalItems'],
+      'global_total_items': data['global_total_items'],
+      'unitsPending': data['unitsPending'],
+      'units_pending': data['units_pending'],
+      'continuationInstruction': data['continuationInstruction'],
+      'continuation_instruction': data['continuation_instruction'],
     },
   };
 }

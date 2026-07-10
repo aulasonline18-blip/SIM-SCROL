@@ -32,6 +32,7 @@ import '../../sim/classroom/classroom_models.dart';
 import '../../sim/classroom/lesson_runtime_engine.dart';
 import '../../sim/classroom/lesson_main_view_model.dart';
 import '../../sim/experience/student_experience_types.dart';
+import '../../sim/experience/curriculum_utils.dart';
 import '../../sim/organism/sim_organism.dart';
 import '../../sim/organism/sim_organism_provider.dart';
 import '../../sim/placement/placement_route_controller.dart';
@@ -2079,6 +2080,10 @@ class LabSession extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (_activateReadyNextCurriculumPartIfNeeded(id)) {
+      unawaited(openAulaRuntime());
+      return;
+    }
     aulaRuntimeLoading = true;
     aulaRuntimeError = null;
     notifyListeners();
@@ -2107,6 +2112,31 @@ class LabSession extends ChangeNotifier {
       aulaRuntimeLoading = false;
       notifyListeners();
     }
+  }
+
+  bool _activateReadyNextCurriculumPartIfNeeded(String currentLessonId) {
+    if (prefs == null) return false;
+    final organism = _organismForActiveLesson();
+    final state = organism.stateService.read(currentLessonId);
+    if (state == null || state.curriculum?.items.isNotEmpty != true) {
+      return false;
+    }
+    final itemCount = state.curriculum!.items.length;
+    final progressIdx = state.progress?.itemIdx ?? state.current?.itemIdx ?? 0;
+    final finished =
+        state.extra['finalizada'] == true ||
+        progressIdx >= itemCount ||
+        (state.progress?.mainAdvances ?? 0) >= itemCount;
+    if (!finished) return false;
+
+    final next = readyNextCurriculumPart(
+      service: organism.stateService,
+      state: state,
+    );
+    if (next == null) return false;
+    lessonLocalId = next.lessonLocalId;
+    navigationState.openRoute('/cyber/aula');
+    return true;
   }
 
   void preparationDone() {

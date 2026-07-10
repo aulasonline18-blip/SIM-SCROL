@@ -29,6 +29,7 @@ class StudentExperienceT00Adapter {
     required String source,
   })?
   onCurriculumExpanded;
+  final Set<String> _continuationInFlight = <String>{};
 
   Future<FirstCurriculumItem> startT00UntilFirstItem(
     StudentExperienceArgs args,
@@ -38,6 +39,13 @@ class StudentExperienceT00Adapter {
     if (existing != null &&
         existing.items.isNotEmpty &&
         normalizeStudyKey(existing.topic) == normalizeStudyKey(topic)) {
+      final existingState = service.read(args.lessonLocalId);
+      if (existingState != null) {
+        _scheduleContinuationIfNeeded(
+          sourceLessonLocalId: args.lessonLocalId,
+          args: args,
+        );
+      }
       return _firstItemFrom(existing)!;
     }
 
@@ -250,7 +258,7 @@ class StudentExperienceT00Adapter {
                 globalPlan: globalPlan,
               );
               service.mutate(args.lessonLocalId, (state) {
-                return state.copyWith(
+                var nextState = state.copyWith(
                   curriculum: curriculum,
                   curriculumStatus: StudentCurriculumStatus(
                     status: CurriculumStatusValue.expanded,
@@ -270,7 +278,40 @@ class StudentExperienceT00Adapter {
                         'curriculum_global_plan': globalPlan.toJson(),
                     },
                   ),
+                  extra: {
+                    ...state.extra,
+                    'curriculumPlanRootLessonId':
+                        state.extra['curriculumPlanRootLessonId'] ??
+                        args.onboarding['rootLessonLocalId'] ??
+                        args.lessonLocalId,
+                    'curriculumPartNumber': globalPlan?.partNumber ?? 1,
+                    if (args.onboarding['previousLessonLocalId'] != null)
+                      'previousCurriculumPartLessonId':
+                          args.onboarding['previousLessonLocalId'],
+                  },
                 );
+                final request = buildCurriculumContinuationRequest(nextState);
+                final nextPart = request == null
+                    ? null
+                    : request['partNumber'] as int?;
+                if (request != null && nextPart != null) {
+                  nextState = markCurriculumPartStatus(
+                    state: nextState,
+                    status: 'preparing',
+                    nextLessonLocalId: curriculumPartLessonId(
+                      curriculumPlanRootLessonId(nextState),
+                      nextPart,
+                    ),
+                  );
+                } else {
+                  nextState = nextState.copyWith(
+                    extra: {
+                      ...nextState.extra,
+                      'nextCurriculumPartStatus': 'none',
+                    },
+                  );
+                }
+                return nextState;
               });
               publishStudentExperienceEvent(
                 service,
@@ -286,6 +327,10 @@ class StudentExperienceT00Adapter {
                 args.lessonLocalId,
                 topic,
                 'StudentExperienceEngineV2:t00_final_expanded',
+              );
+              _scheduleContinuationIfNeeded(
+                sourceLessonLocalId: args.lessonLocalId,
+                args: args,
               );
               first ??= _firstItemFrom(curriculum);
             }
@@ -362,6 +407,128 @@ class StudentExperienceT00Adapter {
       itemIndex: 0,
       marker: item.marker,
     );
+  }
+
+  void _scheduleContinuationIfNeeded({
+    required String sourceLessonLocalId,
+    required StudentExperienceArgs args,
+  }) {
+    final sourceState = service.read(sourceLessonLocalId);
+    if (sourceState == null) return;
+    final request = buildCurriculumContinuationRequest(sourceState);
+    if (request == null) return;
+    final partNumber = request['partNumber'] as int?;
+    if (partNumber == null || partNumber <= 1) return;
+
+    final rootId = curriculumPlanRootLessonId(sourceState);
+    final nextLessonLocalId = curriculumPartLessonId(rootId, partNumber);
+    final existingNext = service.read(nextLessonLocalId);
+    if (existingNext?.curriculum?.items.isNotEmpty == true) {
+      service.mutate(sourceLessonLocalId, (state) {
+        return markCurriculumPartStatus(
+          state: state,
+          status: 'ready',
+          nextLessonLocalId: nextLessonLocalId,
+        );
+      });
+      return;
+    }
+
+    final inFlightKey = '$sourceLessonLocalId->$nextLessonLocalId';
+    if (!_continuationInFlight.add(inFlightKey)) return;
+
+    service.mutate(sourceLessonLocalId, (state) {
+      return markCurriculumPartStatus(
+        state: state,
+        status: 'preparing',
+        nextLessonLocalId: nextLessonLocalId,
+      );
+    });
+
+    unawaited(
+      _prefetchContinuation(
+        sourceState: sourceState,
+        request: request,
+        args: args,
+        nextLessonLocalId: nextLessonLocalId,
+        inFlightKey: inFlightKey,
+      ),
+    );
+  }
+
+  Future<void> _prefetchContinuation({
+    required StudentLearningState sourceState,
+    required JsonMap request,
+    required StudentExperienceArgs args,
+    required String nextLessonLocalId,
+    required String inFlightKey,
+  }) async {
+    try {
+      final continuationOnboarding = _buildContinuationOnboarding(
+        sourceState: sourceState,
+        request: request,
+        args: args,
+        nextLessonLocalId: nextLessonLocalId,
+      );
+      await startT00UntilFirstItem(
+        StudentExperienceArgs(
+          academic: args.academic,
+          idioma: args.idioma,
+          lessonLocalId: nextLessonLocalId,
+          onboarding: continuationOnboarding,
+          localeContract: args.localeContract,
+        ),
+      );
+      service.mutate(sourceState.lessonLocalId, (state) {
+        return markCurriculumPartStatus(
+          state: state,
+          status: 'ready',
+          nextLessonLocalId: nextLessonLocalId,
+        );
+      });
+    } catch (error) {
+      service.mutate(sourceState.lessonLocalId, (state) {
+        return markCurriculumPartStatus(
+          state: state,
+          status: 'failed',
+          nextLessonLocalId: nextLessonLocalId,
+          error: error.toString(),
+        );
+      });
+    } finally {
+      _continuationInFlight.remove(inFlightKey);
+    }
+  }
+
+  JsonMap _buildContinuationOnboarding({
+    required StudentLearningState sourceState,
+    required JsonMap request,
+    required StudentExperienceArgs args,
+    required String nextLessonLocalId,
+  }) {
+    final topic = sourceState.curriculum?.topic.trim();
+    final objetivo = topic?.isNotEmpty == true
+        ? topic!
+        : (args.onboarding['objetivo'] ?? args.onboarding['free_text'] ?? '')
+              .toString();
+    return {
+      ...args.onboarding,
+      ...request,
+      'lessonLocalId': nextLessonLocalId,
+      'rootLessonLocalId': curriculumPlanRootLessonId(sourceState),
+      'previousLessonLocalId': sourceState.lessonLocalId,
+      'curriculum_continuation': true,
+      'objetivo': objetivo,
+      'free_text': objetivo,
+      'target_topic': args.onboarding['target_topic'] ?? objetivo,
+      'TARGET_TOPIC': args.onboarding['TARGET_TOPIC'] ?? objetivo,
+      'previous_batch': request['previousBatch'],
+      'next_global_item_to_request': request['nextGlobalItemToRequest'],
+      'global_total_items': request['globalTotalItems'],
+      'units_pending': request['unitsPending'],
+      'continuation_instruction': request['continuationInstruction'],
+      'part_number': request['partNumber'],
+    };
   }
 
   void _notifyCurriculumExpanded(

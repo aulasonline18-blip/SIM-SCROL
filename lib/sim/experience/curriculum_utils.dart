@@ -1,4 +1,5 @@
 import '../state/student_learning_state.dart';
+import '../state/student_learning_state_service.dart';
 
 String itemText(CurriculumItem item) {
   return (item.microitemForTeacher ?? item.title ?? item.text).trim();
@@ -117,6 +118,60 @@ JsonMap? buildCurriculumContinuationRequest(StudentLearningState state) {
     'continuationInstruction': plan.continuationInstruction,
     'profile': state.profile.toJson(),
   };
+}
+
+String curriculumPlanRootLessonId(StudentLearningState state) {
+  final raw = state.extra['curriculumPlanRootLessonId'];
+  final text = raw?.toString().trim();
+  return text == null || text.isEmpty ? state.lessonLocalId : text;
+}
+
+String curriculumPartLessonId(String rootLessonLocalId, int partNumber) {
+  final cleanRoot = rootLessonLocalId.trim();
+  if (partNumber <= 1) return cleanRoot;
+  return '$cleanRoot::part-$partNumber';
+}
+
+String? nextCurriculumPartLessonId(StudentLearningState state) {
+  final raw = state.extra['nextCurriculumPartLessonId'];
+  final fromExtra = raw?.toString().trim();
+  if (fromExtra != null && fromExtra.isNotEmpty) return fromExtra;
+
+  final request = buildCurriculumContinuationRequest(state);
+  final nextPart = request == null ? null : _intFrom(request['partNumber']);
+  if (nextPart == null || nextPart <= 1) return null;
+  return curriculumPartLessonId(curriculumPlanRootLessonId(state), nextPart);
+}
+
+StudentLearningState markCurriculumPartStatus({
+  required StudentLearningState state,
+  required String status,
+  String? nextLessonLocalId,
+  String? error,
+}) {
+  final extra = {
+    ...state.extra,
+    'curriculumPlanRootLessonId': curriculumPlanRootLessonId(state),
+    'curriculumPartNumber': state.curriculum?.globalPlan?.partNumber ?? 1,
+    'nextCurriculumPartStatus': status,
+  };
+  if (nextLessonLocalId != null) {
+    extra['nextCurriculumPartLessonId'] = nextLessonLocalId;
+  }
+  if (error != null) {
+    extra['nextCurriculumPartError'] = error;
+  }
+  return state.copyWith(extra: extra);
+}
+
+StudentLearningState? readyNextCurriculumPart({
+  required StudentLearningStateService service,
+  required StudentLearningState state,
+}) {
+  final nextId = nextCurriculumPartLessonId(state);
+  if (nextId == null) return null;
+  final next = service.read(nextId);
+  return next?.curriculum?.items.isNotEmpty == true ? next : null;
 }
 
 JsonMap? _planMapFrom(Object? value) {
