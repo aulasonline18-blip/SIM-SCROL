@@ -571,6 +571,52 @@ void main() {
     expect(ficha['expected_result'], 'Aplicar na prática');
   });
 
+  testWidgets('Resumo permite ajustar ficha sem preparar aula', (tester) async {
+    var prepareCalls = 0;
+    final session =
+        LabSession(
+            experiencePreparerOverride: (_) async {
+              prepareCalls += 1;
+              return const StudentExperienceResult(
+                destination: '/cyber/aula',
+                curriculum: StudentCurriculum(
+                  topic: 'Frações',
+                  totalItems: 1,
+                  generatedAt: null,
+                  provisional: false,
+                  items: [CurriculumItem(marker: 'M1', text: 'Frações')],
+                ),
+                startMarker: 'M1',
+                startItemIndex: 0,
+              );
+            },
+          )
+          ..authed = true
+          ..authReady = true
+          ..credits = 999999
+          ..route = '/cyber/idioma';
+
+    await _pumpEntry(tester, session);
+    await _completeLanguageGroup(tester);
+    await _completeProfileGroup(tester);
+    await _completeSimBuildPathWithG3(tester, session: session);
+
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('sim-entry-adjust-ficha-button')),
+    );
+
+    expect(
+      find.text(
+        'Revise as respostas acima e prepare quando estiver tudo certo.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('sim-entry-name-input')), findsOneWidget);
+    expect(session.route, '/cyber/idioma');
+    expect(prepareCalls, 0);
+  });
+
   testWidgets('G2.4-G2.10 Fluxo 2 material e final sem Grupo 3 obrigatorio', (
     tester,
   ) async {

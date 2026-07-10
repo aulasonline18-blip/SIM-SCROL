@@ -94,6 +94,7 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
   );
   late final TextEditingController deadlineCustomController =
       TextEditingController(text: widget.session.deadlineCustom);
+  final GlobalKey _profileAdjustTargetKey = GlobalKey();
 
   bool get waitingAttachment => widget.session.attachments.any(
     (a) => a.status == 'uploading' || a.status == 'processing',
@@ -253,6 +254,27 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     widget.session.saveObjectiveEntry();
   }
 
+  void _adjustFicha() {
+    final targetContext = _profileAdjustTargetKey.currentContext;
+    if (targetContext != null) {
+      Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Revise as respostas acima e prepare quando estiver tudo certo.',
+          ),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
@@ -323,6 +345,7 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
             ),
           if (languagesComplete)
             _TimelineTurn(
+              key: _profileAdjustTargetKey,
               number: 3,
               child: _ProfileNameCard(
                 controller: nameController,
@@ -489,6 +512,7 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 canPrepare: canPrepare,
                 sending: sending,
                 error: error == null ? null : t(error!),
+                onAdjust: _adjustFicha,
                 onPrepare: _prepareLesson,
               ),
             ),
@@ -553,7 +577,7 @@ String _entryLanguageOptionLabel(_EntryLanguageOption option) {
 }
 
 class _TimelineTurn extends StatelessWidget {
-  const _TimelineTurn({required this.number, required this.child});
+  const _TimelineTurn({required this.number, required this.child, super.key});
 
   final int number;
   final Widget child;
@@ -1646,6 +1670,7 @@ class _FichaSummaryCard extends StatelessWidget {
     required this.ficha,
     required this.canPrepare,
     required this.sending,
+    required this.onAdjust,
     required this.onPrepare,
     this.error,
   });
@@ -1653,6 +1678,7 @@ class _FichaSummaryCard extends StatelessWidget {
   final Map<String, dynamic> ficha;
   final bool canPrepare;
   final bool sending;
+  final VoidCallback onAdjust;
   final VoidCallback onPrepare;
   final String? error;
 
@@ -1696,7 +1722,8 @@ class _FichaSummaryCard extends StatelessWidget {
               ),
             ),
           TextButton.icon(
-            onPressed: () {},
+            key: const Key('sim-entry-adjust-ficha-button'),
+            onPressed: onAdjust,
             icon: const Icon(Icons.tune_outlined),
             label: const Text('Ajustar ficha'),
           ),
