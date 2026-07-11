@@ -13,6 +13,7 @@ class RecordingTransport implements SimHttpTransport {
   Uri? lastUri;
   Map<String, String>? lastHeaders;
   Object? lastBody;
+  Duration? lastTimeout;
   int statusCode = 200;
   Map<String, String> responseHeaders = const {};
   String jsonBody = '{"dataUrl":"data:image/png;base64,abc"}';
@@ -30,6 +31,7 @@ class RecordingTransport implements SimHttpTransport {
     lastUri = uri;
     lastHeaders = headers;
     lastBody = body;
+    lastTimeout = timeout;
     return SimHttpResponse(
       statusCode: statusCode,
       body: jsonBody,
@@ -168,6 +170,7 @@ void main() {
       expect((body['ficha'] as Map)['learningLocale'], 'pt-BR');
       expect((body['ficha'] as Map)['academic_level'], 'ano 8');
       expect((body['ficha'] as Map)['mode'], 'WARMUP_WELCOME_BRIDGE');
+      expect(transport.lastTimeout, const Duration(seconds: 70));
       expect(
         (body['ficha'] as Map)['objective'],
         'Aprender deslocamento em Física',

@@ -162,7 +162,7 @@ class SimServerWarmupClient {
   SimServerWarmupClient({
     required this.config,
     SimHttpTransport? transport,
-    this.timeout = const Duration(seconds: 12),
+    this.timeout = const Duration(seconds: 70),
   }) : transport = transport ?? DartIoSimHttpTransport();
 
   final SimAiServerConfig config;
