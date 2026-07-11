@@ -328,6 +328,9 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
         targetLanguage: params.targetLanguage,
       ),
     );
+    final serverManagedVisual =
+        material.source == 'server-classroom' &&
+        (material.imageStatus ?? '').trim().isNotEmpty;
     final conteudo = LessonContent(
       explanation: material.explanation,
       question: material.question,
@@ -335,7 +338,9 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       correctAnswer: material.correctAnswer,
       whyCorrect: material.whyCorrect,
       whyWrong: material.whyWrong,
-      visualTrigger: material.visualTrigger,
+      visualTrigger: serverManagedVisual && material.imageDataUrl == null
+          ? null
+          : material.visualTrigger,
     );
     return CompleteLesson(
       conteudo: conteudo,

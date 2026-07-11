@@ -32,12 +32,18 @@ class FakeT02Client implements T02LessonClient {
     this.explanation,
     this.question,
     this.options,
+    this.source = 'fake-t02',
+    this.imageDataUrl,
+    this.imageStatus,
   });
 
   final JsonMap? visualTrigger;
   final String? explanation;
   final String? question;
   final Map<AnswerLetter, String>? options;
+  final String source;
+  final String? imageDataUrl;
+  final String? imageStatus;
   int calls = 0;
   final requests = <T02LessonRequest>[];
 
@@ -59,8 +65,10 @@ class FakeT02Client implements T02LessonClient {
       whyCorrect: 'Porque sim.',
       whyWrong: null,
       generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
-      source: 'fake-t02',
+      source: source,
       visualTrigger: visualTrigger,
+      imageDataUrl: imageDataUrl,
+      imageStatus: imageStatus,
     );
   }
 
@@ -112,6 +120,34 @@ class _StaleThenRasterVisualPipeline extends LessonVisualPipeline {
       svg: null,
       dataUrl: _serverRasterDataUrl,
       source: 'server_raster',
+    );
+  }
+}
+
+class _CountingVisualPipeline extends LessonVisualPipeline {
+  _CountingVisualPipeline()
+    : super(
+        imageClient: const FakeNoopImageClient(),
+        visualRouterClient: const FakeVisualRouterClient(),
+      );
+
+  int calls = 0;
+
+  @override
+  Future<LessonVisualResult> resolveVisual({
+    required LessonVisualTrigger trigger,
+    required String lessonKey,
+    String? stableLang,
+    String? academicLevel,
+    bool allowPaidImages = false,
+    String? acceptedOfferId,
+    String? idempotencyKey,
+  }) async {
+    calls += 1;
+    return const LessonVisualResult(
+      svg: null,
+      dataUrl: _serverRasterDataUrl,
+      source: 'should_not_run_for_server_classroom',
     );
   }
 }
@@ -1444,6 +1480,81 @@ void main() {
       updates.last.imagem,
     );
   });
+
+  test(
+    'server-classroom pending image does not start app visual route',
+    () async {
+      final trigger = {
+        'needs_image': true,
+        'pedagogical_need': 'important',
+        'render_strategy': 'software',
+        'visual_type': 'diagram',
+        'topic': 'Server managed visual',
+        'image_prompt': 'server is preparing this image',
+      };
+      const params = CompleteLessonParams(
+        lessonLocalId: 'cyber-server-visual',
+        item: 'Imagem governada pelo servidor',
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: LessonLayer.l1,
+        mode: LessonMode.session,
+        marker: 'M1',
+      );
+      final service = StudentLearningStateService(
+        seed: {'cyber-server-visual': _stateWithCurriculum()},
+      );
+      final cache = LessonMaterialCache();
+      final bus = LessonEventBus();
+      final visualPipeline = _CountingVisualPipeline();
+      final orchestrator = LessonOrchestrator(
+        t02Client: FakeT02Client(
+          source: 'server-classroom',
+          visualTrigger: trigger,
+          imageStatus: 'processing',
+          explanation: 'Texto da aula chega antes da imagem.',
+          question: 'O que o App deve fazer?',
+          options: const {
+            AnswerLetter.A: 'Exibir texto',
+            AnswerLetter.B: 'Criar imagem local',
+            AnswerLetter.C: 'Mudar progresso',
+          },
+        ),
+        cache: cache,
+        bus: bus,
+        visualPipeline: visualPipeline,
+      );
+      final materialService = StudentLessonMaterialService(
+        stateService: service,
+        orchestrator: orchestrator,
+        readyWindowEngine: DopamineReadyWindowEngine(
+          service: service,
+          orchestrator: orchestrator,
+        ),
+      );
+
+      final result = await materialService
+          .resolveLessonMaterialFromStateOrEngine(
+            ResolveLessonMaterialInput(
+              lessonLocalId: 'cyber-server-visual',
+              topic: 'Objetivo',
+              itemIdx: 0,
+              marker: 'M1',
+              layer: LessonLayer.l1,
+              params: params,
+            ),
+          );
+
+      expect(
+        result?.conteudo.explanation,
+        'Texto da aula chega antes da imagem.',
+      );
+      expect(result?.imagem, isNull);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(visualPipeline.calls, 0);
+      expect(cache.peek(lessonKeyFor(params))?.imagem, isNull);
+    },
+  );
 
   test('StudentExperienceT02Adapter prepares first minimum lesson', () async {
     final service = StudentLearningStateService(

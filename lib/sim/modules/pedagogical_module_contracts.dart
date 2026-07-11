@@ -90,6 +90,8 @@ class T02LessonMaterial {
     this.visualTrigger,
     this.imageDataUrl,
     this.imageId,
+    this.imageStatus,
+    this.imageError,
   });
 
   final String explanation;
@@ -103,6 +105,8 @@ class T02LessonMaterial {
   final JsonMap? visualTrigger;
   final String? imageDataUrl;
   final String? imageId;
+  final String? imageStatus;
+  final String? imageError;
 }
 
 abstract interface class T02LessonClient {

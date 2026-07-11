@@ -848,6 +848,8 @@ class SimServerT02Client implements T02LessonClient {
     final imageDataUrl = imageMap['dataUrl']?.toString();
     final imageId =
         imageMap['imageId']?.toString() ?? slot['imageId']?.toString();
+    final imageStatus = slot['imageStatus']?.toString();
+    final imageError = slot['imageError']?.toString();
     return T02LessonMaterial(
       explanation: parsed.explanation,
       question: parsed.question,
@@ -864,6 +866,12 @@ class SimServerT02Client implements T02LessonClient {
       imageId: imageId == null || imageId.trim().isEmpty
           ? null
           : imageId.trim(),
+      imageStatus: imageStatus == null || imageStatus.trim().isEmpty
+          ? null
+          : imageStatus.trim(),
+      imageError: imageError == null || imageError.trim().isEmpty
+          ? null
+          : imageError.trim(),
     );
   }
 
