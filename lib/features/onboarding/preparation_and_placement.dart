@@ -257,6 +257,8 @@ class WarmupBridgeScreen extends StatelessWidget {
                 lesson: session.warmupLesson,
                 selectedAnswer: session.warmupSelectedAnswer,
                 waitingForOfficial: session.warmupWaitingForOfficialLesson,
+                loading: session.warmupLoading,
+                error: session.warmupError,
                 onAnswer: session.chooseWarmupAnswer,
                 onContinue: session.continueFromWarmupToAula,
               ),
@@ -273,6 +275,8 @@ class _WarmupRoomCard extends StatelessWidget {
     required this.lesson,
     required this.selectedAnswer,
     required this.waitingForOfficial,
+    required this.loading,
+    required this.error,
     required this.onAnswer,
     required this.onContinue,
   });
@@ -280,6 +284,8 @@ class _WarmupRoomCard extends StatelessWidget {
   final SimWarmupLesson? lesson;
   final String? selectedAnswer;
   final bool waitingForOfficial;
+  final bool loading;
+  final String? error;
   final ValueChanged<String> onAnswer;
   final VoidCallback onContinue;
 
@@ -304,21 +310,68 @@ class _WarmupRoomCard extends StatelessWidget {
         ],
       ),
       child: item == null
-          ? Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: palette.primary,
-                ),
-              ),
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (loading) ...[
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: palette.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Preparando uma ponte de boas-vindas...',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: simDark,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'A aula oficial continua sendo preparada.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 12,
+                      height: 1.3,
+                    ),
+                  ),
+                ] else ...[
+                  const Text(
+                    'A ponte de boas-vindas ainda não chegou.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: simDark,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                if (error?.trim().isNotEmpty == true) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'A aula principal continua sendo preparada.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: 12,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ],
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
-                  'Questão de aquecimento',
+                  'Boas-vindas enquanto preparo sua aula',
                   style: TextStyle(
                     color: simDark,
                     fontSize: 16,
@@ -388,7 +441,9 @@ class _WarmupRoomCard extends StatelessWidget {
                           )
                         : const Icon(Icons.arrow_forward),
                     label: Text(
-                      waitingForOfficial ? 'Preparando a aula...' : 'Continuar',
+                      waitingForOfficial
+                          ? 'Preparando a aula oficial...'
+                          : 'Continuar para a aula',
                     ),
                   ),
                 ],

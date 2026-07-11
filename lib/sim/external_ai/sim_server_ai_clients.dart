@@ -85,6 +85,7 @@ class SimWarmupLesson {
     required this.correctAnswer,
     this.whyCorrect,
     this.whyWrong = const {},
+    this.welcomeBridge = true,
   });
 
   final String explanation;
@@ -93,6 +94,7 @@ class SimWarmupLesson {
   final String correctAnswer;
   final String? whyCorrect;
   final Map<String, String> whyWrong;
+  final bool welcomeBridge;
 
   Map<String, Object?> toJson() => {
     'explanation': explanation,
@@ -102,6 +104,8 @@ class SimWarmupLesson {
     'whyCorrect': whyCorrect,
     'whyWrong': whyWrong,
     'type': 'warmup',
+    'mode': 'WARMUP_WELCOME_BRIDGE',
+    'welcomeBridge': welcomeBridge,
     'officialCurriculum': false,
     'countsForMastery': false,
   };
@@ -149,6 +153,7 @@ class SimWarmupLesson {
       correctAnswer: correct,
       whyCorrect: (source['why_correct'] ?? source['whyCorrect'])?.toString(),
       whyWrong: whyWrong,
+      welcomeBridge: source['welcomeBridge'] != false,
     );
   }
 }
@@ -177,11 +182,20 @@ class SimServerWarmupClient {
       body: {
         'lessonLocalId': lessonLocalId,
         'objective': objective,
+        'mode': 'WARMUP_WELCOME_BRIDGE',
+        'warmupMode': 'WARMUP_WELCOME_BRIDGE',
+        'officialCurriculum': false,
+        'countsForMastery': false,
         'ficha': {
           ...ficha,
           ...locale.toJson(),
           'lessonLocalId': lessonLocalId,
           'academic_level': ?academic,
+          'objective': objective,
+          'mode': 'WARMUP_WELCOME_BRIDGE',
+          'warmupMode': 'WARMUP_WELCOME_BRIDGE',
+          'officialCurriculum': false,
+          'countsForMastery': false,
         },
         ...locale.toJson(),
         'academic_level': ?academic,

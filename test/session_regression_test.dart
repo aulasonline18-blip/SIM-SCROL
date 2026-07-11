@@ -11,6 +11,7 @@ import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/auxiliary/doubt_input_sheet.dart';
 import 'package:sim_mobile/sim/config/sim_environment.dart';
 import 'package:sim_mobile/sim/experience/student_experience_types.dart';
+import 'package:sim_mobile/sim/external_ai/sim_server_ai_clients.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
@@ -189,6 +190,77 @@ void main() {
     expect(session.route, '/cyber/warmup');
     expect(session.warmupWaitingForOfficialLesson, isTrue);
   });
+
+  testWidgets('warmup bridge renders welcome T02 microlesson safely', (
+    tester,
+  ) async {
+    final session = LabSession()
+      ..warmupLesson = const SimWarmupLesson(
+        explanation:
+            'Hello, Joel. While I prepare your full lesson, let us begin with a simple first contact.',
+        question: 'Which first step fits Kiribati conversation?',
+        options: {
+          'A': 'Build a useful greeting',
+          'B': 'Take a final exam now',
+          'C': 'Block the lesson',
+        },
+        correctAnswer: 'A',
+        whyCorrect:
+            'Good start. A useful greeting is a gentle bridge into real conversation.',
+        whyWrong: {'B': 'No exam is needed here.'},
+      )
+      ..route = '/cyber/warmup';
+
+    await tester.pumpWidget(
+      MaterialApp(home: WarmupBridgeScreen(session: session)),
+    );
+
+    expect(find.text('Boas-vindas enquanto preparo sua aula'), findsOneWidget);
+    expect(find.textContaining('Hello, Joel'), findsOneWidget);
+    expect(
+      find.text('Which first step fits Kiribati conversation?'),
+      findsOneWidget,
+    );
+    expect(find.text('Build a useful greeting'), findsOneWidget);
+    expect(session.warmupLesson?.toJson()['officialCurriculum'], isFalse);
+    expect(session.warmupLesson?.toJson()['countsForMastery'], isFalse);
+    expect(session.warmupLesson?.toJson()['mode'], 'WARMUP_WELCOME_BRIDGE');
+
+    await tester.tap(find.text('Build a useful greeting'));
+    await tester.pumpWidget(
+      MaterialApp(home: WarmupBridgeScreen(session: session)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Good start. A useful greeting'),
+      findsOneWidget,
+    );
+    expect(find.text('Continuar para a aula'), findsOneWidget);
+  });
+
+  testWidgets(
+    'warmup bridge shows controlled loading while official lesson prepares',
+    (tester) async {
+      final session = LabSession()
+        ..route = '/cyber/warmup'
+        ..warmupLoading = true;
+
+      await tester.pumpWidget(
+        MaterialApp(home: WarmupBridgeScreen(session: session)),
+      );
+
+      expect(
+        find.text('Preparando uma ponte de boas-vindas...'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('A aula oficial continua sendo preparada.'),
+        findsOneWidget,
+      );
+      expect(find.text('Questão de aquecimento'), findsNothing);
+    },
+  );
 
   testWidgets(
     'erro do onboarding respeita idioma portugues nos botoes de retry',

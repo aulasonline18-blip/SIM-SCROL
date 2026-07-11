@@ -161,11 +161,21 @@ void main() {
       final body = transport.lastBody as Map;
       expect(body['lessonLocalId'], 'lesson-warmup-1');
       expect(body['objective'], 'Aprender deslocamento em Física');
+      expect(body['mode'], 'WARMUP_WELCOME_BRIDGE');
+      expect(body['officialCurriculum'], false);
+      expect(body['countsForMastery'], false);
       expect(body['interfaceLocale'], 'pt-BR');
       expect((body['ficha'] as Map)['learningLocale'], 'pt-BR');
       expect((body['ficha'] as Map)['academic_level'], 'ano 8');
+      expect((body['ficha'] as Map)['mode'], 'WARMUP_WELCOME_BRIDGE');
+      expect(
+        (body['ficha'] as Map)['objective'],
+        'Aprender deslocamento em Física',
+      );
       expect(lesson?.toJson()['officialCurriculum'], isFalse);
       expect(lesson?.toJson()['countsForMastery'], isFalse);
+      expect(lesson?.toJson()['mode'], 'WARMUP_WELCOME_BRIDGE');
+      expect(lesson?.toJson()['welcomeBridge'], isTrue);
       expect(lesson?.options.keys, ['A', 'B', 'C']);
       expect(lesson?.correctAnswer, 'A');
     },
