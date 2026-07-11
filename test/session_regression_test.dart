@@ -191,6 +191,32 @@ void main() {
     expect(session.warmupWaitingForOfficialLesson, isTrue);
   });
 
+  test(
+    'warmup T02 pronto abre ponte diretamente enquanto aula oficial prepara',
+    () async {
+      final session = LabSession()
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'pt-BR'
+        ..freeText = 'Quero aprender deslocamento em física começando do zero.'
+        ..authReady = true
+        ..authed = true;
+
+      session.warmupLesson = const SimWarmupLesson(
+        explanation: 'Welcome bridge.',
+        question: 'What should happen first?',
+        options: {'A': 'Begin gently', 'B': 'Grade now', 'C': 'Block'},
+        correctAnswer: 'A',
+      );
+      session.route = '/cyber/curriculo';
+
+      session.openWarmupBridge();
+
+      expect(session.route, '/cyber/warmup');
+      expect(session.warmupLesson?.toJson()['officialCurriculum'], isFalse);
+      expect(session.warmupLesson?.toJson()['countsForMastery'], isFalse);
+    },
+  );
+
   testWidgets('warmup bridge renders welcome T02 microlesson safely', (
     tester,
   ) async {

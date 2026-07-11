@@ -1027,7 +1027,7 @@ class LabSession extends ChangeNotifier {
           );
         });
         if (route == '/cyber/curriculo') {
-          navigationState.openRoute('/cyber/placement');
+          navigationState.openRoute('/cyber/warmup');
         }
       }
       notifyListeners();
