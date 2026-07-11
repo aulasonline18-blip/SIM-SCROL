@@ -239,6 +239,8 @@ class StudentExperienceT02Adapter {
         {
           'order': index + 1,
           'marker': curriculum.items[index].marker,
+          if ((curriculum.items[index].unit ?? '').trim().isNotEmpty)
+            'unit': curriculum.items[index].unit!.trim(),
           'title':
               curriculum.items[index].title ?? curriculum.items[index].text,
           'text': curriculum.items[index].text,

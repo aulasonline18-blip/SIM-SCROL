@@ -6,6 +6,7 @@ class T00StreamItem {
   const T00StreamItem({
     this.order,
     this.marker,
+    this.unit,
     this.text,
     this.title,
     this.microitemForTeacher,
@@ -13,6 +14,7 @@ class T00StreamItem {
 
   final int? order;
   final String? marker;
+  final String? unit;
   final String? text;
   final String? title;
   final String? microitemForTeacher;
@@ -20,6 +22,7 @@ class T00StreamItem {
   factory T00StreamItem.fromJson(JsonMap json) => T00StreamItem(
     order: (json['order'] as num?)?.toInt(),
     marker: json['marker'] as String?,
+    unit: json['unit'] as String?,
     text: json['text'] as String?,
     title: json['title'] as String?,
     microitemForTeacher: json['microitem_for_teacher'] as String?,
@@ -61,6 +64,7 @@ PartialCurriculumAppendResult? appendPartialCurriculumItemToState({
   final item = CurriculumItem(
     marker: marker,
     text: text,
+    unit: raw.unit?.trim().isNotEmpty == true ? raw.unit!.trim() : null,
     title: raw.title?.trim().isNotEmpty == true ? raw.title!.trim() : text,
     microitemForTeacher: text,
     extra: const {'source_status': 'partial'},

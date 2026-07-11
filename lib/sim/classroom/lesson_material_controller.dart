@@ -204,6 +204,8 @@ class LessonMaterialController {
 
     return {
       if (item.marker.isNotEmpty) 'marker': item.marker,
+      if ((item.unit ?? '').trim().isNotEmpty) 'unit': item.unit!.trim(),
+      if ((item.title ?? '').trim().isNotEmpty) 'title': item.title!.trim(),
       if (pick(['stableLang', 'STABLE_LANG', 'idioma']).isNotEmpty)
         'stable_lang': pick(['stableLang', 'STABLE_LANG', 'idioma']),
       if (pick(['academic_level', 'ACADEMIC_LEVEL']).isNotEmpty)
@@ -239,6 +241,8 @@ class LessonMaterialController {
         {
           'order': index + 1,
           'marker': items[index].marker,
+          if ((items[index].unit ?? '').trim().isNotEmpty)
+            'unit': items[index].unit!.trim(),
           'title': items[index].text,
           'text': items[index].text,
           'purpose': items[index].text,

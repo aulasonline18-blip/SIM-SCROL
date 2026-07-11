@@ -54,6 +54,7 @@ class PlannedItem {
   const PlannedItem({
     required this.marker,
     required this.text,
+    this.unit,
     this.title,
     this.isReview = false,
     this.reviewLayer,
@@ -63,6 +64,7 @@ class PlannedItem {
 
   final String marker;
   final String text;
+  final String? unit;
   final String? title;
   final bool isReview;
   final LessonLayer? reviewLayer;
@@ -72,6 +74,7 @@ class PlannedItem {
   factory PlannedItem.fromCurriculum(CurriculumItem item) => PlannedItem(
     marker: item.marker,
     text: item.teacherText,
+    unit: item.unit,
     title: item.title,
   );
 }

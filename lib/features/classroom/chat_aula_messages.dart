@@ -116,6 +116,8 @@ class ChatLessonMessage {
     this.actionKey,
     this.lessonLocalId,
     this.marker,
+    this.unit,
+    this.title,
     this.itemIdx,
     this.layer,
     this.createdAt,
@@ -145,6 +147,8 @@ class ChatLessonMessage {
   final String? actionKey;
   final String? lessonLocalId;
   final String? marker;
+  final String? unit;
+  final String? title;
   final int? itemIdx;
   final int? layer;
   final int? createdAt;
@@ -184,6 +188,8 @@ class ChatLessonMessage {
     String? actionKey,
     String? lessonLocalId,
     String? marker,
+    String? unit,
+    String? title,
     int? itemIdx,
     int? layer,
     int? createdAt,
@@ -213,6 +219,8 @@ class ChatLessonMessage {
       actionKey: actionKey ?? this.actionKey,
       lessonLocalId: lessonLocalId ?? this.lessonLocalId,
       marker: marker ?? this.marker,
+      unit: unit ?? this.unit,
+      title: title ?? this.title,
       itemIdx: itemIdx ?? this.itemIdx,
       layer: layer ?? this.layer,
       createdAt: createdAt ?? this.createdAt,
@@ -244,6 +252,8 @@ class ChatLessonMessage {
     'actionKey': actionKey,
     'lessonLocalId': lessonLocalId,
     'marker': marker,
+    'unit': unit,
+    'title': title,
     'itemIdx': itemIdx,
     'layer': layer,
     'createdAt': createdAt,
@@ -280,6 +290,8 @@ class ChatLessonMessage {
       actionKey: _stringOrNull(raw['actionKey']),
       lessonLocalId: _stringOrNull(raw['lessonLocalId']),
       marker: _stringOrNull(raw['marker']),
+      unit: _stringOrNull(raw['unit']),
+      title: _stringOrNull(raw['title']),
       itemIdx: _intOrNull(raw['itemIdx']),
       layer: _intOrNull(raw['layer']),
       createdAt: _intOrNull(raw['createdAt']),

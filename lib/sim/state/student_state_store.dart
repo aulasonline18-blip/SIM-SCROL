@@ -526,6 +526,7 @@ class StudentStateStore {
                               item['title'] ??
                               '')
                           .toString(),
+                  unit: item['unit']?.toString(),
                   title: item['title']?.toString(),
                   microitemForTeacher:
                       (item['microitem_for_teacher'] ??
@@ -537,6 +538,7 @@ class StudentStateStore {
                         'marker',
                         'id',
                         'text',
+                        'unit',
                         'title',
                         'microitem_for_teacher',
                         'what_student_must_master',

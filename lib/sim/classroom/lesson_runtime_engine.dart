@@ -24,6 +24,8 @@ class LessonRuntimeSnapshot {
     this.imageMetadata,
     required this.itemMarker,
     required this.itemText,
+    this.itemUnit,
+    this.itemTitle,
   });
 
   final bool authReady;
@@ -38,6 +40,8 @@ class LessonRuntimeSnapshot {
   final LessonImageGenerationMetadata? imageMetadata;
   final String? itemMarker;
   final String? itemText;
+  final String? itemUnit;
+  final String? itemTitle;
 
   static const Object _unset = Object();
 
@@ -54,6 +58,8 @@ class LessonRuntimeSnapshot {
     Object? imageMetadata = _unset,
     Object? itemMarker = _unset,
     Object? itemText = _unset,
+    Object? itemUnit = _unset,
+    Object? itemTitle = _unset,
   }) {
     return LessonRuntimeSnapshot(
       authReady: authReady ?? this.authReady,
@@ -78,6 +84,12 @@ class LessonRuntimeSnapshot {
       itemText: identical(itemText, _unset)
           ? this.itemText
           : itemText as String?,
+      itemUnit: identical(itemUnit, _unset)
+          ? this.itemUnit
+          : itemUnit as String?,
+      itemTitle: identical(itemTitle, _unset)
+          ? this.itemTitle
+          : itemTitle as String?,
     );
   }
 }
@@ -179,6 +191,8 @@ class LessonRuntimeEngine {
         imageMetadata: null,
         itemMarker: null,
         itemText: null,
+        itemUnit: null,
+        itemTitle: null,
       );
     }
     if (session.curriculum == null || session.baseItems.isEmpty) {
@@ -195,6 +209,8 @@ class LessonRuntimeEngine {
         imageMetadata: null,
         itemMarker: null,
         itemText: null,
+        itemUnit: null,
+        itemTitle: null,
       );
     }
 
@@ -306,6 +322,8 @@ class LessonRuntimeEngine {
       imageMetadata: position.imageMetadata,
       itemMarker: position.itemAtivo?.marker,
       itemText: position.itemAtivo?.text,
+      itemUnit: position.itemAtivo?.unit,
+      itemTitle: position.itemAtivo?.title ?? position.itemAtivo?.text,
     );
   }
 
@@ -328,6 +346,8 @@ List<JsonMap> _curriculumSnapshot(StudentCurriculum? curriculum) {
       {
         'order': index + 1,
         'marker': items[index].marker,
+        if ((items[index].unit ?? '').trim().isNotEmpty)
+          'unit': items[index].unit!.trim(),
         'title': items[index].title ?? items[index].text,
         'text': items[index].text,
         'purpose': items[index].teacherText,

@@ -763,20 +763,12 @@ class _AulaLabScreenState extends State<AulaLabScreen>
                                 _LayerBadge(label: layerLabel),
                                 const SizedBox(height: 10),
                               ],
-                              // AUL-4: TEORIA section label
-                              Row(
-                                children: [
-                                  Text(
-                                    t('aula_theory'),
-                                    style: TextStyle(
-                                      fontFamily: kMono,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: palette.muted,
-                                      letterSpacing: 1.2,
-                                    ),
-                                  ),
-                                ],
+                              _LessonTheoryHeader(
+                                unit: viewModel?.itemUnit,
+                                marker:
+                                    viewModel?.itemMarker ??
+                                    snapshot?.itemMarker,
+                                title: viewModel?.itemTitle,
                               ),
                               const SizedBox(height: 8),
                               if (session.prefs == null)
@@ -1629,6 +1621,58 @@ class _LayerBadge extends StatelessWidget {
           letterSpacing: 0.4,
         ),
       ),
+    );
+  }
+}
+
+class _LessonTheoryHeader extends StatelessWidget {
+  const _LessonTheoryHeader({this.unit, this.marker, this.title});
+
+  final String? unit;
+  final String? marker;
+  final String? title;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final cleanUnit = unit?.trim();
+    final cleanMarker = marker?.trim();
+    final cleanTitle = title?.trim();
+    final identity = [
+      if (cleanMarker != null && cleanMarker.isNotEmpty) cleanMarker,
+      if (cleanTitle != null && cleanTitle.isNotEmpty) cleanTitle,
+    ].join(' · ');
+    final hasUnit = cleanUnit != null && cleanUnit.isNotEmpty;
+    final top = hasUnit
+        ? '${t('aula_theory')} · $cleanUnit'
+        : [t('aula_theory'), if (identity.isNotEmpty) identity].join(' · ');
+    final bottom = hasUnit ? identity : '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          top,
+          style: TextStyle(
+            fontFamily: kMono,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: palette.muted,
+            letterSpacing: 1.2,
+          ),
+        ),
+        if (bottom.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            bottom,
+            style: TextStyle(
+              color: palette.text,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

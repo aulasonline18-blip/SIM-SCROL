@@ -271,6 +271,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
             message.id,
             message.kind.name,
             message.text ?? '',
+            message.unit ?? '',
+            message.title ?? '',
             message.imageData ?? '',
             message.imageStatus,
             message.mediaName ?? '',
@@ -618,7 +620,7 @@ class _ChatScrollTarget {
     return _ChatScrollTarget(
       message: message,
       alignment: switch (message.kind) {
-        ChatLessonMessageKind.feedback => 0.18,
+        ChatLessonMessageKind.feedback => 0.08,
         ChatLessonMessageKind.error => 0.18,
         ChatLessonMessageKind.processing => 0.32,
         ChatLessonMessageKind.image => 0.18,
@@ -1044,6 +1046,9 @@ class _ChatAulaMessageBody extends StatelessWidget {
         text: message.text ?? '',
       ),
       ChatLessonMessageKind.studentDoubt => _StudentDoubtMessage(
+        message: message,
+      ),
+      ChatLessonMessageKind.explanation => _ExplanationMessage(
         message: message,
       ),
       ChatLessonMessageKind.historyQuestion => _HistoryQuestionMessage(
@@ -1478,6 +1483,62 @@ class _TextMessage extends StatelessWidget {
         color: palette.text,
         height: 1.42,
       ),
+    );
+  }
+}
+
+class _ExplanationMessage extends StatelessWidget {
+  const _ExplanationMessage({required this.message});
+
+  final ChatLessonMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final cleanUnit = message.unit?.trim();
+    final cleanMarker = message.marker?.trim();
+    final cleanTitle = message.title?.trim();
+    final hasAnyHeading =
+        (cleanUnit != null && cleanUnit.isNotEmpty) ||
+        (cleanTitle != null && cleanTitle.isNotEmpty);
+    if (!hasAnyHeading) return _TextMessage(message.text ?? '');
+    final identity = [
+      if (cleanMarker != null && cleanMarker.isNotEmpty) cleanMarker,
+      if (cleanTitle != null && cleanTitle.isNotEmpty) cleanTitle,
+    ].join(' · ');
+    final hasUnit = cleanUnit != null && cleanUnit.isNotEmpty;
+    final top = hasUnit
+        ? '${t('aula_theory')} · $cleanUnit'
+        : [t('aula_theory'), if (identity.isNotEmpty) identity].join(' · ');
+    final bottom = hasUnit ? identity : '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          top,
+          style: TextStyle(
+            fontFamily: kMono,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: palette.muted,
+            letterSpacing: 1.2,
+          ),
+        ),
+        if (bottom.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            bottom,
+            style: TextStyle(
+              color: palette.text,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        _TextMessage(message.text ?? ''),
+      ],
     );
   }
 }

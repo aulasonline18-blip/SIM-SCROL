@@ -17,6 +17,9 @@ class LessonMainViewModel {
     required this.options,
     required this.locked,
     required this.nextLabel,
+    this.itemUnit,
+    this.itemMarker,
+    this.itemTitle,
   });
 
   final double progress;
@@ -24,6 +27,9 @@ class LessonMainViewModel {
   final List<LessonOptionModel> options;
   final bool locked;
   final String nextLabel;
+  final String? itemUnit;
+  final String? itemMarker;
+  final String? itemTitle;
 }
 
 LessonMainViewModel buildLessonMainViewModel({
@@ -97,5 +103,8 @@ LessonMainViewModel buildLessonMainViewModel({
         phase.type == ClassroomPhaseType.concluido ||
         phase.type == ClassroomPhaseType.processando,
     nextLabel: nextLabel,
+    itemUnit: itemAtivo?.unit,
+    itemMarker: itemAtivo?.marker,
+    itemTitle: itemAtivo?.title ?? itemAtivo?.text,
   );
 }

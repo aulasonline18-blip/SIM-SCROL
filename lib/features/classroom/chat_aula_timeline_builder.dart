@@ -123,6 +123,8 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         text: content.explanation,
         lessonLocalId: input.lessonLocalId,
         marker: marker,
+        unit: snapshot?.viewModel?.itemUnit ?? snapshot?.itemUnit,
+        title: snapshot?.viewModel?.itemTitle ?? snapshot?.itemTitle,
         itemIdx: itemIdx,
         layer: layer,
         isActionable: false,

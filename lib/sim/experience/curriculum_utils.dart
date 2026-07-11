@@ -48,6 +48,7 @@ List<CurriculumItem> normalizeCurriculumItems(Object? raw) {
       CurriculumItem(
         marker: marker,
         text: text,
+        unit: _stringValue(item['unit'] ?? item['unidade']),
         title: item['title'] is String ? item['title'] as String : text,
         microitemForTeacher: item['microitem_for_teacher'] is String
             ? item['microitem_for_teacher'] as String
@@ -284,4 +285,9 @@ String _firstText(
     if (value is String && value.trim().isNotEmpty) return value.trim();
   }
   return '';
+}
+
+String? _stringValue(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
 }

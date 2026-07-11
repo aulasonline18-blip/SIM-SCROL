@@ -170,6 +170,7 @@ class CurriculumItem {
   const CurriculumItem({
     required this.marker,
     required this.text,
+    this.unit,
     this.title,
     this.microitemForTeacher,
     this.extra = const {},
@@ -177,6 +178,7 @@ class CurriculumItem {
 
   final String marker;
   final String text;
+  final String? unit;
   final String? title;
   final String? microitemForTeacher;
   final JsonMap extra;
@@ -187,6 +189,7 @@ class CurriculumItem {
     ...extra,
     'marker': marker,
     'text': text,
+    if (unit != null) 'unit': unit,
     if (title != null) 'title': title,
     if (microitemForTeacher != null)
       'microitem_for_teacher': microitemForTeacher,
@@ -195,12 +198,19 @@ class CurriculumItem {
   factory CurriculumItem.fromJson(JsonMap json) => CurriculumItem(
     marker: (json['marker'] ?? '').toString(),
     text: (json['text'] ?? json['title'] ?? '').toString(),
+    unit: _stringValue(json['unit'] ?? json['unidade']),
     title: json['title'] as String?,
     microitemForTeacher: json['microitem_for_teacher'] as String?,
     extra: JsonMap.of(json)
       ..removeWhere(
-        (key, _) =>
-            {'marker', 'text', 'title', 'microitem_for_teacher'}.contains(key),
+        (key, _) => {
+          'marker',
+          'text',
+          'unit',
+          'unidade',
+          'title',
+          'microitem_for_teacher',
+        }.contains(key),
       ),
   );
 }

@@ -57,7 +57,8 @@ class DopamineReadyWindowEngine {
     required CompleteLessonParams Function(
       DopamineWindowItem item,
       LessonLayer layer,
-    ) buildParams,
+    )
+    buildParams,
   }) {
     final slots = <DopamineReadySlot>[];
     ({int itemIdx, LessonLayer layer})? cursor = (
@@ -100,12 +101,14 @@ class DopamineReadyWindowEngine {
       'source': source,
       'returnMode': returnMode,
       'slots': selected
-          .map((slot) => {
-                'slot': slot.slot,
-                'itemIdx': slot.itemIdx,
-                'marker': slot.marker,
-                'layer': slot.layer.value,
-              })
+          .map(
+            (slot) => {
+              'slot': slot.slot,
+              'itemIdx': slot.itemIdx,
+              'marker': slot.marker,
+              'layer': slot.layer.value,
+            },
+          )
           .toList(),
     });
 
@@ -275,12 +278,13 @@ class DopamineReadyWindowEngine {
     String? topic,
   }) async {
     final state = service.read(lessonLocalId);
-    final curriculumItems = state?.curriculum?.items ?? const <CurriculumItem>[];
+    final curriculumItems =
+        state?.curriculum?.items ?? const <CurriculumItem>[];
     final items = curriculumItems
-        .map((item) => DopamineWindowItem(
-              text: itemText(item),
-              marker: item.marker,
-            ))
+        .map(
+          (item) =>
+              DopamineWindowItem(text: itemText(item), marker: item.marker),
+        )
         .where((item) => item.text.isNotEmpty)
         .toList();
     if (state == null || items.isEmpty) {
@@ -297,15 +301,19 @@ class DopamineReadyWindowEngine {
     final currentItemIdx = itemIdx != null
         ? itemIdx.clamp(0, items.length - 1)
         : markerIdx >= 0
-            ? markerIdx
-            : state.current?.itemIdx ?? state.progress?.itemIdx ?? 0;
+        ? markerIdx
+        : state.current?.itemIdx ?? state.progress?.itemIdx ?? 0;
     final currentLayer =
-        layer ?? state.current?.layer ?? state.progress?.layer ?? LessonLayer.l1;
+        layer ??
+        state.current?.layer ??
+        state.progress?.layer ??
+        LessonLayer.l1;
     final profile = state.profile.toJson();
     final lang = _langFromProfile(profile);
     final academic = _academicFromProfile(profile);
     final curriculumSnapshot = _curriculumSnapshot(state.curriculum);
-    final topicSnapshot = topic ?? state.profile.objetivo ?? state.curriculum?.topic;
+    final topicSnapshot =
+        topic ?? state.profile.objetivo ?? state.curriculum?.topic;
 
     final slots = buildDopamineReadySlots(
       lessonLocalId: lessonLocalId,
@@ -378,7 +386,11 @@ class DopamineReadyWindowEngine {
     required CompleteLesson lesson,
     required String model,
   }) {
-    final key = preparedLessonMaterialKey(slot.itemIdx, slot.marker, slot.layer);
+    final key = preparedLessonMaterialKey(
+      slot.itemIdx,
+      slot.marker,
+      slot.layer,
+    );
     service.mutate(lessonLocalId, (state) {
       return state.copyWith(
         readyLessonMaterials: {
@@ -410,7 +422,9 @@ class DopamineReadyWindowEngine {
   }
 
   bool _isFirstLessonSlot(DopamineReadySlot slot) {
-    return slot.slot == 'A' && slot.itemIdx == 0 && slot.layer == LessonLayer.l1;
+    return slot.slot == 'A' &&
+        slot.itemIdx == 0 &&
+        slot.layer == LessonLayer.l1;
   }
 
   void _event(String lessonLocalId, String type, JsonMap payload) {
@@ -434,10 +448,12 @@ String _pickProfileString(JsonMap profile, List<String> keys) {
 }
 
 String _langFromProfile(JsonMap profile) {
-  final direct = _pickProfileString(
-    profile,
-    ['stableLang', 'STABLE_LANG', 'language', 'idioma'],
-  );
+  final direct = _pickProfileString(profile, [
+    'stableLang',
+    'STABLE_LANG',
+    'language',
+    'idioma',
+  ]);
   const map = {
     'pt': 'Portuguese',
     'en': 'English',
@@ -449,10 +465,11 @@ String _langFromProfile(JsonMap profile) {
 }
 
 String _academicFromProfile(JsonMap profile) {
-  final direct = _pickProfileString(
-    profile,
-    ['academicLevel', 'academic_level', 'ACADEMIC_LEVEL'],
-  );
+  final direct = _pickProfileString(profile, [
+    'academicLevel',
+    'academic_level',
+    'ACADEMIC_LEVEL',
+  ]);
   if (direct.isNotEmpty) return direct;
   final nivel = _pickProfileString(profile, ['nivel']);
   return switch (nivel) {
@@ -471,6 +488,8 @@ List<JsonMap> _curriculumSnapshot(StudentCurriculum? curriculum) {
       {
         'order': index + 1,
         'marker': items[index].marker,
+        if ((items[index].unit ?? '').trim().isNotEmpty)
+          'unit': items[index].unit!.trim(),
         'title': items[index].title ?? items[index].text,
         'text': items[index].text,
         'purpose': items[index].teacherText,
@@ -488,26 +507,50 @@ JsonMap _pedagogicalEnvelope(JsonMap profile) {
     if (_pickProfileString(profile, ['preferred_name']).isNotEmpty)
       'preferred_name': _pickProfileString(profile, ['preferred_name']),
     if (_pickProfileString(profile, ['student_profile_notes']).isNotEmpty)
-      'student_profile_notes':
-          _pickProfileString(profile, ['student_profile_notes']),
+      'student_profile_notes': _pickProfileString(profile, [
+        'student_profile_notes',
+      ]),
     if (profile['interpreted_fields'] != null)
       'interpreted_fields': profile['interpreted_fields'],
-    if (_pickProfileString(profile, ['target_topic', 'TARGET_TOPIC']).isNotEmpty)
-      'target_topic': _pickProfileString(profile, ['target_topic', 'TARGET_TOPIC']),
+    if (_pickProfileString(profile, [
+      'target_topic',
+      'TARGET_TOPIC',
+    ]).isNotEmpty)
+      'target_topic': _pickProfileString(profile, [
+        'target_topic',
+        'TARGET_TOPIC',
+      ]),
     if (_pickProfileString(profile, ['subject']).isNotEmpty)
       'subject': _pickProfileString(profile, ['subject']),
     if (_pickProfileString(profile, ['exam_goal']).isNotEmpty)
       'exam_goal': _pickProfileString(profile, ['exam_goal']),
-    if (_pickProfileString(profile, ['session_goal', 'SESSION_GOAL']).isNotEmpty)
-      'session_goal': _pickProfileString(profile, ['session_goal', 'SESSION_GOAL']),
-    if (_pickProfileString(profile, ['geographic_zone', 'GEOGRAPHIC_ZONE']).isNotEmpty)
-      'geographic_zone':
-          _pickProfileString(profile, ['geographic_zone', 'GEOGRAPHIC_ZONE']),
+    if (_pickProfileString(profile, [
+      'session_goal',
+      'SESSION_GOAL',
+    ]).isNotEmpty)
+      'session_goal': _pickProfileString(profile, [
+        'session_goal',
+        'SESSION_GOAL',
+      ]),
+    if (_pickProfileString(profile, [
+      'geographic_zone',
+      'GEOGRAPHIC_ZONE',
+    ]).isNotEmpty)
+      'geographic_zone': _pickProfileString(profile, [
+        'geographic_zone',
+        'GEOGRAPHIC_ZONE',
+      ]),
     if (_pickProfileString(profile, ['country_or_curriculum']).isNotEmpty)
-      'country_or_curriculum':
-          _pickProfileString(profile, ['country_or_curriculum']),
-    if (_pickProfileString(profile, ['original_text_preserved', 'objetivo']).isNotEmpty)
-      'original_text_preserved':
-          _pickProfileString(profile, ['original_text_preserved', 'objetivo']),
+      'country_or_curriculum': _pickProfileString(profile, [
+        'country_or_curriculum',
+      ]),
+    if (_pickProfileString(profile, [
+      'original_text_preserved',
+      'objetivo',
+    ]).isNotEmpty)
+      'original_text_preserved': _pickProfileString(profile, [
+        'original_text_preserved',
+        'objetivo',
+      ]),
   };
 }
