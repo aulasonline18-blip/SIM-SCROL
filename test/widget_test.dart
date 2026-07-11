@@ -409,9 +409,12 @@ void main() {
       await tester.tap(find.text('B'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('2'));
-      await tester.pump(const Duration(milliseconds: 120));
+      await tester.pumpAndSettle();
       expect(
         _textAny([
+          'Dúvida',
+          'Doubt',
+          'Duda',
           'Tenho dúvida sobre essa questão',
           'I have a question about this',
           'Tengo una duda sobre esta pregunta',
@@ -512,6 +515,14 @@ void main() {
     expect(find.text('2/2'), findsOneWidget);
     expect(find.text('Logout'), findsNothing);
     expect(find.text('Solicitar exclusão da conta'), findsNothing);
+
+    await tester.tap(find.text('Biologia celular'));
+    await tester.pumpAndSettle();
+    expect(session.lessonLocalId, 'lesson-b');
+    expect(session.route, '/cyber/aula');
+
+    await tester.tap(find.text('open drawer'));
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'bio');
     await tester.pumpAndSettle();

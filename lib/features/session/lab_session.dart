@@ -160,6 +160,7 @@ class LabSession extends ChangeNotifier {
   Future<void>? _creditsLoadInFlight;
   Future<void>? _launchExperienceInFlight;
   int _experienceGeneration = 0;
+  int _aulaRuntimeGeneration = 0;
   late SimLocaleSettings localeSettings = SimLocaleSettings.load(prefs);
 
   late final AudioPreference _audioPreference = AudioPreference(
@@ -413,12 +414,22 @@ class LabSession extends ChangeNotifier {
   Future<bool> openDrawerLocalLesson(String lessonLocalId) async {
     final local = _readExistingLocalState(lessonLocalId);
     if (local != null && !_stateDeleted(local)) {
-      this.lessonLocalId = lessonLocalId;
-      navigationState.openRoute('/cyber/aula');
+      _prepareDrawerLessonOpen(lessonLocalId);
       unawaited(openAulaRuntime());
       return true;
     }
     return openDrawerCloudLesson(lessonLocalId);
+  }
+
+  void _prepareDrawerLessonOpen(String lessonLocalId) {
+    _aulaRuntimeGeneration++;
+    stopActiveAudio(notify: false);
+    _resetActiveLessonMedia(clearSnapshot: true, clearSubscriptions: true);
+    aulaRuntimeLoading = false;
+    aulaRuntimeError = null;
+    this.lessonLocalId = lessonLocalId;
+    navigationState.openRoute('/cyber/aula');
+    notifyListeners();
   }
 
   Future<bool> deleteDrawerLocalLesson(String lessonLocalId) async {
@@ -1618,8 +1629,7 @@ class LabSession extends ChangeNotifier {
     final state = row?.state;
     if (state == null || _stateDeleted(state)) return false;
     canonicalStore?.writeState(state);
-    this.lessonLocalId = state.lessonLocalId;
-    navigationState.openRoute('/cyber/aula');
+    _prepareDrawerLessonOpen(state.lessonLocalId);
     unawaited(openAulaRuntime());
     return true;
   }
@@ -2080,6 +2090,7 @@ class LabSession extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    final runtimeGeneration = ++_aulaRuntimeGeneration;
     if (_activateReadyNextCurriculumPartIfNeeded(id)) {
       unawaited(openAulaRuntime());
       return;
@@ -2096,22 +2107,32 @@ class LabSession extends ChangeNotifier {
         return;
       }
       final organism = _organismForActiveLesson();
-      aulaSnapshot = await organism.lessonRuntimeEngine.open(
+      final snapshot = await organism.lessonRuntimeEngine.open(
         lessonLocalId: organism.lessonLocalId,
         authReady: authReady,
         authed: authed,
       );
+      if (!_isCurrentAulaRuntime(id, runtimeGeneration)) return;
+      aulaSnapshot = snapshot;
       _bindActiveLessonMedia(organism);
       _syncImageStateFromSnapshot();
       if (aulaSnapshot?.hasCurriculum != true) {
         aulaRuntimeError = 'Aula sem curriculo no Estado do aluno.';
       }
     } catch (error) {
+      if (!_isCurrentAulaRuntime(id, runtimeGeneration)) return;
       aulaRuntimeError = error.toString();
     } finally {
-      aulaRuntimeLoading = false;
-      notifyListeners();
+      if (_isCurrentAulaRuntime(id, runtimeGeneration)) {
+        aulaRuntimeLoading = false;
+        notifyListeners();
+      }
     }
+  }
+
+  bool _isCurrentAulaRuntime(String lessonLocalId, int generation) {
+    return this.lessonLocalId == lessonLocalId &&
+        _aulaRuntimeGeneration == generation;
   }
 
   bool _activateReadyNextCurriculumPartIfNeeded(String currentLessonId) {
