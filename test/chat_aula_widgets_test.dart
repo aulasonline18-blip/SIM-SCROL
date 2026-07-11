@@ -88,9 +88,186 @@ void main() {
     expect(find.byKey(const Key('chat-aula-timeline')), findsOneWidget);
     expect(find.text('Explicacao'), findsOneWidget);
     expect(find.text('Alternativa B'), findsOneWidget);
+    expect(find.byKey(const Key('chat-answer-card-A')), findsOneWidget);
+    expect(find.byKey(const Key('chat-answer-card-B')), findsOneWidget);
+    expect(find.byKey(const Key('chat-answer-card-C')), findsOneWidget);
+    expect(find.byKey(const Key('chat-answer-letter-A')), findsOneWidget);
+    expect(find.byKey(const Key('chat-answer-letter-B')), findsOneWidget);
+    expect(find.byKey(const Key('chat-answer-letter-C')), findsOneWidget);
 
     await tester.tap(find.text('Alternativa B'));
     expect(chosen, AnswerLetter.B);
+  });
+
+  testWidgets('chat timeline mirrors SimWeb central button phases', (
+    tester,
+  ) async {
+    AnswerLetter? selected;
+    int? submittedSignal;
+    var doubtOpened = 0;
+    var advanced = 0;
+    var chooseCalls = <AnswerLetter>[];
+    var signalCalls = <int>[];
+
+    List<ChatLessonMessage> messagesForState() {
+      return [
+        ChatLessonMessage(
+          id: 'question',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.question,
+          text: 'Pergunta central?',
+        ),
+        ChatLessonMessage(
+          id: 'options',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.options,
+          selectedAnswer: selected,
+          options: [
+            ChatLessonOption(
+              letter: AnswerLetter.A,
+              text: 'Alternativa A',
+              selected: selected == AnswerLetter.A,
+              enabled: submittedSignal == null,
+            ),
+            ChatLessonOption(
+              letter: AnswerLetter.B,
+              text: 'Alternativa B',
+              selected: selected == AnswerLetter.B,
+              enabled: submittedSignal == null,
+            ),
+            ChatLessonOption(
+              letter: AnswerLetter.C,
+              text: 'Alternativa C',
+              selected: selected == AnswerLetter.C,
+              enabled: submittedSignal == null,
+            ),
+          ],
+          signals: selected != null && submittedSignal == null
+              ? const [
+                  ChatLessonSignal(
+                    value: 1,
+                    labelKey: 'aula_sig_certeza',
+                    enabled: true,
+                  ),
+                  ChatLessonSignal(
+                    value: 2,
+                    labelKey: 'aula_sig_revisar',
+                    enabled: true,
+                  ),
+                  ChatLessonSignal(
+                    value: 3,
+                    labelKey: 'aula_sig_nao_sei',
+                    enabled: true,
+                  ),
+                ]
+              : const [],
+          isActionable: true,
+        ),
+        if (submittedSignal != null)
+          ChatLessonMessage(
+            id: 'feedback',
+            role: ChatLessonMessageRole.sim,
+            kind: ChatLessonMessageKind.feedback,
+            text: 'Feedback depois do sinal $submittedSignal.',
+            isCorrect: true,
+            actionKey: 'aula_next_item',
+            isActionable: true,
+          ),
+        if (submittedSignal != null)
+          ChatLessonMessage(
+            id: 'next-question-guard',
+            role: ChatLessonMessageRole.sim,
+            kind: ChatLessonMessageKind.question,
+            text: 'Próxima pergunta ainda não carregada',
+            deliveryStatus: ChatLessonDeliveryStatus.read,
+            isHistorical: true,
+          ),
+      ];
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return ChatAulaTimeline(
+                messages: messagesForState(),
+                onChooseAnswer: (letter) {
+                  setState(() {
+                    selected = letter;
+                    chooseCalls.add(letter);
+                  });
+                },
+                onSignal: (value) {
+                  setState(() {
+                    submittedSignal = value;
+                    signalCalls.add(value);
+                  });
+                },
+                onRetry: () {},
+                onNext: () => advanced++,
+                onOpenDoubt: () => doubtOpened++,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Pergunta central?'), findsOneWidget);
+    expect(find.text('Alternativa A'), findsOneWidget);
+    expect(find.text('Alternativa B'), findsOneWidget);
+    expect(find.text('Alternativa C'), findsOneWidget);
+    expect(find.byKey(const Key('chat-answer-card-A')), findsOneWidget);
+    expect(find.byKey(const Key('chat-answer-letter-A')), findsOneWidget);
+    expect(find.byKey(const Key('inline-signal-choices')), findsNothing);
+    expect(find.byKey(const Key('chat-feedback-doubt-button')), findsNothing);
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
+    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+
+    await tester.tap(find.text('Alternativa A'));
+    await tester.pump();
+    expect(selected, AnswerLetter.A);
+    expect(find.byKey(const Key('inline-signal-choices')), findsOneWidget);
+    expect(find.byKey(const Key('signal-button-1')), findsOneWidget);
+    expect(find.byKey(const Key('signal-button-2')), findsOneWidget);
+    expect(find.byKey(const Key('signal-button-3')), findsOneWidget);
+
+    await tester.tap(find.text('Alternativa B'));
+    await tester.pump();
+    expect(selected, AnswerLetter.B);
+
+    await tester.tap(find.text('Alternativa C'));
+    await tester.pump();
+    expect(selected, AnswerLetter.C);
+    expect(chooseCalls, [AnswerLetter.A, AnswerLetter.B, AnswerLetter.C]);
+
+    await tester.tap(find.byKey(const Key('signal-button-1')));
+    await tester.pump();
+    expect(signalCalls, [1]);
+    expect(find.byKey(const Key('inline-signal-choices')), findsNothing);
+    expect(find.text('Feedback depois do sinal 1.'), findsOneWidget);
+    expect(find.byKey(const Key('chat-feedback-doubt-button')), findsOneWidget);
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsOneWidget);
+    expect(find.text(t('aula_doubt')), findsOneWidget);
+    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+    expect(
+      find.text('Próxima pergunta ainda não carregada', skipOffstage: false),
+      findsOneWidget,
+    );
+
+    await Scrollable.ensureVisible(
+      tester.element(find.byKey(const Key('chat-feedback-doubt-button'))),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
+    await Scrollable.ensureVisible(
+      tester.element(find.byKey(const Key('chat-feedback-next-button'))),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
+    expect(doubtOpened, 1);
+    expect(advanced, 1);
   });
 
   testWidgets('dead history actions are rendered inert by message contract', (
@@ -269,6 +446,7 @@ void main() {
     expect(find.text('Feedback sem depender de animacao.'), findsOneWidget);
     expect(find.byKey(const Key('chat-feedback-next-button')), findsOneWidget);
     expect(find.byType(TweenAnimationBuilder<double>), findsNothing);
+    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
   });
 
   testWidgets('chat timeline keeps mature width on tablet', (tester) async {
@@ -483,6 +661,9 @@ void main() {
     await tester.tap(find.text('2'));
     expect(signal, 2);
 
+    await tester.tap(find.byKey(const Key('signal-button-3')));
+    expect(signal, 3);
+
     final retryFinder = find.text(t('aula_try_again_2'));
     expect(retryFinder, findsOneWidget);
     await tester.tap(retryFinder);
@@ -560,7 +741,7 @@ void main() {
 
     expect(find.text('✅ Exato. Você domina este ponto.'), findsOneWidget);
     expect(find.byType(TweenAnimationBuilder<double>), findsOneWidget);
-    expect(find.text('Tenho dúvida sobre essa questão'), findsOneWidget);
+    expect(find.text(t('aula_doubt')), findsOneWidget);
     final nextItem = _textAny([
       'Próximo item',
       'Next topic',
@@ -577,7 +758,7 @@ void main() {
       contains('isTrue'),
     );
 
-    await tester.tap(find.text('Tenho dúvida sobre essa questão'));
+    await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
     expect(openedDoubt, isTrue);
 
     await tester.tap(nextItem);
@@ -791,7 +972,7 @@ void main() {
   });
 
   testWidgets(
-    'chat timeline preserves reader scroll and returns to current lesson',
+    'chat timeline preserves reader scroll without floating return button',
     (tester) async {
       final key = GlobalKey<_ChatTimelineHarnessState>();
       final controller = ScrollController();
@@ -838,23 +1019,12 @@ void main() {
       key.currentState!.appendMessage('Mensagem mais nova');
       await tester.pump(const Duration(milliseconds: 120));
 
-      expect(
-        find.byKey(const Key('chat-return-current-button')),
-        findsOneWidget,
-      );
-      expect(find.textContaining('Voltar ao feedback'), findsOneWidget);
+      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+      expect(find.textContaining('Voltar ao feedback'), findsNothing);
       expect(find.text('Mensagem mais nova'), findsNothing);
 
-      final buttonRect = tester.getRect(
-        find.byKey(const Key('chat-return-current-button')),
-      );
-      expect(buttonRect.height, greaterThanOrEqualTo(48));
-
-      await tester.tap(find.byKey(const Key('chat-return-current-button')));
-      await tester.pumpAndSettle();
-
       expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
-      expect(find.text('Mensagem mais nova'), findsOneWidget);
+      expect(find.text('Mensagem mais nova'), findsNothing);
     },
   );
 
@@ -897,16 +1067,10 @@ void main() {
       expect(controller.position.pixels, afterManualDrag);
       expect(find.text('Nova explicacao do item.'), findsNothing);
       expect(find.text('Nova alternativa B'), findsNothing);
-      expect(
-        find.byKey(const Key('chat-return-current-button')),
-        findsOneWidget,
-      );
-      expect(find.textContaining('Voltar às alternativas'), findsOneWidget);
+      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+      expect(find.textContaining('Voltar às alternativas'), findsNothing);
 
-      await tester.tap(find.byKey(const Key('chat-return-current-button')));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Nova alternativa B'), findsOneWidget);
+      expect(find.text('Nova alternativa B'), findsNothing);
     },
   );
 
@@ -1011,7 +1175,7 @@ void main() {
     expect(find.text('Feedback do qualificador 2'), findsOneWidget);
   });
 
-  testWidgets('chat return button follows reading column on wide layout', (
+  testWidgets('chat timeline no longer renders floating return button', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
@@ -1042,11 +1206,8 @@ void main() {
     key.currentState!.appendNewLessonTurn();
     await tester.pump(const Duration(milliseconds: 120));
 
-    final buttonRect = tester.getRect(
-      find.byKey(const Key('chat-return-current-button')),
-    );
-    expect(buttonRect.right, lessThan(1100));
-    expect(buttonRect.left, greaterThan(720));
+    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+    expect(find.textContaining('Voltar ao feedback'), findsNothing);
   });
 
   testWidgets('chat timeline supports certified keyboard navigation', (
@@ -1564,7 +1725,7 @@ void main() {
     expect(nextRect.width, lessThanOrEqualTo(288));
     expect(doubtRect.height, greaterThanOrEqualTo(48));
     expect(nextRect.height, greaterThanOrEqualTo(48));
-    expect(nextRect.top, greaterThan(doubtRect.bottom));
+    expect(doubtRect.top, greaterThan(nextRect.bottom));
   });
 
   testWidgets(
@@ -2480,11 +2641,8 @@ void main() {
       key.currentState!.appendRestoredStudentMessage();
       await tester.pump(const Duration(milliseconds: 120));
 
-      expect(
-        find.byKey(const Key('chat-return-current-button')),
-        findsOneWidget,
-      );
-      expect(find.textContaining('Voltar às alternativas'), findsOneWidget);
+      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+      expect(find.textContaining('Voltar às alternativas'), findsNothing);
       expect(find.textContaining('Voltar ao feedback'), findsNothing);
     },
   );

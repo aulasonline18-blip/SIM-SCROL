@@ -3,7 +3,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/utils/sim_constants.dart';
-import '../../shared/widgets/shared_widgets.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
@@ -57,8 +56,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   final FocusNode _timelineFocusNode = FocusNode(
     debugLabel: 'chat-aula-timeline-focus',
   );
-  bool _showCurrentButton = false;
-  int _unreadWhileAway = 0;
   String _messageSignature = '';
   _ExplicitScrollIntent? _pendingScrollIntent;
 
@@ -66,7 +63,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   void initState() {
     super.initState();
     _messageSignature = _signatureOf(widget.messages);
-    _scrollController.addListener(_handleScroll);
   }
 
   @override
@@ -85,33 +81,15 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       if (!mounted) return;
       if (intent != null) {
         _scrollForIntent(intent, initialFallbackOffset: fallbackOffset);
-      } else {
-        setState(() {
-          _showCurrentButton = true;
-          _unreadWhileAway++;
-        });
       }
     });
   }
 
   @override
   void dispose() {
-    _scrollController.removeListener(_handleScroll);
     if (_ownsScrollController) _scrollController.dispose();
     _timelineFocusNode.dispose();
     super.dispose();
-  }
-
-  void _handleScroll() {
-    if (!_scrollController.hasClients) return;
-    final position = _scrollController.position;
-    final nearEnd = position.maxScrollExtent - position.pixels <= 96;
-    if (_showCurrentButton == nearEnd) {
-      setState(() {
-        _showCurrentButton = !nearEnd;
-        if (nearEnd) _unreadWhileAway = 0;
-      });
-    }
   }
 
   Future<void> _scrollForIntent(
@@ -200,11 +178,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         }
       }
     }
-    if (!mounted) return;
-    setState(() {
-      _showCurrentButton = false;
-      _unreadWhileAway = 0;
-    });
   }
 
   void _handleSignal(int value) {
@@ -426,10 +399,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
           expanded: 620,
           large: 680,
         );
-        final returnButtonRight =
-            contentMaxWidth.isFinite && width > contentMaxWidth
-            ? ((width - contentMaxWidth) / 2) + 16
-            : 16.0;
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
             const SingleActivator(LogicalKeyboardKey.end): () {
@@ -463,21 +432,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                         return false;
                       },
                       child: NotificationListener<UserScrollNotification>(
-                        onNotification: (notification) {
-                          if (notification.direction != ScrollDirection.idle) {
-                            final metrics = notification.metrics;
-                            final nearEnd =
-                                metrics.maxScrollExtent - metrics.pixels <= 96;
-                            if (!nearEnd && !_showCurrentButton) {
-                              setState(() {
-                                _showCurrentButton = true;
-                              });
-                            }
-                            return false;
-                          }
-                          _handleScroll();
-                          return false;
-                        },
+                        onNotification: (_) => false,
                         child: ListView(
                           key: const Key('chat-aula-timeline'),
                           controller: _scrollController,
@@ -546,21 +501,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                       ),
                     ),
                   ),
-                  if (_showCurrentButton)
-                    Positioned(
-                      right: returnButtonRight,
-                      bottom: 16 + bottomInset,
-                      child: SafeArea(
-                        top: false,
-                        child: _ChatReturnToCurrentButton(
-                          label:
-                              _targetMessage()?.buttonLabel ??
-                              t('aula_return_current'),
-                          unreadCount: _unreadWhileAway,
-                          onPressed: _scrollToCurrent,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -606,15 +546,10 @@ class _ChatEmptyState extends StatelessWidget {
 }
 
 class _ChatScrollTarget {
-  const _ChatScrollTarget({
-    required this.message,
-    required this.alignment,
-    required this.buttonLabel,
-  });
+  const _ChatScrollTarget({required this.message, required this.alignment});
 
   final ChatLessonMessage message;
   final double alignment;
-  final String buttonLabel;
 
   factory _ChatScrollTarget.forMessage(ChatLessonMessage message) {
     return _ChatScrollTarget(
@@ -629,87 +564,6 @@ class _ChatScrollTarget {
         ChatLessonMessageKind.explanation => 0.12,
         _ => 0.78,
       },
-      buttonLabel: switch (message.kind) {
-        ChatLessonMessageKind.feedback => t('aula_return_feedback'),
-        ChatLessonMessageKind.error => t('aula_return_error'),
-        ChatLessonMessageKind.processing => t('aula_return_processing'),
-        ChatLessonMessageKind.image => t('aula_return_image'),
-        ChatLessonMessageKind.question => t('aula_return_question'),
-        ChatLessonMessageKind.options => t('aula_return_options'),
-        ChatLessonMessageKind.explanation => t('aula_return_new_item'),
-        _ => t('aula_return_current'),
-      },
-    );
-  }
-}
-
-class _ChatReturnToCurrentButton extends StatelessWidget {
-  const _ChatReturnToCurrentButton({
-    required this.label,
-    required this.unreadCount,
-    required this.onPressed,
-  });
-
-  final String label;
-  final int unreadCount;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = SimThemeScope.paletteOf(context);
-    final displayLabel = unreadCount > 0
-        ? t('aula_return_with_new_messages', {
-            'target': label,
-            'count': unreadCount,
-          })
-        : label;
-    return Semantics(
-      button: true,
-      label: displayLabel,
-      child: Tooltip(
-        message: displayLabel,
-        child: Material(
-          color: palette.text,
-          borderRadius: BorderRadius.circular(999),
-          elevation: 8,
-          child: InkWell(
-            key: const Key('chat-return-current-button'),
-            onTap: onPressed,
-            borderRadius: BorderRadius.circular(999),
-            child: Container(
-              constraints: const BoxConstraints(
-                minWidth: SimTouch.min,
-                minHeight: SimTouch.min,
-                maxWidth: 320,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.arrow_downward_rounded,
-                    color: palette.surface,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      displayLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.surface,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1078,25 +932,33 @@ class _FeedbackMessageActions extends StatelessWidget {
     final effectiveActionable =
         message.isActionable &&
         message.deliveryStatus != ChatLessonDeliveryStatus.read;
+    final feedbackIcon = message.isCorrect == false
+        ? Icons.info_outline
+        : Icons.check_circle_outline;
+    final feedbackColor = message.isCorrect == false
+        ? simWarn
+        : palette.primary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              message.isCorrect == false
-                  ? Icons.info_outline
-                  : Icons.check_circle_outline,
-              size: 20,
-              color: message.isCorrect == false ? simWarn : palette.primary,
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: _TextMessage(message.text ?? '')),
-          ],
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: palette.surfaceSoft,
+            borderRadius: BorderRadius.circular(SimRadius.md),
+            border: Border.all(color: palette.border.withValues(alpha: 0.75)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(feedbackIcon, size: 18, color: feedbackColor),
+              const SizedBox(width: 8),
+              Expanded(child: _TextMessage(message.text ?? '')),
+            ],
+          ),
         ),
         if ((message.actionKey ?? '').isNotEmpty) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 360;
@@ -1104,12 +966,11 @@ class _FeedbackMessageActions extends StatelessWidget {
               final nextBusy = pendingActionKeys.contains('next');
               final doubtButton = _ChatActionButton(
                 key: const Key('chat-feedback-doubt-button'),
-                label: doubtBusy
-                    ? t('aula_doubt_processing')
-                    : t('aula_doubt_about_question'),
+                label: doubtBusy ? t('aula_doubt_processing') : t('aula_doubt'),
                 enabled: effectiveActionable && !doubtBusy,
                 busy: doubtBusy,
                 primary: false,
+                compact: true,
                 onPressed: onOpenDoubt,
               );
               final nextButton = _ChatActionButton(
@@ -1119,23 +980,30 @@ class _FeedbackMessageActions extends StatelessWidget {
                     : nextBtnText(message.actionKey ?? 'aula_next'),
                 enabled: effectiveActionable && !nextBusy,
                 busy: nextBusy,
+                icon: Icons.arrow_forward_rounded,
                 onPressed: onNext,
               );
               if (compact) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    doubtButton,
-                    const SizedBox(height: 10),
                     nextButton,
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: doubtButton,
+                      ),
+                    ),
                   ],
                 );
               }
               return Row(
                 children: [
-                  Expanded(child: doubtButton),
-                  const SizedBox(width: 10),
                   Expanded(child: nextButton),
+                  const SizedBox(width: 10),
+                  SizedBox(width: 148, child: doubtButton),
                 ],
               );
             },
@@ -1590,10 +1458,8 @@ class _ChatOptions extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              AnswerButton(
-                label: option.letter.name,
-                text: option.text,
-                active: option.selected,
+              _ChatAnswerCard(
+                option: option,
                 enabled: answerEnabled && option.enabled,
                 onTap: () => onChooseAnswer(option.letter),
               ),
@@ -1615,6 +1481,106 @@ class _ChatOptions extends StatelessWidget {
             ],
           ),
       ],
+    );
+  }
+}
+
+class _ChatAnswerCard extends StatelessWidget {
+  const _ChatAnswerCard({
+    required this.option,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final ChatLessonOption option;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final selected = option.selected;
+    final borderColor = selected ? palette.primary : palette.border;
+    final background = selected
+        ? palette.primary.withValues(alpha: 0.09)
+        : palette.surface;
+    final letterBackground = selected
+        ? palette.primary.withValues(alpha: 0.16)
+        : palette.surfaceSoft;
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      label: t('answer_option_named', {'label': option.letter.name}),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          border: Border.all(color: borderColor, width: selected ? 1.6 : 1),
+          boxShadow: [
+            BoxShadow(
+              color: palette.shadow.withValues(alpha: selected ? 0.16 : 0.08),
+              blurRadius: selected ? 16 : 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          child: InkWell(
+            key: Key('chat-answer-card-${option.letter.name}'),
+            onTap: enabled ? onTap : null,
+            borderRadius: BorderRadius.circular(SimRadius.lg),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 62),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  AnimatedContainer(
+                    key: Key('chat-answer-letter-${option.letter.name}'),
+                    duration: const Duration(milliseconds: 140),
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: letterBackground,
+                      borderRadius: BorderRadius.circular(SimRadius.md),
+                      border: Border.all(
+                        color: selected ? palette.primary : palette.border,
+                      ),
+                    ),
+                    child: Text(
+                      option.letter.name,
+                      style: TextStyle(
+                        fontFamily: kMono,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: selected ? palette.primary : palette.text,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      option.text,
+                      style: SimTypography.lessonBody.copyWith(
+                        color: enabled ? palette.text : palette.muted,
+                        fontWeight: FontWeight.w700,
+                        height: 1.28,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1893,6 +1859,8 @@ class _ChatActionButton extends StatelessWidget {
     this.enabled = true,
     this.busy = false,
     this.primary = true,
+    this.compact = false,
+    this.icon,
     super.key,
   });
 
@@ -1901,31 +1869,41 @@ class _ChatActionButton extends StatelessWidget {
   final bool enabled;
   final bool busy;
   final bool primary;
+  final bool compact;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    final background = primary ? palette.text : palette.surface;
-    final foreground = primary ? palette.surface : palette.text;
+    final active = enabled && !busy;
+    final background = primary ? palette.primary : palette.surface;
+    final foreground = primary ? simDark : palette.text;
+    final borderColor = primary ? palette.primary : palette.border;
     return Semantics(
       button: true,
-      enabled: enabled && !busy,
+      enabled: active,
       label: label,
       child: Material(
-        color: enabled && !busy ? background : palette.surfaceSoft,
+        color: active ? background : palette.surfaceSoft,
         borderRadius: BorderRadius.circular(SimRadius.md),
+        elevation: active && primary ? 2 : 0,
+        shadowColor: palette.shadow.withValues(alpha: 0.18),
         child: InkWell(
-          onTap: enabled && !busy ? onPressed : null,
+          onTap: active ? onPressed : null,
           borderRadius: BorderRadius.circular(SimRadius.md),
           child: Container(
-            constraints: const BoxConstraints(minHeight: SimTouch.min),
+            constraints: BoxConstraints(
+              minHeight: 52,
+              minWidth: compact ? 92 : SimTouch.min,
+            ),
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 12 : 16,
+              vertical: compact ? 8 : 11,
+            ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(SimRadius.md),
-              border: Border.all(
-                color: primary ? palette.text : palette.border,
-              ),
+              border: Border.all(color: borderColor),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -1942,15 +1920,24 @@ class _ChatActionButton extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                 ],
+                if (!busy && icon != null) ...[
+                  Icon(
+                    icon,
+                    size: compact ? 15 : 17,
+                    color: active ? foreground : palette.muted,
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Flexible(
                   child: Text(
                     label,
                     textAlign: TextAlign.center,
-                    maxLines: 3,
+                    maxLines: compact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: enabled && !busy ? foreground : palette.muted,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+                      color: active ? foreground : palette.muted,
+                      fontSize: compact ? 13 : 14,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
