@@ -117,8 +117,6 @@ class LessonAnswerProgressController {
     }
 
     position.phase = ClassroomPhase.processing(letter, signal);
-    // VIII.3: 350ms delay before engine runs so the UI can show "processando" state
-    await Future.delayed(const Duration(milliseconds: 350));
     final delayedPhase = position.phase;
     if (delayedPhase.type != ClassroomPhaseType.processando ||
         delayedPhase.letter != letter ||

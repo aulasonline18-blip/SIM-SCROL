@@ -272,13 +272,13 @@ void main() {
       expect(l1Strong.progress?.layer, LessonLayer.l3);
       expect(l1Weak.progress?.layer, LessonLayer.l2);
       expect(l2Strong.progress?.layer, LessonLayer.l3);
-      expect(l2Weak.progress?.layer, LessonLayer.l2);
-      expect(l2Weak.events.last.payload['decision'], 'needsReinforcement');
+      expect(l2Weak.progress?.layer, LessonLayer.l3);
+      expect(l2Weak.events.last.payload['decision'], 'advanceLayer');
       expect(l3Strong.progress?.itemIdx, 1);
       expect(l3Strong.progress?.layer, LessonLayer.l1);
-      expect(l3Weak.progress?.itemIdx, 0);
-      expect(l3Weak.progress?.layer, LessonLayer.l3);
-      expect(l3Weak.events.last.payload['decision'], 'needsReinforcement');
+      expect(l3Weak.progress?.itemIdx, 1);
+      expect(l3Weak.progress?.layer, LessonLayer.l1);
+      expect(l3Weak.events.last.payload['decision'], 'advanceItem');
     });
 
     test(
@@ -443,8 +443,8 @@ void main() {
       expect(evidence.consecutiveWrong, 2);
       expect(evidence.needsReinforcement, isTrue);
       expect(withTruth.truth.itemConsolidationStatus['M1'], 'weak');
-      expect(decision.actionType, DecisionActionType.needsReinforcement);
-      expect(decision.reason, 'L2 ainda fragil -> refazer L2');
+      expect(decision.actionType, DecisionActionType.advanceLayer);
+      expect(decision.reason, 'L2 encerrada -> propor L3');
     });
 
     test('A5.9 revisao pendente participa da decisao', () {
@@ -510,14 +510,13 @@ void main() {
       expect(withRecovery.truth.falseMasteryFlags, contains('M1'));
       expect(withRecovery.attempts.single.marker, 'M1');
       expect(withRecovery.attempts.single.correct, isFalse);
-      expect(withRecovery.progress?.itemIdx, 0);
-      expect(withRecovery.progress?.layer, LessonLayer.l3);
-      expect(withRecovery.progress?.concluidos, isNot(contains('M1')));
+      expect(withRecovery.progress?.itemIdx, 1);
+      expect(withRecovery.progress?.layer, LessonLayer.l1);
+      expect(withRecovery.events.last.payload['decision'], 'advanceItem');
       expect(
-        withRecovery.events.last.payload['decision'],
-        'needsReinforcement',
+        withRecovery.events.last.payload['reason'],
+        'L3 encerrada -> proximo item',
       );
-      expect(withRecovery.events.last.payload['reason'], contains('L3'));
     });
 
     test('A5.11 conquista so acontece com evidencia suficiente', () {
@@ -604,15 +603,12 @@ void main() {
       expect(blockEvent.payload['letra'], 'C');
       expect(blockEvent.payload['sinal'], 1);
       expect(blockEvent.payload['correct'], isFalse);
-      expect(blockEvent.payload['decision'], 'needsReinforcement');
-      expect(
-        blockEvent.payload['reason'],
-        'L3 ainda nao consolidada -> refazer L3',
-      );
-      expect(blockEvent.payload['advanced'], isFalse);
+      expect(blockEvent.payload['decision'], 'advanceItem');
+      expect(blockEvent.payload['reason'], 'L3 encerrada -> proximo item');
+      expect(blockEvent.payload['advanced'], isTrue);
       expect(blockEvent.payload['review'], isTrue);
-      expect(blockEvent.payload['recovery'], isTrue);
-      expect(blockEvent.payload['blocked'], isTrue);
+      expect(blockEvent.payload['recovery'], isFalse);
+      expect(blockEvent.payload['blocked'], isFalse);
 
       final advanced = processAnswerWithEngine(
         _state(layer: LessonLayer.l3),

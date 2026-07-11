@@ -99,7 +99,7 @@ ApplyDecisionResult applyStudentDecision(
             itemIdx: proposed,
             layer: LessonLayer.l1,
             erros: 0,
-            concluidos: completedWithCurrent,
+            concluidos: inputProgress.concluidos,
             mainAdvances: [
               inputProgress.mainAdvances + 1,
               proposed,

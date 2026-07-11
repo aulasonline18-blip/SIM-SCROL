@@ -404,7 +404,7 @@ void main() {
       expect(answered.current?.marker, 'M1');
       expect(answered.progress?.layer, LessonLayer.l3);
       expect(decisionEvent.payload['decision'], 'advanceLayer');
-      expect(decisionEvent.payload['reason'], 'L2 consolidada -> propor L3');
+      expect(decisionEvent.payload['reason'], 'L2 encerrada -> propor L3');
     });
 
     test('A4.11 L3 consolidada avanca para o proximo item em L1', () {
@@ -428,48 +428,47 @@ void main() {
       expect(answered.current?.marker, 'M2');
       expect(answered.current?.layer, LessonLayer.l1);
       expect(decisionEvent.payload['decision'], 'advanceItem');
-      expect(decisionEvent.payload['reason'], 'L3 consolidada -> proximo item');
+      expect(decisionEvent.payload['reason'], 'L3 encerrada -> proximo item');
     });
 
-    test('A4.12 L3 fragil nao avanca falsamente e registra reparo', () {
-      final wrong = processAnswerWithEngine(
-        _state(layer: LessonLayer.l3),
-        const AnswerContext(
-          letra: AnswerLetter.B,
-          sinal: DecisionSignal.one,
-          correctAnswer: AnswerLetter.A,
-        ),
-        now: 120,
-      );
-      final fragileCorrect = processAnswerWithEngine(
-        _state(layer: LessonLayer.l3),
-        const AnswerContext(
-          letra: AnswerLetter.A,
-          sinal: DecisionSignal.three,
-          correctAnswer: AnswerLetter.A,
-        ),
-        now: 121,
-      );
-      final wrongDecision = wrong.events.lastWhere(
-        (event) => event.type == 'STUDENT_DECISION_APPLIED',
-      );
-      final fragileDecision = fragileCorrect.events.lastWhere(
-        (event) => event.type == 'STUDENT_DECISION_APPLIED',
-      );
+    test(
+      'A4.12 L3 avanca para o proximo item e deixa reparo para auxiliares',
+      () {
+        final wrong = processAnswerWithEngine(
+          _state(layer: LessonLayer.l3),
+          const AnswerContext(
+            letra: AnswerLetter.B,
+            sinal: DecisionSignal.one,
+            correctAnswer: AnswerLetter.A,
+          ),
+          now: 120,
+        );
+        final fragileCorrect = processAnswerWithEngine(
+          _state(layer: LessonLayer.l3),
+          const AnswerContext(
+            letra: AnswerLetter.A,
+            sinal: DecisionSignal.three,
+            correctAnswer: AnswerLetter.A,
+          ),
+          now: 121,
+        );
+        final wrongDecision = wrong.events.lastWhere(
+          (event) => event.type == 'STUDENT_DECISION_APPLIED',
+        );
+        final fragileDecision = fragileCorrect.events.lastWhere(
+          (event) => event.type == 'STUDENT_DECISION_APPLIED',
+        );
 
-      expect(wrong.attempts.single.correct, false);
-      expect(wrong.current?.marker, 'M1');
-      expect(wrong.current?.layer, LessonLayer.l3);
-      expect(wrong.progress?.concluidos, isNot(contains('M1')));
-      expect(wrongDecision.payload['decision'], 'needsReinforcement');
-      expect(
-        wrongDecision.payload['reason'],
-        'L3 ainda nao consolidada -> refazer L3',
-      );
-      expect(fragileCorrect.attempts.single.sinal, DecisionSignal.three);
-      expect(fragileCorrect.current?.marker, 'M1');
-      expect(fragileCorrect.current?.layer, LessonLayer.l3);
-      expect(fragileDecision.payload['decision'], 'needsReinforcement');
-    });
+        expect(wrong.attempts.single.correct, false);
+        expect(wrong.current?.marker, 'M2');
+        expect(wrong.current?.layer, LessonLayer.l1);
+        expect(wrongDecision.payload['decision'], 'advanceItem');
+        expect(wrongDecision.payload['reason'], 'L3 encerrada -> proximo item');
+        expect(fragileCorrect.attempts.single.sinal, DecisionSignal.three);
+        expect(fragileCorrect.current?.marker, 'M2');
+        expect(fragileCorrect.current?.layer, LessonLayer.l1);
+        expect(fragileDecision.payload['decision'], 'advanceItem');
+      },
+    );
   });
 }

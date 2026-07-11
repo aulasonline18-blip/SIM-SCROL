@@ -346,6 +346,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
                 session: session,
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
                 pendingActionKeys: _pendingConversationActions,
+                initialScrollToCurrent: true,
                 onChooseAnswer: _chooseAnswer,
                 onSignal: _submitSignal,
                 onRetry: _retryLessonRuntime,

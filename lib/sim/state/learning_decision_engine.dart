@@ -89,27 +89,17 @@ DecisionResult decideNextActionFromState(StudentLearningState? state) {
         );
     if (lastForItem != null) {
       if (layer == LessonLayer.l3) {
-        if (!lastForItem.correct || lastForItem.sinal == DecisionSignal.three) {
-          return DecisionResult(
-            actionType: DecisionActionType.needsReinforcement,
-            reason: 'L3 ainda nao consolidada -> refazer L3',
-            confidence: DecisionConfidence.high,
-            proposedItemIdx: itemIdx,
-            proposedLayer: LessonLayer.l3,
-            proposedMarker: currentMarker,
-          );
-        }
         final nextIdx = itemIdx + 1;
         if (nextIdx >= total) {
           return const DecisionResult(
             actionType: DecisionActionType.showCompletion,
-            reason: 'L3 consolidada no ultimo item',
+            reason: 'L3 encerrada no ultimo item',
             confidence: DecisionConfidence.high,
           );
         }
         return DecisionResult(
           actionType: DecisionActionType.advanceItem,
-          reason: 'L3 consolidada -> proximo item',
+          reason: 'L3 encerrada -> proximo item',
           confidence: DecisionConfidence.high,
           proposedItemIdx: nextIdx,
           proposedLayer: LessonLayer.l1,
@@ -117,19 +107,9 @@ DecisionResult decideNextActionFromState(StudentLearningState? state) {
         );
       }
       if (layer == LessonLayer.l2) {
-        if (!lastForItem.correct || lastForItem.sinal == DecisionSignal.three) {
-          return DecisionResult(
-            actionType: DecisionActionType.needsReinforcement,
-            reason: 'L2 ainda fragil -> refazer L2',
-            confidence: DecisionConfidence.high,
-            proposedItemIdx: itemIdx,
-            proposedLayer: LessonLayer.l2,
-            proposedMarker: currentMarker,
-          );
-        }
         return DecisionResult(
           actionType: DecisionActionType.advanceLayer,
-          reason: 'L2 consolidada -> propor L3',
+          reason: 'L2 encerrada -> propor L3',
           confidence: DecisionConfidence.high,
           proposedItemIdx: itemIdx,
           proposedLayer: LessonLayer.l3,
@@ -204,11 +184,10 @@ void runShadowDecision(
       'confidence': decision.confidence.name,
     },
   );
-  service.appendEvents(
-    lessonLocalId,
-    [suggested, compared],
-    scheduleShadow: false,
-  );
+  service.appendEvents(lessonLocalId, [
+    suggested,
+    compared,
+  ], scheduleShadow: false);
 }
 
 String _inferCurrentAction(StudentLearningState state) {

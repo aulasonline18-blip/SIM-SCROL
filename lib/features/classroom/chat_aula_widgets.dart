@@ -26,6 +26,7 @@ class ChatAulaTimeline extends StatefulWidget {
     this.onImageSettled,
     this.pendingActionKeys = const {},
     this.scrollController,
+    this.initialScrollToCurrent = false,
     this.padding = const EdgeInsets.fromLTRB(16, 112, 16, 128),
     super.key,
   });
@@ -40,6 +41,7 @@ class ChatAulaTimeline extends StatefulWidget {
   final VoidCallback? onImageSettled;
   final Set<String> pendingActionKeys;
   final ScrollController? scrollController;
+  final bool initialScrollToCurrent;
   final EdgeInsets padding;
 
   @override
@@ -63,6 +65,14 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   void initState() {
     super.initState();
     _messageSignature = _signatureOf(widget.messages);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !widget.initialScrollToCurrent ||
+          widget.messages.isEmpty) {
+        return;
+      }
+      _scrollToCurrent(immediate: true);
+    });
   }
 
   @override
@@ -1876,8 +1886,8 @@ class _ChatActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
     final active = enabled && !busy;
-    final background = primary ? palette.primary : palette.surface;
-    final foreground = primary ? simDark : palette.text;
+    final background = primary ? palette.surface : palette.surface;
+    final foreground = primary ? palette.primary : palette.text;
     final borderColor = primary ? palette.primary : palette.border;
     return Semantics(
       button: true,
@@ -1886,14 +1896,14 @@ class _ChatActionButton extends StatelessWidget {
       child: Material(
         color: active ? background : palette.surfaceSoft,
         borderRadius: BorderRadius.circular(SimRadius.md),
-        elevation: active && primary ? 2 : 0,
+        elevation: active && primary ? 1 : 0,
         shadowColor: palette.shadow.withValues(alpha: 0.18),
         child: InkWell(
           onTap: active ? onPressed : null,
           borderRadius: BorderRadius.circular(SimRadius.md),
           child: Container(
             constraints: BoxConstraints(
-              minHeight: 52,
+              minHeight: compact ? 50 : 52,
               minWidth: compact ? 92 : SimTouch.min,
             ),
             alignment: Alignment.center,
@@ -1903,7 +1913,21 @@ class _ChatActionButton extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(SimRadius.md),
-              border: Border.all(color: borderColor),
+              border: Border.all(
+                color: active && primary
+                    ? borderColor.withValues(alpha: 0.85)
+                    : borderColor,
+                width: primary ? 1.4 : 1,
+              ),
+              boxShadow: active && primary
+                  ? [
+                      BoxShadow(
+                        color: palette.shadow.withValues(alpha: 0.08),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : null,
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -1915,7 +1939,7 @@ class _ChatActionButton extends StatelessWidget {
                     height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: palette.primary,
+                      color: primary ? palette.primary : palette.muted,
                     ),
                   ),
                   const SizedBox(width: 8),

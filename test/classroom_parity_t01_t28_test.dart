@@ -297,9 +297,9 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // T04 – acerto L3 sinal 3 → reinforce L3 (mantém itemIdx, zera erros)
+  // T04 – acerto L3 sinal 3 → próximo item; reparo fica para auxiliares
   // -------------------------------------------------------------------------
-  test('T04: answer(A,3,A) em L3 → itemIdx=0, layer=L3, reinforce', () {
+  test('T04: answer(A,3,A) em L3 → próximo item', () {
     final stateL3 = _state0(layer: LessonLayer.l3);
     final next = _answer(
       stateL3,
@@ -307,8 +307,8 @@ void main() {
       DecisionSignal.three,
       AnswerLetter.A,
     );
-    expect(next.progress?.itemIdx, 0);
-    expect(next.progress?.layer, LessonLayer.l3);
+    expect(next.progress?.itemIdx, 1);
+    expect(next.progress?.layer, LessonLayer.l1);
   });
 
   // -------------------------------------------------------------------------
@@ -340,9 +340,9 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // T07 – erro L2 sinal 3 → reinforce L2
+  // T07 – erro L2 sinal 3 → L3; reparo fica para auxiliares
   // -------------------------------------------------------------------------
-  test('T07: answer(B,3,A) em L2 → layer=L2 reinforce', () {
+  test('T07: answer(B,3,A) em L2 → layer=L3', () {
     final stateL2 = _state0(layer: LessonLayer.l2);
     final next = _answer(
       stateL2,
@@ -350,7 +350,7 @@ void main() {
       DecisionSignal.three,
       AnswerLetter.A,
     );
-    expect(next.progress?.layer, LessonLayer.l2);
+    expect(next.progress?.layer, LessonLayer.l3);
     expect(next.progress?.itemIdx, 0);
   });
 
@@ -887,51 +887,46 @@ void main() {
     expect(svc.read('L1')?.attempts, isEmpty);
   });
 
-  test(
-    'T25b: delayed signal is ignored if phase changed before engine runs',
-    () async {
-      final svc = StudentLearningStateService(seed: {'L1': _state0()});
-      final ctrl = _controller(svc);
-      final pos = LessonPositionState(
-        items: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
-        itemIdx: 0,
-        layer: LessonLayer.l1,
-        erros: 0,
-        historia: const [],
-        history: const [],
-        mainAdvances: 0,
-        loadingLayer: LessonLayer.l1,
-        conteudo: LessonContent(
-          explanation: 'E',
-          question: 'Q',
-          options: const {
-            AnswerLetter.A: 'A',
-            AnswerLetter.B: 'B',
-            AnswerLetter.C: 'C',
-          },
-          correctAnswer: AnswerLetter.A,
-        ),
-        phase: ClassroomPhase.expanded(AnswerLetter.A),
-        imagem: null,
-        teoriaPronta: true,
-      );
+  test('T25b: sinal processa sem atraso artificial', () async {
+    final svc = StudentLearningStateService(seed: {'L1': _state0()});
+    final ctrl = _controller(svc);
+    final pos = LessonPositionState(
+      items: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
+      itemIdx: 0,
+      layer: LessonLayer.l1,
+      erros: 0,
+      historia: const [],
+      history: const [],
+      mainAdvances: 0,
+      loadingLayer: LessonLayer.l1,
+      conteudo: LessonContent(
+        explanation: 'E',
+        question: 'Q',
+        options: const {
+          AnswerLetter.A: 'A',
+          AnswerLetter.B: 'B',
+          AnswerLetter.C: 'C',
+        },
+        correctAnswer: AnswerLetter.A,
+      ),
+      phase: ClassroomPhase.expanded(AnswerLetter.A),
+      imagem: null,
+      teoriaPronta: true,
+    );
 
-      final future = ctrl.enviarSinal(
-        lessonLocalId: 'L1',
-        topic: 'Cinemática',
-        position: pos,
-        signal: DecisionSignal.one,
-        baseItems: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
-      );
-      expect(pos.phase.type, ClassroomPhaseType.processando);
+    final future = ctrl.enviarSinal(
+      lessonLocalId: 'L1',
+      topic: 'Cinemática',
+      position: pos,
+      signal: DecisionSignal.one,
+      baseItems: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
+    );
 
-      pos.phase = const ClassroomPhase.reading();
-      await future;
+    await future;
 
-      expect(pos.phase.type, ClassroomPhaseType.lendo);
-      expect(svc.read('L1')?.attempts, isEmpty);
-    },
-  );
+    expect(pos.phase.type, ClassroomPhaseType.concluido);
+    expect(svc.read('L1')?.attempts, hasLength(1));
+  });
 
   // -------------------------------------------------------------------------
   // T26 – sinal omitido → botão avançar não deve existir em phase!=concluido
