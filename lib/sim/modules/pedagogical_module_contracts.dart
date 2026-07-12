@@ -87,7 +87,6 @@ class T02LessonMaterial {
     required this.whyWrong,
     required this.generatedAt,
     required this.source,
-    this.visualTrigger,
     this.imageDataUrl,
     this.imageId,
     this.imageStatus,
@@ -102,7 +101,6 @@ class T02LessonMaterial {
   final Object? whyWrong;
   final DateTime generatedAt;
   final String source;
-  final JsonMap? visualTrigger;
   final String? imageDataUrl;
   final String? imageId;
   final String? imageStatus;

@@ -14,9 +14,8 @@ import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
 class FakeT02Client implements T02LessonClient {
-  FakeT02Client({this.visualTrigger});
+  FakeT02Client();
 
-  final JsonMap? visualTrigger;
   int doubtCalls = 0;
   int auxCalls = 0;
   T02LessonRequest? lastDoubtRequest;
@@ -34,7 +33,6 @@ class FakeT02Client implements T02LessonClient {
     whyWrong: const {},
     generatedAt: DateTime(2026),
     source: source,
-    visualTrigger: visualTrigger,
   );
 
   @override
@@ -141,15 +139,8 @@ void main() {
     expect(controller.state.response?.explanation, 'Explicacao doubt');
   });
 
-  test('doubt with photo preserves optional free visual trigger', () async {
-    final trigger = <String, dynamic>{
-      'needs_image': true,
-      'pedagogical_need': 'helpful',
-      'render_strategy': 'software',
-      'svg_payload':
-          '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>',
-    };
-    final client = FakeT02Client(visualTrigger: trigger);
+  test('doubt with photo preserves the student image attachment', () async {
+    final client = FakeT02Client();
     final controller = LessonDoubtController(
       caller: DoubtT02Caller(client: client),
     );
@@ -181,7 +172,6 @@ void main() {
       'dataUrl': 'data:image/png;base64,AAAA',
       'hasDataUrl': true,
     });
-    expect(controller.state.response?.visualTrigger, trigger);
   });
 
   test(

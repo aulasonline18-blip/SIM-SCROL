@@ -466,7 +466,6 @@ class _AulaLabScreenState extends State<AulaLabScreen>
     final hasImage = imageData != null && imageData.trim().isNotEmpty;
     return hasImage ||
         widget.session.imageError != null ||
-        widget.session.hasLessonPaidImageOffer ||
         (widget.session.aulaRuntimeLoading && imageData == null);
   }
 

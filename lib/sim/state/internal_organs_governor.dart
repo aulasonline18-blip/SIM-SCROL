@@ -44,23 +44,6 @@ class MediaStateGovernor {
     );
   }
 
-  CanonicalLearningEvent offerPaidImage({
-    required String lessonLocalId,
-    required int cost,
-    String? marker,
-    String source = 'media-state-governor',
-  }) {
-    return _recordMedia(
-      lessonLocalId: lessonLocalId,
-      type: 'PAID_IMAGE_OFFERED',
-      source: source,
-      payload: _withOptional({'cost': cost}, 'marker', marker),
-      kind: 'image_offer',
-      value: {'status': 'offered', 'cost': cost},
-      marker: marker,
-    );
-  }
-
   CanonicalLearningEvent requestImage({
     required String lessonLocalId,
     required String prompt,
@@ -803,32 +786,6 @@ class SettledAnswerResult {
   final CanonicalLearningEvent? syncEvent;
 }
 
-class PaidImageFlowResult {
-  const PaidImageFlowResult({
-    required this.offerEvent,
-    required this.reserveEvent,
-    required this.requestEvent,
-    this.readyEvent,
-    this.captureEvent,
-    this.failedEvent,
-    this.refundEvent,
-    this.syncEvent,
-  });
-
-  final CanonicalLearningEvent offerEvent;
-  final CanonicalLearningEvent reserveEvent;
-  final CanonicalLearningEvent requestEvent;
-  final CanonicalLearningEvent? readyEvent;
-  final CanonicalLearningEvent? captureEvent;
-  final CanonicalLearningEvent? failedEvent;
-  final CanonicalLearningEvent? refundEvent;
-  final CanonicalLearningEvent? syncEvent;
-
-  bool get completed => readyEvent != null && captureEvent != null;
-  bool get failed => failedEvent != null;
-  bool get pending => !completed && !failed;
-}
-
 class AudioFlowResult {
   const AudioFlowResult({
     required this.requestEvent,
@@ -930,104 +887,6 @@ class InternalOrgansCoordinator {
       auxiliaryEvent: auxEvent,
       syncEvent: syncEvent,
     );
-  }
-
-  Future<PaidImageFlowResult> requestPaidImage({
-    required String lessonLocalId,
-    required String prompt,
-    required int cost,
-    String? marker,
-    String? operationId,
-    Future<String> Function()? generateImage,
-    bool syncAfter = true,
-  }) async {
-    final offer = media.offerPaidImage(
-      lessonLocalId: lessonLocalId,
-      cost: cost,
-      marker: marker,
-      source: 'internal-organs-coordinator',
-    );
-    final reserve = credits.reserve(
-      lessonLocalId: lessonLocalId,
-      amount: cost,
-      reason: 'paid_lesson_image',
-      operationId: operationId,
-      source: 'internal-organs-coordinator',
-    );
-    final request = media.requestImage(
-      lessonLocalId: lessonLocalId,
-      prompt: prompt,
-      marker: marker,
-      source: 'internal-organs-coordinator',
-    );
-
-    if (generateImage == null) {
-      return PaidImageFlowResult(
-        offerEvent: offer,
-        reserveEvent: reserve,
-        requestEvent: request,
-      );
-    }
-
-    try {
-      final imageUrl = await generateImage();
-      final ready = media.imageReady(
-        lessonLocalId: lessonLocalId,
-        imageUrl: imageUrl,
-        marker: marker,
-        source: 'internal-organs-coordinator',
-      );
-      final capture = credits.capture(
-        lessonLocalId: lessonLocalId,
-        amount: cost,
-        reason: 'paid_lesson_image_ready',
-        operationId: operationId,
-        source: 'internal-organs-coordinator',
-      );
-      final syncEvent = syncAfter
-          ? await sync.syncToCloud(
-              lessonLocalId: lessonLocalId,
-              source: 'internal-organs-coordinator',
-            )
-          : null;
-      return PaidImageFlowResult(
-        offerEvent: offer,
-        reserveEvent: reserve,
-        requestEvent: request,
-        readyEvent: ready,
-        captureEvent: capture,
-        syncEvent: syncEvent,
-      );
-    } catch (error) {
-      final failed = media.mediaFailed(
-        lessonLocalId: lessonLocalId,
-        kind: 'image',
-        reason: error.toString(),
-        marker: marker,
-        source: 'internal-organs-coordinator',
-      );
-      final refund = credits.refund(
-        lessonLocalId: lessonLocalId,
-        amount: cost,
-        reason: 'paid_lesson_image_failed',
-        operationId: operationId,
-        source: 'internal-organs-coordinator',
-      );
-      final syncEvent = syncAfter
-          ? await sync.syncToCloud(
-              lessonLocalId: lessonLocalId,
-              source: 'internal-organs-coordinator',
-            )
-          : null;
-      return PaidImageFlowResult(
-        offerEvent: offer,
-        reserveEvent: reserve,
-        requestEvent: request,
-        failedEvent: failed,
-        refundEvent: refund,
-        syncEvent: syncEvent,
-      );
-    }
   }
 
   Future<AudioFlowResult> requestLessonAudio({

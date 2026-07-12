@@ -88,12 +88,6 @@ const simLiveRoutes = <SimSchoolRoute>[
     serverOnly: true,
   ),
   SimSchoolRoute(
-    path: '/api/generate-lesson-image',
-    kind: SimRouteKind.api,
-    environmentId: 'server_image',
-    serverOnly: true,
-  ),
-  SimSchoolRoute(
     path: '/api/generate-lesson-audio',
     kind: SimRouteKind.api,
     environmentId: 'server_audio',

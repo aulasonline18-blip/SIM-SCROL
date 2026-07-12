@@ -14,7 +14,6 @@ class ChatLessonTimelineInput {
     this.showImagePanel = false,
     this.imageStatus = 'idle',
     this.imageError,
-    this.hasPaidImageOffer = false,
     this.doubtProcessing = false,
     this.doubtProgress = 0,
     this.doubtResponse,
@@ -28,7 +27,6 @@ class ChatLessonTimelineInput {
   final bool showImagePanel;
   final String imageStatus;
   final String? imageError;
-  final bool hasPaidImageOffer;
   final bool doubtProcessing;
   final int doubtProgress;
   final String? doubtResponse;
@@ -183,7 +181,6 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     final imageData = snapshot?.imagem;
     if ((imageData != null && imageData.trim().isNotEmpty) ||
         input.showImagePanel ||
-        input.hasPaidImageOffer ||
         (input.imageError ?? '').trim().isNotEmpty ||
         input.imageStatus == 'loading') {
       messages.add(
@@ -194,13 +191,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           imageData: imageData,
           text: input.imageError,
           imageStatus: input.imageStatus,
-          hasPaidImageOffer: input.hasPaidImageOffer,
-          actionKey: input.hasPaidImageOffer ? 'paid-image-offer' : null,
           lessonLocalId: input.lessonLocalId,
           marker: marker,
           itemIdx: itemIdx,
           layer: layer,
-          isActionable: input.hasPaidImageOffer,
+          isActionable: false,
           deliveryStatus: input.imageStatus == 'loading'
               ? ChatLessonDeliveryStatus.processing
               : (input.imageError ?? '').trim().isNotEmpty

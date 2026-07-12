@@ -172,13 +172,6 @@ void main() {
             AnswerLetter.C: 'Ponto isolado',
           },
           correctAnswer: AnswerLetter.B,
-          visualTrigger: {
-            'needs_image': true,
-            'render_strategy': 'software',
-            'visual_type': 'graph',
-            'topic': 'curva de crescimento',
-            'highlight_focus': 'curva principal',
-          },
         ),
         imagem: null,
         itemMarker: 'M1',
@@ -201,7 +194,7 @@ void main() {
 
     expect(find.byType(LessonImageStudySurface), findsOneWidget);
     expect(find.byTooltip('Ampliar imagem'), findsOneWidget);
-    expect(find.text('curva principal'), findsOneWidget);
+    expect(find.text('Apoio visual da aula'), findsOneWidget);
     final imageRect = tester.getRect(find.byType(LessonImageStudySurface));
     expect(imageRect.top, greaterThanOrEqualTo(0));
     expect(imageRect.bottom, lessThanOrEqualTo(720));

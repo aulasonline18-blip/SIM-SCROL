@@ -392,8 +392,6 @@ void main() {
         ..lessonLocalId = 'lesson-old'
         ..imageStatus = 'error'
         ..imageError = 'erro anterior'
-        ..lessonImageOfferId = 'offer-old'
-        ..lessonImageOfferLoading = true
         ..audioPlaying = true
         ..audioLoading = true
         ..aulaSnapshot = const LessonRuntimeSnapshot(
@@ -431,8 +429,6 @@ void main() {
       expect(session.aulaSnapshot, isNull);
       expect(session.imageStatus, 'idle');
       expect(session.imageError, isNull);
-      expect(session.lessonImageOfferId, isNull);
-      expect(session.lessonImageOfferLoading, isFalse);
       expect(session.audioPlaying, isFalse);
       expect(session.audioLoading, isFalse);
       expect(session.route, '/cyber/objeto');

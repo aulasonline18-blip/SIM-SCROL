@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'helpers/fake_visual_pipeline.dart';
 import 'package:sim_mobile/sim/experience/bootstrap_payload.dart';
 import 'package:sim_mobile/sim/experience/partial_curriculum_writer.dart';
 import 'package:sim_mobile/sim/experience/student_experience_engine.dart';
@@ -207,7 +206,6 @@ void main() {
         t02Client: t02Client,
         cache: LessonMaterialCache(),
         bus: LessonEventBus(),
-        visualPipeline: fakeVisualPipeline(),
       );
       final materialService = StudentLessonMaterialService(
         stateService: service,

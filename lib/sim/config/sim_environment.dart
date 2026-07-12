@@ -64,6 +64,5 @@ class SimEnvironment {
 
   static const t00Path = '/api/bootstrap-t00';
   static const t02Path = '/api/complete-lesson';
-  static const imagePath = '/api/generate-lesson-image';
   static const audioPath = '/api/generate-lesson-audio';
 }

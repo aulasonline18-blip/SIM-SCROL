@@ -58,7 +58,7 @@ const simFinishRequirements = <SimFinishRequirement>[
   SimFinishRequirement(
     area: SimFinishArea.imagePresentationState,
     labelKey: 'finish_image_state',
-    sourceOfTruth: 'LessonVisualPipeline/generate lesson image',
+    sourceOfTruth: 'server-ready lesson image/display state',
   ),
   SimFinishRequirement(
     area: SimFinishArea.feedbacks,

@@ -1,73 +1,3 @@
-class GenerateLessonImageRequest {
-  const GenerateLessonImageRequest({
-    required this.prompt,
-    required this.lessonKey,
-    this.aspectRatio = '1:1',
-  });
-
-  final String prompt;
-  final String lessonKey;
-  final String aspectRatio;
-
-  String get normalizedAspectRatio {
-    const allowed = {'1:1', '16:9', '9:16', '4:3', '3:4'};
-    return allowed.contains(aspectRatio) ? aspectRatio : '1:1';
-  }
-
-  GenerateLessonImageRequest normalized() => GenerateLessonImageRequest(
-    prompt: prompt.trim().length > 4000
-        ? prompt.trim().substring(0, 4000)
-        : prompt.trim(),
-    lessonKey: lessonKey.trim().length > 160
-        ? lessonKey.trim().substring(0, 160)
-        : lessonKey.trim(),
-    aspectRatio: normalizedAspectRatio,
-  );
-}
-
-class GenerateLessonImageResponse {
-  const GenerateLessonImageResponse({
-    required this.dataUrl,
-    this.cacheKey,
-    this.requestId,
-    this.mimeType,
-    this.provider,
-    this.model,
-    this.charged,
-    this.cacheHit,
-    this.retryable,
-    this.acceptedOfferId,
-    this.costCredits,
-  });
-
-  final String dataUrl;
-  final String? cacheKey;
-  final String? requestId;
-  final String? mimeType;
-  final String? provider;
-  final String? model;
-  final bool? charged;
-  final bool? cacheHit;
-  final bool? retryable;
-  final String? acceptedOfferId;
-  final int? costCredits;
-
-  LessonImageGenerationMetadata toMetadata() {
-    return LessonImageGenerationMetadata(
-      cacheKey: cacheKey,
-      requestId: requestId,
-      mimeType: mimeType,
-      provider: provider,
-      model: model,
-      charged: charged,
-      cacheHit: cacheHit,
-      retryable: retryable,
-      acceptedOfferId: acceptedOfferId,
-      costCredits: costCredits,
-    );
-  }
-}
-
 class LessonImageGenerationMetadata {
   const LessonImageGenerationMetadata({
     this.cacheKey,
@@ -88,8 +18,6 @@ class LessonImageGenerationMetadata {
     this.createdAt,
     this.n2Reason,
     this.n3Reason,
-    this.acceptedOfferId,
-    this.costCredits,
   });
 
   final String? cacheKey;
@@ -110,8 +38,6 @@ class LessonImageGenerationMetadata {
   final String? createdAt;
   final String? n2Reason;
   final String? n3Reason;
-  final String? acceptedOfferId;
-  final int? costCredits;
 
   bool get isEmpty =>
       cacheKey == null &&
@@ -131,9 +57,7 @@ class LessonImageGenerationMetadata {
       source == null &&
       createdAt == null &&
       n2Reason == null &&
-      n3Reason == null &&
-      acceptedOfferId == null &&
-      costCredits == null;
+      n3Reason == null;
 
   Map<String, Object?> toJson() => {
     'cacheKey': cacheKey,
@@ -154,8 +78,6 @@ class LessonImageGenerationMetadata {
     'createdAt': createdAt,
     'n2Reason': n2Reason,
     'n3Reason': n3Reason,
-    'acceptedOfferId': acceptedOfferId,
-    'costCredits': costCredits,
   };
 
   LessonImageGenerationMetadata withSlot({
@@ -188,36 +110,6 @@ class LessonImageGenerationMetadata {
       createdAt: createdAt ?? this.createdAt,
       n2Reason: n2Reason,
       n3Reason: n3Reason,
-      acceptedOfferId: acceptedOfferId,
-      costCredits: costCredits,
-    );
-  }
-
-  LessonImageGenerationMetadata withPaidImage({
-    required String acceptedOfferId,
-    required int costCredits,
-  }) {
-    return LessonImageGenerationMetadata(
-      cacheKey: cacheKey,
-      requestId: requestId,
-      mimeType: mimeType,
-      provider: provider,
-      model: model,
-      charged: charged,
-      cacheHit: cacheHit,
-      retryable: retryable,
-      lessonLocalId: lessonLocalId,
-      marker: marker,
-      itemIdx: itemIdx,
-      layer: layer,
-      mediaType: mediaType,
-      status: status,
-      source: source,
-      createdAt: createdAt,
-      n2Reason: n2Reason,
-      n3Reason: n3Reason,
-      acceptedOfferId: this.acceptedOfferId ?? acceptedOfferId,
-      costCredits: this.costCredits ?? costCredits,
     );
   }
 
@@ -242,20 +134,7 @@ class LessonImageGenerationMetadata {
       createdAt: raw['createdAt']?.toString(),
       n2Reason: raw['n2Reason']?.toString(),
       n3Reason: raw['n3Reason']?.toString(),
-      acceptedOfferId: raw['acceptedOfferId']?.toString(),
-      costCredits: raw['costCredits'] is num
-          ? (raw['costCredits'] as num).toInt()
-          : raw['cost'] is num
-          ? (raw['cost'] as num).toInt()
-          : null,
     );
     return metadata.isEmpty ? null : metadata;
   }
 }
-
-const String lessonImageModelPath = 'google/nano-banana-pro';
-const int lessonImageRequestTimeoutMs = 125000;
-const int lessonImageRateLimitWindowMs = 60000;
-const int lessonImageRateLimitMaxPerWindow = 10;
-const int lessonImageCircuitFailThreshold = 5;
-const int lessonImageCircuitOpenMs = 60000;

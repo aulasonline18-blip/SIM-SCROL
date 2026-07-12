@@ -6,6 +6,14 @@ import 'package:image/image.dart' as img;
 const int defaultMaxImageSide = 1280;
 const int defaultJpegQuality = 78;
 
+bool isUsableRasterImageDataUrl(Object? value) {
+  if (value is! String) return false;
+  return RegExp(
+    r'^data:image/(png|jpeg|jpg|webp);base64,',
+    caseSensitive: false,
+  ).hasMatch(value.trim());
+}
+
 String compressImageDataUrl(
   String dataUrl, {
   int maxSide = defaultMaxImageSide,

@@ -11,7 +11,6 @@ class LessonContent {
     required this.correctAnswer,
     this.whyCorrect,
     this.whyWrong,
-    this.visualTrigger,
   });
 
   final String explanation;
@@ -20,7 +19,6 @@ class LessonContent {
   final AnswerLetter correctAnswer;
   final String? whyCorrect;
   final Object? whyWrong;
-  final JsonMap? visualTrigger;
 
   String get audioText => [
     explanation,
@@ -38,7 +36,6 @@ class LessonContent {
     'correct_answer': correctAnswer.name,
     if (whyCorrect != null) 'why_correct': whyCorrect,
     if (whyWrong != null) 'why_wrong': whyWrong,
-    if (visualTrigger != null) 'visual_trigger': visualTrigger,
   };
 }
 
@@ -142,6 +139,5 @@ LessonContent lessonContentFromT02Material(dynamic material) {
     correctAnswer: material.correctAnswer as AnswerLetter,
     whyCorrect: material.whyCorrect as String?,
     whyWrong: material.whyWrong,
-    visualTrigger: material.visualTrigger as JsonMap?,
   );
 }

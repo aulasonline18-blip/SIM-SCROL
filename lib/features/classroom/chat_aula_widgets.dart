@@ -261,7 +261,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
             message.mediaName ?? '',
             message.mediaType ?? '',
             message.mediaSize?.toString() ?? '',
-            message.hasPaidImageOffer.toString(),
             message.actionKey ?? '',
             message.deliveryStatus.name,
             message.timestampLabel ?? '',
@@ -724,9 +723,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
             ? t('aula_image_loading')
             : (message.imageData ?? '').trim().isNotEmpty
             ? t('aula_image_ready')
-            : (message.hasPaidImageOffer
-                  ? t('aula_img_desc')
-                  : t('aula_image_unavailable')),
+            : t('aula_image_unavailable'),
       ChatLessonMessageKind.studentDoubt =>
         (message.imageData ?? '').trim().isNotEmpty
             ? t('aula_attachment_image')
@@ -1280,21 +1277,16 @@ class ChatImageBubble extends StatelessWidget {
         message.imageData != null && message.imageData!.trim().isNotEmpty;
     final loading = message.imageStatus == 'loading';
     final hasError = (message.text ?? '').trim().isNotEmpty;
-    final offer = message.hasPaidImageOffer && !loading && !imageReady;
     final palette = SimThemeScope.paletteOf(context);
     final icon = imageReady
         ? Icons.image_outlined
         : loading
         ? Icons.hourglass_empty
-        : offer
-        ? Icons.add_photo_alternate_outlined
         : Icons.broken_image_outlined;
     final label = imageReady
         ? t('aula_image_ready')
         : loading
         ? t('aula_image_loading')
-        : offer
-        ? t('aula_img_desc')
         : hasError
         ? message.text!
         : t('aula_image_unavailable');

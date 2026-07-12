@@ -2,10 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'helpers/fake_visual_pipeline.dart';
-import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sim_mobile/sim/billing/sim_pricing.dart';
 import 'package:sim_mobile/sim/experience/student_experience_engine.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t00_adapter.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t02_adapter.dart';
@@ -19,7 +16,6 @@ import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
-import 'package:sim_mobile/sim/media/lesson_visual_pipeline.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
@@ -33,7 +29,6 @@ const _serverRasterDataUrl = 'data:image/png;base64,AAAA';
 
 class FakeT02Client implements T02LessonClient {
   FakeT02Client({
-    this.visualTrigger,
     this.explanation,
     this.question,
     this.options,
@@ -42,7 +37,6 @@ class FakeT02Client implements T02LessonClient {
     this.imageStatus,
   });
 
-  final JsonMap? visualTrigger;
   final String? explanation;
   final String? question;
   final Map<AnswerLetter, String>? options;
@@ -71,7 +65,6 @@ class FakeT02Client implements T02LessonClient {
       whyWrong: null,
       generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
       source: source,
-      visualTrigger: visualTrigger,
       imageDataUrl: imageDataUrl,
       imageStatus: imageStatus,
     );
@@ -88,73 +81,6 @@ class FakeT02Client implements T02LessonClient {
   @override
   Future<T02LessonMaterial> placement(T02LessonRequest request) =>
       completeLesson(request);
-}
-
-class _StaleThenRasterVisualPipeline extends LessonVisualPipeline {
-  _StaleThenRasterVisualPipeline({required this.releaseFirst})
-    : super(
-        imageClient: const FakeNoopImageClient(),
-        visualRouterClient: const FakeVisualRouterClient(),
-      );
-
-  final Completer<void> releaseFirst;
-  int calls = 0;
-  final prompts = <String?>[];
-
-  @override
-  Future<LessonVisualResult> resolveVisual({
-    required LessonVisualTrigger trigger,
-    required String lessonKey,
-    String? stableLang,
-    String? academicLevel,
-    bool allowPaidImages = false,
-    String? acceptedOfferId,
-    String? idempotencyKey,
-  }) async {
-    calls += 1;
-    prompts.add(trigger.imagePrompt);
-    if (calls == 1) {
-      await releaseFirst.future;
-      return const LessonVisualResult(
-        svg: null,
-        dataUrl: null,
-        source: 'skip_no_offer',
-      );
-    }
-    return const LessonVisualResult(
-      svg: null,
-      dataUrl: _serverRasterDataUrl,
-      source: 'server_raster',
-    );
-  }
-}
-
-class _CountingVisualPipeline extends LessonVisualPipeline {
-  _CountingVisualPipeline()
-    : super(
-        imageClient: const FakeNoopImageClient(),
-        visualRouterClient: const FakeVisualRouterClient(),
-      );
-
-  int calls = 0;
-
-  @override
-  Future<LessonVisualResult> resolveVisual({
-    required LessonVisualTrigger trigger,
-    required String lessonKey,
-    String? stableLang,
-    String? academicLevel,
-    bool allowPaidImages = false,
-    String? acceptedOfferId,
-    String? idempotencyKey,
-  }) async {
-    calls += 1;
-    return const LessonVisualResult(
-      svg: null,
-      dataUrl: _serverRasterDataUrl,
-      source: 'should_not_run_for_server_classroom',
-    );
-  }
 }
 
 class AuditT00Client implements T00BootstrapClient {
@@ -245,36 +171,6 @@ class BlockingHydrateCache extends LessonMaterialCache {
   }
 }
 
-class BlockingVisualPipeline extends LessonVisualPipeline {
-  BlockingVisualPipeline({required this.releaseImage})
-    : super(
-        imageClient: const FakeNoopImageClient(),
-        visualRouterClient: const FakeVisualRouterClient(),
-      );
-
-  final Completer<void> releaseImage;
-  int calls = 0;
-
-  @override
-  Future<LessonVisualResult> resolveVisual({
-    required LessonVisualTrigger trigger,
-    required String lessonKey,
-    String? stableLang,
-    String? academicLevel,
-    bool allowPaidImages = false,
-    String? acceptedOfferId,
-    String? idempotencyKey,
-  }) async {
-    calls += 1;
-    await releaseImage.future;
-    return const LessonVisualResult(
-      svg: null,
-      dataUrl: _serverRasterDataUrl,
-      source: 'delayed_secondary_image',
-    );
-  }
-}
-
 class FastStartT02Client implements T02LessonClient {
   final requests = <T02LessonRequest>[];
 
@@ -294,13 +190,6 @@ class FastStartT02Client implements T02LessonClient {
       whyWrong: const {'B': 'menor que metade', 'C': 'um quarto'},
       generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
       source: 'fast-start-t02',
-      visualTrigger: const {
-        'needs_image': true,
-        'pedagogical_need': 'helpful',
-        'render_strategy': 'software',
-        'visual_type': 'diagram',
-        'image_prompt': 'imagem secundaria lenta',
-      },
     );
   }
 
@@ -480,24 +369,14 @@ void main() {
   });
 
   test(
-    'LessonOrchestrator carries T02 visual_trigger into server raster image',
+    'LessonOrchestrator stores image only when T02 returns ready image data',
     () async {
-      final trigger = <String, dynamic>{
-        'needs_image': true,
-        'pedagogical_need': 'helpful',
-        'render_strategy': 'software',
-        'svg_payload':
-            '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
-      };
       final cache = LessonMaterialCache();
       final bus = LessonEventBus();
       final orchestrator = LessonOrchestrator(
-        t02Client: FakeT02Client(visualTrigger: trigger),
+        t02Client: FakeT02Client(imageDataUrl: _serverRasterDataUrl),
         cache: cache,
         bus: bus,
-        visualPipeline: fakeVisualPipeline(
-          displayDataUrl: _serverRasterDataUrl,
-        ),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-visual',
@@ -519,8 +398,8 @@ void main() {
       );
       await Future<void>.delayed(Duration.zero);
 
-      expect(textLesson.conteudo.visualTrigger, trigger);
-      expect(updates.first.conteudo.visualTrigger, trigger);
+      expect(textLesson.imagem, _serverRasterDataUrl);
+      expect(updates.first.imagem, _serverRasterDataUrl);
       final rendered = updates.last.imagem;
       expect(rendered, _serverRasterDataUrl);
     },
@@ -529,18 +408,11 @@ void main() {
   test(
     'LessonOrchestrator uses server raster before any app paid offer',
     () async {
-      final trigger = <String, dynamic>{
-        'needs_image': true,
-        'pedagogical_need': 'important',
-        'render_strategy': 'ai',
-        'topic': 'apoio visual',
-        'image_prompt': 'criar imagem de apoio para a aula',
-      };
       final cache = LessonMaterialCache();
       final bus = LessonEventBus();
       final orchestrator = LessonOrchestrator(
         t02Client: FakeT02Client(
-          visualTrigger: trigger,
+          imageDataUrl: _serverRasterDataUrl,
           explanation:
               'Uma função quadrática é uma função do segundo grau, '
               'com forma geral f(x)=ax²+bx+c. O gráfico é uma parábola.',
@@ -554,9 +426,6 @@ void main() {
         ),
         cache: cache,
         bus: bus,
-        visualPipeline: fakeVisualPipeline(
-          displayDataUrl: _serverRasterDataUrl,
-        ),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-poor-trigger-quadratic',
@@ -568,9 +437,6 @@ void main() {
         marker: 'M1',
       );
       final key = lessonKeyFor(params);
-      final offers = <LessonPaidImageOffer?>[];
-      final unsubscribeOffer = bus.subscribePaidImageOffer(key, offers.add);
-      addTearDown(unsubscribeOffer);
       final updates = <CompleteLesson>[];
       final unsubscribeLesson = bus.subscribe(key, updates.add);
       addTearDown(unsubscribeLesson);
@@ -581,29 +447,17 @@ void main() {
       final rendered = updates.last.imagem;
       expect(rendered, _serverRasterDataUrl);
       expect(cache.peek(key)?.imagem, rendered);
-      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
     },
   );
 
   test(
-    'LessonOrchestrator stores server raster for h(t) visual trigger',
+    'LessonOrchestrator stores ready server raster for h(t) material',
     () async {
-      final stalePrompt = List.filled(
-        90,
-        'foto realista genérica de apoio visual sem fórmula nem eixo',
-      ).join(' ');
-      final trigger = <String, dynamic>{
-        'needs_image': true,
-        'pedagogical_need': 'important',
-        'visual_type': 'photo',
-        'topic': 'apoio visual',
-        'image_prompt': stalePrompt,
-      };
       final cache = LessonMaterialCache();
       final bus = LessonEventBus();
       final orchestrator = LessonOrchestrator(
         t02Client: FakeT02Client(
-          visualTrigger: trigger,
+          imageDataUrl: _serverRasterDataUrl,
           explanation:
               'Ao substituir t por zero na função, a altura inicial aparece '
               'no termo constante. Isso conecta a fórmula ao ponto inicial '
@@ -621,9 +475,6 @@ void main() {
         ),
         cache: cache,
         bus: bus,
-        visualPipeline: fakeVisualPipeline(
-          displayDataUrl: _serverRasterDataUrl,
-        ),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-ht-physics-graph',
@@ -635,9 +486,6 @@ void main() {
         marker: 'M5',
       );
       final key = lessonKeyFor(params);
-      final offers = <LessonPaidImageOffer?>[];
-      final unsubscribeOffer = bus.subscribePaidImageOffer(key, offers.add);
-      addTearDown(unsubscribeOffer);
       final updates = <CompleteLesson>[];
       final unsubscribeLesson = bus.subscribe(key, updates.add);
       addTearDown(unsubscribeLesson);
@@ -648,26 +496,12 @@ void main() {
       final rendered = updates.last.imagem;
       expect(rendered, _serverRasterDataUrl);
       expect(cache.peek(key)?.imagem, rendered);
-      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
     },
   );
 
   test(
     'LessonOrchestrator ignores stale image decision after lesson content refresh',
     () async {
-      final staleTrigger = <String, dynamic>{
-        'needs_image': true,
-        'pedagogical_need': 'important',
-        'topic': 'foto realista',
-        'visual_type': 'photo',
-        'image_prompt': 'foto realista de apoio',
-      };
-      final freshTrigger = <String, dynamic>{
-        'needs_image': true,
-        'pedagogical_need': 'important',
-        'topic': 'apoio visual',
-        'image_prompt': 'criar imagem de apoio para a aula',
-      };
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-stale-image-decision',
         item: 'Função quadrática',
@@ -691,19 +525,13 @@ void main() {
               AnswerLetter.C: 'C',
             },
             correctAnswer: AnswerLetter.A,
-            visualTrigger: staleTrigger,
           ),
           imagem: null,
           audioText: 'material antigo',
         ),
       );
       final bus = LessonEventBus();
-      final releaseFirst = Completer<void>();
-      final pipeline = _StaleThenRasterVisualPipeline(
-        releaseFirst: releaseFirst,
-      );
       final t02 = FakeT02Client(
-        visualTrigger: freshTrigger,
         explanation:
             'Para achar o cruzamento com o eixo Y em uma função quadrática, usamos x = 0.',
         question:
@@ -718,18 +546,13 @@ void main() {
         t02Client: t02,
         cache: cache,
         bus: bus,
-        visualPipeline: pipeline,
       );
-      final offers = <LessonPaidImageOffer?>[];
-      final unsubscribeOffer = bus.subscribePaidImageOffer(key, offers.add);
-      addTearDown(unsubscribeOffer);
       final updates = <CompleteLesson>[];
       final unsubscribeLesson = bus.subscribe(key, updates.add);
       addTearDown(unsubscribeLesson);
 
       await orchestrator.prefetchCompleteLesson(params);
       await Future<void>.delayed(Duration.zero);
-      expect(pipeline.calls, 1);
 
       await orchestrator.prefetchCompleteLesson(
         params,
@@ -738,30 +561,17 @@ void main() {
       );
       expect(t02.calls, 1);
       expect(cache.peek(key)?.conteudo.question, contains('função quadrática'));
-
-      releaseFirst.complete();
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      expect(pipeline.calls, 2);
-      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
       expect(cache.peek(key)?.conteudo.question, contains('função quadrática'));
-      expect(cache.peek(key)?.imagem, _serverRasterDataUrl);
-      expect(updates.last.imagem, cache.peek(key)?.imagem);
-      expect(pipeline.prompts.first, contains('Pergunta antiga'));
-      expect(pipeline.prompts.last, contains('função quadrática'));
+      expect(cache.peek(key)?.imagem, isNull);
+      expect(updates.last.imagem, isNull);
     },
   );
 
   test(
-    'LessonOrchestrator schedules fresh image funnel from cached text',
+    'LessonOrchestrator does not create image from cached visual trigger',
     () async {
-      final trigger = <String, dynamic>{
-        'needs_image': true,
-        'pedagogical_need': 'important',
-        'render_strategy': 'ai',
-        'topic': 'apoio visual',
-        'image_prompt': 'criar imagem de apoio para a aula',
-      };
       final cache = LessonMaterialCache();
       final bus = LessonEventBus();
       final t02 = FakeT02Client();
@@ -769,9 +579,6 @@ void main() {
         t02Client: t02,
         cache: cache,
         bus: bus,
-        visualPipeline: fakeVisualPipeline(
-          displayDataUrl: _serverRasterDataUrl,
-        ),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-cache-linear',
@@ -783,9 +590,6 @@ void main() {
         marker: 'M1',
       );
       final key = lessonKeyFor(params);
-      final offers = <LessonPaidImageOffer?>[];
-      final unsubscribeOffer = bus.subscribePaidImageOffer(key, offers.add);
-      addTearDown(unsubscribeOffer);
       final updates = <CompleteLesson>[];
       final unsubscribeLesson = bus.subscribe(key, updates.add);
       addTearDown(unsubscribeLesson);
@@ -803,7 +607,6 @@ void main() {
               AnswerLetter.C: 'a/x + b = 0',
             },
             correctAnswer: AnswerLetter.A,
-            visualTrigger: trigger,
           ),
           imagem: null,
           audioText: 'texto',
@@ -813,42 +616,21 @@ void main() {
       await orchestrator.prefetchCompleteLesson(params, priority: 'active');
       await Future<void>.delayed(Duration.zero);
 
-      final rendered = updates.last.imagem;
       expect(t02.calls, 0);
-      expect(rendered, _serverRasterDataUrl);
-      expect(cache.peek(key)?.imagem, rendered);
-      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
+      expect(updates, isEmpty);
+      expect(cache.peek(key)?.imagem, isNull);
     },
   );
 
   test(
-    'LessonOrchestrator sends math_template trigger and stores server raster',
+    'LessonOrchestrator does not render math template locally',
     () async {
-      final trigger = <String, dynamic>{
-        'needs_image': true,
-        'pedagogical_need': 'important',
-        'render_strategy': 'software',
-        'topic': 'função linear',
-        'math_template': {
-          'name': 'linear_function',
-          'params': {
-            'a': 2,
-            'b': 1,
-            'x_min': -3,
-            'x_max': 3,
-            'labels': {'title': 'y = 2x + 1'},
-          },
-        },
-      };
       final cache = LessonMaterialCache();
       final bus = LessonEventBus();
       final orchestrator = LessonOrchestrator(
-        t02Client: FakeT02Client(visualTrigger: trigger),
+        t02Client: FakeT02Client(),
         cache: cache,
         bus: bus,
-        visualPipeline: fakeVisualPipeline(
-          displayDataUrl: _serverRasterDataUrl,
-        ),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-math-template',
@@ -867,147 +649,7 @@ void main() {
       await orchestrator.prefetchCompleteLesson(params, priority: 'active');
       await Future<void>.delayed(Duration.zero);
 
-      final rendered = updates.last.imagem;
-      expect(rendered, _serverRasterDataUrl);
-    },
-  );
-
-  test(
-    'LessonOrchestrator publishes paid image offer without generating before accept',
-    () async {
-      final trigger = <String, dynamic>{
-        'needs_image': true,
-        'pedagogical_need': 'important',
-        'render_strategy': 'ai',
-        'topic': 'foto realista de um coracao humano',
-        'visual_type': 'anatomy',
-        'image_prompt': 'foto realista de um coracao humano',
-      };
-      final cache = LessonMaterialCache();
-      final bus = LessonEventBus();
-      final orchestrator = LessonOrchestrator(
-        t02Client: FakeT02Client(visualTrigger: trigger),
-        cache: cache,
-        bus: bus,
-        visualPipeline: fakeVisualPipeline(),
-      );
-      const params = CompleteLessonParams(
-        lessonLocalId: 'cyber-paid-offer',
-        item: 'Coracao humano',
-        lang: 'pt-BR',
-        academic: 'fundamental',
-        layer: LessonLayer.l1,
-        mode: LessonMode.session,
-        marker: 'M1',
-      );
-      final key = lessonKeyFor(params);
-      final offers = <LessonPaidImageOffer?>[];
-      final unsubscribe = bus.subscribePaidImageOffer(key, offers.add);
-      addTearDown(unsubscribe);
-      final updates = <CompleteLesson>[];
-      final unsubscribeLesson = bus.subscribe(key, updates.add);
-      addTearDown(unsubscribeLesson);
-
-      await orchestrator.prefetchCompleteLesson(params, priority: 'active');
-      await Future<void>.delayed(Duration.zero);
-
-      expect(cache.peek(key)?.imagem, isNull);
-      expect(offers.whereType<LessonPaidImageOffer>(), isNotEmpty);
-      expect(offers.whereType<LessonPaidImageOffer>().last.lessonKey, key);
-      expect(
-        offers.whereType<LessonPaidImageOffer>().last.creditCost,
-        simPricing.imageCostCredits,
-      );
-    },
-  );
-
-  test(
-    'LessonOrchestrator clears declined offer and keeps paid generation gated',
-    () async {
-      final trigger = <String, dynamic>{
-        'needs_image': true,
-        'pedagogical_need': 'important',
-        'render_strategy': 'ai',
-        'topic': 'foto realista de um coracao humano',
-        'visual_type': 'anatomy',
-        'image_prompt': 'foto realista de um coracao humano',
-      };
-      final cache = LessonMaterialCache();
-      final bus = LessonEventBus();
-      final paidPng =
-          'data:image/png;base64,${base64Encode(img.encodePng(img.Image(width: 2, height: 2)))}';
-      var paidCalls = 0;
-      final orchestrator = LessonOrchestrator(
-        t02Client: FakeT02Client(visualTrigger: trigger),
-        cache: cache,
-        bus: bus,
-        visualPipeline: fakeVisualPipeline(
-          paidImageDataUrl: paidPng,
-          onPaidImageGenerate: () => paidCalls += 1,
-        ),
-      );
-      const params = CompleteLessonParams(
-        lessonLocalId: 'cyber-paid-offer-reset',
-        item: 'Coracao humano',
-        lang: 'pt-BR',
-        academic: 'fundamental',
-        layer: LessonLayer.l1,
-        mode: LessonMode.session,
-        marker: 'M1',
-      );
-      final key = lessonKeyFor(params);
-      final offers = <LessonPaidImageOffer?>[];
-      final unsubscribe = bus.subscribePaidImageOffer(key, offers.add);
-      addTearDown(unsubscribe);
-      final updates = <CompleteLesson>[];
-      final unsubscribeLesson = bus.subscribe(key, updates.add);
-      addTearDown(unsubscribeLesson);
-
-      await orchestrator.prefetchCompleteLesson(params, priority: 'active');
-      await Future<void>.delayed(Duration.zero);
-      expect(offers.whereType<LessonPaidImageOffer>(), isNotEmpty);
-      expect(paidCalls, 0);
-
-      orchestrator.declinePaidImageOffer(key);
-      expect(offers.last, isNull);
-      await orchestrator.prefetchCompleteLesson(
-        params,
-        priority: 'active',
-        forceRefresh: true,
-      );
-      await Future<void>.delayed(Duration.zero);
-      expect(offers.whereType<LessonPaidImageOffer>(), isNotEmpty);
-
-      orchestrator.resetDeclinedPaidImageOffer(key);
-      await Future<void>.delayed(Duration.zero);
-      expect(paidCalls, 0);
-      expect(updates.last.imagem, isNull);
-      expect(cache.peek(key)?.imagem, isNull);
-    },
-  );
-
-  test(
-    'LessonEventBus replays pending paid image offer to late subscriber',
-    () {
-      final bus = LessonEventBus();
-      const offer = LessonPaidImageOffer(
-        offerId: 'img_offer_late',
-        lessonKey: 'lesson-key',
-        prompt: 'prompt',
-        creditCost: 10,
-        source: 'skip_no_offer',
-      );
-      bus.notifyPaidImageOffer('lesson-key', offer);
-      final received = <LessonPaidImageOffer?>[];
-      final unsubscribe = bus.subscribePaidImageOffer(
-        'lesson-key',
-        received.add,
-      );
-      addTearDown(unsubscribe);
-
-      expect(received, [offer]);
-      bus.clearPaidImageOffer('lesson-key');
-      expect(received.last, isNull);
+      expect(updates.single.imagem, isNull);
     },
   );
 
@@ -1044,20 +686,12 @@ void main() {
     },
   );
 
-  test('review and recovery requests preserve visual_trigger', () async {
-    final trigger = <String, dynamic>{
-      'needs_image': true,
-      'pedagogical_need': 'important',
-      'render_strategy': 'software',
-      'svg_payload':
-          '<svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/></svg>',
-    };
-    final t02 = FakeT02Client(visualTrigger: trigger);
+  test('review and recovery requests do not depend on visual trigger', () async {
+    final t02 = FakeT02Client();
     final orchestrator = LessonOrchestrator(
       t02Client: t02,
       cache: LessonMaterialCache(),
       bus: LessonEventBus(),
-      visualPipeline: fakeVisualPipeline(),
     );
 
     final review = await orchestrator.prefetchCompleteLesson(
@@ -1090,26 +724,18 @@ void main() {
       LessonMode.reforco.name,
       LessonMode.amparo.name,
     ]);
-    expect(review.conteudo.visualTrigger, trigger);
-    expect(recovery.conteudo.visualTrigger, trigger);
+    expect(review.conteudo.explanation, isNotEmpty);
+    expect(recovery.conteudo.explanation, isNotEmpty);
   });
 
   test(
-    'background prefetch does not create paid image without student action',
+    'background prefetch does not invent local image when server has none',
     () async {
-      final trigger = <String, dynamic>{
-        'needs_image': true,
-        'pedagogical_need': 'important',
-        'render_strategy': 'ai',
-        'topic': 'coração humano realista',
-        'image_prompt': 'foto realista de um coração humano',
-      };
       final cache = LessonMaterialCache();
       final orchestrator = LessonOrchestrator(
-        t02Client: FakeT02Client(visualTrigger: trigger),
+        t02Client: FakeT02Client(),
         cache: cache,
         bus: LessonEventBus(),
-        visualPipeline: fakeVisualPipeline(),
       );
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-paid-bg',
@@ -1128,7 +754,7 @@ void main() {
       );
       await Future<void>.delayed(Duration.zero);
 
-      expect(lesson.conteudo.visualTrigger, trigger);
+      expect(lesson.imagem, isNull);
       expect(cache.peek(key)?.imagem, isNull);
     },
   );
@@ -1142,7 +768,6 @@ void main() {
       t02Client: t02,
       cache: LessonMaterialCache(),
       bus: LessonEventBus(),
-      visualPipeline: fakeVisualPipeline(),
     );
     final engine = DopamineReadyWindowEngine(
       service: service,
@@ -1193,7 +818,6 @@ void main() {
         t02Client: t02,
         cache: LessonMaterialCache(),
         bus: LessonEventBus(),
-        visualPipeline: fakeVisualPipeline(),
       );
       final materialService = StudentLessonMaterialService(
         stateService: service,
@@ -1240,7 +864,6 @@ void main() {
       t02Client: FakeT02Client(),
       cache: LessonMaterialCache(),
       bus: LessonEventBus(),
-      visualPipeline: fakeVisualPipeline(),
     );
     final materialService = StudentLessonMaterialService(
       stateService: service,
@@ -1289,7 +912,6 @@ void main() {
         t02Client: FakeT02Client(),
         cache: LessonMaterialCache(),
         bus: LessonEventBus(),
-        visualPipeline: fakeVisualPipeline(),
       );
       final materialService = StudentLessonMaterialService(
         stateService: service,
@@ -1333,7 +955,6 @@ void main() {
       t02Client: FakeT02Client(),
       cache: LessonMaterialCache(),
       bus: LessonEventBus(),
-      visualPipeline: fakeVisualPipeline(),
     );
     final materialService = StudentLessonMaterialService(
       stateService: service,
@@ -1379,7 +1000,6 @@ void main() {
         t02Client: FakeT02Client(),
         cache: LessonMaterialCache(),
         bus: LessonEventBus(),
-        visualPipeline: fakeVisualPipeline(),
       );
       final materialService = StudentLessonMaterialService(
         stateService: service,
@@ -1464,15 +1084,7 @@ void main() {
     expect(cache.peek('bad'), isNull);
   });
 
-  test('ready state material schedules server raster visual', () async {
-    final trigger = {
-      'needs_image': true,
-      'pedagogical_need': 'helpful',
-      'render_strategy': 'software',
-      'visual_type': 'graph',
-      'svg_payload':
-          '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
-    };
+  test('ready state material keeps text-only material text-only', () async {
     final params = const CompleteLessonParams(
       lessonLocalId: 'cyber-ready',
       item: 'Plano cartesiano',
@@ -1492,7 +1104,6 @@ void main() {
               'question': 'Onde fica a origem?',
               'options': {'A': 'No zero', 'B': 'No topo', 'C': 'Na borda'},
               'correct_answer': 'A',
-              'visual_trigger': trigger,
               'for_itemIdx': 0,
               'for_marker': 'M1',
               'for_layer': LessonLayer.l1.name,
@@ -1510,7 +1121,6 @@ void main() {
       t02Client: FakeT02Client(),
       cache: cache,
       bus: bus,
-      visualPipeline: fakeVisualPipeline(displayDataUrl: _serverRasterDataUrl),
     );
     final materialService = StudentLessonMaterialService(
       stateService: service,
@@ -1534,19 +1144,11 @@ void main() {
 
     expect(result?.conteudo.question, 'Onde fica a origem?');
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(updates.last.imagem, _serverRasterDataUrl);
-    expect(cache.peek(lessonKeyFor(params))?.imagem, updates.last.imagem);
+    expect(updates.last.imagem, isNull);
+    expect(cache.peek(lessonKeyFor(params))?.imagem, isNull);
   });
 
-  test('cached text-only material schedules server raster visual', () async {
-    final trigger = {
-      'needs_image': true,
-      'pedagogical_need': 'helpful',
-      'render_strategy': 'software',
-      'visual_type': 'graph',
-      'svg_payload':
-          '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>',
-    };
+  test('cached text-only material does not schedule visual route', () async {
     final params = const CompleteLessonParams(
       lessonLocalId: 'cyber-cache',
       item: 'Plano cartesiano',
@@ -1569,7 +1171,6 @@ void main() {
             AnswerLetter.C: 'z',
           },
           correctAnswer: AnswerLetter.A,
-          visualTrigger: trigger,
         ),
         imagem: null,
         audioText: 'Veja o plano. Qual eixo é horizontal?',
@@ -1586,7 +1187,6 @@ void main() {
       t02Client: FakeT02Client(),
       cache: cache,
       bus: bus,
-      visualPipeline: fakeVisualPipeline(displayDataUrl: _serverRasterDataUrl),
     );
     final materialService = StudentLessonMaterialService(
       stateService: service,
@@ -1610,11 +1210,11 @@ void main() {
 
     expect(result?.imagem, isNull);
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(updates.last.imagem, _serverRasterDataUrl);
-    expect(cache.peek(lessonKeyFor(params))?.imagem, updates.last.imagem);
+    expect(updates, isEmpty);
+    expect(cache.peek(lessonKeyFor(params))?.imagem, isNull);
     expect(
       service.read('cyber-cache')?.currentLessonMaterial?['imagem'],
-      updates.last.imagem,
+      isNull,
     );
     expect(
       service
@@ -1624,21 +1224,13 @@ void main() {
         'M1',
         LessonLayer.l1,
       )]?['imagem'],
-      updates.last.imagem,
+      isNull,
     );
   });
 
   test(
-    'server-classroom pending image does not start app visual route',
+    'server-classroom pending image stays text-only in the app',
     () async {
-      final trigger = {
-        'needs_image': true,
-        'pedagogical_need': 'important',
-        'render_strategy': 'software',
-        'visual_type': 'diagram',
-        'topic': 'Server managed visual',
-        'image_prompt': 'server is preparing this image',
-      };
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-server-visual',
         item: 'Imagem governada pelo servidor',
@@ -1653,11 +1245,9 @@ void main() {
       );
       final cache = LessonMaterialCache();
       final bus = LessonEventBus();
-      final visualPipeline = _CountingVisualPipeline();
       final orchestrator = LessonOrchestrator(
         t02Client: FakeT02Client(
           source: 'server-classroom',
-          visualTrigger: trigger,
           imageStatus: 'processing',
           explanation: 'Texto da aula chega antes da imagem.',
           question: 'O que o App deve fazer?',
@@ -1669,7 +1259,6 @@ void main() {
         ),
         cache: cache,
         bus: bus,
-        visualPipeline: visualPipeline,
       );
       final materialService = StudentLessonMaterialService(
         stateService: service,
@@ -1698,7 +1287,6 @@ void main() {
       );
       expect(result?.imagem, isNull);
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(visualPipeline.calls, 0);
       expect(cache.peek(lessonKeyFor(params))?.imagem, isNull);
     },
   );
@@ -1712,7 +1300,6 @@ void main() {
       t02Client: t02,
       cache: LessonMaterialCache(),
       bus: LessonEventBus(),
-      visualPipeline: fakeVisualPipeline(),
     );
     final readyWindow = DopamineReadyWindowEngine(
       service: service,
@@ -1763,13 +1350,11 @@ void main() {
       final service = StudentLearningStateService();
       final releaseFinalCurriculum = Completer<void>();
       final releaseCacheHydrate = Completer<void>();
-      final releaseImage = Completer<void>();
       final t00 = GiantCurriculumT00Client(
         releaseFinal: releaseFinalCurriculum,
       );
       final t02 = FastStartT02Client();
       final cache = BlockingHydrateCache(releaseHydrate: releaseCacheHydrate);
-      final visualPipeline = BlockingVisualPipeline(releaseImage: releaseImage);
       var syncStarted = false;
       final syncRelease = Completer<void>();
       service.subscribe((lessonLocalId) {
@@ -1784,7 +1369,6 @@ void main() {
         t02Client: t02,
         cache: cache,
         bus: LessonEventBus(),
-        visualPipeline: visualPipeline,
       );
       final readyWindow = DopamineReadyWindowEngine(
         service: service,
@@ -1860,8 +1444,6 @@ void main() {
       );
 
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(visualPipeline.calls, greaterThanOrEqualTo(1));
-      expect(releaseImage.isCompleted, isFalse);
       expect(
         cache
             .peekCachedLesson(
@@ -1909,7 +1491,6 @@ void main() {
       expect(snap.phase.type, ClassroomPhaseType.expandida);
       expect(snap.phase.letter, AnswerLetter.A);
 
-      releaseImage.complete();
       releaseCacheHydrate.complete();
       syncRelease.complete();
       releaseFinalCurriculum.complete();
@@ -1928,7 +1509,6 @@ void main() {
         t02Client: t02,
         cache: LessonMaterialCache(),
         bus: LessonEventBus(),
-        visualPipeline: fakeVisualPipeline(),
       );
       final readyWindow = DopamineReadyWindowEngine(
         service: service,
@@ -2050,7 +1630,6 @@ void main() {
         t02Client: t02,
         cache: LessonMaterialCache(),
         bus: LessonEventBus(),
-        visualPipeline: fakeVisualPipeline(),
       );
       final materialService = StudentLessonMaterialService(
         stateService: service,
@@ -2125,7 +1704,6 @@ void main() {
         t02Client: t02,
         cache: LessonMaterialCache(),
         bus: LessonEventBus(),
-        visualPipeline: fakeVisualPipeline(),
       );
       final materialService = StudentLessonMaterialService(
         stateService: service,

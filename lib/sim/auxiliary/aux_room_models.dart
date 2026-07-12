@@ -246,10 +246,9 @@ class DoubtImagePayload {
 }
 
 class DoubtResponse {
-  const DoubtResponse({required this.explanation, this.visualTrigger});
+  const DoubtResponse({required this.explanation});
 
   final String explanation;
-  final JsonMap? visualTrigger;
 }
 
 class DoubtState {

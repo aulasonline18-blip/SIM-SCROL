@@ -247,7 +247,6 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     final hasImage = imageData != null && imageData.trim().isNotEmpty;
     return hasImage ||
         widget.session.imageError != null ||
-        widget.session.hasLessonPaidImageOffer ||
         (widget.session.aulaRuntimeLoading && imageData == null);
   }
 
@@ -319,7 +318,6 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
           showImagePanel: _hasLessonImagePanel(),
           imageStatus: session.imageStatus,
           imageError: session.imageError,
-          hasPaidImageOffer: session.hasLessonPaidImageOffer,
           doubtProcessing: session.doubt.status == DoubtStatus.processing,
           doubtProgress: session.doubt.progress,
           doubtResponse: session.doubt.response?.explanation,
@@ -556,7 +554,6 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       message.mediaType ?? '',
       message.mediaSize?.toString() ?? '',
       message.imageStatus,
-      message.hasPaidImageOffer,
       message.selectedAnswer?.name ?? '',
       message.selectedSignal?.name ?? '',
       message.isCorrect?.toString() ?? '',

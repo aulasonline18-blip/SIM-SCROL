@@ -21,7 +21,6 @@ import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
 
-import 'helpers/fake_visual_pipeline.dart';
 
 // Fake T00 client that returns one item successfully
 class _FakeOkT00Client implements T00BootstrapClient {
@@ -122,7 +121,6 @@ StudentExperienceT02Adapter _fakeT02Adapter(
     t02Client: _FakeT02Client(),
     cache: LessonMaterialCache(),
     bus: LessonEventBus(),
-    visualPipeline: fakeVisualPipeline(),
   );
   final readyWindow = DopamineReadyWindowEngine(
     service: service,

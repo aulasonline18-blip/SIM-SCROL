@@ -172,11 +172,6 @@ class LabSession extends ChangeNotifier {
   String? _activeLessonMediaKey;
   SimOrganism? _activeLessonMediaOrganism;
   void Function()? _lessonImageUnsubscribe;
-  void Function()? _lessonImageOfferUnsubscribe;
-  LessonPaidImageOffer? _activePaidImageOffer;
-  final Set<String> _declinedPaidImageOfferKeys = {};
-  String? lessonImageOfferId;
-  bool lessonImageOfferLoading = false;
 
   void _notifyFromChild() => notifyListeners();
 
@@ -232,7 +227,6 @@ class LabSession extends ChangeNotifier {
   set freeText(String value) => entryForm.freeText = value;
   String get preferredName => entryForm.preferredName;
   set preferredName(String value) => entryForm.preferredName = value;
-  bool get allowPaidImages => entryForm.allowPaidImages;
   List<AttachmentDraft> get attachments => entryForm.attachments;
   String get attachmentsText => entryForm.attachmentsText;
   String get studentProfileNotes => entryForm.studentProfileNotes;
@@ -1777,37 +1771,16 @@ class LabSession extends ChangeNotifier {
     return content;
   }
 
-  JsonMap? get currentVisualTrigger => aulaSnapshot?.conteudo?.visualTrigger;
-
-  String? get lessonPaidImagePrompt {
-    final offer = _activePaidImageOffer;
-    if (offer == null) return null;
-    if (_declinedPaidImageOfferKeys.contains(offer.offerId)) return null;
-    if (aulaSnapshot?.imagem != null) return null;
-    return offer.prompt;
-  }
-
-  bool get hasLessonPaidImageOffer =>
-      _activePaidImageOffer != null &&
-      lessonPaidImagePrompt != null &&
-      imageStatus != 'declined';
-
   void _resetActiveLessonMedia({
     bool clearSnapshot = false,
     bool clearSubscriptions = false,
   }) {
     if (clearSubscriptions) {
       _lessonImageUnsubscribe?.call();
-      _lessonImageOfferUnsubscribe?.call();
       _lessonImageUnsubscribe = null;
-      _lessonImageOfferUnsubscribe = null;
       _activeLessonMediaKey = null;
       _activeLessonMediaOrganism = null;
     }
-    _activePaidImageOffer = null;
-    _declinedPaidImageOfferKeys.clear();
-    lessonImageOfferId = null;
-    lessonImageOfferLoading = false;
     imageStatus = 'idle';
     imageError = null;
     lessonUiState.imageRequestId = null;
@@ -1823,8 +1796,6 @@ class LabSession extends ChangeNotifier {
         aulaSnapshot!.imagem!.trim().isNotEmpty) {
       imageStatus = 'ready';
       imageError = null;
-      _activePaidImageOffer = null;
-      lessonImageOfferId = null;
       _syncImageMetadataFromSnapshot();
     }
   }
@@ -1846,12 +1817,10 @@ class LabSession extends ChangeNotifier {
       return;
     }
     _lessonImageUnsubscribe?.call();
-    _lessonImageOfferUnsubscribe?.call();
     _resetActiveLessonMedia();
     _activeLessonMediaKey = key;
     _activeLessonMediaOrganism = organism;
     _syncImageStateFromSnapshot();
-    _activePaidImageOffer = null;
     _lessonImageUnsubscribe = organism.eventBus.subscribe(key, (lesson) {
       if (lesson.imagem == null || lesson.imagem!.trim().isEmpty) return;
       final applied = organism.lessonRuntimeEngine.applyLessonUpdateForKey(
@@ -1863,166 +1832,8 @@ class LabSession extends ChangeNotifier {
       imageStatus = 'ready';
       imageError = null;
       _syncImageMetadataFromSnapshot();
-      _activePaidImageOffer = null;
-      organism.eventBus.clearPaidImageOffer(key);
       notifyListeners();
     });
-    _lessonImageOfferUnsubscribe = organism.eventBus.subscribePaidImageOffer(
-      key,
-      (offer) {
-        if (offer == null) {
-          if (_activePaidImageOffer?.lessonKey == key) {
-            _activePaidImageOffer = null;
-          }
-          notifyListeners();
-          return;
-        }
-        if (_declinedPaidImageOfferKeys.contains(offer.offerId)) return;
-        if (aulaSnapshot?.imagem != null) return;
-        _activePaidImageOffer = offer;
-        lessonImageOfferId = offer.offerId;
-        if (imageStatus != 'loading') imageStatus = 'offer';
-        notifyListeners();
-      },
-    );
-  }
-
-  LessonMediaPosition? _activeImageMediaPosition() {
-    final id = lessonLocalId;
-    if (id == null || id.trim().isEmpty) return null;
-    return LessonMediaPosition(
-      lessonLocalId: id,
-      itemMarker: aulaSnapshot?.itemMarker,
-      layer: currentAulaLayer,
-    );
-  }
-
-  void _markLessonImageStarted(String? cacheKey) {
-    final id = lessonLocalId;
-    final position = _activeImageMediaPosition();
-    if (id == null || position == null || canonicalStore == null) return;
-    _audioControllerFor(
-      id,
-    ).mediaService.markLessonImageStarted(position, cacheKey: cacheKey);
-  }
-
-  void _markLessonImageReady({
-    required String? cacheKey,
-    required String imageUrl,
-  }) {
-    final id = lessonLocalId;
-    final position = _activeImageMediaPosition();
-    if (id == null || position == null || canonicalStore == null) return;
-    _audioControllerFor(id).mediaService.markLessonImageReady(
-      position,
-      cacheKey: cacheKey,
-      imageUrl: imageUrl,
-    );
-  }
-
-  void _markLessonImageFailed(String error) {
-    final id = lessonLocalId;
-    final position = _activeImageMediaPosition();
-    if (id == null || position == null || canonicalStore == null) return;
-    _audioControllerFor(
-      id,
-    ).mediaService.markLessonImageFailed(position, error: error);
-  }
-
-  void declineLessonPaidImage() {
-    final offer = _activePaidImageOffer;
-    if (offer != null) {
-      _declinedPaidImageOfferKeys.add(offer.offerId);
-      _activeOrganism?.lessonOrchestrator.declinePaidImageOffer(
-        offer.lessonKey,
-      );
-      _activeOrganism?.eventBus.clearPaidImageOffer(offer.lessonKey);
-    }
-    _activePaidImageOffer = null;
-    imageStatus = 'declined';
-    imageError = null;
-    lessonUiState.imageRequestId = null;
-    lessonUiState.imageRetryable = null;
-    lessonImageOfferId = null;
-    notifyListeners();
-  }
-
-  void buyImageCredits() {
-    final offer = _activePaidImageOffer;
-    if (offer != null) {
-      _declinedPaidImageOfferKeys.remove(offer.offerId);
-      _activeOrganism?.lessonOrchestrator.resetDeclinedPaidImageOffer(
-        offer.lessonKey,
-      );
-    }
-    navigationState.openRoute('/creditos?returnTo=/cyber/aula');
-    notifyListeners();
-  }
-
-  Future<void> acceptLessonPaidImage() async {
-    final offer = _activePaidImageOffer;
-    if (offer == null || _activeOrganism == null || lessonImageOfferLoading) {
-      return;
-    }
-    final key = offer.lessonKey;
-    final offerId = offer.offerId;
-    lessonImageOfferId = offerId;
-    lessonImageOfferLoading = true;
-    imageStatus = 'loading';
-    imageError = null;
-    lessonUiState.imageRequestId = null;
-    lessonUiState.imageCacheKey = null;
-    lessonUiState.imageCharged = null;
-    lessonUiState.imageCacheHit = null;
-    lessonUiState.imageRetryable = null;
-    _markLessonImageStarted(offerId);
-    notifyListeners();
-    try {
-      final metadata = await _activeOrganism!.lessonOrchestrator
-          .acceptPaidImageOffer(key);
-      final dataUrl = aulaSnapshot?.imagem;
-      if (dataUrl == null || dataUrl.trim().isEmpty) {
-        throw StateError('Imagem indisponivel.');
-      }
-      if (aulaSnapshot?.imagem != dataUrl) {
-        aulaSnapshot = aulaSnapshot?.copyWith(imagem: dataUrl);
-      }
-      imageStatus = 'ready';
-      imageError = null;
-      if (metadata != null && !metadata.isEmpty) {
-        lessonUiState.imageRequestId = metadata.requestId;
-        lessonUiState.imageCacheKey = metadata.cacheKey;
-        lessonUiState.imageCharged = metadata.charged;
-        lessonUiState.imageCacheHit = metadata.cacheHit;
-        lessonUiState.imageRetryable = metadata.retryable;
-      } else {
-        _syncImageMetadataFromSnapshot();
-      }
-      _activePaidImageOffer = null;
-      _markLessonImageReady(
-        cacheKey: lessonUiState.imageCacheKey ?? offerId,
-        imageUrl: dataUrl,
-      );
-    } on SimExternalAiException catch (error) {
-      lessonUiState.imageRequestId = error.requestId;
-      lessonUiState.imageRetryable = error.retryable;
-      imageStatus = 'error';
-      imageError = t('aula_image_unavailable_no_image');
-      _markLessonImageFailed(
-        [
-          if (error.code != null) error.code,
-          if (error.statusCode != null) 'HTTP ${error.statusCode}',
-          if (error.requestId != null) 'requestId=${error.requestId}',
-        ].whereType<String>().join(' | '),
-      );
-    } catch (error) {
-      imageStatus = 'error';
-      imageError = t('aula_image_unavailable_no_image');
-      _markLessonImageFailed(error.toString());
-    } finally {
-      lessonImageOfferLoading = false;
-      notifyListeners();
-    }
   }
 
   SimOrganism _organismForActiveLesson() {
@@ -2628,7 +2439,6 @@ class LabSession extends ChangeNotifier {
     navigationState.removeListener(_notifyFromChild);
     lessonUiState.removeListener(_notifyFromChild);
     _lessonImageUnsubscribe?.call();
-    _lessonImageOfferUnsubscribe?.call();
     unawaited(_playBillingFunctions?.dispose());
     authSession.dispose();
     _lessonAudioController?.pararAudio();

@@ -55,9 +55,6 @@ class DoubtT02Caller {
         addendum: getAuxRoomAddonReference(AuxRoomMode.doubt),
       ),
     );
-    return DoubtResponse(
-      explanation: material.explanation,
-      visualTrigger: material.visualTrigger,
-    );
+    return DoubtResponse(explanation: material.explanation);
   }
 }

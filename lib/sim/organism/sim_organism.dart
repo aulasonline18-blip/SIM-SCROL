@@ -28,7 +28,6 @@ import '../lesson/student_lesson_material_service.dart';
 import '../media/audio_core.dart';
 import '../media/audio_preference.dart';
 import '../media/lesson_audio_controller.dart';
-import '../media/lesson_visual_pipeline.dart';
 import '../media/student_lesson_media_service.dart';
 import '../placement/placement_route_controller.dart';
 import '../placement/placement_store.dart';
@@ -73,7 +72,6 @@ class SimOrganism {
     required this.audioCore,
     required this.mediaService,
     required this.lessonAudioController,
-    required this.visualPipeline,
     required this.creditsController,
     required this.accountDeletionController,
   });
@@ -100,7 +98,6 @@ class SimOrganism {
   final AudioCore audioCore;
   final StudentLessonMediaService mediaService;
   final LessonAudioController lessonAudioController;
-  final LessonVisualPipeline visualPipeline;
   final CreditsRouteController creditsController;
   final AccountDeletionController accountDeletionController;
 
@@ -132,15 +129,10 @@ class SimOrganism {
     final cache = LessonMaterialCache();
     cache.hydrateFromPreferences(prefs);
     final eventBus = LessonEventBus();
-    final visualPipeline = LessonVisualPipeline(
-      imageClient: SimServerLessonImageClient(config: aiConfig),
-      visualRouterClient: SimServerVisualRouterClient(config: aiConfig),
-    );
     final orchestrator = LessonOrchestrator(
       t02Client: t02Client,
       cache: cache,
       bus: eventBus,
-      visualPipeline: visualPipeline,
     );
     final readyWindowEngine = DopamineReadyWindowEngine(
       service: stateService,
@@ -303,7 +295,6 @@ class SimOrganism {
       audioCore: audioCore,
       mediaService: mediaService,
       lessonAudioController: lessonAudioController,
-      visualPipeline: visualPipeline,
       creditsController: creditsController,
       accountDeletionController: accountDeletionController,
     );

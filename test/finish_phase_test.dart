@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:sim_mobile/features/classroom/aula_widgets.dart';
@@ -251,14 +252,6 @@ void main() {
             AnswerLetter.C: 'C',
           },
           correctAnswer: AnswerLetter.A,
-          visualTrigger: {
-            'needs_image': true,
-            'pedagogical_need': 'important',
-            'render_strategy': 'ai',
-            'image_prompt': 'foto realista de um coração humano',
-            'topic': 'coração humano',
-            'visual_type': 'anatomy',
-          },
         ),
         imagem: null,
         itemMarker: 'M1',
@@ -325,12 +318,6 @@ void main() {
             AnswerLetter.C: 'C',
           },
           correctAnswer: AnswerLetter.A,
-          visualTrigger: {
-            'needs_image': true,
-            'topic': 'Sistema circulatório',
-            'highlight_focus': 'fluxo do sangue entre coração e corpo',
-            'key_elements': ['coração', 'artérias'],
-          },
         ),
         imagem: 'data:image/png;base64,$png',
         itemMarker: 'M1',
@@ -356,7 +343,7 @@ void main() {
 
     expect(find.text('Imagem da aula pronta'), findsNothing);
     expect(find.byType(LessonImageStudySurface), findsOneWidget);
-    expect(find.text('fluxo do sangue entre coração e corpo'), findsOneWidget);
+    expect(find.text('Apoio visual da aula'), findsOneWidget);
     expect(find.byTooltip(t('aula_image_expand')), findsOneWidget);
     expect(settled, 1);
   });
@@ -389,6 +376,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(InteractiveViewer), findsNothing);
+  });
+
+  test('LessonImageStudySurface does not use BoxFit.cover as fake fix', () {
+    final source = File(
+      'lib/features/classroom/aula_widgets.dart',
+    ).readAsStringSync();
+    final lessonImageSurface = RegExp(
+      r'class LessonImageStudySurface[\s\S]*?class LessonMediaImageView',
+    ).firstMatch(source)?.group(0);
+    final mediaImageView = RegExp(
+      r'class LessonMediaImageView[\s\S]*?class ',
+    ).firstMatch(source)?.group(0);
+
+    expect(lessonImageSurface, isNotNull);
+    expect(mediaImageView, isNotNull);
+    expect(lessonImageSurface, isNot(contains('BoxFit.cover')));
+    expect(mediaImageView, isNot(contains('BoxFit.cover')));
+    expect(source, contains('fit: BoxFit.contain'));
   });
 
   testWidgets('imagem inválida mostra erro compacto sem quebrar a aula', (

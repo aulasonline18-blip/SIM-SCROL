@@ -1515,15 +1515,6 @@ void main() {
                   imageStatus: 'error',
                 ),
               ),
-              ChatImageBubble(
-                message: ChatLessonMessage(
-                  id: 'offer',
-                  role: ChatLessonMessageRole.sim,
-                  kind: ChatLessonMessageKind.image,
-                  imageStatus: 'offer',
-                  hasPaidImageOffer: true,
-                ),
-              ),
             ],
           ),
         ),
@@ -1537,7 +1528,7 @@ void main() {
       find.text(
         'Esta parte da aula tem uma imagem criada por inteligência artificial.',
       ),
-      findsOneWidget,
+      findsNothing,
     );
   });
 

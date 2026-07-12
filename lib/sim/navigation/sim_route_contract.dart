@@ -380,17 +380,6 @@ const simRouteContract = <SimRouteContractEntry>[
     fallbackPath: '/',
   ),
   SimRouteContractEntry(
-    name: 'apiGenerateLessonImage',
-    path: '/api/generate-lesson-image',
-    destination: 'server_image',
-    access: SimRouteAccess.server,
-    surface: SimRouteSurface.api,
-    preconditions: [SimRoutePrecondition.serverOnly],
-    canDeepLink: false,
-    restorable: false,
-    fallbackPath: '/',
-  ),
-  SimRouteContractEntry(
     name: 'apiGenerateLessonAudio',
     path: '/api/generate-lesson-audio',
     destination: 'server_audio',

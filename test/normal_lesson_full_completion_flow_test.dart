@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'helpers/fake_visual_pipeline.dart';
 import 'package:sim_mobile/sim/classroom/amparo_controller.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_answer_progress_controller.dart';
@@ -218,7 +217,6 @@ class FullFlowHarness {
       t02Client: t02,
       cache: LessonMaterialCache(maxLessons: 3),
       bus: LessonEventBus(),
-      visualPipeline: fakeVisualPipeline(),
     );
     readyWindow = DopamineReadyWindowEngine(
       service: service,

@@ -36,7 +36,6 @@ void main() {
       audioUrl: 'https://audio.local/aula.mp3',
       marker: 'm1',
     );
-    media.offerPaidImage(lessonLocalId: 'lesson-1', cost: 10, marker: 'm1');
     media.imageReady(
       lessonLocalId: 'lesson-1',
       imageUrl: 'https://image.local/aula.png',
@@ -47,15 +46,13 @@ void main() {
     final mediaState = state.extra['media'] as Map;
     expect((mediaState['audio'] as Map)['status'], 'ready');
     expect((mediaState['audio'] as Map)['event_id'], 'evt-2');
-    expect((mediaState['image_offer'] as Map)['cost'], 10);
     expect((mediaState['image'] as Map)['image_url'], contains('aula.png'));
-    expect(state.extra['foundation']['revision'], 4);
+    expect(state.extra['foundation']['revision'], 3);
     expect(
       store.getEventLog('lesson-1').map((event) => event.type),
       containsAll([
         'AUDIO_REQUESTED',
         'AUDIO_READY',
-        'PAID_IMAGE_OFFERED',
         'IMAGE_READY',
       ]),
     );
@@ -311,56 +308,6 @@ void main() {
       expect(after.auxRooms, isNull);
       expect(cloud.states['lesson-1'], isNull);
       expect(store.getEventLog('lesson-1'), isEmpty);
-    },
-  );
-
-  test('imagem paga real captura creditos e sincroniza', () async {
-    final coordinator = InternalOrgansCoordinator(store: store);
-
-    final result = await coordinator.requestPaidImage(
-      lessonLocalId: 'lesson-1',
-      prompt: 'desenhe a celula',
-      cost: 10,
-      marker: 'm1',
-      operationId: 'img-1',
-      generateImage: () async => 'https://cdn.sim/aula.png',
-    );
-
-    expect(result.completed, isTrue);
-    expect(result.syncEvent?.type, 'SYNC_COMPLETED');
-    final state = store.readState('lesson-1');
-    expect(state.extra['media']['image']['status'], 'ready');
-    expect(state.extra['credits']['spent'], 10);
-    expect(state.extra['credits']['reserved'], 0);
-    expect(
-      cloud.states['lesson-1']?.extra['media']['image']['status'],
-      'ready',
-    );
-  });
-
-  test(
-    'imagem paga falha sem fingir sucesso e devolve credito reservado',
-    () async {
-      final coordinator = InternalOrgansCoordinator(store: store);
-
-      final result = await coordinator.requestPaidImage(
-        lessonLocalId: 'lesson-1',
-        prompt: 'desenhe a celula',
-        cost: 10,
-        marker: 'm1',
-        operationId: 'img-1',
-        generateImage: () async => throw StateError('servidor indisponivel'),
-      );
-
-      expect(result.failed, isTrue);
-      final state = store.readState('lesson-1');
-      expect(state.extra['media']['image']['status'], 'failed');
-      expect(state.extra['credits']['refunded'], 10);
-      expect(state.extra['credits']['reserved'], 0);
-      expect(
-        store.getEventLog('lesson-1').map((event) => event.type),
-        containsAll(['MEDIA_FAILED', 'CREDIT_REFUNDED', 'SYNC_COMPLETED']),
-      );
     },
   );
 

@@ -3,9 +3,6 @@ import 'dart:convert';
 
 import '../media/audio_core.dart';
 import '../media/lesson_audio_api_contract.dart';
-import '../media/lesson_image_api_contract.dart';
-import '../media/lesson_visual_models.dart';
-import '../media/lesson_visual_pipeline.dart';
 import '../lesson/lesson_content_validator.dart';
 import '../localization/sim_locale_contract.dart';
 import '../modules/pedagogical_module_contracts.dart';
@@ -19,9 +16,7 @@ import 'sim_http_transport.dart';
 const String simT00BootstrapPath = '/api/bootstrap-t00';
 const String simServerClassroomSlotPath = '/api/server-classroom/slot';
 const String simWarmupPath = '/api/warmup';
-const String simLessonImagePath = '/api/generate-lesson-image';
 const String simLessonAudioPath = '/api/generate-lesson-audio';
-const String simVisualRoutePath = '/api/visual-route';
 const String simDoubtPath = '/api/doubt';
 const String simReviewPath = '/api/review';
 const String simRecoveryPath = '/api/recovery';
@@ -211,243 +206,6 @@ class SimServerWarmupClient {
     if (decoded is! Map) return null;
     return SimWarmupLesson.fromJson(decoded);
   }
-}
-
-class SimServerLessonImageClient
-    implements LessonImageClient, LessonImageResponseClient {
-  SimServerLessonImageClient({
-    required this.config,
-    SimHttpTransport? transport,
-    this.timeout = const Duration(seconds: 125),
-  }) : transport = transport ?? DartIoSimHttpTransport();
-
-  final SimAiServerConfig config;
-  final SimHttpTransport transport;
-  final Duration timeout;
-
-  @override
-  Future<String?> generateLessonImage({
-    required String prompt,
-    required String lessonKey,
-    String aspectRatio = '1:1',
-    String? acceptedOfferId,
-    String? idempotencyKey,
-    Map<String, dynamic>? visualTrigger,
-    Map<String, dynamic>? lessonContext,
-  }) async {
-    final response = await generateLessonImageResponse(
-      prompt: prompt,
-      lessonKey: lessonKey,
-      aspectRatio: aspectRatio,
-      acceptedOfferId: acceptedOfferId,
-      idempotencyKey: idempotencyKey,
-      visualTrigger: visualTrigger,
-      lessonContext: lessonContext,
-    );
-    return response?.dataUrl;
-  }
-
-  @override
-  Future<GenerateLessonImageResponse?> generateLessonImageResponse({
-    required String prompt,
-    required String lessonKey,
-    String aspectRatio = '1:1',
-    String? acceptedOfferId,
-    String? idempotencyKey,
-    Map<String, dynamic>? visualTrigger,
-    Map<String, dynamic>? lessonContext,
-  }) async {
-    final locale = _localeFieldsFromMap(lessonContext, visualTrigger);
-    final request = GenerateLessonImageRequest(
-      prompt: prompt,
-      lessonKey: lessonKey,
-      aspectRatio: aspectRatio,
-    ).normalized();
-    final body = <String, Object?>{
-      'prompt': request.prompt,
-      'lessonKey': request.lessonKey,
-      'aspectRatio': request.aspectRatio,
-      ...locale,
-    };
-    if (acceptedOfferId != null) body['acceptedOfferId'] = acceptedOfferId;
-    if (idempotencyKey != null) body['idempotencyKey'] = idempotencyKey;
-    if (visualTrigger != null && visualTrigger.isNotEmpty) {
-      body['visual_trigger'] = visualTrigger;
-    }
-    if (lessonContext != null && lessonContext.isNotEmpty) {
-      body['lessonContext'] = lessonContext;
-    }
-    body['source'] = 'sim_app_flutter';
-    body['contractVersion'] = 'lesson_image_paid_v1';
-    final requestId = _mediaRequestId(
-      'img',
-      '${request.lessonKey}|${request.prompt}',
-    );
-    final headers = await config.jsonHeaders();
-    headers['x-request-id'] = requestId;
-    final response = await _postJsonWithTimeout(
-      transport,
-      config.uri(simLessonImagePath),
-      headers: headers,
-      body: body,
-      timeout: timeout,
-      requestId: requestId,
-    );
-    if (!response.ok) {
-      throw _mediaHttpException(response, fallbackRequestId: requestId);
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) return null;
-    final dataUrl = decoded['dataUrl']?.toString() ?? '';
-    if (dataUrl.trim().isEmpty) return null;
-    return GenerateLessonImageResponse(
-      dataUrl: dataUrl,
-      cacheKey: decoded['cacheKey']?.toString(),
-      requestId: decoded['requestId']?.toString() ?? requestId,
-      mimeType:
-          decoded['mime_type']?.toString() ?? decoded['mimeType']?.toString(),
-      provider: decoded['provider']?.toString(),
-      model: decoded['model']?.toString(),
-      charged: decoded['charged'] is bool ? decoded['charged'] as bool : null,
-      cacheHit: decoded['cache_hit'] is bool
-          ? decoded['cache_hit'] as bool
-          : decoded['cacheHit'] is bool
-          ? decoded['cacheHit'] as bool
-          : null,
-      retryable: decoded['retryable'] is bool
-          ? decoded['retryable'] as bool
-          : null,
-      acceptedOfferId:
-          decoded['acceptedOfferId']?.toString() ?? acceptedOfferId,
-      costCredits: decoded['costCredits'] is num
-          ? (decoded['costCredits'] as num).toInt()
-          : decoded['cost'] is num
-          ? (decoded['cost'] as num).toInt()
-          : null,
-    );
-  }
-}
-
-class SimServerVisualRouterClient implements LessonVisualRouterClient {
-  SimServerVisualRouterClient({
-    required this.config,
-    SimHttpTransport? transport,
-    this.timeout = const Duration(seconds: 100),
-  }) : transport = transport ?? DartIoSimHttpTransport();
-
-  final SimAiServerConfig config;
-  final SimHttpTransport transport;
-  final Duration timeout;
-
-  bool get prefersServerSideVisuals => true;
-
-  @override
-  Future<ServerVisualRouteResult> routeVisual({
-    String? stableLang,
-    required Map<String, dynamic> visualTrigger,
-  }) async {
-    final locale = _localeFieldsFromMap(visualTrigger, {
-      'explanationLanguage': ?stableLang,
-    });
-    final topic = visualTrigger['topic']?.toString();
-    final visualType = visualTrigger['visual_type']?.toString();
-    final imagePrompt =
-        visualTrigger['image_prompt']?.toString() ??
-        visualTrigger['teacher_prompt']?.toString() ??
-        visualTrigger['teacherPrompt']?.toString() ??
-        visualTrigger['prompt']?.toString();
-    final requestId = _mediaRequestId(
-      'vis',
-      '${topic ?? ''}|${visualType ?? ''}|${imagePrompt ?? ''}',
-    );
-    final headers = await config.jsonHeaders();
-    headers['x-request-id'] = requestId;
-    final visualTriggerPayload = <String, Object?>{...visualTrigger}
-      ..addAll(locale)
-      ..removeWhere((_, value) => value == null);
-    final keyElements = visualTriggerPayload['key_elements'];
-    final body = <String, Object?>{
-      'contractVersion': 'server_ready_image_v1',
-      'topic': topic ?? '',
-      'visualType': visualType ?? '',
-      'imagePrompt': imagePrompt ?? '',
-      ...locale,
-      'outputContract': {
-        'format': 'ready_raster_image',
-        'acceptedDataUrls': ['png', 'jpeg', 'jpg', 'webp'],
-        'preferredFields': ['displayDataUrl', 'dataUrl', 'image_data_url'],
-      },
-      if (keyElements is List && keyElements.isNotEmpty)
-        'keyElements': keyElements,
-      if (visualTriggerPayload.isNotEmpty)
-        'visual_trigger': visualTriggerPayload,
-    };
-    final svgPayload = visualTriggerPayload['svg_payload']?.toString();
-    if (svgPayload != null && svgPayload.trim().isNotEmpty) {
-      body['svgPayload'] = svgPayload;
-    }
-    final mathTemplate = visualTriggerPayload['math_template'];
-    if (mathTemplate != null) {
-      body['mathTemplate'] = mathTemplate;
-    }
-    if (visualTriggerPayload['pedagogical_need'] != null) {
-      body['pedagogicalNeed'] = visualTriggerPayload['pedagogical_need'];
-    }
-    if (visualTriggerPayload['highlight_focus'] != null) {
-      body['highlightFocus'] = visualTriggerPayload['highlight_focus'];
-    }
-    if (visualTriggerPayload['complexity'] != null) {
-      body['complexity'] = visualTriggerPayload['complexity'];
-    }
-    if (stableLang != null) body['stableLang'] = stableLang;
-    final response = await _postJsonWithTimeout(
-      transport,
-      config.uri(simVisualRoutePath),
-      headers: headers,
-      body: body,
-      timeout: timeout,
-      requestId: requestId,
-    );
-    if (!response.ok) {
-      throw _mediaHttpException(response, fallbackRequestId: requestId);
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      return const ServerVisualRouteResult(
-        verdict: ServerVisualRouteVerdict.missingRaster,
-        reason: 'VISUAL_ROUTE_INVALID_RESPONSE',
-      );
-    }
-    final reason = decoded['reason']?.toString() ?? 'VISUAL_ROUTE_RESPONSE';
-    final verdictRaw = decoded['verdict']?.toString();
-    final noImage = verdictRaw == 'no_image';
-    final displayDataUrl = _firstUsableRasterDataUrl(
-      decoded['displayDataUrl'],
-      decoded['dataUrl'],
-      decoded['image_data_url'],
-    );
-    return ServerVisualRouteResult(
-      verdict: noImage
-          ? ServerVisualRouteVerdict.noImage
-          : displayDataUrl != null
-          ? ServerVisualRouteVerdict.image
-          : ServerVisualRouteVerdict.missingRaster,
-      reason: reason,
-      readyImageDataUrl: displayDataUrl,
-      requestId: decoded['requestId']?.toString() ?? requestId,
-    );
-  }
-}
-
-String? _firstUsableRasterDataUrl(
-  Object? first,
-  Object? second,
-  Object? third,
-) {
-  for (final value in [first, second, third]) {
-    if (isUsableRasterImageDataUrl(value)) return (value! as String).trim();
-  }
-  return null;
 }
 
 class SimServerGeneratedAudioClient implements GeneratedAudioClient {
@@ -841,7 +599,6 @@ class SimServerT02Client implements T02LessonClient {
       whyWrong: content.whyWrong,
       generatedAt: DateTime.now(),
       source: (source['source'] ?? 'sim-server-t02').toString(),
-      visualTrigger: content.visualTrigger,
     );
   }
 
@@ -870,7 +627,6 @@ class SimServerT02Client implements T02LessonClient {
       whyWrong: parsed.whyWrong,
       generatedAt: parsed.generatedAt,
       source: 'server-classroom',
-      visualTrigger: parsed.visualTrigger,
       imageDataUrl: imageDataUrl == null || imageDataUrl.trim().isEmpty
           ? null
           : imageDataUrl.trim(),

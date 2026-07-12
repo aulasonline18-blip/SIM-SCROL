@@ -30,8 +30,8 @@ import '../../session/navigation_state.dart';
 import '../../sim/lesson/lesson_models.dart';
 import '../../sim/media/audio_core.dart';
 import '../../sim/media/audio_preference.dart';
+import '../../sim/media/image_data_url_compression.dart';
 import '../../sim/media/lesson_audio_controller.dart';
-import '../../sim/media/lesson_visual_models.dart';
 import '../../sim/media/student_lesson_media_service.dart';
 import '../../sim/state/shared_prefs_state_storage.dart';
 import '../../sim/state/student_learning_state.dart';
@@ -510,25 +510,36 @@ class LessonImagePanel extends StatelessWidget {
     final loading = session.aulaRuntimeLoading && imageData == null;
     final ready = imageData != null && imageData.trim().isNotEmpty;
     final error = session.imageError;
-    final offer = session.hasLessonPaidImageOffer && !loading && !ready;
-    final imageCost = simPricing.imageCostCredits;
-    final hasImageCredits = session.isUnlimited || session.credits >= imageCost;
-    if (!loading && !ready && !offer && error == null) {
+    if (!loading && !ready && error == null) {
       return const SizedBox.shrink();
     }
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = MediaQuery.sizeOf(context);
-        final maxReadyHeight = SimBreakpoints.isTablet(size.width)
-            ? 320.0
-            : 220.0;
-        final readyHeight = (size.height * 0.28).clamp(136.0, maxReadyHeight);
+        final panelWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : size.width;
+        final horizontalPadding = ready ? 20.0 : 28.0;
+        final maxSquareSize = SimBreakpoints.isTablet(size.width)
+            ? 520.0
+            : 420.0;
+        final viewportMaxSide = (size.height * 0.58).clamp(
+          136.0,
+          maxSquareSize,
+        );
+        final parentMaxSide = constraints.maxHeight.isFinite
+            ? (constraints.maxHeight - 104).clamp(96.0, viewportMaxSide)
+            : viewportMaxSide;
+        final imageSide = (panelWidth - horizontalPadding).clamp(
+          96.0,
+          parentMaxSide,
+        );
         final palette = SimThemeScope.paletteOf(context);
         return Container(
           width: double.infinity,
           constraints: BoxConstraints(
             minHeight: loading ? 88 : 0,
-            maxHeight: ready ? readyHeight + 104 : double.infinity,
+            maxHeight: ready ? imageSide + 104 : double.infinity,
           ),
           padding: EdgeInsets.all(ready ? 10 : 14),
           decoration: BoxDecoration(
@@ -554,18 +565,16 @@ class LessonImagePanel extends StatelessWidget {
               if (ready)
                 LessonImageStudySurface(
                   data: imageData,
-                  height: readyHeight,
+                  height: imageSide,
                   caption: lessonImageCaption(session),
                   onImageSettled: onImageSettled,
                 )
-              else if (!loading && !offer)
+              else if (!loading)
                 const LessonImageErrorView(),
               if (!ready)
                 Text(
                   loading
                       ? t('aula_image_loading')
-                      : offer
-                      ? t('aula_img_desc')
                       : error ?? t('aula_image_unavailable'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -574,100 +583,6 @@ class LessonImagePanel extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              if (offer) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '${t('aula_img_cost', {'n': imageCost})}'
-                  '${session.isUnlimited ? '' : t('aula_img_balance', {'n': session.credits})}',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: palette.muted,
-                    fontSize: 12,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    if (!hasImageCredits) ...[
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: session.lessonImageOfferLoading
-                              ? null
-                              : session.buyImageCredits,
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(0, 46),
-                            backgroundColor: palette.surfaceSoft,
-                            foregroundColor: palette.text,
-                            disabledBackgroundColor: palette.surfaceSoft,
-                            disabledForegroundColor: palette.muted,
-                            side: BorderSide(color: palette.border),
-                            textStyle: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          child: _ButtonText(t('aula_buy_credits')),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: session.lessonImageOfferLoading
-                            ? null
-                            : session.declineLessonPaidImage,
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(0, 46),
-                          foregroundColor: palette.text,
-                          disabledForegroundColor: palette.muted,
-                          side: BorderSide(color: palette.border),
-                          textStyle: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        child: _ButtonText(
-                          hasImageCredits
-                              ? t('aula_skip')
-                              : t('aula_continue_no_img'),
-                        ),
-                      ),
-                    ),
-                    if (hasImageCredits) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: session.lessonImageOfferLoading
-                              ? null
-                              : session.acceptLessonPaidImage,
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(0, 46),
-                            backgroundColor: palette.primary,
-                            foregroundColor: palette.onPrimary,
-                            disabledBackgroundColor: palette.surfaceSoft,
-                            disabledForegroundColor: palette.muted,
-                            side: BorderSide(color: palette.border),
-                            textStyle: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          child: session.lessonImageOfferLoading
-                              ? SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: palette.onPrimary,
-                                  ),
-                                )
-                              : _ButtonText(
-                                  t('aula_view_img', {'n': imageCost}),
-                                ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
             ],
           ),
         );
@@ -676,46 +591,8 @@ class LessonImagePanel extends StatelessWidget {
   }
 }
 
-class _ButtonText extends StatelessWidget {
-  const _ButtonText(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Text(
-        text,
-        maxLines: 2,
-        textAlign: TextAlign.center,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-  }
-}
-
 String lessonImageCaption(LabSession session) {
-  final trigger = session.currentVisualTrigger;
-  final topic = trigger?['topic']?.toString().trim();
-  final focus = trigger?['highlight_focus']?.toString().trim();
-  final elements = trigger?['key_elements'];
-  String? firstElement;
-  if (elements is List && elements.isNotEmpty) {
-    firstElement = elements.first.toString().trim();
-  }
-  String? base;
-  if (focus != null && focus.isNotEmpty) {
-    base = focus;
-  } else if (topic != null && topic.isNotEmpty) {
-    base = topic;
-  } else if (firstElement != null && firstElement.isNotEmpty) {
-    base = firstElement;
-  }
-  if (base == null || base.isEmpty) return 'Apoio visual da aula';
-  final clean = base.replaceAll(RegExp(r'\s+'), ' ');
-  if (clean.length <= 92) return clean;
-  return '${clean.substring(0, 89).trimRight()}...';
+  return 'Apoio visual da aula';
 }
 
 class LessonImageStudySurface extends StatelessWidget {
@@ -748,7 +625,7 @@ class LessonImageStudySurface extends StatelessWidget {
               color: palette.surfaceSoft,
               child: SizedBox(
                 height: height,
-                width: double.infinity,
+                width: height,
                 child: LessonMediaImageView(
                   data: data,
                   onImageSettled: onImageSettled,

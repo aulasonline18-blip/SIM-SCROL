@@ -443,10 +443,9 @@ void main() {
 
   test('image states stay non blocking before question and options', () {
     for (final state in const [
-      ('ready', 'data:image/png;base64,AAAA', null, false),
-      ('loading', null, null, false),
-      ('error', null, 'Imagem falhou sem bloquear.', false),
-      ('offer', null, null, true),
+      ('ready', 'data:image/png;base64,AAAA', null),
+      ('loading', null, null),
+      ('error', null, 'Imagem falhou sem bloquear.'),
     ]) {
       final messages = buildChatLessonMessages(
         ChatLessonTimelineInput(
@@ -457,7 +456,6 @@ void main() {
           showImagePanel: true,
           imageStatus: state.$1,
           imageError: state.$3,
-          hasPaidImageOffer: state.$4,
         ),
       );
       final kinds = messages.map((message) => message.kind).toList();
@@ -472,7 +470,6 @@ void main() {
       expect(image.imageStatus, state.$1);
       expect(image.imageData, state.$2);
       expect(image.text, state.$3);
-      expect(image.hasPaidImageOffer, state.$4);
     }
   });
 

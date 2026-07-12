@@ -74,7 +74,6 @@ class EntryFormState extends ChangeNotifier {
   String? stableLang;
   bool interfaceLanguageSubmitted = false;
   bool learningLanguageSubmitted = false;
-  bool allowPaidImages = false;
   List<AttachmentDraft> attachments = [];
   String attachmentsText = '';
   String studentProfileNotes = '';

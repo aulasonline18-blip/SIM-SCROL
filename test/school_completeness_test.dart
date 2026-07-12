@@ -23,7 +23,6 @@ void main() {
     expect(paths, contains('/termos'));
     expect(paths, contains('/conta/deletar'));
     expect(paths, contains('/api/bootstrap-t00'));
-    expect(paths, contains('/api/generate-lesson-image'));
     expect(paths, contains('/api/generate-lesson-audio'));
     expect(paths, contains('/api/public/payments/webhook'));
   });
@@ -35,7 +34,6 @@ void main() {
         .toSet();
 
     expect(serverRoutes, contains('/api/bootstrap-t00'));
-    expect(serverRoutes, contains('/api/generate-lesson-image'));
     expect(serverRoutes, contains('/api/generate-lesson-audio'));
     expect(serverRoutes, contains('/api/public/payments/webhook'));
   });
@@ -103,7 +101,7 @@ void main() {
     expect(report.environmentCount, greaterThanOrEqualTo(14));
     expect(report.doorCount, greaterThanOrEqualTo(50));
     expect(report.screenRouteCount, 14);
-    expect(report.apiRouteCount, 4);
+    expect(report.apiRouteCount, 3);
     expect(report.externalRouteCount, 3);
   });
 }

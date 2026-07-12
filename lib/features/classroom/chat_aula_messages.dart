@@ -124,7 +124,6 @@ class ChatLessonMessage {
     this.isHistorical = false,
     this.isActionable = true,
     this.imageStatus = 'idle',
-    this.hasPaidImageOffer = false,
     this.progress,
     this.deliveryStatus = ChatLessonDeliveryStatus.delivered,
     this.timestampLabel,
@@ -155,7 +154,6 @@ class ChatLessonMessage {
   final bool isHistorical;
   final bool isActionable;
   final String imageStatus;
-  final bool hasPaidImageOffer;
   final int? progress;
   final ChatLessonDeliveryStatus deliveryStatus;
   final String? timestampLabel;
@@ -196,7 +194,6 @@ class ChatLessonMessage {
     bool? isHistorical,
     bool? isActionable,
     String? imageStatus,
-    bool? hasPaidImageOffer,
     int? progress,
     ChatLessonDeliveryStatus? deliveryStatus,
     String? timestampLabel,
@@ -227,7 +224,6 @@ class ChatLessonMessage {
       isHistorical: isHistorical ?? this.isHistorical,
       isActionable: isActionable ?? this.isActionable,
       imageStatus: imageStatus ?? this.imageStatus,
-      hasPaidImageOffer: hasPaidImageOffer ?? this.hasPaidImageOffer,
       progress: progress ?? this.progress,
       deliveryStatus: deliveryStatus ?? this.deliveryStatus,
       timestampLabel: timestampLabel ?? this.timestampLabel,
@@ -260,7 +256,6 @@ class ChatLessonMessage {
     'isHistorical': isHistorical,
     'isActionable': isActionable,
     'imageStatus': imageStatus,
-    'hasPaidImageOffer': hasPaidImageOffer,
     'progress': progress,
     'deliveryStatus': deliveryStatus.name,
     'timestampLabel': timestampLabel,
@@ -302,9 +297,6 @@ class ChatLessonMessage {
           ? raw['isActionable'] as bool
           : true,
       imageStatus: _stringOrNull(raw['imageStatus']) ?? 'idle',
-      hasPaidImageOffer: raw['hasPaidImageOffer'] is bool
-          ? raw['hasPaidImageOffer'] as bool
-          : false,
       progress: _intOrNull(raw['progress']),
       deliveryStatus:
           _enumByName(ChatLessonDeliveryStatus.values, raw['deliveryStatus']) ??

@@ -59,10 +59,6 @@ void main() {
     expect(organism.health.serverOnlyOrgans, contains('/api/bootstrap-t00'));
     expect(
       organism.health.serverOnlyOrgans,
-      contains('/api/generate-lesson-image'),
-    );
-    expect(
-      organism.health.serverOnlyOrgans,
       contains('/api/generate-lesson-audio'),
     );
     expect(
