@@ -8,6 +8,7 @@ import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_answer_progress_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
+import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
 import 'package:sim_mobile/sim/cloud/cloud_queue.dart';
 import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
@@ -203,9 +204,40 @@ class _CountingAudio implements AudioPlaybackAdapter {
   }
 }
 
+class _FakeServerAdvanceGateClient implements ServerAdvanceGateClient {
+  _FakeServerAdvanceGateClient(this._decide);
+
+  final ServerAdvanceGateDecision Function(ServerAdvanceGateRequest request)
+  _decide;
+  final requests = <ServerAdvanceGateRequest>[];
+
+  @override
+  Future<ServerAdvanceGateDecision> decide(
+    ServerAdvanceGateRequest request,
+  ) async {
+    requests.add(request);
+    return _decide(request);
+  }
+}
+
+ServerAdvanceGateDecision _serverNextLayer(LessonLayer layer) {
+  return ServerAdvanceGateDecision(
+    accepted: true,
+    decision: 'next_layer',
+    reason: 'test_server_next_layer',
+    nextItemIdx: 0,
+    nextLayer: layer,
+    highWaterMark: 1,
+    events: const [
+      {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
+    ],
+  );
+}
+
 LessonAnswerProgressController _controller(
   StudentLearningStateService svc, {
   AudioCore? audio,
+  ServerAdvanceGateClient? serverAdvanceGateClient,
 }) {
   final t02 = _FakeT02();
   final cache = LessonMaterialCache();
@@ -231,6 +263,7 @@ LessonAnswerProgressController _controller(
     materialService: mat,
     materialController: ctrl,
     audioCore: audio,
+    serverAdvanceGateClient: serverAdvanceGateClient,
   );
 }
 
@@ -925,7 +958,11 @@ void main() {
     await future;
 
     expect(pos.phase.type, ClassroomPhaseType.concluido);
-    expect(svc.read('L1')?.attempts, hasLength(1));
+    expect(svc.read('L1')?.attempts, isEmpty);
+    expect(
+      svc.read('L1')?.queuedActions.map((action) => action['type']),
+      contains('ADVANCE_GATE_PENDING'),
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -1031,7 +1068,10 @@ void main() {
     'S12: resposta, sinal, feedback, proxima experiencia e restore',
     () async {
       final svc = StudentLearningStateService(seed: {'L1': _state0()});
-      final ctrl = _controller(svc);
+      final gate = _FakeServerAdvanceGateClient(
+        (_) => _serverNextLayer(LessonLayer.l2),
+      );
+      final ctrl = _controller(svc, serverAdvanceGateClient: gate);
       final pos = LessonPositionState(
         items: _items
             .map((item) => PlannedItem(marker: item.marker, text: item.text))
@@ -1077,6 +1117,7 @@ void main() {
       expect(svc.read('L1')?.current?.itemIdx, 0);
       expect(svc.read('L1')?.current?.layer, LessonLayer.l2);
       expect(svc.read('L1')?.attempts.single.letra, AnswerLetter.B);
+      expect(gate.requests, hasLength(1));
 
       await ctrl.avancar(
         lessonLocalId: 'L1',

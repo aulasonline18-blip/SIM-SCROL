@@ -435,81 +435,69 @@ void main() {
       },
     );
 
-    test(
-      'C8 revisao atualiza evidencia e dominio sem autoridade da IA',
-      () async {
-        final initialAttempt = _attempt(
-          marker: 'M1',
-          sinal: DecisionSignal.two,
-        );
-        final base = registerPendingFromAttempt(
-          _state(attempts: [initialAttempt]),
-          initialAttempt,
-        );
-        final states = {'c6-lesson': base};
-        final client = _FakeT02Client();
-        final review = ReviewRoomService(_service(states, client));
-        var view = await review.startReviewRoom(_context('c6-lesson'), 5);
+    test('C8 revisao local registra apoio sem gravar dominio forte', () async {
+      final initialAttempt = _attempt(marker: 'M1', sinal: DecisionSignal.two);
+      final base = registerPendingFromAttempt(
+        _state(attempts: [initialAttempt]),
+        initialAttempt,
+      );
+      final states = {'c6-lesson': base};
+      final client = _FakeT02Client();
+      final review = ReviewRoomService(_service(states, client));
+      var view = await review.startReviewRoom(_context('c6-lesson'), 5);
 
-        view = review.selectLetter(view, AnswerLetter.B);
-        review.answerReviewRoom(
-          _context('c6-lesson'),
-          view,
-          DecisionSignal.one,
-        );
-        var saved = states['c6-lesson']!;
-        expect(saved.truth.itemConsolidationStatus['M1'], 'mastered');
-        expect(saved.truth.needsRetestFlags, isNot(contains('M1')));
+      view = review.selectLetter(view, AnswerLetter.B);
+      review.answerReviewRoom(_context('c6-lesson'), view, DecisionSignal.one);
+      var saved = states['c6-lesson']!;
+      expect(saved.truth.itemConsolidationStatus['M1'], isNot('mastered'));
+      expect(saved.events.last.payload['authoritative'], isFalse);
+      expect(saved.events.last.payload['writesTruth'], isFalse);
+      expect(saved.events.last.payload['requiresServerDecision'], isTrue);
 
-        final wrongAttempt = _attempt(
-          marker: 'M2',
-          letra: AnswerLetter.C,
-          sinal: DecisionSignal.two,
-          correct: false,
-          ts: 80,
-        );
-        states['c6-lesson'] = registerPendingFromAttempt(
-          saved.copyWith(attempts: [...saved.attempts, wrongAttempt]),
-          wrongAttempt,
-        );
-        view = await review.startReviewRoom(_context('c6-lesson'), 5);
-        view = review.selectLetter(view, AnswerLetter.C);
-        review.answerReviewRoom(
-          _context('c6-lesson'),
-          view,
-          DecisionSignal.two,
-        );
-        saved = states['c6-lesson']!;
-        expect(saved.truth.itemConsolidationStatus['M2'], isNot('mastered'));
-        expect(saved.truth.masteryEvidence.last['needs_reinforcement'], isTrue);
+      final wrongAttempt = _attempt(
+        marker: 'M2',
+        letra: AnswerLetter.C,
+        sinal: DecisionSignal.two,
+        correct: false,
+        ts: 80,
+      );
+      states['c6-lesson'] = registerPendingFromAttempt(
+        saved.copyWith(attempts: [...saved.attempts, wrongAttempt]),
+        wrongAttempt,
+      );
+      view = await review.startReviewRoom(_context('c6-lesson'), 5);
+      view = review.selectLetter(view, AnswerLetter.C);
+      review.answerReviewRoom(_context('c6-lesson'), view, DecisionSignal.two);
+      saved = states['c6-lesson']!;
+      expect(saved.truth.itemConsolidationStatus['M2'], isNot('mastered'));
+      expect(saved.truth.itemConsolidationStatus['M2'], isNot('mastered'));
 
-        final lowConfidenceAttempt = _attempt(
-          marker: 'M3',
-          sinal: DecisionSignal.three,
-          correct: true,
-          ts: 90,
-        );
-        states['c6-lesson'] = registerPendingFromAttempt(
-          saved.copyWith(attempts: [...saved.attempts, lowConfidenceAttempt]),
-          lowConfidenceAttempt,
-        );
-        view = await review.startReviewRoom(_context('c6-lesson'), 5);
-        view = review.selectLetter(view, AnswerLetter.B);
-        review.answerReviewRoom(
-          _context('c6-lesson'),
-          view,
-          DecisionSignal.three,
-        );
-        saved = states['c6-lesson']!;
-        expect(saved.truth.itemConsolidationStatus['M3'], isNot('mastered'));
-        expect(
-          pendingMapOf(ensureAuxRooms(saved)).any(
-            (entry) => entry['marker'] == 'M3' && entry['status'] == 'pending',
-          ),
-          isTrue,
-        );
-      },
-    );
+      final lowConfidenceAttempt = _attempt(
+        marker: 'M3',
+        sinal: DecisionSignal.three,
+        correct: true,
+        ts: 90,
+      );
+      states['c6-lesson'] = registerPendingFromAttempt(
+        saved.copyWith(attempts: [...saved.attempts, lowConfidenceAttempt]),
+        lowConfidenceAttempt,
+      );
+      view = await review.startReviewRoom(_context('c6-lesson'), 5);
+      view = review.selectLetter(view, AnswerLetter.B);
+      review.answerReviewRoom(
+        _context('c6-lesson'),
+        view,
+        DecisionSignal.three,
+      );
+      saved = states['c6-lesson']!;
+      expect(saved.truth.itemConsolidationStatus['M3'], isNot('mastered'));
+      expect(
+        pendingMapOf(ensureAuxRooms(saved)).any(
+          (entry) => entry['marker'] == 'M3' && entry['status'] == 'pending',
+        ),
+        isTrue,
+      );
+    });
 
     test('C9 revisao nao apaga nem retrocede progresso principal', () async {
       final attempt = _attempt(
@@ -602,11 +590,13 @@ void main() {
         saved.events.map((event) => event.type),
         contains('REVIEW_ANSWER_RECORDED'),
       );
-      expect(saved.truth.itemConsolidationStatus['M1'], 'mastered');
+      expect(saved.truth.itemConsolidationStatus['M1'], isNot('mastered'));
       expect(saved.current?.marker, before.current?.marker);
       expect(saved.progress?.itemIdx, before.progress?.itemIdx);
       expect(saved.readyLessonMaterials, before.readyLessonMaterials);
-      expect(pendingMapOf(ensureAuxRooms(saved)).single['status'], 'cleared');
+      expect(pendingMapOf(ensureAuxRooms(saved)).single['status'], 'pending');
+      expect(saved.events.last.payload['authoritative'], isFalse);
+      expect(saved.events.last.payload['writesTruth'], isFalse);
       expect(
         saved.events.any((event) => event.type.contains('ERROR')),
         isFalse,
@@ -618,7 +608,7 @@ void main() {
       final restored = StudentLearningState.fromJson(saved.toJson());
       final restoredReview = ensureAuxRooms(restored)['review'] as Map;
 
-      expect(restored.truth.itemConsolidationStatus['M1'], 'mastered');
+      expect(restored.truth.itemConsolidationStatus['M1'], isNot('mastered'));
       expect(restored.current?.marker, 'M1');
       expect(restoredReview['currentIndex'], greaterThanOrEqualTo(1));
       expect(

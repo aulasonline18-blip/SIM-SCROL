@@ -9,6 +9,7 @@ import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
+import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
 import 'package:sim_mobile/sim/experience/student_experience_engine.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t00_adapter.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t02_adapter.dart';
@@ -120,11 +121,41 @@ class VitalT02Client implements T02LessonClient {
       completeLesson(request);
 }
 
+class VitalAdvanceGateClient implements ServerAdvanceGateClient {
+  final requests = <ServerAdvanceGateRequest>[];
+
+  @override
+  Future<ServerAdvanceGateDecision> decide(
+    ServerAdvanceGateRequest request,
+  ) async {
+    requests.add(request);
+    return ServerAdvanceGateDecision(
+      accepted: true,
+      decision: 'next_layer',
+      reason: 'test_server_next_layer',
+      nextItemIdx: request.itemIdx,
+      nextLayer: LessonLayer.l3,
+      highWaterMark: requests.length,
+      events: [
+        {
+          'type': 'ADVANCE_GATE_DECIDED',
+          'decision': 'next_layer',
+          'marker': request.marker,
+          'layer': request.layer.value,
+          'letra': request.selectedOption.name,
+          'sinal': request.signal.value,
+        },
+      ],
+    );
+  }
+}
+
 class VitalHarness {
   VitalHarness()
     : service = StudentLearningStateService(),
       t00 = VitalT00Client(),
-      t02 = VitalT02Client() {
+      t02 = VitalT02Client(),
+      advanceGate = VitalAdvanceGateClient() {
     orchestrator = LessonOrchestrator(
       t02Client: t02,
       cache: LessonMaterialCache(maxLessons: 3),
@@ -163,6 +194,7 @@ class VitalHarness {
         stateService: service,
         materialService: materialService,
         materialController: materialController,
+        serverAdvanceGateClient: advanceGate,
       ),
     );
   }
@@ -170,6 +202,7 @@ class VitalHarness {
   final StudentLearningStateService service;
   final VitalT00Client t00;
   final VitalT02Client t02;
+  final VitalAdvanceGateClient advanceGate;
   late final LessonOrchestrator orchestrator;
   late final DopamineReadyWindowEngine readyWindow;
   late final StudentLessonMaterialService materialService;
@@ -266,18 +299,9 @@ void main() {
       expect(attempt.correct, isTrue);
 
       final eventTypes = state.events.map((event) => event.type).toList();
-      expect(eventTypes, contains('ANSWER_SUBMITTED'));
-      expect(eventTypes, contains('STUDENT_DECISION_APPLIED'));
-      expect(eventTypes, contains('STUDENT_EXECUTOR_APPLIED'));
-      expect(eventTypes, contains('NEXT_ACTION_DECIDED'));
-      final executorDecision = state.events.firstWhere(
-        (event) => event.type == 'STUDENT_DECISION_APPLIED',
-      );
-      expect(executorDecision.payload['decision'], 'advanceLayer');
-      expect(
-        state.extra['next_action'],
-        isA<Map>().having((value) => value['action'], 'action', isNotEmpty),
-      );
+      expect(eventTypes, contains('ADVANCE_GATE_DECIDED'));
+      expect(h.advanceGate.requests, hasLength(1));
+      expect(h.advanceGate.requests.single.marker, 'M1');
       expect(
         state.queuedActions.where(
           (job) => job['type'] == 'PREPARE_READY_WINDOW',

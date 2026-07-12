@@ -20,6 +20,14 @@ class FakeRecoveryTransport implements ServerRecoveryTransport {
           'accepted': false,
           'duplicate': false,
           'blocksConclusion': true,
+          'contractVersion': 'sim.auxiliary.recovery.v1',
+          'flow': 'recovery',
+          'nextAction': 'return_to_lesson',
+          'stateEffect': {
+            'strongAdvance': false,
+            'writesProgress': false,
+            'preservesCurrent': true,
+          },
           'humanError': {
             'message': 'Nao consegui concluir a recuperacao agora.',
             'action': 'try_again',
@@ -32,6 +40,14 @@ class FakeRecoveryTransport implements ServerRecoveryTransport {
         'duplicate': false,
         'blocksConclusion': false,
         'mainProgressPreserved': true,
+        'contractVersion': 'sim.auxiliary.recovery.v1',
+        'flow': 'recovery',
+        'nextAction': 'return_to_lesson',
+        'stateEffect': {
+          'strongAdvance': false,
+          'writesProgress': false,
+          'preservesCurrent': true,
+        },
         'result': {
           'recoveryId': body['recoveryId'],
           'marker': body['marker'],
@@ -59,6 +75,14 @@ class FakeRecoveryTransport implements ServerRecoveryTransport {
         'feedback': {'correct': 'Reparo registrado'},
         'status': 'ready',
         'schemaVersion': 1,
+        'contractVersion': 'sim.auxiliary.recovery.v1',
+        'flow': 'recovery',
+        'nextAction': 'show_aux_room',
+        'stateEffect': {
+          'strongAdvance': false,
+          'writesProgress': false,
+          'preservesCurrent': true,
+        },
       },
     };
   }
@@ -150,6 +174,9 @@ void main() {
     expect(item.ready, isTrue);
     expect(item.correctOption, AnswerLetter.C);
     expect(item.options[AnswerLetter.B], 'B');
+    expect(item.contractVersion, 'sim.auxiliary.recovery.v1');
+    expect(item.flow, 'recovery');
+    expect(item.nextAction, 'show_aux_room');
   });
 
   test(
@@ -209,6 +236,11 @@ void main() {
 
     expect(result.accepted, isFalse);
     expect(result.blocksConclusion, isTrue);
+    expect(result.contractVersion, 'sim.auxiliary.recovery.v1');
+    expect(result.flow, 'recovery');
+    expect(result.nextAction, 'return_to_lesson');
+    expect(result.stateEffect['strongAdvance'], isFalse);
+    expect(result.stateEffect['writesProgress'], isFalse);
     expect(result.humanError?['message'], contains('recuperacao'));
     expect(result.humanError.toString(), isNot(contains('stack')));
     expect(result.humanError.toString(), isNot(contains('{error')));

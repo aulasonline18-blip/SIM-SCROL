@@ -239,7 +239,7 @@ void main() {
     },
   );
 
-  test('resposta, verdade, decisao e sala auxiliar usam o mesmo estado', () {
+  test('learning local legado nao cria resposta, verdade ou sala auxiliar', () {
     final state = StudentLearningState.empty(lessonLocalId: 'lesson-1')
         .copyWith(
           curriculum: StudentCurriculum(
@@ -273,69 +273,44 @@ void main() {
     store.writeState(state);
 
     final learning = StudentLearningGovernor(store: store);
-    final auxiliary = AuxiliaryStateGovernor(store: store);
-    final result = learning.submitAnswer(
-      lessonLocalId: 'lesson-1',
-      selected: AnswerLetter.A,
-      correctAnswer: AnswerLetter.B,
-      signal: DecisionSignal.one,
-    );
-    auxiliary.routeFromTruth(
-      lessonLocalId: 'lesson-1',
-      evidence: result.mastery,
-    );
-
-    final after = store.readState('lesson-1');
-    expect(after.attempts, hasLength(1));
     expect(
-      after.events.map((event) => event.type),
-      contains('ANSWER_SUBMITTED'),
-    );
-    final truth = after.extra['truth'] as Map;
-    expect((truth['item_consolidation_status'] as Map)['m1'], isNotNull);
-    expect(after.auxRooms!['recovery_queue'], hasLength(1));
-    expect(
-      store.getEventLog('lesson-1').map((event) => event.type),
-      containsAll([
-        'ANSWER_SUBMITTED',
-        'MASTERY_EVALUATED',
-        'NEXT_ACTION_DECIDED',
-        'RECOVERY_REQUIRED',
-      ]),
-    );
-  });
-
-  test(
-    'coordenador assenta resposta ate auxiliar e sync no mesmo estado',
-    () async {
-      _seedActiveLesson(store, lessonLocalId: 'lesson-1');
-      final coordinator = InternalOrgansCoordinator(store: store);
-
-      final result = await coordinator.submitAnswerAndSettle(
+      () => learning.submitAnswer(
         lessonLocalId: 'lesson-1',
         selected: AnswerLetter.A,
         correctAnswer: AnswerLetter.B,
         signal: DecisionSignal.one,
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    final after = store.readState('lesson-1');
+    expect(after.attempts, isEmpty);
+    expect(after.extra['truth'], isNull);
+    expect(after.auxRooms, isNull);
+    expect(store.getEventLog('lesson-1'), isEmpty);
+  });
+
+  test(
+    'coordenador bloqueia resposta local antes de auxiliar e sync',
+    () async {
+      _seedActiveLesson(store, lessonLocalId: 'lesson-1');
+      final coordinator = InternalOrgansCoordinator(store: store);
+
+      await expectLater(
+        coordinator.submitAnswerAndSettle(
+          lessonLocalId: 'lesson-1',
+          selected: AnswerLetter.A,
+          correctAnswer: AnswerLetter.B,
+          signal: DecisionSignal.one,
+        ),
+        throwsA(isA<StateError>()),
       );
 
-      expect(result.learning.mastery.needsReinforcement, isTrue);
-      expect(result.auxiliaryEvent.type, 'RECOVERY_REQUIRED');
-      expect(result.syncEvent?.type, 'SYNC_COMPLETED');
-      expect(
-        cloud.states['lesson-1']?.auxRooms?['recovery_queue'],
-        hasLength(1),
-      );
-      expect(
-        store.getEventLog('lesson-1').map((event) => event.type),
-        containsAll([
-          'ANSWER_SUBMITTED',
-          'MASTERY_EVALUATED',
-          'NEXT_ACTION_DECIDED',
-          'RECOVERY_REQUIRED',
-          'SYNC_STARTED',
-          'SYNC_COMPLETED',
-        ]),
-      );
+      final after = store.readState('lesson-1');
+      expect(after.attempts, isEmpty);
+      expect(after.auxRooms, isNull);
+      expect(cloud.states['lesson-1'], isNull);
+      expect(store.getEventLog('lesson-1'), isEmpty);
     },
   );
 
@@ -468,29 +443,27 @@ void main() {
     );
   });
 
-  test('evento de resposta carrega attempt suficiente para replay', () {
+  test('learning local bloqueado nao gera evento de resposta para replay', () {
     _seedActiveLesson(store, lessonLocalId: 'lesson-1');
     final learning = StudentLearningGovernor(store: store);
 
-    learning.submitAnswer(
-      lessonLocalId: 'lesson-1',
-      selected: AnswerLetter.C,
-      correctAnswer: AnswerLetter.C,
-      signal: DecisionSignal.two,
-    );
-    final events = store.getEventLog('lesson-1');
-    final answerEvent = events.firstWhere(
-      (event) => event.type == 'ANSWER_SUBMITTED',
+    expect(
+      () => learning.submitAnswer(
+        lessonLocalId: 'lesson-1',
+        selected: AnswerLetter.C,
+        correctAnswer: AnswerLetter.C,
+        signal: DecisionSignal.two,
+      ),
+      throwsA(isA<StateError>()),
     );
 
-    expect(answerEvent.payload['attempt'], isA<Map>());
+    final events = store.getEventLog('lesson-1');
+    expect(events, isEmpty);
     final replayed = store.replayEvents(
       seed: StudentLearningState.empty(lessonLocalId: 'lesson-replay'),
       events: events,
     );
-    expect(replayed.attempts, hasLength(1));
-    expect(replayed.attempts.single.marker, 'm1');
-    expect(replayed.attempts.single.correct, isTrue);
+    expect(replayed.attempts, isEmpty);
   });
 }
 

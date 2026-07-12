@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:sim_mobile/features/classroom/aula_widgets.dart';
+import 'package:sim_mobile/sim/billing/sim_pricing.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/external_ai/sim_http_transport.dart';
 import 'package:sim_mobile/sim/external_ai/sim_server_ai_clients.dart';
@@ -196,10 +197,9 @@ void main() {
     _expectRasterImageShown();
   });
 
-  testWidgets('AI paga sem raster nao vira imagem nem oferta no app moldura', (
-    tester,
-  ) async {
+  test('AI paga sem raster cria oferta e aceite atualiza aula', () async {
     final offers = <LessonPaidImageOffer?>[];
+    final imageClient = _FakePaidImageClient(_jpegDataUrl);
     final harness = _buildHarness(
       visualTransport: _RecordingTransport()
         ..jsonBody = jsonEncode({
@@ -207,7 +207,7 @@ void main() {
           'reason': 'REALISTIC_IMAGE_REQUIRED',
           'requestId': 'rid-ai',
         }),
-      imageClient: _FakePaidImageClient(_jpegDataUrl),
+      imageClient: imageClient,
       visualTrigger: const {
         'needs_image': true,
         'pedagogical_need': 'essential',
@@ -219,11 +219,27 @@ void main() {
     final cancel = harness.bus.subscribePaidImageOffer(harness.key, offers.add);
 
     final lesson = await harness.resolveImage(expectImage: false);
-    await tester.pump(const Duration(milliseconds: 20));
+    final offer = await harness.waitForPaidImageOffer();
+    final metadata = await harness.orchestrator.acceptPaidImageOffer(
+      harness.key,
+    );
+    await _waitFor(
+      () => harness.cache.peek(harness.key)?.imagem == _jpegDataUrl,
+    );
     cancel();
 
     expect(lesson.imagem, isNull);
-    expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
+    expect(offer.offerId, isNotEmpty);
+    expect(offer.prompt, contains('foto realista'));
+    expect(offer.creditCost, simPricing.imageCostCredits);
+    expect(offers.whereType<LessonPaidImageOffer>(), isNotEmpty);
+    expect(imageClient.calls, 1);
+    expect(imageClient.lastAcceptedOfferId, offer.offerId);
+    expect(imageClient.lastIdempotencyKey, offer.offerId);
+    expect(harness.cache.peek(harness.key)?.imagem, _jpegDataUrl);
+    expect(metadata, isNotNull);
+    expect(metadata?.acceptedOfferId, offer.offerId);
+    expect(metadata?.costCredits, simPricing.imageCostCredits);
   });
 
   test('no_image nao tenta mostrar imagem quebrada e aula segue', () async {
@@ -648,9 +664,12 @@ class _MapT02Client implements T02LessonClient {
 
 class _FakePaidImageClient
     implements LessonImageClient, LessonImageResponseClient {
-  const _FakePaidImageClient(this.dataUrl);
+  _FakePaidImageClient(this.dataUrl);
 
   final String dataUrl;
+  int calls = 0;
+  String? lastAcceptedOfferId;
+  String? lastIdempotencyKey;
 
   @override
   Future<String?> generateLessonImage({
@@ -662,6 +681,9 @@ class _FakePaidImageClient
     Map<String, dynamic>? visualTrigger,
     Map<String, dynamic>? lessonContext,
   }) async {
+    calls += 1;
+    lastAcceptedOfferId = acceptedOfferId;
+    lastIdempotencyKey = idempotencyKey;
     return dataUrl;
   }
 
@@ -675,6 +697,9 @@ class _FakePaidImageClient
     Map<String, dynamic>? visualTrigger,
     Map<String, dynamic>? lessonContext,
   }) async {
+    calls += 1;
+    lastAcceptedOfferId = acceptedOfferId;
+    lastIdempotencyKey = idempotencyKey;
     return GenerateLessonImageResponse(dataUrl: dataUrl);
   }
 }

@@ -1263,7 +1263,11 @@ StudentLearningState mergeStudentLearningStateFromCloud(
   } else {
     mergedProgress = lp ?? rp;
   }
-  final curriculum = local.curriculum ?? remote.curriculum;
+  final localItems = local.curriculum?.items.length ?? 0;
+  final remoteItems = remote.curriculum?.items.length ?? 0;
+  final curriculum = remoteItems >= localItems
+      ? remote.curriculum ?? local.curriculum
+      : local.curriculum ?? remote.curriculum;
   final base = _progressRank(lp) >= _progressRank(rp) ? local : remote;
   final localCurrentRank = _progressRank(local.progress);
   final remoteCurrentRank = _progressRank(remote.progress);
@@ -1271,8 +1275,8 @@ StudentLearningState mergeStudentLearningStateFromCloud(
       ? local.current ?? remote.current
       : remote.current ?? local.current;
   final readyLessonMaterials = {
-    ...remote.readyLessonMaterials,
     ...local.readyLessonMaterials,
+    ...remote.readyLessonMaterials,
   };
   return base.copyWith(
     curriculum: curriculum,
@@ -1281,9 +1285,9 @@ StudentLearningState mergeStudentLearningStateFromCloud(
     attempts: mergedAttempts,
     events: mergedEvents,
     currentLessonMaterial:
+        remote.currentLessonMaterial ??
         base.currentLessonMaterial ??
-        local.currentLessonMaterial ??
-        remote.currentLessonMaterial,
+        local.currentLessonMaterial,
     readyLessonMaterials: readyLessonMaterials,
     auxRooms: base.auxRooms ?? local.auxRooms ?? remote.auxRooms,
     truth: _hasServerMasteryTruth(remote.truth)
@@ -1309,3 +1313,46 @@ bool _hasServerMasteryTruth(StudentMasteryTruth truth) =>
     truth.weaknessRecords.isNotEmpty ||
     truth.conquestRecords.isNotEmpty ||
     truth.itemConsolidationStatus.isNotEmpty;
+
+StudentLearningState mergeStudentLearningStateFromServerAuthority(
+  StudentLearningState localCandidate,
+  StudentLearningState remoteAuthority,
+) {
+  return remoteAuthority.copyWith(
+    attempts: mergeAttempts(remoteAuthority.attempts, localCandidate.attempts),
+    events: mergeEvents(remoteAuthority.events, localCandidate.events),
+    readyLessonMaterials: {
+      ...localCandidate.readyLessonMaterials,
+      ...remoteAuthority.readyLessonMaterials,
+    },
+    currentLessonMaterial:
+        remoteAuthority.currentLessonMaterial ??
+        localCandidate.currentLessonMaterial,
+    queuedActions: _mergeJsonListByStableKey(
+      remoteAuthority.queuedActions,
+      localCandidate.queuedActions,
+    ),
+    inflightJobs: _mergeJsonListByStableKey(
+      remoteAuthority.inflightJobs,
+      localCandidate.inflightJobs,
+    ),
+    updatedAt: remoteAuthority.updatedAt > localCandidate.updatedAt
+        ? remoteAuthority.updatedAt
+        : localCandidate.updatedAt,
+  );
+}
+
+List<JsonMap> _mergeJsonListByStableKey(List<JsonMap> a, List<JsonMap> b) {
+  final byKey = <String, JsonMap>{};
+  for (final entry in [...a, ...b]) {
+    final key =
+        (entry['id'] ??
+                entry['eventId'] ??
+                entry['idempotencyKey'] ??
+                entry['type'] ??
+                entry.toString())
+            .toString();
+    byKey.putIfAbsent(key, () => entry);
+  }
+  return byKey.values.toList(growable: false);
+}

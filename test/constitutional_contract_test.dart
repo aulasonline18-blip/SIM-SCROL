@@ -255,7 +255,7 @@ void main() {
   });
 
   test(
-    '7 A1 enviarSinal real registra tentativa e feedback após evidência',
+    '7 A1 enviarSinal sem servidor guarda pendencia sem tentativa oficial',
     () async {
       final service = StudentLearningStateService(
         seed: {'constitutional': _state()},
@@ -273,8 +273,10 @@ void main() {
       );
 
       final state = service.read('constitutional')!;
-      expect(state.attempts, hasLength(1));
-      expect(state.attempts.single.correct, isTrue);
+      expect(state.attempts, isEmpty);
+      expect(state.queuedActions.single['type'], 'ADVANCE_GATE_PENDING');
+      expect(state.progress?.itemIdx, 0);
+      expect(state.progress?.layer, LessonLayer.l1);
       expect(position.phase.type, ClassroomPhaseType.concluido);
     },
   );
@@ -301,10 +303,8 @@ void main() {
       expect(progress.itemIdx, 0);
       expect(progress.concluidos, isEmpty);
       expect(
-        service
-            .read('constitutional')!
-            .extra['next_action']['constitutional_gate'],
-        'dominio real ainda nao comprovado',
+        service.read('constitutional')!.events.map((event) => event.type),
+        contains('ADVANCE_GATE_PENDING'),
       );
     },
   );
@@ -667,9 +667,9 @@ void main() {
       expect(
         service.read('constitutional')!.events.map((event) => event.type),
         containsAll([
+          'ADVANCE_GATE_PENDING',
           'ANSWER_SUBMITTED',
           'SIGNAL_SUBMITTED',
-          'NEXT_ACTION_DECIDED',
         ]),
       );
     });

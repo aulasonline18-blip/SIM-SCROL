@@ -1,4 +1,11 @@
-// MIRROR OF: src/sim/state/learningDecisionEngine.ts (Web, source of truth)
+// LEGACY/SHADOW ONLY.
+//
+// This engine may compute an audit suggestion for tests, migration diagnostics,
+// or non-mutating comparison. It must not be used as the official judge of
+// advancement, mastery, current item, current layer, review, or recovery in the
+// SIMAPP runtime. Official pedagogical decisions belong to SimServidor.
+//
+// Historical origin: MIRROR OF src/sim/state/learningDecisionEngine.ts.
 import 'student_learning_state.dart';
 import 'student_learning_state_service.dart';
 

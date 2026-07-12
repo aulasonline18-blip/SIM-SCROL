@@ -94,7 +94,7 @@ void main() {
     },
   );
 
-  test('StateStore resolve conflito mantendo estado mais avancado', () {
+  test('StateStore resolve conflito mantendo autoridade remota', () {
     final store = StudentStateStore(local: MemoryStudentStateLocalStorage());
     final local = StudentLearningState.empty(lessonLocalId: 'lesson-1', now: 1)
         .copyWith(
@@ -127,8 +127,8 @@ void main() {
           ),
         );
 
-    expect(store.resolveConflict(local, cloud), StateConflictResolution.local);
-    expect(store.syncState(local, cloud).progress?.itemIdx, 2);
+    expect(store.resolveConflict(local, cloud), StateConflictResolution.cloud);
+    expect(store.syncState(local, cloud).progress?.itemIdx, 1);
   });
 
   test('MasteryTruthEngine nao aceita um acerto isolado como dominio', () {

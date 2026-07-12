@@ -5,10 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'helpers/fake_visual_pipeline.dart';
 import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sim_mobile/sim/billing/sim_pricing.dart';
 import 'package:sim_mobile/sim/experience/student_experience_engine.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t00_adapter.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t02_adapter.dart';
 import 'package:sim_mobile/sim/experience/student_experience_types.dart';
+import 'package:sim_mobile/sim/classroom/lesson_answer_progress_controller.dart';
+import 'package:sim_mobile/sim/classroom/lesson_hydration_engine.dart';
+import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
+import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
@@ -189,6 +194,129 @@ class AuditT00Client implements T00BootstrapClient {
   }
 }
 
+class GiantCurriculumT00Client implements T00BootstrapClient {
+  GiantCurriculumT00Client({required this.releaseFinal});
+
+  final Completer<void> releaseFinal;
+  final requests = <T00BootstrapRequest>[];
+
+  @override
+  Stream<T00BootstrapChunk> runBootstrap(T00BootstrapRequest request) async* {
+    requests.add(request);
+    yield const T00BootstrapChunk(
+      type: 't00_item_partial',
+      payload: {
+        'item': {
+          'order': 1,
+          'marker': 'M1',
+          'title': 'Frações',
+          'microitem_for_teacher': 'Entender metade rapidamente',
+        },
+      },
+    );
+    await releaseFinal.future;
+    yield T00BootstrapChunk(
+      type: 't00_final',
+      payload: {
+        'curriculum': [
+          for (var i = 1; i <= 2500; i++)
+            {
+              'order': i,
+              'marker': 'M$i',
+              'title': 'Item $i',
+              'microitem_for_teacher': 'Microitem $i',
+            },
+        ],
+      },
+    );
+  }
+}
+
+class BlockingHydrateCache extends LessonMaterialCache {
+  BlockingHydrateCache({required this.releaseHydrate});
+
+  final Completer<void> releaseHydrate;
+  bool hydrateStarted = false;
+
+  @override
+  Future<void> hydrate() async {
+    hydrateStarted = true;
+    await releaseHydrate.future;
+  }
+}
+
+class BlockingVisualPipeline extends LessonVisualPipeline {
+  BlockingVisualPipeline({required this.releaseImage})
+    : super(
+        imageClient: const FakeNoopImageClient(),
+        visualRouterClient: const FakeVisualRouterClient(),
+      );
+
+  final Completer<void> releaseImage;
+  int calls = 0;
+
+  @override
+  Future<LessonVisualResult> resolveVisual({
+    required LessonVisualTrigger trigger,
+    required String lessonKey,
+    String? stableLang,
+    String? academicLevel,
+    bool allowPaidImages = false,
+    String? acceptedOfferId,
+    String? idempotencyKey,
+  }) async {
+    calls += 1;
+    await releaseImage.future;
+    return const LessonVisualResult(
+      svg: null,
+      dataUrl: _serverRasterDataUrl,
+      source: 'delayed_secondary_image',
+    );
+  }
+}
+
+class FastStartT02Client implements T02LessonClient {
+  final requests = <T02LessonRequest>[];
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) async {
+    requests.add(request);
+    return T02LessonMaterial(
+      explanation: 'Primeiro texto essencial.',
+      question: 'Qual alternativa representa metade?',
+      options: const {
+        AnswerLetter.A: '1/2',
+        AnswerLetter.B: '1/3',
+        AnswerLetter.C: '1/4',
+      },
+      correctAnswer: AnswerLetter.A,
+      whyCorrect: '1/2 e metade.',
+      whyWrong: const {'B': 'menor que metade', 'C': 'um quarto'},
+      generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
+      source: 'fast-start-t02',
+      visualTrigger: const {
+        'needs_image': true,
+        'pedagogical_need': 'helpful',
+        'render_strategy': 'software',
+        'visual_type': 'diagram',
+        'image_prompt': 'imagem secundaria lenta',
+      },
+    );
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
+}
+
 class AuditT02Client implements T02LessonClient {
   final requests = <T02LessonRequest>[];
   final l2 = Completer<T02LessonMaterial>();
@@ -230,6 +358,19 @@ class AuditT02Client implements T02LessonClient {
     generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
     source: 'audit-t02',
   );
+}
+
+Future<void> _waitUntil(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    if (condition()) return;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  if (condition()) return;
+  fail('condicao esperada nao ocorreu antes do timeout');
 }
 
 class SlowFirstT02Client implements T02LessonClient {
@@ -732,7 +873,7 @@ void main() {
   );
 
   test(
-    'LessonOrchestrator does not publish paid image offer from app',
+    'LessonOrchestrator publishes paid image offer without generating before accept',
     () async {
       final trigger = <String, dynamic>{
         'needs_image': true,
@@ -771,12 +912,17 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(cache.peek(key)?.imagem, isNull);
-      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
+      expect(offers.whereType<LessonPaidImageOffer>(), isNotEmpty);
+      expect(offers.whereType<LessonPaidImageOffer>().last.lessonKey, key);
+      expect(
+        offers.whereType<LessonPaidImageOffer>().last.creditCost,
+        simPricing.imageCostCredits,
+      );
     },
   );
 
   test(
-    'LessonOrchestrator does not reset app-created paid image offer',
+    'LessonOrchestrator clears declined offer and keeps paid generation gated',
     () async {
       final trigger = <String, dynamic>{
         'needs_image': true,
@@ -819,20 +965,21 @@ void main() {
 
       await orchestrator.prefetchCompleteLesson(params, priority: 'active');
       await Future<void>.delayed(Duration.zero);
-      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
+      expect(offers.whereType<LessonPaidImageOffer>(), isNotEmpty);
+      expect(paidCalls, 0);
 
       orchestrator.declinePaidImageOffer(key);
+      expect(offers.last, isNull);
       await orchestrator.prefetchCompleteLesson(
         params,
         priority: 'active',
         forceRefresh: true,
       );
       await Future<void>.delayed(Duration.zero);
-      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
+      expect(offers.whereType<LessonPaidImageOffer>(), isNotEmpty);
 
       orchestrator.resetDeclinedPaidImageOffer(key);
       await Future<void>.delayed(Duration.zero);
-      expect(offers.whereType<LessonPaidImageOffer>(), isEmpty);
       expect(paidCalls, 0);
       expect(updates.last.imagem, isNull);
       expect(cache.peek(key)?.imagem, isNull);
@@ -1609,6 +1756,166 @@ void main() {
       contains('LESSON_TEXT_READY'),
     );
   });
+
+  test(
+    'Proposicao F: primeira aula funcional nasce antes de imagem, cache, sync e curriculo gigante',
+    () async {
+      final service = StudentLearningStateService();
+      final releaseFinalCurriculum = Completer<void>();
+      final releaseCacheHydrate = Completer<void>();
+      final releaseImage = Completer<void>();
+      final t00 = GiantCurriculumT00Client(
+        releaseFinal: releaseFinalCurriculum,
+      );
+      final t02 = FastStartT02Client();
+      final cache = BlockingHydrateCache(releaseHydrate: releaseCacheHydrate);
+      final visualPipeline = BlockingVisualPipeline(releaseImage: releaseImage);
+      var syncStarted = false;
+      final syncRelease = Completer<void>();
+      service.subscribe((lessonLocalId) {
+        if (lessonLocalId == 'cyber-fast-start') {
+          syncStarted = true;
+          unawaited(syncRelease.future);
+        }
+      });
+      unawaited(cache.hydrate());
+
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: cache,
+        bus: LessonEventBus(),
+        visualPipeline: visualPipeline,
+      );
+      final readyWindow = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      );
+      final materialService = StudentLessonMaterialService(
+        stateService: service,
+        orchestrator: orchestrator,
+        readyWindowEngine: readyWindow,
+      );
+      final materialController = LessonMaterialController(
+        stateService: service,
+        materialService: materialService,
+      );
+      final engine = StudentExperienceEngine(
+        service: service,
+        t00: StudentExperienceT00Adapter(service: service, client: t00),
+        t02: StudentExperienceT02Adapter(
+          service: service,
+          materialService: materialService,
+        ),
+        placement: const SettledPlacementReader(settled: true),
+      );
+
+      final result = await engine.prepareStudentExperienceEntry(
+        const StudentExperienceArgs(
+          academic: 'fundamental',
+          idioma: 'pt-BR',
+          lessonLocalId: 'cyber-fast-start',
+          onboarding: {
+            'objetivo': 'Aprender frações no celular fraco',
+            'academic_level': 'fundamental',
+          },
+        ),
+      );
+
+      expect(result.destination, '/cyber/aula');
+      expect(cache.hydrateStarted, isTrue);
+      expect(releaseCacheHydrate.isCompleted, isFalse);
+      expect(releaseFinalCurriculum.isCompleted, isFalse);
+      expect(syncStarted, isTrue);
+
+      await _waitUntil(
+        () =>
+            service
+                .read('cyber-fast-start')
+                ?.currentLessonMaterial?['text_status'] ==
+            'ready',
+      );
+      final state = service.read('cyber-fast-start')!;
+      expect(state.curriculum?.items, hasLength(1));
+      expect(state.current?.marker, 'M1');
+      expect(state.currentLessonMaterial?['explanation'], isNotEmpty);
+      expect(state.currentLessonMaterial?['question'], isNotEmpty);
+      expect(state.currentLessonMaterial?['options'], isA<Map>());
+      expect(state.currentLessonMaterial?['imagem'], isNull);
+      expect(state.progress?.itemIdx, 0);
+      expect(state.progress?.layer, LessonLayer.l1);
+      expect(
+        state.events.map((event) => event.type),
+        contains('LESSON_TEXT_READY'),
+      );
+      expect(
+        state.events
+            .where((event) => event.type == 'PROGRESS_UPDATED')
+            .map((event) => event.payload['event']),
+        containsAll([
+          't00FirstItemReceived',
+          'firstLessonShellOpened',
+          't02FirstMinimumLessonReady',
+          'timeToFirstQuestion',
+        ]),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(visualPipeline.calls, greaterThanOrEqualTo(1));
+      expect(releaseImage.isCompleted, isFalse);
+      expect(
+        cache
+            .peekCachedLesson(
+              lessonKeyFor(
+                const CompleteLessonParams(
+                  lessonLocalId: 'cyber-fast-start',
+                  item: 'Entender metade rapidamente',
+                  lang: 'pt-BR',
+                  academic: 'fundamental',
+                  layer: LessonLayer.l1,
+                  mode: LessonMode.session,
+                  marker: 'M1',
+                  topic: 'Aprender frações no celular fraco',
+                  itemIdx: 0,
+                ),
+              ),
+            )
+            ?.imagem,
+        isNull,
+      );
+
+      final runtime = LessonRuntimeEngine(
+        stateService: service,
+        sessionEngine: LessonSessionEngine(service: service),
+        hydrationEngine: LessonHydrationEngine(
+          materialService: materialService,
+        ),
+        positionEngine: LessonPositionEngine(),
+        materialController: materialController,
+        answerController: LessonAnswerProgressController(
+          stateService: service,
+          materialService: materialService,
+          materialController: materialController,
+        ),
+      );
+      var snap = await runtime.open(
+        lessonLocalId: 'cyber-fast-start',
+        authReady: true,
+        authed: true,
+      );
+      expect(snap.phase.type, ClassroomPhaseType.lendo);
+      expect(snap.conteudo?.question, 'Qual alternativa representa metade?');
+      runtime.select(AnswerLetter.A);
+      snap = runtime.snapshot();
+      expect(snap.phase.type, ClassroomPhaseType.expandida);
+      expect(snap.phase.letter, AnswerLetter.A);
+
+      releaseImage.complete();
+      releaseCacheHydrate.complete();
+      syncRelease.complete();
+      releaseFinalCurriculum.complete();
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
 
   test(
     'Teste 1: onboarding abre primeira aula no primeiro parcial e prepara B/C em background',

@@ -1,5 +1,4 @@
 import '../state/student_learning_state.dart';
-import '../state/mastery_truth_engine.dart';
 import 'aux_room_models.dart';
 import 'aux_room_t02_caller.dart';
 import 'student_aux_rooms.dart' as aux_state;
@@ -21,15 +20,13 @@ class StudentAuxRoomService {
     required this.readState,
     required this.writeState,
     required this.t02Caller,
-    MasteryTruthEngine? truthEngine,
     this.auxRoomsEnabled = true,
     this.recoveryRoomEnabled = true,
-  }) : truthEngine = truthEngine ?? const MasteryTruthEngine();
+  });
 
   final StudentLearningState Function(String lessonLocalId) readState;
   final StudentLearningState Function(StudentLearningState state) writeState;
   final AuxRoomT02Caller t02Caller;
-  final MasteryTruthEngine truthEngine;
   final bool auxRoomsEnabled;
   final bool recoveryRoomEnabled;
 
@@ -257,10 +254,7 @@ class StudentAuxRoomService {
       correct: letra == conteudo.correctAnswer,
       ts: ts,
     );
-    state = aux_state.mirrorAttemptToAuxRooms(
-      state.copyWith(attempts: [...state.attempts, attempt]),
-      attempt,
-    );
+    state = state.copyWith(attempts: [...state.attempts, attempt]);
     final eventType = source.startsWith('review')
         ? 'REVIEW_ANSWER_RECORDED'
         : source.startsWith('recovery')
@@ -281,19 +275,14 @@ class StudentAuxRoomService {
             'letra': letra.name,
             'sinal': sinal.value,
             'correct': attempt.correct,
+            'authoritative': false,
+            'strongEffect': false,
+            'writesTruth': false,
+            'requiresServerDecision': true,
           },
         ),
       ],
     );
-    if (source.startsWith('review') || source.startsWith('recovery')) {
-      final evidence = truthEngine.evaluateMarker(
-        nextState,
-        marker,
-        reviewed: source.startsWith('review'),
-        recovered: source.startsWith('recovery'),
-      );
-      nextState = truthEngine.writeTruthToState(nextState, evidence);
-    }
     writeState(nextState);
   }
 

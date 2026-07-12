@@ -235,7 +235,7 @@ void main() {
   test('imagem preserva metadados tecnicos de sucesso', () async {
     final transport = RecordingTransport()
       ..jsonBody =
-          '{"dataUrl":"data:image/png;base64,abc","cacheKey":"image:user:key","requestId":"rid-ok","charged":true,"cache_hit":false,"mime_type":"image/png","provider":"gemini","model":"gemini-image"}';
+          '{"dataUrl":"data:image/png;base64,abc","cacheKey":"image:user:key","requestId":"rid-ok","charged":true,"cache_hit":false,"mime_type":"image/png","provider":"gemini","model":"gemini-image","acceptedOfferId":"offer-1","cost":10}';
     final client = SimServerLessonImageClient(
       config: config(),
       transport: transport,
@@ -256,6 +256,8 @@ void main() {
     expect(response?.mimeType, 'image/png');
     expect(response?.provider, 'gemini');
     expect(response?.model, 'gemini-image');
+    expect(response?.acceptedOfferId, 'offer-1');
+    expect(response?.costCredits, 10);
   });
 
   test('rota visual envia visual_trigger para /api/visual-route', () async {

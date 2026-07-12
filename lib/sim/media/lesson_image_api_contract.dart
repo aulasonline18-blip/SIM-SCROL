@@ -36,6 +36,8 @@ class GenerateLessonImageResponse {
     this.charged,
     this.cacheHit,
     this.retryable,
+    this.acceptedOfferId,
+    this.costCredits,
   });
 
   final String dataUrl;
@@ -47,6 +49,8 @@ class GenerateLessonImageResponse {
   final bool? charged;
   final bool? cacheHit;
   final bool? retryable;
+  final String? acceptedOfferId;
+  final int? costCredits;
 
   LessonImageGenerationMetadata toMetadata() {
     return LessonImageGenerationMetadata(
@@ -58,6 +62,8 @@ class GenerateLessonImageResponse {
       charged: charged,
       cacheHit: cacheHit,
       retryable: retryable,
+      acceptedOfferId: acceptedOfferId,
+      costCredits: costCredits,
     );
   }
 }
@@ -80,6 +86,10 @@ class LessonImageGenerationMetadata {
     this.status,
     this.source,
     this.createdAt,
+    this.n2Reason,
+    this.n3Reason,
+    this.acceptedOfferId,
+    this.costCredits,
   });
 
   final String? cacheKey;
@@ -98,6 +108,10 @@ class LessonImageGenerationMetadata {
   final String? status;
   final String? source;
   final String? createdAt;
+  final String? n2Reason;
+  final String? n3Reason;
+  final String? acceptedOfferId;
+  final int? costCredits;
 
   bool get isEmpty =>
       cacheKey == null &&
@@ -115,7 +129,11 @@ class LessonImageGenerationMetadata {
       mediaType == null &&
       status == null &&
       source == null &&
-      createdAt == null;
+      createdAt == null &&
+      n2Reason == null &&
+      n3Reason == null &&
+      acceptedOfferId == null &&
+      costCredits == null;
 
   Map<String, Object?> toJson() => {
     'cacheKey': cacheKey,
@@ -134,6 +152,10 @@ class LessonImageGenerationMetadata {
     'status': status,
     'source': source,
     'createdAt': createdAt,
+    'n2Reason': n2Reason,
+    'n3Reason': n3Reason,
+    'acceptedOfferId': acceptedOfferId,
+    'costCredits': costCredits,
   };
 
   LessonImageGenerationMetadata withSlot({
@@ -164,6 +186,38 @@ class LessonImageGenerationMetadata {
       status: status,
       source: source ?? this.source ?? provider,
       createdAt: createdAt ?? this.createdAt,
+      n2Reason: n2Reason,
+      n3Reason: n3Reason,
+      acceptedOfferId: acceptedOfferId,
+      costCredits: costCredits,
+    );
+  }
+
+  LessonImageGenerationMetadata withPaidImage({
+    required String acceptedOfferId,
+    required int costCredits,
+  }) {
+    return LessonImageGenerationMetadata(
+      cacheKey: cacheKey,
+      requestId: requestId,
+      mimeType: mimeType,
+      provider: provider,
+      model: model,
+      charged: charged,
+      cacheHit: cacheHit,
+      retryable: retryable,
+      lessonLocalId: lessonLocalId,
+      marker: marker,
+      itemIdx: itemIdx,
+      layer: layer,
+      mediaType: mediaType,
+      status: status,
+      source: source,
+      createdAt: createdAt,
+      n2Reason: n2Reason,
+      n3Reason: n3Reason,
+      acceptedOfferId: this.acceptedOfferId ?? acceptedOfferId,
+      costCredits: this.costCredits ?? costCredits,
     );
   }
 
@@ -186,6 +240,14 @@ class LessonImageGenerationMetadata {
       status: raw['status']?.toString(),
       source: raw['source']?.toString(),
       createdAt: raw['createdAt']?.toString(),
+      n2Reason: raw['n2Reason']?.toString(),
+      n3Reason: raw['n3Reason']?.toString(),
+      acceptedOfferId: raw['acceptedOfferId']?.toString(),
+      costCredits: raw['costCredits'] is num
+          ? (raw['costCredits'] as num).toInt()
+          : raw['cost'] is num
+          ? (raw['cost'] as num).toInt()
+          : null,
     );
     return metadata.isEmpty ? null : metadata;
   }

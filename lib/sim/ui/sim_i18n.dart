@@ -664,7 +664,7 @@ const Map<String, String> _enStrings = {
       'Use Home for the beginning, End for the current item, Page Up and Page Down to navigate.',
   'aula_empty_conversation':
       'The lesson conversation appears here as soon as SIM prepares the next step.',
-  'aula_doubt': 'Question',
+  'aula_doubt': 'Doubt',
   'aula_doubt_about_question': 'I have a question about this',
   'aula_doubt_processing': 'Analyzing your question...',
   'aula_registering': 'Registering...',

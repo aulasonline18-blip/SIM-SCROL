@@ -6,6 +6,7 @@ import 'helpers/fake_visual_pipeline.dart';
 import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
+import 'package:sim_mobile/sim/billing/sim_pricing.dart';
 import 'package:sim_mobile/sim/auxiliary/aux_room_models.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
@@ -17,6 +18,7 @@ import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
 import 'package:sim_mobile/sim/media/audio_core.dart';
 import 'package:sim_mobile/sim/media/audio_preference.dart';
 import 'package:sim_mobile/sim/media/doubt_audio.dart';
+import 'package:sim_mobile/sim/media/image_pedagogical_critic.dart';
 import 'package:sim_mobile/sim/media/image_data_url_compression.dart';
 import 'package:sim_mobile/sim/media/lesson_audio_api_contract.dart';
 import 'package:sim_mobile/sim/media/lesson_audio_controller.dart';
@@ -25,6 +27,7 @@ import 'package:sim_mobile/sim/media/lesson_paid_image_offer.dart';
 import 'package:sim_mobile/sim/media/lesson_visual_pipeline.dart';
 import 'package:sim_mobile/sim/media/platform_audio_adapter.dart';
 import 'package:sim_mobile/sim/media/student_lesson_media_service.dart';
+import 'package:sim_mobile/sim/media/visual_funnel_telemetry.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
@@ -82,6 +85,7 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
   String? lastSvgPayload;
   Object? lastMathTemplate;
   Map<String, dynamic>? lastVisualTrigger;
+  final visualTriggers = <Map<String, dynamic>>[];
   int calls = 0;
 
   @override
@@ -108,6 +112,7 @@ class CapturingVisualRouterClient implements LessonVisualRouterClient {
     lastSvgPayload = visualTrigger['svg_payload']?.toString();
     lastMathTemplate = visualTrigger['math_template'];
     lastVisualTrigger = visualTrigger;
+    visualTriggers.add(Map<String, dynamic>.from(visualTrigger));
     return result;
   }
 }
@@ -224,6 +229,8 @@ class FakeImageClient implements LessonImageClient {
   String? next = 'data:image/jpeg;base64,AAAA';
   String? lastPrompt;
   String? lastAspectRatio;
+  String? lastAcceptedOfferId;
+  String? lastIdempotencyKey;
   Map<String, dynamic>? lastVisualTrigger;
   Map<String, dynamic>? lastLessonContext;
   int calls = 0;
@@ -241,6 +248,8 @@ class FakeImageClient implements LessonImageClient {
     calls += 1;
     lastPrompt = prompt;
     lastAspectRatio = aspectRatio;
+    lastAcceptedOfferId = acceptedOfferId;
+    lastIdempotencyKey = idempotencyKey;
     lastVisualTrigger = visualTrigger;
     lastLessonContext = lessonContext;
     return next;
@@ -264,6 +273,8 @@ class RichFakeImageClient extends FakeImageClient
     calls += 1;
     lastPrompt = prompt;
     lastAspectRatio = aspectRatio;
+    lastAcceptedOfferId = acceptedOfferId;
+    lastIdempotencyKey = idempotencyKey;
     lastVisualTrigger = visualTrigger;
     lastLessonContext = lessonContext;
     return response ?? GenerateLessonImageResponse(dataUrl: next ?? '');
@@ -808,30 +819,33 @@ void main() {
     final compressed = compressImageDataUrl(png);
     expect(compressed, startsWith('data:image/jpeg;base64,'));
   });
-  test('visual pipeline sends schematic visual to server only', () async {
-    final client = FakeImageClient();
-    final router = CapturingVisualRouterClient();
-    final pipeline = LessonVisualPipeline(
-      imageClient: client,
-      visualRouterClient: router,
-    );
+  test(
+    'visual pipeline asks server first then renders schematic fallback',
+    () async {
+      final client = FakeImageClient();
+      final router = CapturingVisualRouterClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: router,
+      );
 
-    final result = await pipeline.resolveVisual(
-      trigger: const LessonVisualTrigger(
-        needsImage: true,
-        pedagogicalNeed: 'important',
-        topic: 'diagrama de etapas de um algoritmo',
-        visualType: 'diagram',
-      ),
-      lessonKey: 'lesson',
-      allowPaidImages: false,
-    );
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'important',
+          topic: 'diagrama de etapas de um algoritmo',
+          visualType: 'diagram',
+        ),
+        lessonKey: 'lesson',
+        allowPaidImages: false,
+      );
 
-    expect(result.source, 'server_missing_raster');
-    expect(result.displayUrl, isNull);
-    expect(client.calls, 0);
-    expect(router.calls, 1);
-  });
+      expect(result.source, 'local_software');
+      expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+      expect(client.calls, 0);
+      expect(router.calls, 1);
+    },
+  );
 
   test('visual pipeline sends rich trigger context to server first', () async {
     final client = FakeImageClient();
@@ -868,9 +882,14 @@ void main() {
       allowPaidImages: false,
     );
 
-    expect(result.source, 'server_missing_raster');
-    expect(result.displayUrl, isNull);
-    expect(router.calls, 1);
+    expect(result.source, 'local_software');
+    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+    expect(router.calls, 2);
+    expect(router.visualTriggers.first['visual_route_stage'], isNull);
+    expect(
+      router.visualTriggers.last['visual_route_stage'],
+      'n3_cheap_equivalent',
+    );
     expect(router.lastComplexity, 'high');
     expect(router.lastKeyElements, contains('conduta'));
     expect(client.calls, 0);
@@ -1003,7 +1022,7 @@ void main() {
   );
 
   test(
-    'server-side visual ignores paid offer while app is raster-only frame',
+    'server-side visual creates paid offer only when raster/software do not solve',
     () async {
       final client = FakeImageClient();
       final router = CapturingVisualRouterClient(
@@ -1031,7 +1050,8 @@ void main() {
       );
 
       expect(router.calls, 1);
-      expect(result.source, 'server_missing_raster');
+      expect(result.source, 'paid_offer_required');
+      expect(result.paidOfferPrompt, contains('fotografia realista'));
       expect(client.calls, 0);
     },
   );
@@ -1067,48 +1087,51 @@ void main() {
       acceptedOfferId: 'offer-rich',
     );
 
-    expect(router.calls, 1);
-    expect(result.source, 'server_missing_raster');
+    expect(router.calls, 2);
+    expect(router.visualTriggers.first['visual_route_stage'], isNull);
+    expect(
+      router.visualTriggers.last['visual_route_stage'],
+      'n3_cheap_equivalent',
+    );
+    expect(result.source, 'local_software');
+    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
     expect(client.calls, 0);
     expect(client.lastVisualTrigger, isNull);
   });
-  test(
-    'visual pipeline does not fallback to local SVG when server fails',
-    () async {
-      final client = FakeImageClient();
-      final pipeline = LessonVisualPipeline(
-        imageClient: client,
-        visualRouterClient: const ThrowingVisualRouterClient(),
-      );
+  test('visual pipeline falls back to local SVG when server fails', () async {
+    final client = FakeImageClient();
+    final pipeline = LessonVisualPipeline(
+      imageClient: client,
+      visualRouterClient: const ThrowingVisualRouterClient(),
+    );
 
-      final result = await pipeline.resolveVisual(
-        trigger: const LessonVisualTrigger(
-          needsImage: true,
-          pedagogicalNeed: 'essential',
-          topic: 'fluxograma contextual de decisão',
-          visualType: 'flowchart',
-          keyElements: [
-            'entrada',
-            'validação',
-            'decisão',
-            'resultado',
-            'erro',
-            'correção',
-          ],
-          highlightFocus: 'relação entre erro e correção',
-          complexity: 'high',
-          imagePrompt: 'fluxo rico com múltiplas etapas',
-        ),
-        lessonKey: 'server-fails-without-local-fallback',
-        allowPaidImages: true,
-        acceptedOfferId: 'offer-should-not-run',
-      );
+    final result = await pipeline.resolveVisual(
+      trigger: const LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'essential',
+        topic: 'fluxograma contextual de decisão',
+        visualType: 'flowchart',
+        keyElements: [
+          'entrada',
+          'validação',
+          'decisão',
+          'resultado',
+          'erro',
+          'correção',
+        ],
+        highlightFocus: 'relação entre erro e correção',
+        complexity: 'high',
+        imagePrompt: 'fluxo rico com múltiplas etapas',
+      ),
+      lessonKey: 'server-fails-without-local-fallback',
+      allowPaidImages: true,
+      acceptedOfferId: 'offer-should-not-run',
+    );
 
-      expect(result.source, 'server_failed');
-      expect(result.displayUrl, isNull);
-      expect(client.calls, 0);
-    },
-  );
+    expect(result.source, 'local_software');
+    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+    expect(client.calls, 0);
+  });
 
   test('visual pipeline passes complete trigger context to server', () async {
     const legend = [
@@ -1139,7 +1162,7 @@ void main() {
       allowPaidImages: false,
     );
 
-    expect(result.source, 'server_missing_raster');
+    expect(result.source, 'local_software');
     expect(router.lastKeyElements, ['entrada', 'processamento', 'saída']);
     expect(router.lastHighlightFocus, 'diferença entre entrada e saída');
     expect(router.lastComplexity, 'technical');
@@ -1150,7 +1173,7 @@ void main() {
     expect(router.lastStableLang, 'pt-BR');
     expect(router.lastVisualTrigger?['color_legend'], hasLength(2));
   });
-  test('server unavailable does not use local software', () async {
+  test('server unavailable uses local software for parabola', () async {
     final client = FakeImageClient();
     final pipeline = LessonVisualPipeline(
       imageClient: client,
@@ -1172,78 +1195,84 @@ void main() {
       acceptedOfferId: null,
     );
 
-    expect(result.source, 'server_failed');
-    expect(result.displayUrl, isNull);
+    expect(result.source, 'local_software');
+    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
     expect(client.calls, 0);
   });
 
-  test('deterministic graph waits for server raster', () async {
-    final client = FakeImageClient();
-    final router = CapturingVisualRouterClient(
-      result: const ServerVisualRouteResult(
-        verdict: ServerVisualRouteVerdict.image,
-        reason: 'N3_SHOULD_NOT_BE_NEEDED_FOR_EXACT_GRAPH',
-      ),
-    );
-    final pipeline = LessonVisualPipeline(
-      imageClient: client,
-      visualRouterClient: router,
-    );
+  test(
+    'deterministic graph uses software fallback when server omits raster',
+    () async {
+      final client = FakeImageClient();
+      final router = CapturingVisualRouterClient(
+        result: const ServerVisualRouteResult(
+          verdict: ServerVisualRouteVerdict.image,
+          reason: 'N3_SHOULD_NOT_BE_NEEDED_FOR_EXACT_GRAPH',
+        ),
+      );
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: router,
+      );
 
-    final result = await pipeline.resolveVisual(
-      trigger: const LessonVisualTrigger(
-        needsImage: true,
-        pedagogicalNeed: 'essential',
-        topic: 'função quadrática',
-        visualType: 'graph',
-        keyElements: [
-          'coeficiente a',
-          'coeficiente b',
-          'coeficiente c',
-          'vértice',
-          'intercepto',
-        ],
-        complexity: 'high',
-        highlightFocus: 'mostrar a parábola exata sem alterar coeficientes',
-        imagePrompt: 'desenhe h(t) = -2t^2 + 8t + 10 com vértice e eixos',
-      ),
-      lessonKey: 'deterministic-rich-graph',
-      allowPaidImages: true,
-      acceptedOfferId: 'offer-should-not-be-used',
-    );
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'essential',
+          topic: 'função quadrática',
+          visualType: 'graph',
+          keyElements: [
+            'coeficiente a',
+            'coeficiente b',
+            'coeficiente c',
+            'vértice',
+            'intercepto',
+          ],
+          complexity: 'high',
+          highlightFocus: 'mostrar a parábola exata sem alterar coeficientes',
+          imagePrompt: 'desenhe h(t) = -2t^2 + 8t + 10 com vértice e eixos',
+        ),
+        lessonKey: 'deterministic-rich-graph',
+        allowPaidImages: true,
+        acceptedOfferId: 'offer-should-not-be-used',
+      );
 
-    expect(result.source, 'server_missing_raster');
-    expect(result.displayUrl, isNull);
-    expect(router.calls, 1);
-    expect(client.calls, 0);
-  });
+      expect(result.source, 'local_software');
+      expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+      expect(router.calls, 1);
+      expect(client.calls, 0);
+    },
+  );
 
-  test('formula without math_template does not render local SVG', () async {
-    final client = FakeImageClient();
-    final pipeline = LessonVisualPipeline(
-      imageClient: client,
-      visualRouterClient: const ThrowingVisualRouterClient(),
-    );
+  test(
+    'formula without math_template still renders cheap local graph',
+    () async {
+      final client = FakeImageClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: const ThrowingVisualRouterClient(),
+      );
 
-    final result = await pipeline.resolveVisual(
-      trigger: const LessonVisualTrigger(
-        needsImage: true,
-        pedagogicalNeed: 'important',
-        topic: 'parábola',
-        visualType: 'graph',
-        imagePrompt: 'desenhe f(x)=x²-4x+3 no plano cartesiano',
-      ),
-      lessonKey: 'parabola-exact-formula',
-      allowPaidImages: true,
-      acceptedOfferId: null,
-    );
+      final result = await pipeline.resolveVisual(
+        trigger: const LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'important',
+          topic: 'parábola',
+          visualType: 'graph',
+          imagePrompt: 'desenhe f(x)=x²-4x+3 no plano cartesiano',
+        ),
+        lessonKey: 'parabola-exact-formula',
+        allowPaidImages: true,
+        acceptedOfferId: null,
+      );
 
-    expect(result.source, 'server_failed');
-    expect(result.displayUrl, isNull);
-    expect(client.calls, 0);
-  });
+      expect(result.source, 'local_software');
+      expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+      expect(client.calls, 0);
+    },
+  );
 
-  test('physics height function does not render local SVG', () async {
+  test('physics height function renders local graph fallback', () async {
     final client = FakeImageClient();
     final pipeline = LessonVisualPipeline(
       imageClient: client,
@@ -1265,12 +1294,12 @@ void main() {
       acceptedOfferId: null,
     );
 
-    expect(result.source, 'server_failed');
-    expect(result.displayUrl, isNull);
+    expect(result.source, 'local_software');
+    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
     expect(client.calls, 0);
   });
 
-  test('poor but recoverable math trigger does not render local graph', () async {
+  test('poor but recoverable math trigger renders local graph', () async {
     final client = FakeImageClient();
     final pipeline = LessonVisualPipeline(
       imageClient: client,
@@ -1291,107 +1320,98 @@ void main() {
       acceptedOfferId: null,
     );
 
-    expect(result.source, 'server_failed');
-    expect(result.displayUrl, isNull);
+    expect(result.source, 'local_software');
+    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+    expect(client.calls, 0);
+  });
+
+  test('poor but recoverable physics force trigger renders local SVG', () async {
+    final client = FakeImageClient();
+    final pipeline = LessonVisualPipeline(
+      imageClient: client,
+      visualRouterClient: const ThrowingVisualRouterClient(),
+    );
+
+    final result = await pipeline.resolveVisual(
+      trigger: const LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'important',
+        topic: 'apoio visual',
+        visualType: 'diagram',
+        imagePrompt:
+            'Um bloco recebe peso, normal, atrito e força aplicada; mostrar vetores e força resultante.',
+      ),
+      lessonKey: 'recovered-poor-force-trigger',
+      allowPaidImages: true,
+      acceptedOfferId: null,
+    );
+
+    expect(result.source, 'local_software');
+    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+    expect(client.calls, 0);
+  });
+
+  test('physics position function lesson renders local graph SVG', () async {
+    final client = FakeImageClient();
+    final pipeline = LessonVisualPipeline(
+      imageClient: client,
+      visualRouterClient: const ThrowingVisualRouterClient(),
+    );
+
+    final result = await pipeline.resolveVisual(
+      trigger: const LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'important',
+        topic: 'função horária da posição no movimento uniforme',
+        visualType: 'graph',
+        keyElements: [
+          'posição inicial 15 km',
+          'velocidade constante 25 km/h',
+          's = 15 + 25t',
+        ],
+        highlightFocus:
+            'mostrar que a posição inicial soma com a velocidade vezes o tempo',
+        imagePrompt:
+            'Um ciclista inicia no marco de 15 km e mantém velocidade constante de 25 km/h; desenhar gráfico posição x tempo e a equação s = 15 + 25t.',
+      ),
+      lessonKey: 'physics-position-function',
+      allowPaidImages: true,
+      acceptedOfferId: null,
+    );
+
+    expect(result.source, 'local_software');
+    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
+    expect(client.calls, 0);
+  });
+
+  test('poor but recoverable chemistry trigger renders local SVG', () async {
+    final client = FakeImageClient();
+    final pipeline = LessonVisualPipeline(
+      imageClient: client,
+      visualRouterClient: const ThrowingVisualRouterClient(),
+    );
+
+    final result = await pipeline.resolveVisual(
+      trigger: const LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'important',
+        topic: 'apoio visual',
+        visualType: 'diagram',
+        imagePrompt:
+            'Reação química com reagentes, seta de reação, produtos e conservação dos átomos.',
+      ),
+      lessonKey: 'recovered-poor-chemistry-trigger',
+      allowPaidImages: true,
+      acceptedOfferId: null,
+    );
+
+    expect(result.source, 'local_software');
+    expect(result.displayUrl, startsWith('data:image/svg+xml;utf8,'));
     expect(client.calls, 0);
   });
 
   test(
-    'poor but recoverable physics force trigger does not render local SVG',
-    () async {
-      final client = FakeImageClient();
-      final pipeline = LessonVisualPipeline(
-        imageClient: client,
-        visualRouterClient: const ThrowingVisualRouterClient(),
-      );
-
-      final result = await pipeline.resolveVisual(
-        trigger: const LessonVisualTrigger(
-          needsImage: true,
-          pedagogicalNeed: 'important',
-          topic: 'apoio visual',
-          visualType: 'diagram',
-          imagePrompt:
-              'Um bloco recebe peso, normal, atrito e força aplicada; mostrar vetores e força resultante.',
-        ),
-        lessonKey: 'recovered-poor-force-trigger',
-        allowPaidImages: true,
-        acceptedOfferId: null,
-      );
-
-      expect(result.source, 'server_failed');
-      expect(result.displayUrl, isNull);
-      expect(client.calls, 0);
-    },
-  );
-
-  test(
-    'physics position function lesson does not render local kinematics SVG',
-    () async {
-      final client = FakeImageClient();
-      final pipeline = LessonVisualPipeline(
-        imageClient: client,
-        visualRouterClient: const ThrowingVisualRouterClient(),
-      );
-
-      final result = await pipeline.resolveVisual(
-        trigger: const LessonVisualTrigger(
-          needsImage: true,
-          pedagogicalNeed: 'important',
-          topic: 'função horária da posição no movimento uniforme',
-          visualType: 'graph',
-          keyElements: [
-            'posição inicial 15 km',
-            'velocidade constante 25 km/h',
-            's = 15 + 25t',
-          ],
-          highlightFocus:
-              'mostrar que a posição inicial soma com a velocidade vezes o tempo',
-          imagePrompt:
-              'Um ciclista inicia no marco de 15 km e mantém velocidade constante de 25 km/h; desenhar gráfico posição x tempo e a equação s = 15 + 25t.',
-        ),
-        lessonKey: 'physics-position-function',
-        allowPaidImages: true,
-        acceptedOfferId: null,
-      );
-
-      expect(result.source, 'server_failed');
-      expect(result.displayUrl, isNull);
-      expect(client.calls, 0);
-    },
-  );
-
-  test(
-    'poor but recoverable chemistry trigger does not render local SVG',
-    () async {
-      final client = FakeImageClient();
-      final pipeline = LessonVisualPipeline(
-        imageClient: client,
-        visualRouterClient: const ThrowingVisualRouterClient(),
-      );
-
-      final result = await pipeline.resolveVisual(
-        trigger: const LessonVisualTrigger(
-          needsImage: true,
-          pedagogicalNeed: 'important',
-          topic: 'apoio visual',
-          visualType: 'diagram',
-          imagePrompt:
-              'Reação química com reagentes, seta de reação, produtos e conservação dos átomos.',
-        ),
-        lessonKey: 'recovered-poor-chemistry-trigger',
-        allowPaidImages: true,
-        acceptedOfferId: null,
-      );
-
-      expect(result.source, 'server_failed');
-      expect(result.displayUrl, isNull);
-      expect(client.calls, 0);
-    },
-  );
-
-  test(
-    'software catalog candidates do not render locally when server is unavailable',
+    'software catalog candidates render locally when server is unavailable',
     () async {
       final cases = [
         (
@@ -1471,48 +1491,193 @@ void main() {
           acceptedOfferId: null,
         );
 
-        expect(result.source, 'server_failed', reason: sample.lessonKey);
-        expect(result.displayUrl, isNull, reason: sample.lessonKey);
+        expect(result.source, 'local_software', reason: sample.lessonKey);
+        expect(
+          result.displayUrl,
+          startsWith('data:image/svg+xml;utf8,'),
+          reason: sample.lessonKey,
+        );
         expect(client.calls, 0, reason: sample.lessonKey);
       }
     },
   );
 
-  test('realistic ambiguous visual is not paid-decided by app', () async {
-    final client = FakeImageClient();
-    final pipeline = LessonVisualPipeline(
-      imageClient: client,
-      visualRouterClient: const FakeVisualRouterClient(),
-    );
-    const trigger = LessonVisualTrigger(
-      needsImage: true,
-      pedagogicalNeed: 'important',
-      topic: 'diagrama com foto realista de um processo historico',
-      visualType: 'diagram',
-      imagePrompt: 'foto realista com etapas visuais',
-      aspectRatio: '16:9',
-    );
+  test('ported math templates render deterministic SVGs', () async {
+    final cases = [
+      (
+        key: 'math-linear',
+        name: 'linear_function',
+        params: {'a': 2, 'b': 1, 'x_min': -2, 'x_max': 4},
+      ),
+      (
+        key: 'math-quadratic',
+        name: 'quadratic_function',
+        params: {'a': 1, 'b': -4, 'c': 3, 'x_min': -1, 'x_max': 5},
+      ),
+      (
+        key: 'math-vt',
+        name: 'kinematics_vt',
+        params: {'v0': 4, 'a': -1, 't_max': 8},
+      ),
+      (
+        key: 'math-st',
+        name: 'kinematics_st',
+        params: {'s0': 2, 'v0': 3, 'a': 1, 't_max': 6},
+      ),
+      (
+        key: 'math-unit-circle',
+        name: 'unit_circle',
+        params: {'angle_deg': 60, 'show_tan': true},
+      ),
+    ];
 
-    final blocked = await pipeline.resolveVisual(
-      trigger: trigger,
-      lessonKey: 'lesson',
-      allowPaidImages: false,
-    );
-    expect(blocked.source, 'server_missing_raster');
-    expect(client.calls, 0);
+    for (final sample in cases) {
+      final pipeline = LessonVisualPipeline(
+        imageClient: FakeImageClient(),
+        visualRouterClient: const ThrowingVisualRouterClient(),
+      );
 
-    final paid = await pipeline.resolveVisual(
-      trigger: trigger,
-      lessonKey: 'lesson',
-      allowPaidImages: true,
-      acceptedOfferId: 'offer-paid',
-    );
-    expect(paid.source, 'server_missing_raster');
-    expect(client.calls, 0);
-    expect(client.lastAspectRatio, isNull);
-    expect(client.lastVisualTrigger, isNull);
-    expect(client.lastLessonContext, isNull);
+      final result = await pipeline.resolveVisual(
+        trigger: LessonVisualTrigger(
+          needsImage: true,
+          pedagogicalNeed: 'important',
+          topic: 'template ${sample.name}',
+          visualType: 'graph',
+          mathTemplate: {'name': sample.name, 'params': sample.params},
+        ),
+        lessonKey: sample.key,
+      );
+
+      expect(result.source, 'math_template', reason: sample.name);
+      expect(
+        result.displayUrl,
+        startsWith('data:image/svg+xml;utf8,'),
+        reason: sample.name,
+      );
+      expect(result.imageMetadata?.source, 'math_template');
+      expect(result.imageMetadata?.provider, 'flutter_math_template');
+    }
   });
+
+  test('SVG critic rejects unsafe or weak SVG before final image', () {
+    const critic = ImagePedagogicalCritic();
+    final unsafe = Uri.encodeComponent(
+      '<svg viewBox="0 0 10 10"><script>alert(1)</script><rect width="10" height="10"/></svg>',
+    );
+    final sparse = Uri.encodeComponent(
+      '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+    );
+
+    expect(
+      critic.evaluateSvgDataUrl('data:image/svg+xml;utf8,$unsafe').reason,
+      'unsafe_svg',
+    );
+    expect(
+      critic.evaluateSvgDataUrl('data:image/svg+xml;utf8,$sparse').reason,
+      'too_sparse',
+    );
+  });
+
+  test('N3 cheap route can become final visual with trace metadata', () async {
+    final telemetry = VisualFunnelTelemetry();
+    final router = SequenceVisualRouterClient([
+      const ServerVisualRouteResult(
+        verdict: ServerVisualRouteVerdict.missingRaster,
+        reason: 'SERVER_NO_RASTER',
+      ),
+      const ServerVisualRouteResult(
+        verdict: ServerVisualRouteVerdict.image,
+        reason: 'N3_CHEAP_ACCEPTED',
+        readyImageDataUrl: 'data:image/png;base64,AAAA',
+        requestId: 'rid-n3',
+      ),
+    ]);
+    final pipeline = LessonVisualPipeline(
+      imageClient: FakeImageClient(),
+      visualRouterClient: router,
+      telemetry: telemetry,
+    );
+
+    final result = await pipeline.resolveVisual(
+      trigger: const LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'essential',
+        topic: 'fluxograma clinico com seis decisões',
+        visualType: 'flowchart',
+        keyElements: [
+          'sintoma',
+          'triagem',
+          'hipótese',
+          'exame',
+          'risco',
+          'conduta',
+        ],
+        highlightFocus: 'relação entre triagem risco e conduta',
+        complexity: 'high',
+        imagePrompt: 'visual rico com múltiplas camadas de decisão',
+      ),
+      lessonKey: 'n3-rich-route',
+    );
+
+    expect(router.calls, 2);
+    expect(result.source, 'n3_software');
+    expect(result.dataUrl, 'data:image/png;base64,AAAA');
+    expect(result.imageMetadata?.source, 'n3_software');
+    expect(result.imageMetadata?.provider, 'visual_route_n3');
+    expect(result.imageMetadata?.requestId, 'rid-n3');
+    expect(result.imageMetadata?.n3Reason, 'N3_CHEAP_ACCEPTED');
+    expect(
+      telemetry.snapshot().events.map((event) => event.source),
+      contains('n3_software'),
+    );
+  });
+
+  test(
+    'realistic ambiguous visual creates offer then generates after accept',
+    () async {
+      final client = FakeImageClient();
+      final pipeline = LessonVisualPipeline(
+        imageClient: client,
+        visualRouterClient: const FakeVisualRouterClient(),
+      );
+      const trigger = LessonVisualTrigger(
+        needsImage: true,
+        pedagogicalNeed: 'important',
+        topic: 'diagrama com foto realista de um processo historico',
+        visualType: 'diagram',
+        imagePrompt: 'foto realista com etapas visuais',
+        aspectRatio: '16:9',
+      );
+
+      final blocked = await pipeline.resolveVisual(
+        trigger: trigger,
+        lessonKey: 'lesson',
+        allowPaidImages: false,
+      );
+      expect(blocked.source, 'paid_offer_required');
+      expect(blocked.paidOfferPrompt, contains('foto realista'));
+      expect(client.calls, 0);
+
+      final paid = await pipeline.resolveVisual(
+        trigger: trigger,
+        lessonKey: 'lesson',
+        allowPaidImages: true,
+        acceptedOfferId: 'offer-paid',
+      );
+      expect(paid.source, 'ai_blueprint');
+      expect(client.calls, 1);
+      expect(client.lastAspectRatio, '16:9');
+      expect(client.lastAcceptedOfferId, 'offer-paid');
+      expect(client.lastIdempotencyKey, 'offer-paid');
+      expect(client.lastVisualTrigger?['topic'], trigger.topic);
+      expect(
+        client.lastLessonContext?['source'],
+        'sim_app_flutter_visual_fallback',
+      );
+      expect(paid.imageMetadata?.acceptedOfferId, 'offer-paid');
+      expect(paid.imageMetadata?.costCredits, simPricing.imageCostCredits);
+    },
+  );
   test('api contracts preserve limits and constants without secrets', () {
     final image = GenerateLessonImageRequest(
       prompt: 'p' * 5000,

@@ -10,6 +10,8 @@ import '../lesson/lesson_content_validator.dart';
 import '../localization/sim_locale_contract.dart';
 import '../modules/pedagogical_module_contracts.dart';
 import '../experience/bootstrap_payload.dart';
+import '../auxiliary/server_recovery_contract.dart';
+import '../auxiliary/server_review_contract.dart';
 import '../state/student_learning_state.dart';
 import 'sim_ai_server_config.dart';
 import 'sim_http_transport.dart';
@@ -21,6 +23,8 @@ const String simLessonImagePath = '/api/generate-lesson-image';
 const String simLessonAudioPath = '/api/generate-lesson-audio';
 const String simVisualRoutePath = '/api/visual-route';
 const String simDoubtPath = '/api/doubt';
+const String simReviewPath = '/api/review';
+const String simRecoveryPath = '/api/recovery';
 
 class SimServerT00Client implements T00BootstrapClient {
   SimServerT00Client({
@@ -312,6 +316,13 @@ class SimServerLessonImageClient
           : null,
       retryable: decoded['retryable'] is bool
           ? decoded['retryable'] as bool
+          : null,
+      acceptedOfferId:
+          decoded['acceptedOfferId']?.toString() ?? acceptedOfferId,
+      costCredits: decoded['costCredits'] is num
+          ? (decoded['costCredits'] as num).toInt()
+          : decoded['cost'] is num
+          ? (decoded['cost'] as num).toInt()
           : null,
     );
   }
@@ -901,5 +912,83 @@ class SimServerT02Client implements T02LessonClient {
       generatedAt: DateTime.now(),
       source: (json['source'] ?? 'server-doubt-room').toString(),
     );
+  }
+}
+
+class SimServerReviewTransport implements ServerReviewTransport {
+  SimServerReviewTransport({
+    required this.config,
+    SimHttpTransport? transport,
+    this.timeout = const Duration(seconds: 45),
+  }) : transport = transport ?? DartIoSimHttpTransport();
+
+  final SimAiServerConfig config;
+  final SimHttpTransport transport;
+  final Duration timeout;
+
+  @override
+  Future<JsonMap> postReview(JsonMap body) async {
+    final response = await transport.postJson(
+      config.uri(simReviewPath),
+      headers: await config.jsonHeaders(),
+      body: {
+        ...body,
+        'contractVersion': 'sim.auxiliary.review.v1',
+        'flow': 'review',
+        'source': 'sim_app_flutter_aux_room',
+      },
+      timeout: timeout,
+    );
+    if (!response.ok) {
+      throw SimExternalAiException(
+        response.body,
+        statusCode: response.statusCode,
+      );
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw const SimExternalAiException('review retornou resposta invalida.');
+    }
+    return JsonMap.from(decoded);
+  }
+}
+
+class SimServerRecoveryTransport implements ServerRecoveryTransport {
+  SimServerRecoveryTransport({
+    required this.config,
+    SimHttpTransport? transport,
+    this.timeout = const Duration(seconds: 45),
+  }) : transport = transport ?? DartIoSimHttpTransport();
+
+  final SimAiServerConfig config;
+  final SimHttpTransport transport;
+  final Duration timeout;
+
+  @override
+  Future<JsonMap> postRecovery(JsonMap body) async {
+    final response = await transport.postJson(
+      config.uri(simRecoveryPath),
+      headers: await config.jsonHeaders(),
+      body: {
+        ...body,
+        'contractVersion': 'sim.auxiliary.recovery.v1',
+        'flow': 'recovery',
+        'source': 'sim_app_flutter_aux_room',
+      },
+      timeout: timeout,
+    );
+    if (!response.ok) {
+      throw SimExternalAiException(
+        response.body,
+        statusCode: response.statusCode,
+      );
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw const SimExternalAiException(
+        'recovery retornou resposta invalida.',
+      );
+    }
+    return JsonMap.from(decoded);
   }
 }

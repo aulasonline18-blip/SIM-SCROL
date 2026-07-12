@@ -8,13 +8,13 @@ import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
+import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
 import 'package:sim_mobile/sim/lesson/student_lesson_material_service.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
-import 'package:sim_mobile/sim/state/mastery_truth_engine.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
 import 'package:sim_mobile/sim/state/student_state_store.dart';
@@ -55,6 +55,21 @@ class FakeClassroomT02 implements T02LessonClient {
   @override
   Future<T02LessonMaterial> placement(T02LessonRequest request) =>
       completeLesson(request);
+}
+
+class FakeServerAdvanceGateClient implements ServerAdvanceGateClient {
+  FakeServerAdvanceGateClient(this.decision);
+
+  final ServerAdvanceGateDecision decision;
+  final requests = <ServerAdvanceGateRequest>[];
+
+  @override
+  Future<ServerAdvanceGateDecision> decide(
+    ServerAdvanceGateRequest request,
+  ) async {
+    requests.add(request);
+    return decision;
+  }
 }
 
 StudentLearningState _classroomState() {
@@ -100,6 +115,7 @@ LessonRuntimeEngine _runtime(
   StudentLearningStateService stateService,
   FakeClassroomT02 t02, {
   StudentStateStore? store,
+  ServerAdvanceGateClient? serverAdvanceGateClient,
 }) {
   final orchestrator = LessonOrchestrator(
     t02Client: t02,
@@ -133,6 +149,7 @@ LessonRuntimeEngine _runtime(
       materialService: materialService,
       materialController: materialController,
       store: store,
+      serverAdvanceGateClient: serverAdvanceGateClient,
     ),
   );
 }
@@ -211,12 +228,25 @@ void main() {
     },
   );
 
-  test('Classroom answer A with signal 1 advances from L1 to L3', () async {
+  test('Classroom applies server decision from L1 to L3', () async {
     final service = StudentLearningStateService(
       seed: {'cyber-class': _classroomState()},
     );
     final t02 = FakeClassroomT02();
-    final runtime = _runtime(service, t02);
+    final gate = FakeServerAdvanceGateClient(
+      const ServerAdvanceGateDecision(
+        accepted: true,
+        decision: 'next_layer',
+        reason: 'server_skip_to_l3',
+        nextItemIdx: 0,
+        nextLayer: LessonLayer.l3,
+        highWaterMark: 2,
+        events: [
+          {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
+        ],
+      ),
+    );
+    final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
     await runtime.open(lessonLocalId: 'cyber-class');
 
     runtime.select(AnswerLetter.A);
@@ -226,6 +256,10 @@ void main() {
     expect(snap.phase.type, ClassroomPhaseType.concluido);
     expect(snap.history, hasLength(1));
     expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
+    expect(gate.requests, hasLength(1));
+    expect(gate.requests.single.questionText, isNotEmpty);
+    expect(gate.requests.single.correctOption, AnswerLetter.A);
+    expect(gate.requests.single.toJson()['evidence'], isA<Map>());
 
     await runtime.advance();
     snap = runtime.snapshot();
@@ -236,7 +270,7 @@ void main() {
   });
 
   test(
-    'answer signal writes false mastery truth and canonical event',
+    'answer signal without server does not write false mastery truth',
     () async {
       final store = StudentStateStore(local: MemoryStudentStateLocalStorage());
       store.writeState(
@@ -262,20 +296,23 @@ void main() {
       await runtime.signal(DecisionSignal.one);
 
       final state = store.readState('cyber-class');
-      final truth = state.extra['truth'] as Map;
-      final status = truth['item_consolidation_status'] as Map;
-      expect(status['M1'], MasteryStatus.falseMastery.name);
+      expect(state.extra['truth'], isNull);
+      expect(state.truth.masteryEvidence, isEmpty);
+      expect(
+        state.queuedActions.map((action) => action['type']),
+        contains('ADVANCE_GATE_PENDING'),
+      );
       final eventTypes = store
           .getEventLog('cyber-class')
           .map((event) => event.type);
-      expect(eventTypes, contains('MASTERY_EVALUATED'));
-      expect(eventTypes, contains('WEAKNESS_REGISTERED'));
-      expect(eventTypes, contains('REINFORCEMENT_REQUIRED'));
+      expect(eventTypes, isNot(contains('MASTERY_EVALUATED')));
+      expect(eventTypes, isNot(contains('WEAKNESS_REGISTERED')));
+      expect(eventTypes, isNot(contains('REINFORCEMENT_REQUIRED')));
     },
   );
 
   test(
-    'answer signal writes mastered truth after three correct attempts',
+    'answer signal without server does not write mastery or advance events',
     () async {
       final store = StudentStateStore(local: MemoryStudentStateLocalStorage());
       store.writeState(
@@ -309,15 +346,18 @@ void main() {
       await runtime.signal(DecisionSignal.one);
 
       final state = store.readState('cyber-class');
-      final truth = state.extra['truth'] as Map;
-      final status = truth['item_consolidation_status'] as Map;
-      expect(status['M1'], MasteryStatus.mastered.name);
+      expect(state.extra['truth'], isNull);
+      expect(state.truth.masteryEvidence, isEmpty);
+      expect(
+        state.queuedActions.map((action) => action['type']),
+        contains('ADVANCE_GATE_PENDING'),
+      );
       final eventTypes = store
           .getEventLog('cyber-class')
           .map((event) => event.type);
-      expect(eventTypes, contains('NEXT_ACTION_DECIDED'));
-      expect(eventTypes, contains('ITEM_MASTERED'));
-      expect(eventTypes, contains('ITEM_ADVANCED'));
+      expect(eventTypes, isNot(contains('NEXT_ACTION_DECIDED')));
+      expect(eventTypes, isNot(contains('ITEM_MASTERED')));
+      expect(eventTypes, isNot(contains('ITEM_ADVANCED')));
     },
   );
 

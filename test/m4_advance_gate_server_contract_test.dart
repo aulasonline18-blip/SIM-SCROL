@@ -118,6 +118,9 @@ ServerAdvanceGateRequest _request(StudentLearningState state) {
     selectedOption: AnswerLetter.A,
     signal: DecisionSignal.one,
     correct: true,
+    questionId: 'M1:layer-1:Quanto e 1+1?',
+    questionText: 'Quanto e 1+1?',
+    correctOption: AnswerLetter.A,
     attempts: state.attempts,
     history: const [],
     currentState: state,
@@ -152,9 +155,47 @@ void main() {
     expect(body['selectedOption'], 'A');
     expect(body['signal'], 1);
     expect(body['correct'], isTrue);
+    expect(body['questionId'], 'M1:layer-1:Quanto e 1+1?');
+    expect(body['questionText'], 'Quanto e 1+1?');
+    expect(body['correctOption'], 'A');
+    expect(body['evidence'], isA<Map>());
+    expect((body['evidence'] as Map)['correctOption'], 'A');
+    expect(
+      (body['evidence'] as Map)['source'],
+      'sim_app_flutter_lesson_material',
+    );
     expect(body['idempotencyKey'], 'idem-1');
     expect(decision.decision, 'next_layer');
   });
+
+  test(
+    'App obedece rejeicao do servidor e nao fabrica decisao local',
+    () async {
+      final transport = RecordingTransport()
+        ..statusCode = 409
+        ..body = jsonEncode({
+          'accepted': false,
+          'decision': 'block',
+          'reason': 'ADVANCE_GATE_INVALID_CONTRACT',
+          'humanError': {
+            'message': 'Nao conseguimos validar sua resposta agora.',
+            'technical': {'code': 'ADVANCE_GATE_INVALID_CONTRACT'},
+          },
+        });
+      final client = SimServerAdvanceGateClient(
+        config: SimAiServerConfig(
+          baseUrl: 'https://sim.example',
+          accessTokenProvider: () async => 'token',
+        ),
+        transport: transport,
+      );
+
+      expect(
+        () => client.decide(_request(_state())),
+        throwsA(isA<SimExternalAiException>()),
+      );
+    },
+  );
 
   test('App aplica decisao do servidor sem marcar dominio final sozinho', () {
     final state = _state();

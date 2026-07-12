@@ -11,6 +11,16 @@ JsonMap _map(Object? value) => value is Map
     ? value.map((key, value) => MapEntry(key.toString(), value))
     : {};
 
+JsonMap _safeStateEffect(Object? value) {
+  final parsed = _map(value);
+  return {
+    'strongAdvance': parsed['strongAdvance'] == true,
+    'writesProgress': parsed['writesProgress'] == true,
+    'preservesCurrent': parsed['preservesCurrent'] != false,
+    'preservesMainLesson': parsed['preservesMainLesson'] != false,
+  };
+}
+
 AnswerLetter _letter(Object? value) => switch (_text(value).toUpperCase()) {
   'B' => AnswerLetter.B,
   'C' => AnswerLetter.C,
@@ -92,6 +102,10 @@ class ServerRecoveryItem {
     required this.schemaVersion,
     this.explanation = '',
     this.feedback = const {},
+    this.contractVersion = 'sim.auxiliary.recovery.v1',
+    this.flow = 'recovery',
+    this.nextAction = 'show_aux_room',
+    this.stateEffect = const {},
     this.humanError,
   });
 
@@ -105,6 +119,10 @@ class ServerRecoveryItem {
   final Map<AnswerLetter, String> options;
   final AnswerLetter correctOption;
   final JsonMap feedback;
+  final String contractVersion;
+  final String flow;
+  final String nextAction;
+  final JsonMap stateEffect;
   final String status;
   final int schemaVersion;
   final JsonMap? humanError;
@@ -133,6 +151,14 @@ class ServerRecoveryItem {
       },
       correctOption: _letter(json['correctOption']),
       feedback: _map(json['feedback']),
+      contractVersion: _text(json['contractVersion']).isEmpty
+          ? 'sim.auxiliary.recovery.v1'
+          : _text(json['contractVersion']),
+      flow: _text(json['flow']).isEmpty ? 'recovery' : _text(json['flow']),
+      nextAction: _text(json['nextAction']).isEmpty
+          ? 'show_aux_room'
+          : _text(json['nextAction']),
+      stateEffect: _safeStateEffect(json['stateEffect']),
       status: _text(json['status']),
       schemaVersion: _int(json['schemaVersion'], 1),
       humanError: json['humanError'] is Map ? _map(json['humanError']) : null,
@@ -180,6 +206,10 @@ class ServerRecoveryAnswerResult {
     required this.blocksConclusion,
     required this.mainProgressPreserved,
     this.humanError,
+    this.contractVersion = 'sim.auxiliary.recovery.v1',
+    this.flow = 'recovery',
+    this.nextAction = 'return_to_lesson',
+    this.stateEffect = const {},
   });
 
   final bool accepted;
@@ -189,6 +219,10 @@ class ServerRecoveryAnswerResult {
   final bool blocksConclusion;
   final bool mainProgressPreserved;
   final JsonMap? humanError;
+  final String contractVersion;
+  final String flow;
+  final String nextAction;
+  final JsonMap stateEffect;
 
   factory ServerRecoveryAnswerResult.fromJson(JsonMap json) {
     final result = _map(json['result']);
@@ -200,6 +234,14 @@ class ServerRecoveryAnswerResult {
       blocksConclusion: json['blocksConclusion'] == true,
       mainProgressPreserved: json['mainProgressPreserved'] != false,
       humanError: json['humanError'] is Map ? _map(json['humanError']) : null,
+      contractVersion: _text(json['contractVersion']).isEmpty
+          ? 'sim.auxiliary.recovery.v1'
+          : _text(json['contractVersion']),
+      flow: _text(json['flow']).isEmpty ? 'recovery' : _text(json['flow']),
+      nextAction: _text(json['nextAction']).isEmpty
+          ? 'return_to_lesson'
+          : _text(json['nextAction']),
+      stateEffect: _safeStateEffect(json['stateEffect']),
     );
   }
 }

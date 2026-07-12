@@ -78,9 +78,13 @@ class StudentStateStoreAdapter implements StudentLearningStateService {
   StudentLearningState write(
     StudentLearningState state, {
     bool scheduleShadow = true,
+    bool acceptServerAuthority = false,
   }) {
     _knownLessonIds.add(state.lessonLocalId);
-    final saved = _store.writeState(state);
+    final saved = _store.writeState(
+      state,
+      acceptServerAuthority: acceptServerAuthority,
+    );
     onWrite?.call(saved.lessonLocalId);
     _notifyWrite(saved.lessonLocalId, scheduleShadow: scheduleShadow);
     return saved;

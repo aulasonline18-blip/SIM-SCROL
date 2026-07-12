@@ -44,7 +44,7 @@ class SharedPrefsAudioPreferenceStorage implements AudioPreferenceStorage {
 
 class AudioPreference {
   AudioPreference({AudioPreferenceStorage? storage})
-      : storage = storage ?? MemoryAudioPreferenceStorage();
+    : storage = storage ?? MemoryAudioPreferenceStorage();
 
   final AudioPreferenceStorage storage;
   final Set<AudioPreferenceListener> _listeners = {};

@@ -1,6 +1,7 @@
 // MIRROR OF: src/cyber/lesson-orchestrator.ts (Web, source of truth)
 import 'dart:convert';
 
+import '../billing/sim_pricing.dart';
 import '../media/lesson_image_api_contract.dart';
 import '../media/lesson_visual_pipeline.dart';
 import '../media/lesson_paid_image_offer.dart';
@@ -32,6 +33,7 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
   final Map<String, Future<CompleteLesson>> _textInflight = {};
   final Map<String, _ImageInflight> _imageInflight = {};
   final Map<String, int> _imageEpochByKey = {};
+  final Map<String, _PendingPaidImageVisual> _pendingPaidImageByKey = {};
   final BackgroundTextSemaphore _bgText = BackgroundTextSemaphore();
   Future<void> _lastLessonFullyComplete = Future.value();
 
@@ -194,6 +196,28 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
       );
       return;
     }
+    final paidPrompt = result.paidOfferPrompt;
+    if (paidPrompt != null && paidPrompt.trim().isNotEmpty) {
+      final offerId = _paidImageOfferId(key, signature);
+      _pendingPaidImageByKey[key] = _PendingPaidImageVisual(
+        params: params,
+        lesson: lesson,
+        trigger: trigger,
+        offerId: offerId,
+        prompt: paidPrompt,
+        signature: signature,
+      );
+      bus.notifyPaidImageOffer(
+        key,
+        LessonPaidImageOffer(
+          offerId: offerId,
+          lessonKey: key,
+          prompt: paidPrompt,
+          creditCost: simPricing.imageCostCredits,
+          source: result.source,
+        ),
+      );
+    }
   }
 
   bool _isCurrentImageDecision(String key, String signature, int epoch) {
@@ -294,10 +318,39 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
   @override
   Future<LessonImageGenerationMetadata?> acceptPaidImageOffer(
     String lessonKey,
-  ) async => cache.peek(lessonKey)?.imageMetadata;
+  ) async {
+    final pending = _pendingPaidImageByKey[lessonKey];
+    if (pending == null) return cache.peek(lessonKey)?.imageMetadata;
+    final cached = cache.peek(lessonKey);
+    if (cached?.imagem?.trim().isNotEmpty == true) {
+      _pendingPaidImageByKey.remove(lessonKey);
+      bus.clearPaidImageOffer(lessonKey);
+      return cached?.imageMetadata;
+    }
+    final result = await visualPipeline.resolveVisual(
+      trigger: pending.trigger,
+      lessonKey: lessonKey,
+      stableLang: pending.params.explanationLanguage ?? pending.params.lang,
+      academicLevel: pending.params.academic,
+      allowPaidImages: true,
+      acceptedOfferId: pending.offerId,
+      idempotencyKey: pending.offerId,
+    );
+    if (!result.hasImage) return cache.peek(lessonKey)?.imageMetadata;
+    _publishImage(
+      pending.params,
+      cache.peek(lessonKey) ?? pending.lesson,
+      result.displayUrl!,
+      imageMetadata: result.imageMetadata,
+    );
+    _pendingPaidImageByKey.remove(lessonKey);
+    bus.clearPaidImageOffer(lessonKey);
+    return cache.peek(lessonKey)?.imageMetadata;
+  }
 
   @override
   void declinePaidImageOffer(String lessonKey) {
+    _pendingPaidImageByKey.remove(lessonKey);
     bus.clearPaidImageOffer(lessonKey);
   }
 
@@ -377,6 +430,9 @@ class LessonOrchestrator implements LessonPaidImageOrchestrator {
     return lesson;
   }
 }
+
+String _paidImageOfferId(String lessonKey, String signature) =>
+    'paid-image:${base64Url.encode(utf8.encode('$lessonKey:$signature'))}';
 
 String _compactVisualContext(List<String?> parts, {int maxChars = 1200}) {
   return _joinVisualContext(parts, maxChars: maxChars);
@@ -481,6 +537,24 @@ class _ImageInflight {
 
   final String signature;
   final int epoch;
+}
+
+class _PendingPaidImageVisual {
+  const _PendingPaidImageVisual({
+    required this.params,
+    required this.lesson,
+    required this.trigger,
+    required this.offerId,
+    required this.prompt,
+    required this.signature,
+  });
+
+  final CompleteLessonParams params;
+  final CompleteLesson lesson;
+  final LessonVisualTrigger trigger;
+  final String offerId;
+  final String prompt;
+  final String signature;
 }
 
 JsonMap preparedMaterialFromLesson({

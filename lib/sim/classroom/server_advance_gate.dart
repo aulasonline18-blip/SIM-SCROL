@@ -20,6 +20,9 @@ class ServerAdvanceGateRequest {
     required this.signal,
     required this.correct,
     required this.idempotencyKey,
+    this.questionId,
+    this.questionText,
+    this.correctOption,
     this.currentState,
     this.attempts = const [],
     this.history = const [],
@@ -36,6 +39,9 @@ class ServerAdvanceGateRequest {
   final DecisionSignal signal;
   final bool correct;
   final String idempotencyKey;
+  final String? questionId;
+  final String? questionText;
+  final AnswerLetter? correctOption;
   final StudentLearningState? currentState;
   final List<LessonAttempt> attempts;
   final List<String> history;
@@ -52,6 +58,21 @@ class ServerAdvanceGateRequest {
     'selectedOption': selectedOption.name,
     'signal': signal.value,
     'correct': correct,
+    if (questionId != null && questionId!.trim().isNotEmpty)
+      'questionId': questionId,
+    if (questionText != null && questionText!.trim().isNotEmpty)
+      'questionText': questionText,
+    if (correctOption != null) 'correctOption': correctOption!.name,
+    'evidence': {
+      if (questionId != null && questionId!.trim().isNotEmpty)
+        'questionId': questionId,
+      if (questionText != null && questionText!.trim().isNotEmpty)
+        'questionText': questionText,
+      if (correctOption != null) 'correctOption': correctOption!.name,
+      'selectedOption': selectedOption.name,
+      'signal': signal.value,
+      'source': 'sim_app_flutter_lesson_material',
+    },
     'attempts': attempts.map((attempt) => attempt.toJson()).toList(),
     'history': history,
     if (highWaterMark != null) 'highWaterMark': highWaterMark,
@@ -289,11 +310,14 @@ LessonProgress _progressFromDecision(
     final nextIdx = decision.nextItemIdx
         .clamp(0, curriculum.items.length)
         .toInt();
+    final completed = progress.concluidos.contains(request.marker)
+        ? progress.concluidos
+        : [...progress.concluidos, request.marker];
     return progress.copyWith(
       itemIdx: nextIdx,
       layer: decision.nextLayer,
       erros: 0,
-      concluidos: progress.concluidos,
+      concluidos: completed,
       mainAdvances: [
         progress.mainAdvances + 1,
         nextIdx,

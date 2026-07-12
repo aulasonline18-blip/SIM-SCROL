@@ -101,6 +101,10 @@ class ServerDoubtResponse {
     required this.stateMutation,
     required this.mainProgressPreserved,
     required this.events,
+    this.contractVersion = 'sim.auxiliary.doubt.v1',
+    this.flow = 'doubt',
+    this.nextAction = 'return_to_lesson',
+    this.reason = '',
     this.humanError,
   });
 
@@ -119,6 +123,10 @@ class ServerDoubtResponse {
   final JsonMap stateMutation;
   final bool mainProgressPreserved;
   final List<JsonMap> events;
+  final String contractVersion;
+  final String flow;
+  final String nextAction;
+  final String reason;
   final JsonMap? humanError;
 
   bool get progressPreserved =>
@@ -151,6 +159,14 @@ class ServerDoubtResponse {
     stateMutation: _map(json['stateMutation']),
     mainProgressPreserved: json['mainProgressPreserved'] != false,
     events: _listOfMaps(json['events']),
+    contractVersion: _text(json['contractVersion']).isEmpty
+        ? 'sim.auxiliary.doubt.v1'
+        : _text(json['contractVersion']),
+    flow: _text(json['flow']).isEmpty ? 'doubt' : _text(json['flow']),
+    nextAction: _text(json['nextAction']).isEmpty
+        ? 'return_to_lesson'
+        : _text(json['nextAction']),
+    reason: _text(json['reason']),
     humanError: json['humanError'] is Map ? _map(json['humanError']) : null,
   );
 }

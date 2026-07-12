@@ -272,8 +272,10 @@ void main() {
     expect(view.resultCorrect, true);
     expect(
       pendingMapOf(ensureAuxRooms(states['l1']!)).single['status'],
-      'cleared',
+      'pending',
     );
+    expect(states['l1']!.events.last.payload['authoritative'], isFalse);
+    expect(states['l1']!.events.last.payload['writesTruth'], isFalse);
     expect(states['l1']?.current?.marker, 'M1');
     expect(states['l1']?.current?.layer, LessonLayer.l1);
   });
@@ -319,9 +321,11 @@ void main() {
       view = recovery.answerRecoveryRoom(context, view, DecisionSignal.one);
       expect(view.status, RecoveryRoomStatus.result);
       expect(view.resultCorrect, true);
-      expect(isFinalBlockedByRecovery(recovery, 'l1'), false);
+      expect(isFinalBlockedByRecovery(recovery, 'l1'), true);
+      expect(states['l1']!.events.last.payload['authoritative'], isFalse);
+      expect(states['l1']!.events.last.payload['writesTruth'], isFalse);
       final done = await recovery.nextRecoveryRoom(context, view);
-      expect(done.status, RecoveryRoomStatus.done);
+      expect(done.status, RecoveryRoomStatus.ready);
       expect(states['l1']?.current?.marker, 'M1');
       expect(states['l1']?.current?.layer, LessonLayer.l1);
     },

@@ -109,6 +109,7 @@ class LessonMaterialController {
             marker: item.marker,
             layer: position.layer,
             params: params,
+            forceRefresh: forceRefresh,
             waitBeforeOrderMs: 0,
             waitAfterOrderMs: 3000,
           ),

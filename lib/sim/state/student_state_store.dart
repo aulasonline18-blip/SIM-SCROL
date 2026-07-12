@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'student_learning_state.dart';
+import 'student_state_contract.dart';
 
 enum StateConflictResolution { local, cloud, equal }
 
@@ -172,8 +173,22 @@ class StudentStateStore {
     return state;
   }
 
-  StudentLearningState writeState(StudentLearningState state) {
-    final next = state.copyWith(updatedAt: now());
+  StudentLearningState writeState(
+    StudentLearningState state, {
+    bool acceptServerAuthority = false,
+  }) {
+    final existing =
+        _memory[state.lessonLocalId] ?? _readStateIfExists(state.lessonLocalId);
+    final protected =
+        !acceptServerAuthority &&
+            existing != null &&
+            StudentStateContract().isRegression(
+              existing: existing,
+              incoming: state,
+            )
+        ? mergeStudentLearningStateFromCloud(existing, state)
+        : state;
+    final next = protected.copyWith(updatedAt: now());
     _memory[next.lessonLocalId] = next;
     local.writeState(next.lessonLocalId, jsonEncode(next.toJson()));
     return next;
@@ -346,12 +361,9 @@ class StudentStateStore {
   ) {
     final localScore = highWaterMark(localState);
     final cloudScore = highWaterMark(cloudState);
-    if (localScore > cloudScore) return StateConflictResolution.local;
     if (cloudScore > localScore) return StateConflictResolution.cloud;
-    if (localState.updatedAt > cloudState.updatedAt) {
-      return StateConflictResolution.local;
-    }
-    if (cloudState.updatedAt > localState.updatedAt) {
+    if (localScore > cloudScore) return StateConflictResolution.cloud;
+    if (localState.updatedAt != cloudState.updatedAt) {
       return StateConflictResolution.cloud;
     }
     return StateConflictResolution.equal;
@@ -412,12 +424,17 @@ class StudentStateStore {
               .toList()
         : <CanonicalLearningEvent>[];
     final dedupedEvents = _dedupeEvents(events);
+    final existing =
+        _memory[state.lessonLocalId] ?? _readStateIfExists(state.lessonLocalId);
+    final protectedState = existing == null
+        ? state
+        : mergeStudentLearningStateFromServerAuthority(state, existing);
     _eventLog[state.lessonLocalId] = dedupedEvents;
     local.writeEvents(
       state.lessonLocalId,
       jsonEncode(dedupedEvents.map((e) => e.toJson()).toList()),
     );
-    return writeState(state);
+    return writeState(protectedState);
   }
 
   StudentLearningState _importCyberBackup(JsonMap backup) {
@@ -455,7 +472,9 @@ class StudentStateStore {
           : _stateFromCyberLesson(lesson, id);
       final imported = _mergeBackupStates(lessonState, snapshot);
       if (imported == null) continue;
-      final merged = _mergeBackupStates(before, imported) ?? imported;
+      final merged = before == null
+          ? imported
+          : mergeStudentLearningStateFromServerAuthority(imported, before);
       lastImported = writeState(
         merged.copyWith(
           lessonLocalId: id,

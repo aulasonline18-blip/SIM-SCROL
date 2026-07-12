@@ -25,6 +25,7 @@ class ResolveLessonMaterialInput {
     required this.marker,
     required this.layer,
     required this.params,
+    this.forceRefresh = false,
     this.waitBeforeOrderMs = 2000,
     this.waitAfterOrderMs = 12000,
   });
@@ -35,6 +36,7 @@ class ResolveLessonMaterialInput {
   final String? marker;
   final LessonLayer layer;
   final CompleteLessonParams params;
+  final bool forceRefresh;
   final int waitBeforeOrderMs;
   final int waitAfterOrderMs;
 }
@@ -121,7 +123,9 @@ class StudentLessonMaterialService {
   ) async {
     _rememberInput(input);
     final startedAt = DateTime.now().millisecondsSinceEpoch;
-    final fast = resolveFastLessonMaterialFromStateOrCache(input);
+    final fast = input.forceRefresh
+        ? null
+        : resolveFastLessonMaterialFromStateOrCache(input);
     if (fast != null) return fast;
 
     final lesson = await orchestrator.prefetchCompleteLesson(

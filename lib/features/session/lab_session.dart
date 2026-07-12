@@ -28,6 +28,7 @@ import '../../sim/config/sim_environment.dart';
 import '../../sim/external_ai/sim_ai_server_config.dart';
 import '../../sim/external_ai/sim_server_ai_clients.dart';
 import '../../sim/external_ai/sim_server_attachment_client.dart';
+import '../../sim/errors/human_error_policy.dart';
 import '../../sim/classroom/classroom_models.dart';
 import '../../sim/classroom/lesson_runtime_engine.dart';
 import '../../sim/classroom/lesson_main_view_model.dart';
@@ -1001,7 +1002,11 @@ class LabSession extends ChangeNotifier {
     } catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
       debugPrint('[SIM] BLOCKED reason=${err.toString()}');
-      entryError = err.toString();
+      entryError = humanErrorMessage(
+        err,
+        fallback:
+            'Nao consegui preparar a entrada da aula agora. Toque para tentar novamente.',
+      );
       entryStatus = 'erro';
       notifyListeners();
     }
@@ -1045,7 +1050,11 @@ class LabSession extends ChangeNotifier {
     } catch (error) {
       if (!_isCurrentExperience(lessonLocalId, generation)) return;
       warmupLoading = false;
-      warmupError = error.toString();
+      warmupError = humanErrorMessage(
+        error,
+        fallback:
+            'Nao consegui preparar o aquecimento agora. Continue para a aula principal.',
+      );
       notifyListeners();
     }
   }

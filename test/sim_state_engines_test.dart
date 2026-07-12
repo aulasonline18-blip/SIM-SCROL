@@ -144,7 +144,7 @@ void main() {
     },
   );
 
-  test('StudentLessonExecutor applies answer without legacy fallback', () {
+  test('legacy shadow StudentLessonExecutor is isolated from runtime wiring', () {
     final next = processAnswerWithEngine(
       _state(),
       const AnswerContext(

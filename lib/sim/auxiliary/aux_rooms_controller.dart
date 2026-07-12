@@ -32,8 +32,19 @@ class AuxRoomsController {
     review = reviewRoomService.selectLetter(review, letter);
   }
 
-  void reviewEnviarSinal(ReviewRoomContext context, DecisionSignal signal) {
-    review = reviewRoomService.answerReviewRoom(context, review, signal);
+  Future<void> reviewEnviarSinal(
+    ReviewRoomContext context,
+    DecisionSignal signal,
+  ) async {
+    if (reviewRoomService.serverReviewClient == null) {
+      review = reviewRoomService.answerReviewRoom(context, review, signal);
+      return;
+    }
+    review = await reviewRoomService.answerServerReviewRoom(
+      context,
+      review,
+      signal,
+    );
   }
 
   Future<void> reviewNext(ReviewRoomContext context) async {
@@ -67,13 +78,25 @@ class AuxRoomsController {
     }
   }
 
-  void recoveryEnviarSinal(
+  Future<void> recoveryEnviarSinal(
     RecoveryRoomContext context,
     DecisionSignal signal,
-  ) {
+  ) async {
     final current = recovery;
     if (current != null) {
-      recovery = recoveryRoomService.answerRecoveryRoom(context, current, signal);
+      if (recoveryRoomService.serverRecoveryClient == null) {
+        recovery = recoveryRoomService.answerRecoveryRoom(
+          context,
+          current,
+          signal,
+        );
+        return;
+      }
+      recovery = await recoveryRoomService.answerServerRecoveryRoom(
+        context,
+        current,
+        signal,
+      );
     }
   }
 

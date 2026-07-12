@@ -26,6 +26,14 @@ class FakeReviewTransport implements ServerReviewTransport {
         'evidence': {
           'item_consolidation_status': {'M1': 'needs_review'},
         },
+        'contractVersion': 'sim.auxiliary.review.v1',
+        'flow': 'review',
+        'nextAction': 'return_to_lesson',
+        'stateEffect': {
+          'strongAdvance': false,
+          'writesProgress': false,
+          'preservesCurrent': true,
+        },
       };
     }
     return {
@@ -45,6 +53,14 @@ class FakeReviewTransport implements ServerReviewTransport {
         'schemaVersion': 1,
         'updatedAt': '2026-07-08T00:00:00.000Z',
         'humanError': null,
+        'contractVersion': 'sim.auxiliary.review.v1',
+        'flow': 'review',
+        'nextAction': 'show_aux_room',
+        'stateEffect': {
+          'strongAdvance': false,
+          'writesProgress': false,
+          'preservesCurrent': true,
+        },
       },
     };
   }
@@ -93,6 +109,9 @@ void main() {
     expect(item.ready, isTrue);
     expect(item.correctOption, AnswerLetter.B);
     expect(item.options[AnswerLetter.C], 'C');
+    expect(item.contractVersion, 'sim.auxiliary.review.v1');
+    expect(item.flow, 'review');
+    expect(item.nextAction, 'show_aux_room');
   });
 
   test('M6 App envia resposta de revisao sem decidir dominio final', () async {
@@ -129,6 +148,11 @@ void main() {
     expect(result.accepted, isTrue);
     expect(result.correct, isTrue);
     expect(result.mainProgressPreserved, isTrue);
+    expect(result.contractVersion, 'sim.auxiliary.review.v1');
+    expect(result.flow, 'review');
+    expect(result.nextAction, 'return_to_lesson');
+    expect(result.stateEffect['strongAdvance'], isFalse);
+    expect(result.stateEffect['writesProgress'], isFalse);
     expect(transport.bodies.last['action'], 'answer');
     expect(transport.bodies.last['idempotencyKey'], 'answer-review-m1');
 

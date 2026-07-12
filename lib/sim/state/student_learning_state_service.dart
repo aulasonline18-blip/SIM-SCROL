@@ -168,10 +168,12 @@ class StudentLearningStateService {
   StudentLearningState write(
     StudentLearningState state, {
     bool scheduleShadow = true,
+    bool acceptServerAuthority = false,
   }) {
     final existing = _states[state.lessonLocalId];
     final protectedState =
-        existing != null &&
+        !acceptServerAuthority &&
+            existing != null &&
             _stateContract.isRegression(existing: existing, incoming: state)
         ? mergeStudentLearningStateFromCloud(existing, state)
         : state;

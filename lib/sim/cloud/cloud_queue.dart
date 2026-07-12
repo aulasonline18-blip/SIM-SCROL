@@ -160,9 +160,12 @@ class CloudQueue with WidgetsBindingObserver {
         session,
       );
       if (result.rejected && result.remoteState != null) {
-        // F1.2: merge profundo em vez de substituicao simples
         stateService.write(
-          mergeStudentLearningStateFromCloud(snap, result.remoteState!),
+          mergeStudentLearningStateFromServerAuthority(
+            snap,
+            result.remoteState!,
+          ),
+          acceptServerAuthority: true,
         );
         enqueueStudentStateSync(lessonLocalId: lessonLocalId);
         return;

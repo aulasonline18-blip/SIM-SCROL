@@ -51,6 +51,10 @@ class FakeDoubtTransport implements ServerDoubtTransport {
         'events': [
           {'type': 'DOUBT_FAILED', 'marker': body['marker']},
         ],
+        'contractVersion': 'sim.auxiliary.doubt.v1',
+        'flow': 'doubt',
+        'nextAction': 'return_to_lesson',
+        'reason': 'server_doubt_failed',
       };
     }
     return {
@@ -99,6 +103,10 @@ class FakeDoubtTransport implements ServerDoubtTransport {
           'idempotencyKey': body['idempotencyKey'],
         },
       ],
+      'contractVersion': 'sim.auxiliary.doubt.v1',
+      'flow': 'doubt',
+      'nextAction': 'return_to_lesson',
+      'reason': 'server_doubt_answer_ready',
     };
   }
 }
@@ -141,6 +149,10 @@ class FakeHttpTransport implements SimHttpTransport {
         'events': [
           {'type': 'DOUBT_ANSWER_READY'},
         ],
+        'contractVersion': 'sim.auxiliary.doubt.v1',
+        'flow': 'doubt',
+        'nextAction': 'return_to_lesson',
+        'reason': 'server_doubt_answer_ready',
       }),
     );
   }
@@ -235,6 +247,9 @@ void main() {
     expect(response.ok, isTrue);
     expect(response.answerText, 'Resposta auxiliar do servidor.');
     expect(response.source, 'server_doubt_room');
+    expect(response.contractVersion, 'sim.auxiliary.doubt.v1');
+    expect(response.flow, 'doubt');
+    expect(response.nextAction, 'return_to_lesson');
     expect(
       response.events.map((event) => event['type']),
       contains('DOUBT_ANSWER_READY'),
@@ -287,6 +302,8 @@ void main() {
     expect(response.humanError.toString(), isNot(contains('stack')));
     expect(response.progressPreserved, isTrue);
     expect(response.domainPreserved, isTrue);
+    expect(response.contractVersion, 'sim.auxiliary.doubt.v1');
+    expect(response.flow, 'doubt');
   });
 
   test('M8 cliente T02 ativo envia dúvida para /api/doubt', () async {

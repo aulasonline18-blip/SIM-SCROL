@@ -1,4 +1,13 @@
-// MIRROR OF: src/sim/state/studentLessonExecutor.ts (Web, source of truth)
+// LEGACY/SHADOW ONLY.
+//
+// This file remains as a deterministic audit mirror for old parity tests and
+// migration diagnostics. It is not an authority for official SIMAPP progress.
+// Runtime answer flow must call SimServidor through ServerAdvanceGateClient and
+// apply only the server decision. Do not wire processAnswerWithEngine or
+// applyStudentDecision into classroom runtime, controllers, widgets, sync, or
+// restore paths.
+//
+// Historical origin: MIRROR OF src/sim/state/studentLessonExecutor.ts.
 import 'learning_decision_engine.dart';
 import 'student_learning_state.dart';
 

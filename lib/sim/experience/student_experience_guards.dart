@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import '../errors/human_error_policy.dart';
 import 'student_experience_types.dart';
 
 StudentExperienceErrorInfo classifyStudentExperienceError(Object error) {
@@ -27,7 +28,7 @@ StudentExperienceErrorInfo classifyStudentExperienceError(Object error) {
     return StudentExperienceErrorInfo(
       kind: StudentExperienceErrorKind.auth,
       message:
-          'O servidor recusou a preparacao da aula. Detalhe tecnico: $message',
+          'Sua sessao precisa ser renovada. Entre novamente para continuar.',
     );
   }
   if (error is TimeoutException ||
@@ -53,7 +54,7 @@ StudentExperienceErrorInfo classifyStudentExperienceError(Object error) {
       lower.contains('http 5')) {
     return StudentExperienceErrorInfo(
       kind: StudentExperienceErrorKind.generic,
-      message: 'Erro de conexao com o servidor. Detalhe tecnico: $message',
+      message: humanErrorMessage(error),
     );
   }
   return const StudentExperienceErrorInfo(

@@ -404,65 +404,69 @@ void main() {
       expect(recorded.payload['correct'], isTrue);
     });
 
-    test('A7.6 recuperacao atualiza evidencia por software', () async {
-      final base = _withPending(
-        _state(),
-        _attempt(sinal: DecisionSignal.one, correct: false),
-      );
-      final states = {'a7-lesson': base};
-      final recovery = RecoveryRoomService(_service(states, _FakeT02Client()));
-      var view = await recovery.startRecoveryRoom(
-        _recoveryContext('a7-lesson'),
-      );
-      view = recovery.continueRecovery(view);
-      view = recovery.selectLetter(view, AnswerLetter.B);
-      recovery.answerRecoveryRoom(
-        _recoveryContext('a7-lesson'),
-        view,
-        DecisionSignal.one,
-      );
-      var saved = states['a7-lesson']!;
-      expect(saved.truth.itemConsolidationStatus['M1'], 'mastered');
-      expect(
-        saved.truth.masteryEvidence.last['reason'],
-        contains('recuperado'),
-      );
-      expect(pendingMapOf(ensureAuxRooms(saved)).single['status'], 'cleared');
+    test(
+      'A7.6 recuperacao local registra apoio sem gravar dominio forte',
+      () async {
+        final base = _withPending(
+          _state(),
+          _attempt(sinal: DecisionSignal.one, correct: false),
+        );
+        final states = {'a7-lesson': base};
+        final recovery = RecoveryRoomService(
+          _service(states, _FakeT02Client()),
+        );
+        var view = await recovery.startRecoveryRoom(
+          _recoveryContext('a7-lesson'),
+        );
+        view = recovery.continueRecovery(view);
+        view = recovery.selectLetter(view, AnswerLetter.B);
+        recovery.answerRecoveryRoom(
+          _recoveryContext('a7-lesson'),
+          view,
+          DecisionSignal.one,
+        );
+        var saved = states['a7-lesson']!;
+        expect(saved.truth.itemConsolidationStatus['M1'], isNot('mastered'));
+        expect(pendingMapOf(ensureAuxRooms(saved)).single['status'], 'pending');
+        expect(saved.events.last.payload['authoritative'], isFalse);
+        expect(saved.events.last.payload['writesTruth'], isFalse);
+        expect(saved.events.last.payload['requiresServerDecision'], isTrue);
 
-      final stillFragile = _withPending(
-        saved.copyWith(
-          attempts: [
-            ...saved.attempts,
-            _attempt(
-              marker: 'M2',
-              letra: AnswerLetter.C,
-              sinal: DecisionSignal.one,
-              correct: false,
-              ts: 20,
-            ),
-          ],
-        ),
-        _attempt(
-          marker: 'M2',
-          letra: AnswerLetter.C,
-          sinal: DecisionSignal.one,
-          correct: false,
-          ts: 20,
-        ),
-      );
-      states['a7-lesson'] = stillFragile;
-      view = await recovery.startRecoveryRoom(_recoveryContext('a7-lesson'));
-      view = recovery.continueRecovery(view);
-      view = recovery.selectLetter(view, AnswerLetter.C);
-      recovery.answerRecoveryRoom(
-        _recoveryContext('a7-lesson'),
-        view,
-        DecisionSignal.two,
-      );
-      saved = states['a7-lesson']!;
-      expect(saved.truth.itemConsolidationStatus['M2'], isNot('mastered'));
-      expect(saved.truth.masteryEvidence.last['needs_reinforcement'], isTrue);
-    });
+        final stillFragile = _withPending(
+          saved.copyWith(
+            attempts: [
+              ...saved.attempts,
+              _attempt(
+                marker: 'M2',
+                letra: AnswerLetter.C,
+                sinal: DecisionSignal.one,
+                correct: false,
+                ts: 20,
+              ),
+            ],
+          ),
+          _attempt(
+            marker: 'M2',
+            letra: AnswerLetter.C,
+            sinal: DecisionSignal.one,
+            correct: false,
+            ts: 20,
+          ),
+        );
+        states['a7-lesson'] = stillFragile;
+        view = await recovery.startRecoveryRoom(_recoveryContext('a7-lesson'));
+        view = recovery.continueRecovery(view);
+        view = recovery.selectLetter(view, AnswerLetter.C);
+        recovery.answerRecoveryRoom(
+          _recoveryContext('a7-lesson'),
+          view,
+          DecisionSignal.two,
+        );
+        saved = states['a7-lesson']!;
+        expect(saved.truth.itemConsolidationStatus['M2'], isNot('mastered'));
+        expect(saved.truth.itemConsolidationStatus['M2'], isNot('mastered'));
+      },
+    );
 
     test(
       'A7.7 reparo suficiente libera, insuficiente mantem pendencia',
@@ -507,10 +511,10 @@ void main() {
           DecisionSignal.one,
         );
         expect(view.resultCorrect, isTrue);
-        expect(recovery.shouldStartRecoveryRoom('a7-lesson'), isFalse);
+        expect(recovery.shouldStartRecoveryRoom('a7-lesson'), isTrue);
         expect(
           pendingMapOf(ensureAuxRooms(states['a7-lesson']!)).last['status'],
-          'cleared',
+          'pending',
         );
       },
     );
@@ -635,8 +639,11 @@ void main() {
       final afterRepair = states['a7-lesson']!;
       expect(view.status, RecoveryRoomStatus.result);
       expect(view.resultCorrect, isTrue);
-      expect(afterRepair.truth.itemConsolidationStatus['M1'], 'mastered');
-      expect(recovery.shouldStartRecoveryRoom('a7-lesson'), isFalse);
+      expect(
+        afterRepair.truth.itemConsolidationStatus['M1'],
+        isNot('mastered'),
+      );
+      expect(recovery.shouldStartRecoveryRoom('a7-lesson'), isTrue);
       expect(afterRepair.current?.marker, before.current?.marker);
       expect(afterRepair.progress?.historia, before.progress?.historia);
       expect(afterRepair.readyLessonMaterials, before.readyLessonMaterials);
@@ -652,9 +659,9 @@ void main() {
       final restored = StudentLearningState.fromJson(
         states['a7-lesson']!.toJson(),
       );
-      expect(done.status, RecoveryRoomStatus.done);
-      expect(restored.truth.itemConsolidationStatus['M1'], 'mastered');
-      expect(pendingMapOf(ensureAuxRooms(restored)).last['status'], 'cleared');
+      expect(done.status, RecoveryRoomStatus.ready);
+      expect(restored.truth.itemConsolidationStatus['M1'], isNot('mastered'));
+      expect(pendingMapOf(ensureAuxRooms(restored)).last['status'], 'pending');
     });
   });
 }

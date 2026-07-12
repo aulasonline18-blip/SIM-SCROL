@@ -152,6 +152,9 @@ void main() {
     expect(next.progress!.amparoLvl, 1);
     expect(next.events.single.type, 'AMPARO_TRIGGERED');
     expect(next.events.single.payload['trigger'], 'signal_tracker');
+    expect(next.truth.itemConsolidationStatus['M1'], isNot('mastered'));
+    expect(next.truth.masteryEvidence, isEmpty);
+    expect(next.truth.conquestRecords, isEmpty);
   });
 
   test(
