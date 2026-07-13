@@ -247,6 +247,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     final hasImage = imageData != null && imageData.trim().isNotEmpty;
     return hasImage ||
         widget.session.imageError != null ||
+        widget.session.imageStatus == 'loading' ||
         (widget.session.aulaRuntimeLoading && imageData == null);
   }
 

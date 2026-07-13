@@ -507,7 +507,9 @@ class LessonImagePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageData = session.aulaSnapshot?.imagem;
-    final loading = session.aulaRuntimeLoading && imageData == null;
+    final loading =
+        (session.aulaRuntimeLoading || session.imageStatus == 'loading') &&
+        imageData == null;
     final ready = imageData != null && imageData.trim().isNotEmpty;
     final error = session.imageError;
     if (!loading && !ready && error == null) {

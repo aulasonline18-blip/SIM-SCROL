@@ -1869,7 +1869,32 @@ class LabSession extends ChangeNotifier {
       imageStatus = 'ready';
       imageError = null;
       _syncImageMetadataFromSnapshot();
+      return;
     }
+    final metadata = aulaSnapshot?.imageMetadata;
+    final status = metadata?.status?.trim().toLowerCase();
+    if (status == null || status.isEmpty) return;
+    _syncImageMetadataFromSnapshot();
+    if (_isPendingLessonImageStatus(status)) {
+      imageStatus = 'loading';
+      imageError = null;
+      return;
+    }
+    if (status == 'failed' ||
+        status == 'error' ||
+        status == 'paid_offer' ||
+        status == 'no_image') {
+      imageStatus = 'failed';
+      imageError = metadata?.n3Reason ?? t('aula_image_unavailable');
+    }
+  }
+
+  bool _isPendingLessonImageStatus(String status) {
+    return status == 'idle' ||
+        status == 'queued' ||
+        status == 'pending' ||
+        status == 'processing' ||
+        status == 'running';
   }
 
   void _syncImageMetadataFromSnapshot() {

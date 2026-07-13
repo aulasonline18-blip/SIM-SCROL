@@ -83,6 +83,34 @@ class FakeT02Client implements T02LessonClient {
       completeLesson(request);
 }
 
+class SequenceT02Client implements T02LessonClient {
+  SequenceT02Client(this.materials);
+
+  final List<T02LessonMaterial> materials;
+  int calls = 0;
+  final requests = <T02LessonRequest>[];
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) async {
+    requests.add(request);
+    final index = calls.clamp(0, materials.length - 1);
+    calls += 1;
+    return materials[index];
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
+}
+
 class AuditT00Client implements T00BootstrapClient {
   AuditT00Client({required this.releaseFinal});
 
@@ -622,36 +650,33 @@ void main() {
     },
   );
 
-  test(
-    'LessonOrchestrator does not render math template locally',
-    () async {
-      final cache = LessonMaterialCache();
-      final bus = LessonEventBus();
-      final orchestrator = LessonOrchestrator(
-        t02Client: FakeT02Client(),
-        cache: cache,
-        bus: bus,
-      );
-      const params = CompleteLessonParams(
-        lessonLocalId: 'cyber-math-template',
-        item: 'Função linear',
-        lang: 'pt-BR',
-        academic: 'fundamental',
-        layer: LessonLayer.l1,
-        mode: LessonMode.session,
-        marker: 'M1',
-      );
-      final key = lessonKeyFor(params);
-      final updates = <CompleteLesson>[];
-      final unsubscribe = bus.subscribe(key, updates.add);
-      addTearDown(unsubscribe);
+  test('LessonOrchestrator does not render math template locally', () async {
+    final cache = LessonMaterialCache();
+    final bus = LessonEventBus();
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: cache,
+      bus: bus,
+    );
+    const params = CompleteLessonParams(
+      lessonLocalId: 'cyber-math-template',
+      item: 'Função linear',
+      lang: 'pt-BR',
+      academic: 'fundamental',
+      layer: LessonLayer.l1,
+      mode: LessonMode.session,
+      marker: 'M1',
+    );
+    final key = lessonKeyFor(params);
+    final updates = <CompleteLesson>[];
+    final unsubscribe = bus.subscribe(key, updates.add);
+    addTearDown(unsubscribe);
 
-      await orchestrator.prefetchCompleteLesson(params, priority: 'active');
-      await Future<void>.delayed(Duration.zero);
+    await orchestrator.prefetchCompleteLesson(params, priority: 'active');
+    await Future<void>.delayed(Duration.zero);
 
-      expect(updates.single.imagem, isNull);
-    },
-  );
+    expect(updates.single.imagem, isNull);
+  });
 
   test(
     'LessonEventBus delivers live image and replays image to late subscriber',
@@ -686,47 +711,50 @@ void main() {
     },
   );
 
-  test('review and recovery requests do not depend on visual trigger', () async {
-    final t02 = FakeT02Client();
-    final orchestrator = LessonOrchestrator(
-      t02Client: t02,
-      cache: LessonMaterialCache(),
-      bus: LessonEventBus(),
-    );
+  test(
+    'review and recovery requests do not depend on visual trigger',
+    () async {
+      final t02 = FakeT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      );
 
-    final review = await orchestrator.prefetchCompleteLesson(
-      const CompleteLessonParams(
-        lessonLocalId: 'cyber-review',
-        item: 'Revisão de função',
-        lang: 'pt-BR',
-        academic: 'fundamental',
-        layer: LessonLayer.l2,
-        mode: LessonMode.reforco,
-        marker: 'M1',
-      ),
-      priority: 'active',
-    );
-    final recovery = await orchestrator.prefetchCompleteLesson(
-      const CompleteLessonParams(
-        lessonLocalId: 'cyber-recovery',
-        item: 'Recuperação de função',
-        lang: 'pt-BR',
-        academic: 'fundamental',
-        layer: LessonLayer.l1,
-        mode: LessonMode.amparo,
-        amparoLvl: 1,
-        marker: 'M1',
-      ),
-      priority: 'active',
-    );
+      final review = await orchestrator.prefetchCompleteLesson(
+        const CompleteLessonParams(
+          lessonLocalId: 'cyber-review',
+          item: 'Revisão de função',
+          lang: 'pt-BR',
+          academic: 'fundamental',
+          layer: LessonLayer.l2,
+          mode: LessonMode.reforco,
+          marker: 'M1',
+        ),
+        priority: 'active',
+      );
+      final recovery = await orchestrator.prefetchCompleteLesson(
+        const CompleteLessonParams(
+          lessonLocalId: 'cyber-recovery',
+          item: 'Recuperação de função',
+          lang: 'pt-BR',
+          academic: 'fundamental',
+          layer: LessonLayer.l1,
+          mode: LessonMode.amparo,
+          amparoLvl: 1,
+          marker: 'M1',
+        ),
+        priority: 'active',
+      );
 
-    expect(t02.requests.map((request) => request.mode), [
-      LessonMode.reforco.name,
-      LessonMode.amparo.name,
-    ]);
-    expect(review.conteudo.explanation, isNotEmpty);
-    expect(recovery.conteudo.explanation, isNotEmpty);
-  });
+      expect(t02.requests.map((request) => request.mode), [
+        LessonMode.reforco.name,
+        LessonMode.amparo.name,
+      ]);
+      expect(review.conteudo.explanation, isNotEmpty);
+      expect(recovery.conteudo.explanation, isNotEmpty);
+    },
+  );
 
   test(
     'background prefetch does not invent local image when server has none',
@@ -1228,66 +1256,132 @@ void main() {
     );
   });
 
+  test('server-classroom pending image stays text-only in the app', () async {
+    const params = CompleteLessonParams(
+      lessonLocalId: 'cyber-server-visual',
+      item: 'Imagem governada pelo servidor',
+      lang: 'pt-BR',
+      academic: 'fundamental',
+      layer: LessonLayer.l1,
+      mode: LessonMode.session,
+      marker: 'M1',
+    );
+    final service = StudentLearningStateService(
+      seed: {'cyber-server-visual': _stateWithCurriculum()},
+    );
+    final cache = LessonMaterialCache();
+    final bus = LessonEventBus();
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(
+        source: 'server-classroom',
+        imageStatus: 'processing',
+        explanation: 'Texto da aula chega antes da imagem.',
+        question: 'O que o App deve fazer?',
+        options: const {
+          AnswerLetter.A: 'Exibir texto',
+          AnswerLetter.B: 'Criar imagem local',
+          AnswerLetter.C: 'Mudar progresso',
+        },
+      ),
+      cache: cache,
+      bus: bus,
+      imageRefreshDelays: const [Duration(milliseconds: 1)],
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      ),
+    );
+
+    final result = await materialService.resolveLessonMaterialFromStateOrEngine(
+      ResolveLessonMaterialInput(
+        lessonLocalId: 'cyber-server-visual',
+        topic: 'Objetivo',
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l1,
+        params: params,
+      ),
+    );
+
+    expect(
+      result?.conteudo.explanation,
+      'Texto da aula chega antes da imagem.',
+    );
+    expect(result?.imagem, isNull);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(cache.peek(lessonKeyFor(params))?.imagem, isNull);
+  });
+
   test(
-    'server-classroom pending image stays text-only in the app',
+    'server-classroom pending image is refreshed into the live lesson cache',
     () async {
       const params = CompleteLessonParams(
-        lessonLocalId: 'cyber-server-visual',
-        item: 'Imagem governada pelo servidor',
+        lessonLocalId: 'cyber-server-visual-refresh',
+        item: 'Imagem chega depois do texto',
         lang: 'pt-BR',
         academic: 'fundamental',
         layer: LessonLayer.l1,
         mode: LessonMode.session,
         marker: 'M1',
       );
-      final service = StudentLearningStateService(
-        seed: {'cyber-server-visual': _stateWithCurriculum()},
-      );
-      final cache = LessonMaterialCache();
-      final bus = LessonEventBus();
-      final orchestrator = LessonOrchestrator(
-        t02Client: FakeT02Client(
+      final t02 = SequenceT02Client([
+        T02LessonMaterial(
+          explanation: 'Texto pronto antes da imagem.',
+          question: 'O que deve acontecer?',
+          options: const {
+            AnswerLetter.A: 'A imagem entra depois',
+            AnswerLetter.B: 'A aula trava',
+            AnswerLetter.C: 'O aluno perde progresso',
+          },
+          correctAnswer: AnswerLetter.A,
+          whyCorrect: 'A midia completa a aula em segundo plano.',
+          whyWrong: null,
+          generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
           source: 'server-classroom',
           imageStatus: 'processing',
-          explanation: 'Texto da aula chega antes da imagem.',
-          question: 'O que o App deve fazer?',
-          options: const {
-            AnswerLetter.A: 'Exibir texto',
-            AnswerLetter.B: 'Criar imagem local',
-            AnswerLetter.C: 'Mudar progresso',
-          },
         ),
+        T02LessonMaterial(
+          explanation: 'Texto pronto antes da imagem.',
+          question: 'O que deve acontecer?',
+          options: const {
+            AnswerLetter.A: 'A imagem entra depois',
+            AnswerLetter.B: 'A aula trava',
+            AnswerLetter.C: 'O aluno perde progresso',
+          },
+          correctAnswer: AnswerLetter.A,
+          whyCorrect: 'A midia completa a aula em segundo plano.',
+          whyWrong: null,
+          generatedAt: DateTime.fromMillisecondsSinceEpoch(2),
+          source: 'server-classroom',
+          imageDataUrl: _serverRasterDataUrl,
+          imageStatus: 'ready',
+        ),
+      ]);
+      final cache = LessonMaterialCache();
+      final bus = LessonEventBus();
+      final updates = <CompleteLesson>[];
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
         cache: cache,
         bus: bus,
-      );
-      final materialService = StudentLessonMaterialService(
-        stateService: service,
-        orchestrator: orchestrator,
-        readyWindowEngine: DopamineReadyWindowEngine(
-          service: service,
-          orchestrator: orchestrator,
-        ),
+        imageRefreshDelays: const [Duration(milliseconds: 1)],
+        onImageReady: (_, lesson) => updates.add(lesson),
       );
 
-      final result = await materialService
-          .resolveLessonMaterialFromStateOrEngine(
-            ResolveLessonMaterialInput(
-              lessonLocalId: 'cyber-server-visual',
-              topic: 'Objetivo',
-              itemIdx: 0,
-              marker: 'M1',
-              layer: LessonLayer.l1,
-              params: params,
-            ),
-          );
-
-      expect(
-        result?.conteudo.explanation,
-        'Texto da aula chega antes da imagem.',
+      final first = await orchestrator.prefetchCompleteLesson(
+        params,
+        priority: 'active',
       );
-      expect(result?.imagem, isNull);
+
+      expect(first.imagem, isNull);
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(cache.peek(lessonKeyFor(params))?.imagem, isNull);
+      expect(t02.calls, 2);
+      expect(cache.peek(lessonKeyFor(params))?.imagem, _serverRasterDataUrl);
+      expect(updates.single.imagem, _serverRasterDataUrl);
     },
   );
 

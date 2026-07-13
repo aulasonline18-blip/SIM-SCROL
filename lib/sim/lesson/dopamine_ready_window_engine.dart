@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../experience/curriculum_utils.dart';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';
@@ -133,6 +135,13 @@ class DopamineReadyWindowEngine {
         slot.layer,
       );
       if (existing != null) {
+        _refreshTextOnlySlotInBackground(
+          lessonLocalId: lessonLocalId,
+          source: source,
+          slot: slot,
+          material: existing,
+          model: 'DopamineReadyWindowEngine-state-refresh',
+        );
         _markFirstLessonIfNeeded(lessonLocalId, slot);
         _event(lessonLocalId, 'DOPAMINE_SLOT_ALREADY_READY', {
           'source': source,
@@ -150,6 +159,13 @@ class DopamineReadyWindowEngine {
           slot: slot,
           lesson: cached,
           model: 'DopamineReadyWindowEngine-cache',
+        );
+        _refreshCachedTextOnlySlotInBackground(
+          lessonLocalId: lessonLocalId,
+          source: source,
+          slot: slot,
+          lesson: cached,
+          model: 'DopamineReadyWindowEngine-cache-refresh',
         );
         _markFirstLessonIfNeeded(lessonLocalId, slot);
         _event(lessonLocalId, 'DOPAMINE_SLOT_ALREADY_READY', {
@@ -406,6 +422,100 @@ class DopamineReadyWindowEngine {
         },
       );
     });
+  }
+
+  void _refreshTextOnlySlotInBackground({
+    required String lessonLocalId,
+    required String source,
+    required DopamineReadySlot slot,
+    required JsonMap material,
+    required String model,
+  }) {
+    if ((material['imagem'] as String?)?.trim().isNotEmpty == true) return;
+    _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_REQUESTED', {
+      'source': source,
+      'slot': slot.slot,
+      'storage': 'student_state',
+    });
+    unawaited(
+      orchestrator
+          .prefetchCompleteLesson(
+            slot.params,
+            priority: 'background',
+            forceRefresh: true,
+          )
+          .then((lesson) {
+            if (lesson.imagem == null || lesson.imagem!.trim().isEmpty) {
+              return;
+            }
+            _mirrorPreparedLesson(
+              lessonLocalId: lessonLocalId,
+              slot: slot,
+              lesson: lesson,
+              model: model,
+            );
+            _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_READY', {
+              'source': source,
+              'slot': slot.slot,
+              'storage': 'student_state',
+            });
+          })
+          .catchError((Object error) {
+            _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_FAILED', {
+              'source': source,
+              'slot': slot.slot,
+              'storage': 'student_state',
+              'error': error.toString(),
+            });
+          }),
+    );
+  }
+
+  void _refreshCachedTextOnlySlotInBackground({
+    required String lessonLocalId,
+    required String source,
+    required DopamineReadySlot slot,
+    required CompleteLesson lesson,
+    required String model,
+  }) {
+    if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty) return;
+    _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_REQUESTED', {
+      'source': source,
+      'slot': slot.slot,
+      'storage': 'cache',
+    });
+    unawaited(
+      orchestrator
+          .prefetchCompleteLesson(
+            slot.params,
+            priority: 'background',
+            forceRefresh: true,
+          )
+          .then((refreshed) {
+            if (refreshed.imagem == null || refreshed.imagem!.trim().isEmpty) {
+              return;
+            }
+            _mirrorPreparedLesson(
+              lessonLocalId: lessonLocalId,
+              slot: slot,
+              lesson: refreshed,
+              model: model,
+            );
+            _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_READY', {
+              'source': source,
+              'slot': slot.slot,
+              'storage': 'cache',
+            });
+          })
+          .catchError((Object error) {
+            _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_FAILED', {
+              'source': source,
+              'slot': slot.slot,
+              'storage': 'cache',
+              'error': error.toString(),
+            });
+          }),
+    );
   }
 
   void _markFirstLessonIfNeeded(String lessonLocalId, DopamineReadySlot slot) {

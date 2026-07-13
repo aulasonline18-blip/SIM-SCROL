@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../media/lesson_image_api_contract.dart';
 import '../modules/pedagogical_module_contracts.dart';
 import '../state/student_learning_state.dart';
@@ -13,16 +15,28 @@ class LessonOrchestrator {
     required this.bus,
     this.onAudioTextReady,
     this.onImageReady,
-  });
+    List<Duration>? imageRefreshDelays,
+  }) : imageRefreshDelays =
+           imageRefreshDelays ??
+           const [
+             Duration(seconds: 1),
+             Duration(seconds: 2),
+             Duration(seconds: 3),
+             Duration(seconds: 5),
+             Duration(seconds: 8),
+             Duration(seconds: 13),
+           ];
 
   final T02LessonClient t02Client;
   final LessonMaterialCache cache;
   final LessonEventBus bus;
+  final List<Duration> imageRefreshDelays;
   void Function(CompleteLessonParams params, CompleteLesson lesson)?
   onAudioTextReady;
   void Function(CompleteLessonParams params, CompleteLesson lesson)?
   onImageReady;
   final Map<String, Future<CompleteLesson>> _textInflight = {};
+  final Map<String, Future<void>> _imageRefreshInflight = {};
   final BackgroundTextSemaphore _bgText = BackgroundTextSemaphore();
   Future<void> _lastLessonFullyComplete = Future.value();
 
@@ -41,6 +55,7 @@ class LessonOrchestrator {
     if (cached != null) {
       onAudioTextReady?.call(params, cached);
       _notifyReadyImage(params, cached);
+      _scheduleImageRefreshIfNeeded(params, cached);
       return cached;
     }
 
@@ -53,6 +68,7 @@ class LessonOrchestrator {
     bus.notify(key, base);
     onAudioTextReady?.call(params, base);
     _notifyReadyImage(params, base);
+    _scheduleImageRefreshIfNeeded(params, base);
     return base;
   }
 
@@ -72,6 +88,7 @@ class LessonOrchestrator {
     if (ready != null && !forceRefresh) {
       onAudioTextReady?.call(params, ready);
       _notifyReadyImage(params, ready);
+      _scheduleImageRefreshIfNeeded(params, ready);
       return Future.value(ready);
     }
     final existing = _textInflight[key];
@@ -92,6 +109,7 @@ class LessonOrchestrator {
           bus.notify(key, lesson);
           onAudioTextReady?.call(params, lesson);
           _notifyReadyImage(params, lesson);
+          _scheduleImageRefreshIfNeeded(params, lesson);
           if (_textInflight[key] != null) _textInflight.remove(key);
           return lesson;
         })
@@ -114,28 +132,43 @@ class LessonOrchestrator {
   }
 
   Future<CompleteLesson> _fetchText(CompleteLessonParams params) async {
-    final material = await t02Client.completeLesson(
-      T02LessonRequest(
-        lessonLocalId: params.lessonLocalId,
-        item: params.item,
-        lang: params.lang,
-        academic: params.academic,
-        layer: params.layer,
-        mode: params.mode.name,
-        errCount: params.errCount,
-        history: params.history,
-        marker: params.marker,
-        profile: params.pedagogicalEnvelope,
-        amparoLvl: params.amparoLvl,
-        curriculumItems: params.curriculumItems,
-        topic: params.topic,
-        itemIdx: params.itemIdx,
-        interfaceLocale: params.interfaceLocale,
-        learningLocale: params.learningLocale,
-        explanationLanguage: params.explanationLanguage,
-        targetLanguage: params.targetLanguage,
-      ),
+    final material = await _fetchMaterial(params);
+    return _lessonFromMaterial(material);
+  }
+
+  Future<T02LessonMaterial> _fetchMaterial(CompleteLessonParams params) {
+    return t02Client.completeLesson(_requestFor(params));
+  }
+
+  T02LessonRequest _requestFor(CompleteLessonParams params) {
+    return T02LessonRequest(
+      lessonLocalId: params.lessonLocalId,
+      item: params.item,
+      lang: params.lang,
+      academic: params.academic,
+      layer: params.layer,
+      mode: params.mode.name,
+      errCount: params.errCount,
+      history: params.history,
+      marker: params.marker,
+      profile: params.pedagogicalEnvelope,
+      amparoLvl: params.amparoLvl,
+      curriculumItems: params.curriculumItems,
+      topic: params.topic,
+      itemIdx: params.itemIdx,
+      interfaceLocale: params.interfaceLocale,
+      learningLocale: params.learningLocale,
+      explanationLanguage: params.explanationLanguage,
+      targetLanguage: params.targetLanguage,
     );
+  }
+
+  CompleteLesson _lessonFromMaterial(T02LessonMaterial material) {
+    final imageDataUrl = material.imageDataUrl?.trim().isEmpty == true
+        ? null
+        : material.imageDataUrl;
+    final status = _cleanText(material.imageStatus);
+    final error = _cleanText(material.imageError);
     final conteudo = LessonContent(
       explanation: material.explanation,
       question: material.question,
@@ -146,11 +179,9 @@ class LessonOrchestrator {
     );
     return CompleteLesson(
       conteudo: conteudo,
-      imagem: material.imageDataUrl?.trim().isEmpty == true
-          ? null
-          : material.imageDataUrl,
+      imagem: imageDataUrl,
       audioText: conteudo.audioText,
-      imageMetadata: material.imageDataUrl == null
+      imageMetadata: imageDataUrl == null && status == null && error == null
           ? null
           : LessonImageGenerationMetadata(
               requestId: material.imageId,
@@ -158,9 +189,87 @@ class LessonOrchestrator {
               model: material.source,
               mimeType: null,
               charged: false,
-              cacheHit: true,
+              cacheHit: imageDataUrl != null,
+              retryable: status == null ? null : _isPendingImageStatus(status),
+              mediaType: 'image',
+              status: imageDataUrl != null ? 'ready' : status,
+              source: material.source,
+              n3Reason: error,
             ),
     );
+  }
+
+  void _scheduleImageRefreshIfNeeded(
+    CompleteLessonParams params,
+    CompleteLesson lesson,
+  ) {
+    if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty) return;
+    if (imageRefreshDelays.isEmpty) return;
+    final status = lesson.imageMetadata?.status;
+    if (status != null && !_isPendingImageStatus(status)) return;
+    final key = lessonKeyFor(params);
+    if (_imageRefreshInflight.containsKey(key)) return;
+
+    final future = _refreshImageUntilReady(params, key);
+    _imageRefreshInflight[key] = future;
+    unawaited(
+      future.whenComplete(() {
+        _imageRefreshInflight.remove(key);
+      }),
+    );
+  }
+
+  Future<void> _refreshImageUntilReady(
+    CompleteLessonParams params,
+    String key,
+  ) async {
+    for (final delay in imageRefreshDelays) {
+      await Future<void>.delayed(delay);
+      final current = cache.peek(key);
+      if (current?.imagem != null && current!.imagem!.trim().isNotEmpty) {
+        return;
+      }
+
+      final material = await _fetchMaterial(params);
+      final refreshed = _lessonFromMaterial(material);
+      final currentAfterFetch = cache.peek(key);
+      final base = currentAfterFetch ?? refreshed;
+
+      if (refreshed.imagem != null && refreshed.imagem!.trim().isNotEmpty) {
+        final completed = base.copyWith(
+          conteudo: base.conteudo,
+          imagem: refreshed.imagem,
+          imageMetadata: refreshed.imageMetadata,
+        );
+        cache.put(key, completed);
+        bus.notify(key, completed);
+        onAudioTextReady?.call(params, completed);
+        _notifyReadyImage(params, completed);
+        return;
+      }
+
+      final status = refreshed.imageMetadata?.status;
+      if (status != null && !_isPendingImageStatus(status)) {
+        final updated = base.copyWith(imageMetadata: refreshed.imageMetadata);
+        cache.put(key, updated);
+        bus.notify(key, updated);
+        return;
+      }
+    }
+  }
+
+  static String? _cleanText(String? value) {
+    final text = value?.trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  static bool _isPendingImageStatus(String status) {
+    final normalized = status.trim().toLowerCase();
+    return normalized == 'idle' ||
+        normalized == 'queued' ||
+        normalized == 'pending' ||
+        normalized == 'processing' ||
+        normalized == 'running';
   }
 
   CompleteLesson seedCompleteLesson(
