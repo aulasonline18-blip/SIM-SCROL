@@ -1,4 +1,3 @@
-// MIRROR OF: src/sim/state/dopamineReadyWindowEngine.ts (Web, source of truth)
 import '../experience/curriculum_utils.dart';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';

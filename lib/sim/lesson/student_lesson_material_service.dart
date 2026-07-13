@@ -1,4 +1,3 @@
-// MIRROR OF: src/sim/lesson/studentLessonMaterialService.ts (Web, source of truth)
 import 'dart:async';
 
 import '../state/live_entry_state.dart';

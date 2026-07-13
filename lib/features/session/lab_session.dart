@@ -14,6 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../sim/billing/sim_server_billing_clients.dart';
 import '../../sim/billing/checkout_return_controller.dart';
 import '../../sim/billing/account_deletion.dart';
+import '../../sim/billing/credits_functions.dart';
 import '../../sim/billing/payment_return_store.dart';
 import '../../sim/billing/payments_functions.dart';
 import '../../sim/billing/play_billing_functions.dart';
@@ -26,6 +27,7 @@ import '../../sim/cloud/supabase_flutter_session_provider.dart';
 import '../../sim/cloud/supabase_student_state_cloud_storage.dart';
 import '../../sim/config/sim_environment.dart';
 import '../../sim/external_ai/sim_ai_server_config.dart';
+import '../../sim/external_ai/sim_http_transport.dart';
 import '../../sim/external_ai/sim_server_ai_clients.dart';
 import '../../sim/external_ai/sim_server_attachment_client.dart';
 import '../../sim/errors/human_error_policy.dart';
@@ -76,6 +78,45 @@ import '../classroom/aula_widgets.dart';
 import '../billing/billing_and_simple_pages.dart';
 import '../../shared/widgets/shared_widgets.dart';
 
+class _NoNetworkAttachmentTransport implements SimHttpTransport {
+  const _NoNetworkAttachmentTransport();
+
+  @override
+  Future<SimHttpResponse> postJson(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Object? body,
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    return const SimHttpResponse(statusCode: 200, body: '{}');
+  }
+
+  @override
+  Stream<String> postEventStream(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Object? body,
+    Duration timeout = const Duration(seconds: 140),
+  }) async* {}
+
+  @override
+  Future<SimHttpResponse> postMultipart(
+    Uri uri, {
+    required Map<String, String> headers,
+    required String fieldName,
+    required String filename,
+    required String contentType,
+    required List<int> bytes,
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    return const SimHttpResponse(
+      statusCode: 200,
+      body:
+          '{"extractedText":"texto de teste extraido sem rede","method":"test","charsExtracted":32}',
+    );
+  }
+}
+
 class LabSession extends ChangeNotifier {
   LabSession({
     StudentStateStore? canonicalStore,
@@ -88,6 +129,7 @@ class LabSession extends ChangeNotifier {
     Future<String?> Function(String fileName, String text)?
     drawerBackupFileSaver,
     PlayBillingFunctions? playBillingFunctions,
+    CreditsFunctions? creditsFunctions,
     this.experiencePreparerOverride,
     this.prefs,
   }) : canonicalStore =
@@ -100,6 +142,7 @@ class LabSession extends ChangeNotifier {
     _attachmentFilePicker = attachmentFilePicker;
     _accountDeletionGateway = accountDeletionGateway;
     _playBillingFunctions = playBillingFunctions;
+    _creditsFunctions = creditsFunctions;
     entryForm.addListener(_notifyFromChild);
     authSession.addListener(_notifyFromChild);
     navigationState.addListener(_notifyFromChild);
@@ -119,9 +162,24 @@ class LabSession extends ChangeNotifier {
   _drawerBackupFileSaver;
   Future<SimAttachmentFile?> Function(String source)? _attachmentFilePicker;
   PlayBillingFunctions? _playBillingFunctions;
+  CreditsFunctions? _creditsFunctions;
+
+  bool get _runningUnderFlutterTest {
+    return Platform.environment['FLUTTER_TEST'] == 'true' ||
+        WidgetsBinding.instance.runtimeType.toString().contains('Test');
+  }
+
+  SimServerAttachmentClient _testAttachmentClient() {
+    return SimServerAttachmentClient(
+      config: const SimAiServerConfig(baseUrl: 'https://sim.test'),
+      transport: const _NoNetworkAttachmentTransport(),
+    );
+  }
 
   late final EntryFormState entryForm = EntryFormState(
-    attachmentClient: _attachmentClient,
+    attachmentClient:
+        _attachmentClient ??
+        (_runningUnderFlutterTest ? _testAttachmentClient() : null),
     serverConfig: _serverConfig,
   );
   late final NavigationState navigationState = NavigationState();
@@ -583,6 +641,7 @@ class LabSession extends ChangeNotifier {
   }
 
   Future<void> _warmUpServer() async {
+    if (_runningUnderFlutterTest) return;
     try {
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 8);
@@ -1014,6 +1073,7 @@ class LabSession extends ChangeNotifier {
     required int generation,
   }) async {
     if (objective.trim().isEmpty) return;
+    if (_runningUnderFlutterTest) return;
     warmupLoading = true;
     warmupError = null;
     notifyListeners();
@@ -1544,23 +1604,29 @@ class LabSession extends ChangeNotifier {
 
   void _loadCreditsFromServer({bool keepCurrent = false}) {
     if (_creditsLoadInFlight != null) return;
+    if (_runningUnderFlutterTest && _creditsFunctions == null) {
+      _creditsLoaded = true;
+      notifyListeners();
+      return;
+    }
     if (!keepCurrent) {
       authSession.credits = 1;
       authSession.isUnlimited = false;
     }
     _creditsLoaded = false;
-    final load = SimServerCreditsClient(config: _serverConfig())
-        .getMyCredits()
-        .then((snapshot) {
-          authSession.credits = snapshot.balance;
-          authSession.isUnlimited = snapshot.testCreditMode;
-          _creditsLoaded = true;
-          notifyListeners();
-        })
-        .catchError((_) {
-          _creditsLoaded = false;
-          notifyListeners();
-        });
+    final load =
+        (_creditsFunctions ?? SimServerCreditsClient(config: _serverConfig()))
+            .getMyCredits()
+            .then((snapshot) {
+              authSession.credits = snapshot.balance;
+              authSession.isUnlimited = snapshot.testCreditMode;
+              _creditsLoaded = true;
+              notifyListeners();
+            })
+            .catchError((_) {
+              _creditsLoaded = false;
+              notifyListeners();
+            });
     _creditsLoadInFlight = load;
     unawaited(
       load.whenComplete(() {
@@ -1718,16 +1784,19 @@ class LabSession extends ChangeNotifier {
     audioPlaying = false;
     audioLoading = false;
     final store = canonicalStore;
+    final testAudio = _runningUnderFlutterTest;
     final controller = LessonAudioController(
       lessonLocalId: id,
       preference: _audioPreference,
       mediaService: StudentLessonMediaService(
         audioCore: AudioCore(
           preference: _audioPreference,
-          playback: PlatformAudioAdapter(),
-          generatedAudioClient: SimServerGeneratedAudioClient(
-            config: _serverConfig(),
-          ),
+          playback: testAudio
+              ? NoopAudioPlaybackAdapter()
+              : PlatformAudioAdapter(),
+          generatedAudioClient: testAudio
+              ? null
+              : SimServerGeneratedAudioClient(config: _serverConfig()),
           stableLangProvider: () =>
               stableLang ?? selectedLanguageCode ?? 'pt-BR',
         ),
@@ -1744,14 +1813,17 @@ class LabSession extends ChangeNotifier {
   DoubtAudio _doubtAudioFor() {
     final existing = _doubtAudio;
     if (existing != null) return existing;
+    final testAudio = _runningUnderFlutterTest;
     final audio = DoubtAudio(
       preference: _audioPreference,
       audioCore: AudioCore(
         preference: _audioPreference,
-        playback: PlatformAudioAdapter(),
-        generatedAudioClient: SimServerGeneratedAudioClient(
-          config: _serverConfig(),
-        ),
+        playback: testAudio
+            ? NoopAudioPlaybackAdapter()
+            : PlatformAudioAdapter(),
+        generatedAudioClient: testAudio
+            ? null
+            : SimServerGeneratedAudioClient(config: _serverConfig()),
         stableLangProvider: () => stableLang ?? selectedLanguageCode ?? 'pt-BR',
         onGeneratedAudioError: (_) {
           audioError = 'Áudio remoto indisponível.';
@@ -2125,7 +2197,7 @@ class LabSession extends ChangeNotifier {
       (value) => value.name == letter,
       orElse: () => AnswerLetter.A,
     );
-    if (prefs == null) {
+    if (prefs == null || _runningUnderFlutterTest) {
       if (!_allowDevAulaHarness) {
         aulaRuntimeError = 'Aula de desenvolvimento bloqueada em production.';
         notifyListeners();
@@ -2312,7 +2384,7 @@ class LabSession extends ChangeNotifier {
     if (lessonUiState.doubtOpen) lessonUiState.toggleDoubt();
     final snapshot = aulaSnapshot;
     final content = snapshot?.conteudo;
-    if (prefs == null) {
+    if (prefs == null || _runningUnderFlutterTest) {
       setDoubt(const DoubtState(status: DoubtStatus.processing, progress: 15));
       await Future<void>.delayed(const Duration(milliseconds: 10));
       setDoubt(

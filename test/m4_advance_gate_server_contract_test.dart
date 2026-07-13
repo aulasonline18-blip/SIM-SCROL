@@ -233,6 +233,102 @@ void main() {
     expect(next.events.last.type, 'ADVANCE_GATE_DECIDED');
   });
 
+  test('App nao conclui curriculo global ao atravessar borda de parte', () {
+    final items = List<CurriculumItem>.generate(
+      80,
+      (index) =>
+          CurriculumItem(marker: 'M${index + 1}', text: 'Item ${index + 1}'),
+    );
+    final state =
+        StudentLearningState.empty(
+          lessonLocalId: 'lesson-cg',
+          userId: 'user-m4',
+          now: 1,
+        ).copyWith(
+          curriculum: StudentCurriculum(
+            topic: 'Curriculo grande',
+            totalItems: 80,
+            generatedAt: null,
+            provisional: false,
+            items: items,
+            globalPlan: const CurriculumGlobalPlan(
+              globalTotalItems: 180,
+              batchStartItem: 1,
+              batchEndItem: 80,
+              operationalBatchLimit: 80,
+              partNumber: 1,
+              nextGlobalItemToRequest: 81,
+              continuationNeeded: true,
+            ),
+          ),
+          current: const LessonCurrent(
+            itemIdx: 79,
+            marker: 'M80',
+            layer: LessonLayer.l3,
+            amparoLvl: 0,
+          ),
+          progress: const LessonProgress(
+            itemIdx: 79,
+            layer: LessonLayer.l3,
+            erros: 0,
+            amparoLvl: 0,
+            historia: [],
+            mainAdvances: 79,
+            concluidos: [],
+            pendentesMarkers: [],
+            totalItems: 180,
+            pctAvanco: 43,
+          ),
+        );
+    final request = ServerAdvanceGateRequest(
+      lessonLocalId: state.lessonLocalId,
+      userId: state.userId,
+      marker: 'M80',
+      itemIdx: 79,
+      layer: LessonLayer.l3,
+      selectedOption: AnswerLetter.A,
+      signal: DecisionSignal.two,
+      correct: true,
+      questionText: 'Pergunta 80?',
+      correctOption: AnswerLetter.A,
+      currentState: state,
+      idempotencyKey: 'cg-boundary-80-81',
+    );
+    const decision = ServerAdvanceGateDecision(
+      accepted: true,
+      decision: 'next_item',
+      reason: 'l3_to_next_item',
+      nextItemIdx: 80,
+      nextLayer: LessonLayer.l1,
+      nextGlobalItemNumber: 81,
+      nextLocalItemIdx: 0,
+      nextPartNumber: 2,
+      authoritativeRootLessonLocalId: 'lesson-cg',
+      authoritativePartLessonLocalId: 'lesson-cg::part-2',
+      highWaterMark: 80,
+      events: [
+        {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_item'},
+      ],
+    );
+
+    final next = applyServerAdvanceGateDecision(
+      state: state,
+      request: request,
+      decision: decision,
+      now: 2,
+    );
+
+    expect(next.progress?.mainAdvances, 80);
+    expect(next.progress?.totalItems, 180);
+    expect(next.progress?.pctAvanco, lessThan(100));
+    expect(next.progress?.pctAvanco, 44);
+    expect(next.extra['serverAdvanceGate']?['lastDecision']?['partNumber'], 2);
+    expect(
+      next.extra['serverAdvanceGate']?['lastDecision']?['partLessonLocalId'],
+      'lesson-cg::part-2',
+    );
+  });
+
   test('App nao duplica avanco quando retry usa mesma idempotencyKey', () {
     final state = _state();
     final request = _request(state);
@@ -267,25 +363,30 @@ void main() {
     expect(second.progress?.layer, LessonLayer.l2);
   });
 
-  test('Falha remota vira pendencia e preserva evidencia sem dominio local', () {
-    final state = _state();
-    final pending = recordPendingServerAdvanceGate(
-      state: state,
-      request: _request(state),
-      error: const SimExternalAiException(
-        'Servidor indisponivel',
-        code: 'ADVANCE_GATE_TIMEOUT',
-      ),
-      now: 2,
-    );
+  test(
+    'Falha remota vira pendencia e preserva evidencia sem dominio local',
+    () {
+      final state = _state();
+      final pending = recordPendingServerAdvanceGate(
+        state: state,
+        request: _request(state),
+        error: const SimExternalAiException(
+          'Servidor indisponivel',
+          code: 'ADVANCE_GATE_TIMEOUT',
+        ),
+        now: 2,
+      );
 
-    expect(pending.queuedActions.single['type'], 'ADVANCE_GATE_PENDING');
-    expect(pending.attempts.single.marker, 'M1');
-    expect(pending.attempts.single.layer, LessonLayer.l1);
-    expect(pending.attempts.single.letra, AnswerLetter.A);
-    expect(pending.progress?.itemIdx, 0);
-    expect(pending.progress?.layer, LessonLayer.l1);
-    expect(pending.progress?.concluidos, isEmpty);
-    expect(pending.events.last.payload['humanError'], contains('guardada'));
-  });
+      expect(pending.queuedActions.single['type'], 'ADVANCE_GATE_PENDING');
+      expect(pending.attempts, isEmpty);
+      final payload = pending.queuedActions.single['payload'] as Map;
+      expect(payload['marker'], 'M1');
+      expect(payload['layer'], 1);
+      expect(payload['selectedOption'], 'A');
+      expect(pending.progress?.itemIdx, 0);
+      expect(pending.progress?.layer, LessonLayer.l1);
+      expect(pending.progress?.concluidos, isEmpty);
+      expect(pending.events.last.payload['humanError'], contains('guardada'));
+    },
+  );
 }

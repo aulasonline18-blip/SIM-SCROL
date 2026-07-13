@@ -1,4 +1,3 @@
-// MIRROR OF: src/core/S04_SignalTracker.ts (Web, source of truth)
 // Fachada read-only — deriva sinais de StudentLearningStateService.
 // Quem escreve é o executor via appendAttempt. Não há recordSignal aqui.
 import '../state/student_learning_state.dart';

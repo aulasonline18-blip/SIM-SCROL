@@ -1,4 +1,3 @@
-// MIRROR OF: src/sim/state/studentLearningStateService.ts (Web, source of truth)
 import 'dart:async';
 
 import 'student_state_contract.dart';
@@ -7,7 +6,7 @@ import 'student_learning_state.dart';
 typedef StudentStateMutator =
     StudentLearningState Function(StudentLearningState state);
 
-// Resumo de aula para o drawer lateral (espelha CyberLessonSummary do Web)
+// Resumo de aula para o drawer lateral do app.
 class CyberLessonSummary {
   const CyberLessonSummary({
     required this.lessonLocalId,

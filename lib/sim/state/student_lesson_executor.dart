@@ -7,7 +7,7 @@
 // applyStudentDecision into classroom runtime, controllers, widgets, sync, or
 // restore paths.
 //
-// Historical origin: MIRROR OF src/sim/state/studentLessonExecutor.ts.
+// Historical origin only; this is not a live parity rule.
 import 'learning_decision_engine.dart';
 import 'student_learning_state.dart';
 

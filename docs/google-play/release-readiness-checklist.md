@@ -25,7 +25,7 @@ Base oficial consultada em 04/07/2026:
 | Observabilidade | PARCIAL | ErrorWidget/FlutterError existem; falta Sentry/Crashlytics real |
 | Billing Play no app | FEITO | `GooglePlayBillingFunctions` + `SIM_BILLING_PROVIDER=google_play` obrigatorio em production |
 | Produtos Play Console | BLOQUEADO EXTERNO | Criar `sim_credits_100`, `sim_credits_200`, `sim_credits_500` como consumiveis |
-| Validacao Play no servidor | FEITO | `POST /api/play-billing/consume-credit-pack` valida Android Publisher API e concede idempotente |
+| Validacao Play no servidor | FEITO | `POST /api/play-billing/consume-credit-pack` valida Android Publisher API, aceita service account e concede idempotente |
 | API level 35+ | A VERIFICAR | Depende do Flutter/Android Gradle instalado no build |
 
 ## Comando Play release esperado

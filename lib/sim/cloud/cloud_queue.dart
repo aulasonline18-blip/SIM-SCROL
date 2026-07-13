@@ -1,4 +1,3 @@
-// MIRROR OF: src/sim/state/cloudQueue.ts (Web, source of truth)
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';

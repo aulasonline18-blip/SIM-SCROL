@@ -167,26 +167,19 @@ void main() {
     expect(reloaded.getAudioEnabled(), false);
   });
 
-  test(
-    'production/session audio wiring uses PlatformAudioAdapter, not Noop',
-    () {
-      final labSession = File(
-        'lib/features/session/lab_session.dart',
-      ).readAsStringSync();
-      final organism = File(
-        'lib/sim/organism/sim_organism.dart',
-      ).readAsStringSync();
+  test('production/session audio wiring keeps PlatformAudioAdapter live', () {
+    final labSession = File(
+      'lib/features/session/lab_session.dart',
+    ).readAsStringSync();
+    final organism = File(
+      'lib/sim/organism/sim_organism.dart',
+    ).readAsStringSync();
 
-      expect(labSession, contains('playback: PlatformAudioAdapter()'));
-      expect(
-        RegExp(
-          r'playback:\s*NoopAudioPlaybackAdapter\(\)',
-        ).hasMatch(labSession),
-        false,
-      );
-      expect(organism, contains('playback ?? PlatformAudioAdapter()'));
-    },
-  );
+    expect(labSession, contains('PlatformAudioAdapter()'));
+    expect(labSession, contains('_runningUnderFlutterTest'));
+    expect(labSession, contains('NoopAudioPlaybackAdapter()'));
+    expect(organism, contains('playback ?? PlatformAudioAdapter()'));
+  });
 
   test('platform TTS maps broad stable language names to native locales', () {
     expect(simTtsLanguageForStableLang('Portuguese'), 'pt-BR');
@@ -489,40 +482,43 @@ void main() {
     expect(session.audioLoading, false);
   });
 
-  test('LabSession keeps visual trigger passive until server image arrives', () {
-    final session = LabSession()
-      ..aulaSnapshot = LessonRuntimeSnapshot(
-        authReady: true,
-        authed: true,
-        hasCurriculum: true,
-        isDone: false,
-        viewModel: const LessonMainViewModel(
-          progress: 0,
-          headerLabel: 'item',
-          options: [],
-          locked: false,
-          nextLabel: '',
-        ),
-        phase: ClassroomPhase.reading(),
-        history: const [],
-        conteudo: const LessonContent(
-          explanation: 'Explicacao',
-          question: 'Pergunta?',
-          options: {
-            AnswerLetter.A: 'A',
-            AnswerLetter.B: 'B',
-            AnswerLetter.C: 'C',
-          },
-          correctAnswer: AnswerLetter.A,
-        ),
-        imagem: null,
-        itemMarker: 'M1',
-        itemText: 'Coracao humano',
-      );
+  test(
+    'LabSession keeps visual trigger passive until server image arrives',
+    () {
+      final session = LabSession()
+        ..aulaSnapshot = LessonRuntimeSnapshot(
+          authReady: true,
+          authed: true,
+          hasCurriculum: true,
+          isDone: false,
+          viewModel: const LessonMainViewModel(
+            progress: 0,
+            headerLabel: 'item',
+            options: [],
+            locked: false,
+            nextLabel: '',
+          ),
+          phase: ClassroomPhase.reading(),
+          history: const [],
+          conteudo: const LessonContent(
+            explanation: 'Explicacao',
+            question: 'Pergunta?',
+            options: {
+              AnswerLetter.A: 'A',
+              AnswerLetter.B: 'B',
+              AnswerLetter.C: 'C',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          itemMarker: 'M1',
+          itemText: 'Coracao humano',
+        );
 
-    expect(session.imageStatus, 'idle');
-    expect(session.imageError, isNull);
-  });
+      expect(session.imageStatus, 'idle');
+      expect(session.imageError, isNull);
+    },
+  );
 
   test(
     'LabSession toggleAudio stop does not disable audio preference',

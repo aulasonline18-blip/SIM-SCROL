@@ -1,4 +1,3 @@
-// MIRROR OF: src/cyber/lesson-event-bus.ts (Web, source of truth)
 import 'lesson_models.dart';
 
 typedef LessonListener = void Function(CompleteLesson lesson);

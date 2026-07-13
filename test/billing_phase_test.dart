@@ -255,9 +255,13 @@ void main() {
     'lab session production billing uses Google Play flow instead of Stripe',
     () async {
       final play = FakePlayBillingFunctions();
-      final session = LabSession(playBillingFunctions: play)
-        ..authed = true
-        ..authReady = true;
+      final session =
+          LabSession(
+              playBillingFunctions: play,
+              creditsFunctions: FakeCreditsFunctions(),
+            )
+            ..authed = true
+            ..authReady = true;
       session.authSession.userId = 'u-billing';
 
       final error = await session.startCreditsCheckout('credits_100');
@@ -270,7 +274,10 @@ void main() {
 
   test('lab session does not start billing when auth is missing', () async {
     final play = FakePlayBillingFunctions();
-    final session = LabSession(playBillingFunctions: play);
+    final session = LabSession(
+      playBillingFunctions: play,
+      creditsFunctions: FakeCreditsFunctions(),
+    );
 
     final error = await session.startCreditsCheckout('credits_100');
 
@@ -282,9 +289,13 @@ void main() {
     'lab session surfaces Google Play pending and canceled states',
     () async {
       final play = FakePlayBillingFunctions();
-      final session = LabSession(playBillingFunctions: play)
-        ..authed = true
-        ..authReady = true;
+      final session =
+          LabSession(
+              playBillingFunctions: play,
+              creditsFunctions: FakeCreditsFunctions(),
+            )
+            ..authed = true
+            ..authReady = true;
       session.authSession.userId = 'u-billing';
 
       play.outcome = const PlayBillingPurchaseOutcome.pending();

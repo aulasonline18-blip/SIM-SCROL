@@ -1,4 +1,3 @@
-// MIRROR OF: src/cyber/lesson-pipeline-runtime.ts (Web, source of truth)
 // Part III.4: runImageSequential + runBackgroundText queues
 // D2.2: ensureFirstLessonPrepared + ensureLessonWindow
 import 'dart:async';
@@ -8,7 +7,7 @@ import 'lesson_models.dart';
 import 'lesson_orchestrator.dart';
 
 /// Sequential image queue — runs at most one image fetch at a time.
-/// Dart translation of Web's runImageSequential (Planta-Mãe III.4).
+/// Sequential image queue from the SIMAPP visual pipeline.
 class ImageSequentialQueue {
   Future<void> _chain = Future.value();
 

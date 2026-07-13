@@ -5,7 +5,7 @@
 // advancement, mastery, current item, current layer, review, or recovery in the
 // SIMAPP runtime. Official pedagogical decisions belong to SimServidor.
 //
-// Historical origin: MIRROR OF src/sim/state/learningDecisionEngine.ts.
+// Historical origin only; this is not a live parity rule.
 import 'student_learning_state.dart';
 import 'student_learning_state_service.dart';
 

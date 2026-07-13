@@ -1,12 +1,12 @@
 # Relatorio de Prontidao Google Play — SIM-SCROL
 
-Data: 04/07/2026
+Data: 13/07/2026
 
 ## Veredito honesto
 
-Google Play readiness no codigo do app: PARCIALMENTE FEITO.
+Google Play readiness no codigo do app e do servidor: FEITO no que depende do codigo.
 
-O app ficou mais preparado para build de loja, mas ainda nao deve ser declarado 100% pronto para Google Play enquanto faltarem as dependencias externas abaixo.
+Ainda nao deve ser declarado 100% publicado porque faltam dependencias externas de loja: dominio HTTPS final, produtos no Play Console e assinatura real fora do repositorio.
 
 ## Feito nesta etapa
 
@@ -20,6 +20,9 @@ O app ficou mais preparado para build de loja, mas ainda nao deve ser declarado 
 8. Rotas sensiveis `/creditos`, `/checkout/return` e `/conta/deletar` passaram a ter gate formal de auth no roteador central.
 9. `/pai` passou a exigir auth e role/claim de responsavel/admin.
 10. Testes cobrem gates, package configuravel, cleartext off e role.
+11. Servidor executa exclusao autenticada real de conta.
+12. Servidor valida compra Google Play em `/api/play-billing/consume-credit-pack`.
+13. Servidor aceita service account Google Play e renova token OAuth sem segredo no app.
 
 ## Bloqueios externos restantes
 
@@ -49,16 +52,17 @@ Sugestao ideal:
 
 ### 3. Exclusao real no servidor
 
-O app chama `/api/account/request-deletion`, mas a remocao real de dados precisa existir no servidor. Este repo nao contem mais a pasta do servidor. Portanto, este item precisa ser implementado no repositorio do servidor.
+FEITO no servidor.
 
-Contrato minimo do endpoint:
+Contrato implementado:
 
-1. Exigir Bearer token valido.
-2. Confirmar que `userId` do body e igual ao usuario autenticado ou ignorar `userId` do body e usar apenas token.
-3. Registrar auditoria da solicitacao.
-4. Apagar/anonimizar perfil, progresso, aulas, duvidas e anexos do usuario.
-5. Preservar registros financeiros obrigatorios pelo prazo legal.
-6. Retornar requestId.
+1. Exige Bearer token valido.
+2. Usa o usuario autenticado como fonte de verdade.
+3. Registra auditoria da solicitacao.
+4. Apaga estados de aula do usuario.
+5. Anonimiza/zera saldo operacional e reservas de credito.
+6. Preserva somente registros financeiros minimos quando necessario.
+7. Retorna requestId e contagem de aulas apagadas.
 
 ### 4. Google Play Billing
 
@@ -72,6 +76,14 @@ O fluxo de loja:
 4. so consome/finaliza a compra depois da API conceder creditos.
 
 Stripe permanece como legado tecnico, mas `SimEnvironment.assertProductionSafe()` bloqueia production quando `SIM_BILLING_PROVIDER` nao e `google_play`.
+
+No servidor, a validacao Google Play:
+
+1. verifica `productId`, `packId` e `purchaseToken`;
+2. consulta Android Publisher API;
+3. aceita service account oficial e renova access token;
+4. concede creditos somente depois da validacao;
+5. nao vaza `purchaseToken` nem chave privada em erro.
 
 ### 5. Keystore real
 
@@ -102,11 +114,10 @@ flutter build appbundle --release \
 
 ## Declaracao final
 
-O app esta mais perto de Play readiness, mas Google Play 100% = NAO ate:
+O codigo esta pronto para a trilha Google Play. A publicacao real ainda depende de:
 
-1. Servidor executar exclusao real.
-2. URLs publicas finais existirem.
-3. Produtos Play Console existirem.
-4. API validar `purchaseToken` e conceder creditos em `/api/play-billing/consume-credit-pack`.
-5. Build AAB assinado com upload key real ser gerado.
-6. API de producao usar HTTPS.
+1. URLs publicas finais existirem.
+2. Produtos Play Console existirem.
+3. Build AAB assinado com upload key real ser gerado.
+4. API de producao usar HTTPS.
+5. Service account Google Play oficial estar configurada no servidor.

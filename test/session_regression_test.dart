@@ -17,7 +17,7 @@ import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
 void main() {
-  test('default API URL points to Scroll API, not the SimWeb host', () {
+  test('default API URL points to the official Scroll API host', () {
     expect(SimEnvironment.apiBaseUrl, 'http://167.179.109.137:3000');
     expect(SimEnvironment.assertProductionSafe, returnsNormally);
   });
@@ -86,7 +86,7 @@ void main() {
   );
 
   test(
-    'erro de auth vindo do preparo fica no curriculo com retry como SimWeb',
+    'erro de auth vindo do preparo fica no curriculo com retry do proprio app',
     () async {
       var attempts = 0;
       final session =
@@ -313,7 +313,7 @@ void main() {
   );
 
   testWidgets(
-    'curriculo copia SimWeb e espera authReady/authed antes de chamar T00',
+    'curriculo espera authReady/authed antes de chamar T00',
     (tester) async {
       var called = false;
       final session =

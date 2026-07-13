@@ -1,4 +1,3 @@
-// MIRROR OF: src/cyber/lesson-material-cache.ts (Web, source of truth)
 import 'dart:async';
 import 'dart:convert';
 

@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/organism/sim_live_parity.dart';
 
 void main() {
-  test('matriz de paridade A -> B representa rotas, professores e mortos', () {
+  test('inventario vivo representa rotas, professores e mortos do app', () {
     final report = buildSimLiveParityReport();
 
     expect(report.complete, isTrue);

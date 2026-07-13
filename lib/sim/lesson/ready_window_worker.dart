@@ -1,4 +1,3 @@
-// MIRROR OF: src/sim/state/readyWindowWorker.ts (Web, source of truth)
 import 'dart:async';
 
 import '../state/student_learning_state.dart';

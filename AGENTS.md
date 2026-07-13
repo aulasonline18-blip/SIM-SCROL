@@ -7,4 +7,5 @@ These rules apply to the Flutter app in this repository.
 3. Never mirror SIMAPP changes into SIMWEB automatically.
 4. Treat all T00, T02, revisao/review, duvida/doubt, recuperacao/recovery, adendo amparo T00, and adendo amparo T02 prompt files as protected.
 5. Protected prompt files may only be changed after explicit user authorization naming that prompt or file.
-6. Comparison or parity documents are references only, not permission to edit SIMWEB or protected prompts.
+6. Historical comparison documents are references only. They do not create any duty to copy, mirror, equalize, or synchronize SIMAPP with SIMWEB.
+7. SIMAPP and SIMWEB are independent products. Do not make SIMAPP, the SIMAPP server, or the visual system match SIMWEB unless the user explicitly asks for that specific change in the current conversation.

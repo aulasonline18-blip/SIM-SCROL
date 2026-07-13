@@ -31,7 +31,7 @@ void main() {
   });
 
   test(
-    'simweb_backup_import_test imports Web backup and resumes same point',
+    'legacy_backup_import_test imports compatible backup and resumes same point',
     () {
       final store = StudentStateStore(local: MemoryStudentStateLocalStorage());
       final backupText = _simWebBackupText();

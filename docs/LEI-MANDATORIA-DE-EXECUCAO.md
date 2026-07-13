@@ -8,8 +8,8 @@ Nenhuma alteracao pode quebrar, reduzir, descontinuar, contornar ou enfraquecer 
 
 Nenhuma alteracao pode ser feita sem referencia comprovada. A referencia deve ser uma destas:
 
-1. Comportamento vivo do SimWeb, quando o comportamento existir no Web.
-2. Comportamento vivo ja validado do proprio SIM-SCROL, quando o Web nao se aplicar.
+1. Comportamento vivo ja validado do proprio SIM-SCROL.
+2. Comportamento vivo ja validado do servidor oficial do SIM-SCROL, quando a funcao depender do servidor.
 3. Documentacao oficial da plataforma, biblioteca, loja, API ou framework envolvido.
 4. Literatura tecnica reconhecida de engenharia de software, arquitetura, UX, acessibilidade, seguranca ou qualidade.
 
@@ -26,21 +26,17 @@ Antes de tocar em qualquer caractere, o executor deve provar para si mesmo:
 7. Qual rollback e possivel se algo falhar.
 8. Qual referencia valida autoriza a alteracao.
 
-## Lei de paridade com SimWeb
+## Lei de independencia do SimWeb
 
-Antes de qualquer analise, correcao, refatoracao, teste ou release, o executor deve perguntar:
+O SIM-SCROL/App Flutter, o servidor oficial do SIM-SCROL e o SimWeb sao produtos/repositorios independentes.
 
-1. Esse comportamento existe no SimWeb?
-2. Se existe, qual arquivo, funcao, rota ou componente do SimWeb e a fonte de verdade?
-3. O SIM-SCROL esta copiando o comportamento funcional correto ou esta inventando uma regra diferente?
-4. A diferenca e exigida pela plataforma mobile, pela Google Play, pela seguranca ou por uma arquitetura explicitamente melhor?
-5. A diferenca foi documentada e testada?
+Nenhuma regra, teste, auditoria, documento de paridade ou comparacao historica pode obrigar o SIM-SCROL ou o servidor a copiar, espelhar, igualar ou sincronizar comportamento com o SimWeb.
 
-Quando o SimWeb tiver o comportamento vivo correto, o SIM-SCROL deve seguir a mesma regra funcional, mesmo que a implementacao seja diferente.
+O SimWeb pode ser lido apenas como referencia historica opcional quando o usuario pedir explicitamente. Essa leitura nao torna o SimWeb fonte de verdade do SIM-SCROL.
 
-Quando o SimWeb tiver uma arquitetura ruim mas um comportamento correto, o SIM-SCROL deve copiar o comportamento, nao a doenca arquitetural.
+O sistema visual do SIM-SCROL e do servidor oficial e independente do sistema visual do SimWeb. Diferencas visuais entre eles sao permitidas e nao sao, por si so, erro, regressao ou obrigacao de correcao.
 
-Quando o SimWeb nao tiver referencia aplicavel, o executor deve usar referencia oficial externa e registrar a fonte antes de alterar.
+Qualquer alteracao no SIM-SCROL deve preservar o comportamento vivo do proprio SIM-SCROL, a Planta-Mae, as leis de seguranca, os contratos do servidor oficial e os testes proprios do app/servidor.
 
 ## Lei contra mudanca sem fonte
 
@@ -48,9 +44,9 @@ E proibido:
 
 1. Corrigir por intuicao.
 2. Alterar por gosto.
-3. Trocar fluxo sem comparar com o SimWeb quando houver equivalente.
+3. Trocar fluxo sem referencia valida do proprio SIM-SCROL, do servidor oficial ou de documentacao tecnica aplicavel.
 4. Redirecionar usuario, apagar sessao, cobrar credito, gerar imagem, gerar audio, sincronizar cloud, importar backup ou avancar aula sem referencia funcional.
-5. Tratar erro tecnico de forma diferente do SimWeb sem justificar por plataforma, seguranca ou documentacao oficial.
+5. Tratar erro tecnico de forma diferente dos contratos proprios do SIM-SCROL sem justificar por plataforma, seguranca ou documentacao oficial.
 6. Usar "parece melhor" como justificativa.
 
 Toda tarefa deve deixar rastreavel no commit, teste ou relatorio qual referencia guiou a mudanca.
@@ -77,10 +73,10 @@ git status --short
 
 Se houver alteracao nao relacionada, preservar. Nao reverter trabalho de outra pessoa.
 
-Tambem antes de editar, quando houver comportamento equivalente no SimWeb, localizar a referencia com leitura de codigo real. Exemplos de referencia aceitavel:
+Tambem antes de editar, quando houver comportamento equivalente no proprio SIM-SCROL ou no servidor oficial, localizar a referencia com leitura de codigo real. Exemplos de referencia aceitavel:
 
 ```bash
-rg -n "nomeDaFuncao|rota|evento|erro|acao" /root/sim-work/sim-web/src
+rg -n "nomeDaFuncao|rota|evento|erro|acao" /root/SIM-SCROL/lib /root/SIM-SCROL/test /root/sim-work/sim-api/src /root/sim-work/sim-api/test
 ```
 
 A leitura deve responder qual e o comportamento antes, durante e depois da acao.

@@ -92,6 +92,11 @@ class ServerAdvanceGateDecision {
     required this.nextLayer,
     required this.highWaterMark,
     required this.events,
+    this.nextGlobalItemNumber,
+    this.nextLocalItemIdx,
+    this.nextPartNumber,
+    this.authoritativeRootLessonLocalId,
+    this.authoritativePartLessonLocalId,
     this.duplicate = false,
     this.humanError,
   });
@@ -103,6 +108,11 @@ class ServerAdvanceGateDecision {
   final LessonLayer nextLayer;
   final int highWaterMark;
   final List<JsonMap> events;
+  final int? nextGlobalItemNumber;
+  final int? nextLocalItemIdx;
+  final int? nextPartNumber;
+  final String? authoritativeRootLessonLocalId;
+  final String? authoritativePartLessonLocalId;
   final bool duplicate;
   final JsonMap? humanError;
 
@@ -120,6 +130,19 @@ class ServerAdvanceGateDecision {
       nextItemIdx: (next['itemIdx'] as num?)?.toInt() ?? 0,
       nextLayer: LessonLayerValue.fromValue(next['layer']),
       highWaterMark: (json['highWaterMark'] as num?)?.toInt() ?? 0,
+      nextGlobalItemNumber:
+          (next['globalItemNumber'] as num?)?.toInt() ??
+          (json['authoritativeGlobalItemNumber'] as num?)?.toInt(),
+      nextLocalItemIdx:
+          (next['localItemIdx'] as num?)?.toInt() ??
+          (json['authoritativeLocalItemIdx'] as num?)?.toInt(),
+      nextPartNumber: (next['partNumber'] as num?)?.toInt(),
+      authoritativeRootLessonLocalId:
+          (json['authoritativeRootLessonLocalId'] ?? next['rootLessonLocalId'])
+              ?.toString(),
+      authoritativePartLessonLocalId:
+          (json['authoritativePartLessonLocalId'] ?? next['partLessonLocalId'])
+              ?.toString(),
       events: (json['events'] as List? ?? const [])
           .whereType<Map>()
           .map((event) => JsonMap.from(event))
@@ -235,6 +258,16 @@ StudentLearningState applyServerAdvanceGateDecision({
           'reason': decision.reason,
           'highWaterMark': decision.highWaterMark,
           'idempotencyKey': request.idempotencyKey,
+          if (decision.nextGlobalItemNumber != null)
+            'globalItemNumber': decision.nextGlobalItemNumber,
+          if (decision.nextLocalItemIdx != null)
+            'localItemIdx': decision.nextLocalItemIdx,
+          if (decision.nextPartNumber != null)
+            'partNumber': decision.nextPartNumber,
+          if (decision.authoritativeRootLessonLocalId != null)
+            'rootLessonLocalId': decision.authoritativeRootLessonLocalId,
+          if (decision.authoritativePartLessonLocalId != null)
+            'partLessonLocalId': decision.authoritativePartLessonLocalId,
         },
         'idempotencyKeys': [...seenKeys, request.idempotencyKey],
       },
@@ -250,20 +283,8 @@ StudentLearningState recordPendingServerAdvanceGate({
   int? now,
 }) {
   final ts = now ?? DateTime.now().millisecondsSinceEpoch;
-  final alreadyRecorded = state.attempts.any(
-    (attempt) => attempt.marker == request.marker && attempt.layer == request.layer,
-  );
-  final attempt = LessonAttempt(
-    marker: request.marker,
-    layer: request.layer,
-    letra: request.selectedOption,
-    sinal: request.signal,
-    correct: request.correct,
-    ts: ts,
-  );
   return state.copyWith(
     updatedAt: ts,
-    attempts: alreadyRecorded ? state.attempts : [...state.attempts, attempt],
     queuedActions: [
       ...state.queuedActions,
       {
@@ -322,6 +343,14 @@ LessonProgress _progressFromDecision(
     final nextIdx = decision.nextItemIdx
         .clamp(0, curriculum.items.length)
         .toInt();
+    final globalPlan = curriculum.globalPlan;
+    final completedGlobalItems = _completedGlobalItemsAfterNextItem(
+      progress,
+      curriculum,
+      decision,
+    );
+    final displayTotal =
+        globalPlan?.globalTotalItems ?? curriculum.items.length;
     final completed = progress.concluidos.contains(request.marker)
         ? progress.concluidos
         : [...progress.concluidos, request.marker];
@@ -332,14 +361,31 @@ LessonProgress _progressFromDecision(
       concluidos: completed,
       mainAdvances: [
         progress.mainAdvances + 1,
-        nextIdx,
+        completedGlobalItems,
       ].reduce((a, b) => a > b ? a : b),
-      pctAvanco: curriculum.items.isEmpty
+      totalItems: displayTotal,
+      pctAvanco: displayTotal == 0
           ? 0
-          : ((nextIdx / curriculum.items.length) * 100).round(),
+          : ((completedGlobalItems / displayTotal) * 100)
+                .round()
+                .clamp(0, 100)
+                .toInt(),
     );
   }
   return progress.copyWith(layer: decision.nextLayer, erros: 0);
+}
+
+int _completedGlobalItemsAfterNextItem(
+  LessonProgress progress,
+  StudentCurriculum curriculum,
+  ServerAdvanceGateDecision decision,
+) {
+  final globalPlan = curriculum.globalPlan;
+  if (globalPlan == null || decision.nextGlobalItemNumber == null) {
+    return decision.nextItemIdx.clamp(0, curriculum.items.length).toInt();
+  }
+  final completedBeforeNext = decision.nextGlobalItemNumber! - 1;
+  return completedBeforeNext.clamp(0, globalPlan.globalTotalItems).toInt();
 }
 
 JsonMap _serverAdvanceGateMap(StudentLearningState state) {

@@ -1,4 +1,3 @@
-// MIRROR OF: src/sim/state/studentLearningState.store.ts (Web, source of truth)
 import 'dart:convert';
 
 import 'student_learning_state.dart';
@@ -348,11 +347,7 @@ class StudentStateStore {
     StudentLearningState? cloudState,
   ) {
     if (cloudState == null) return localState;
-    return switch (resolveConflict(localState, cloudState)) {
-      StateConflictResolution.local => localState,
-      StateConflictResolution.cloud => cloudState,
-      StateConflictResolution.equal => _mergeEqual(localState, cloudState),
-    };
+    return mergeStudentLearningStateFromCloud(localState, cloudState);
   }
 
   StateConflictResolution resolveConflict(
@@ -362,7 +357,7 @@ class StudentStateStore {
     final localScore = highWaterMark(localState);
     final cloudScore = highWaterMark(cloudState);
     if (cloudScore > localScore) return StateConflictResolution.cloud;
-    if (localScore > cloudScore) return StateConflictResolution.cloud;
+    if (localScore > cloudScore) return StateConflictResolution.local;
     if (localState.updatedAt != cloudState.updatedAt) {
       return StateConflictResolution.cloud;
     }
@@ -485,7 +480,7 @@ class StudentStateStore {
       );
     }
     if (lastImported == null) {
-      throw ArgumentError('Backup SimWeb sem aulas validas.');
+      throw ArgumentError('Backup compativel sem aulas validas.');
     }
     return lastImported;
   }
@@ -818,40 +813,6 @@ class StudentStateStore {
       );
     }
     return state;
-  }
-
-  StudentLearningState _mergeEqual(
-    StudentLearningState localState,
-    StudentLearningState cloudState,
-  ) {
-    final attempts = <String, LessonAttempt>{};
-    for (final attempt in [...cloudState.attempts, ...localState.attempts]) {
-      attempts[_attemptKey(attempt)] = attempt;
-    }
-    final events = <String, StudentLearningEvent>{};
-    for (final event in [...cloudState.events, ...localState.events]) {
-      final id = event.payload['event_id']?.toString();
-      events[id?.isNotEmpty == true ? id! : '${event.type}:${event.ts}'] =
-          event;
-    }
-    return localState.copyWith(
-      attempts: attempts.values.toList()..sort((a, b) => a.ts.compareTo(b.ts)),
-      events: events.values.toList()..sort((a, b) => a.ts.compareTo(b.ts)),
-      updatedAt: localState.updatedAt > cloudState.updatedAt
-          ? localState.updatedAt
-          : cloudState.updatedAt,
-    );
-  }
-
-  String _attemptKey(LessonAttempt attempt) {
-    return [
-      attempt.marker,
-      attempt.layer.value,
-      attempt.letra.name,
-      attempt.sinal.value,
-      attempt.correct,
-      attempt.ts,
-    ].join('|');
   }
 
   static String _defaultId() {

@@ -99,7 +99,7 @@ void main() {
     expect(chosen, AnswerLetter.B);
   });
 
-  testWidgets('chat timeline mirrors SimWeb central button phases', (
+  testWidgets('chat timeline preserves app central button phases', (
     tester,
   ) async {
     AnswerLetter? selected;
