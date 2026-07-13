@@ -530,6 +530,7 @@ class SimServerT02Client implements T02LessonClient {
     T02LessonRequest request,
   ) async {
     final locale = _localeFieldsForT02(request);
+    final curriculumPlan = request.profile['curriculum_global_plan'];
     final response = await transport.postJson(
       config.uri(simServerClassroomSlotPath),
       headers: await config.jsonHeaders(),
@@ -552,6 +553,8 @@ class SimServerT02Client implements T02LessonClient {
             'topic': request.topic ?? request.profile['target_topic'],
             'profile': {...request.profile, ...locale},
             'curriculumItems': request.curriculumItems,
+            if (curriculumPlan is Map && curriculumPlan.isNotEmpty)
+              'curriculumPlan': curriculumPlan,
           },
         ...request.profile,
       },

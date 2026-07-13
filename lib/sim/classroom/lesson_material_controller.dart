@@ -221,6 +221,8 @@ class LessonMaterialController {
         'student_profile_notes': pick(['student_profile_notes']),
       if (profile['interpreted_fields'] != null)
         'interpreted_fields': profile['interpreted_fields'],
+      if (profile['curriculum_global_plan'] != null)
+        'curriculum_global_plan': profile['curriculum_global_plan'],
       if (pick(['target_topic', 'TARGET_TOPIC']).isNotEmpty)
         'target_topic': pick(['target_topic', 'TARGET_TOPIC']),
       if (pick(['subject']).isNotEmpty) 'subject': pick(['subject']),

@@ -225,6 +225,7 @@ class StudentExperienceT02Adapter {
       'teaching_style_for_T02',
     ]);
     put(envelope, 'interpreted_fields', ['interpreted_fields']);
+    put(envelope, 'curriculum_global_plan', ['curriculum_global_plan']);
     put(envelope, 'source_status', ['source_status']);
     put(envelope, 'visual_policy', ['visual_policy']);
     put(envelope, 'session_goal', ['session_goal', 'SESSION_GOAL']);

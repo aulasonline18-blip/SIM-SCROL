@@ -405,6 +405,72 @@ void main() {
     },
   );
 
+  test(
+    'T02 envia plano global do curriculo para server-classroom adotar CG-1',
+    () async {
+      final transport = RecordingTransport()
+        ..jsonBody =
+            '{"slot":{"material":{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}}}}';
+      final client = SimServerT02Client(
+        config: SimAiServerConfig(
+          baseUrl: 'https://gemini-aid-pal.lovable.app',
+          t02Path: '/api/sim/t02',
+          accessTokenProvider: () async => 'user-token',
+        ),
+        transport: transport,
+      );
+
+      const globalPlan = {
+        'globalTotalItems': 360,
+        'batchStartItem': 1,
+        'batchEndItem': 80,
+        'partNumber': 1,
+        'nextGlobalItemToRequest': 81,
+        'continuationNeeded': true,
+      };
+
+      await client.completeLesson(
+        const T02LessonRequest(
+          lessonLocalId: 'cg-lesson-1',
+          item: 'Item 80',
+          lang: 'pt-BR',
+          academic: 'ano 9',
+          layer: LessonLayer.l2,
+          mode: 'session',
+          errCount: 0,
+          history: [],
+          marker: 'M80',
+          topic: 'Matematica',
+          itemIdx: 79,
+          profile: {
+            'target_topic': 'Matematica',
+            'curriculum_global_plan': globalPlan,
+          },
+          curriculumItems: [
+            {
+              'order': 1,
+              'marker': 'M1',
+              'title': 'Item 1',
+              'text': 'Item 1',
+            },
+            {
+              'order': 80,
+              'marker': 'M80',
+              'title': 'Item 80',
+              'text': 'Item 80',
+            },
+          ],
+        ),
+      );
+
+      final body = transport.lastBody as Map;
+      final adopt = body['adopt'] as Map;
+      expect(adopt['curriculumItems'], hasLength(2));
+      expect(adopt['curriculumPlan'], globalPlan);
+      expect((adopt['profile'] as Map)['curriculum_global_plan'], globalPlan);
+    },
+  );
+
   test('T02 invalido nao vira aula falsa nem default A', () async {
     final transport = RecordingTransport()
       ..jsonBody =

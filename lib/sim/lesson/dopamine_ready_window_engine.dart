@@ -512,6 +512,8 @@ JsonMap _pedagogicalEnvelope(JsonMap profile) {
       ]),
     if (profile['interpreted_fields'] != null)
       'interpreted_fields': profile['interpreted_fields'],
+    if (profile['curriculum_global_plan'] != null)
+      'curriculum_global_plan': profile['curriculum_global_plan'],
     if (_pickProfileString(profile, [
       'target_topic',
       'TARGET_TOPIC',
