@@ -267,7 +267,7 @@ void main() {
     expect(second.progress?.layer, LessonLayer.l2);
   });
 
-  test('Falha remota vira pendencia e erro humano sem dominio local', () {
+  test('Falha remota vira pendencia e preserva evidencia sem dominio local', () {
     final state = _state();
     final pending = recordPendingServerAdvanceGate(
       state: state,
@@ -280,6 +280,9 @@ void main() {
     );
 
     expect(pending.queuedActions.single['type'], 'ADVANCE_GATE_PENDING');
+    expect(pending.attempts.single.marker, 'M1');
+    expect(pending.attempts.single.layer, LessonLayer.l1);
+    expect(pending.attempts.single.letra, AnswerLetter.A);
     expect(pending.progress?.itemIdx, 0);
     expect(pending.progress?.layer, LessonLayer.l1);
     expect(pending.progress?.concluidos, isEmpty);

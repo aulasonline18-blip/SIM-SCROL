@@ -250,8 +250,20 @@ StudentLearningState recordPendingServerAdvanceGate({
   int? now,
 }) {
   final ts = now ?? DateTime.now().millisecondsSinceEpoch;
+  final alreadyRecorded = state.attempts.any(
+    (attempt) => attempt.marker == request.marker && attempt.layer == request.layer,
+  );
+  final attempt = LessonAttempt(
+    marker: request.marker,
+    layer: request.layer,
+    letra: request.selectedOption,
+    sinal: request.signal,
+    correct: request.correct,
+    ts: ts,
+  );
   return state.copyWith(
     updatedAt: ts,
+    attempts: alreadyRecorded ? state.attempts : [...state.attempts, attempt],
     queuedActions: [
       ...state.queuedActions,
       {
