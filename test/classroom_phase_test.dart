@@ -71,6 +71,55 @@ class FakeServerAdvanceGateClient implements ServerAdvanceGateClient {
   }
 }
 
+class OfficialRouteAdvanceGateClient implements ServerAdvanceGateClient {
+  final requests = <ServerAdvanceGateRequest>[];
+
+  @override
+  Future<ServerAdvanceGateDecision> decide(
+    ServerAdvanceGateRequest request,
+  ) async {
+    requests.add(request);
+    final isLastLayer = request.layer == LessonLayer.l3;
+    final secureL1 =
+        request.layer == LessonLayer.l1 &&
+        request.correct &&
+        request.signal == DecisionSignal.one;
+    final nextItemIdx = isLastLayer ? request.itemIdx + 1 : request.itemIdx;
+    final nextLayer = isLastLayer
+        ? LessonLayer.l1
+        : secureL1
+        ? LessonLayer.l3
+        : LessonLayerValue.fromValue(request.layer.value + 1);
+    return ServerAdvanceGateDecision(
+      accepted: true,
+      decision: isLastLayer ? 'next_item' : 'next_layer',
+      reason: isLastLayer
+          ? (request.correct
+                ? 'l3_to_next_item'
+                : 'l3_completed_with_repair_due')
+          : secureL1
+          ? 'secure_l1_skip_to_layer_3'
+          : request.layer == LessonLayer.l1
+          ? (request.correct ? 'l1_to_layer_2' : 'l1_error_to_layer_2')
+          : (request.correct ? 'l2_to_layer_3' : 'l2_error_to_layer_3'),
+      nextItemIdx: nextItemIdx,
+      nextLayer: nextLayer,
+      highWaterMark: requests.length,
+      events: [
+        {
+          'type': 'ADVANCE_GATE_DECIDED',
+          'decision': isLastLayer ? 'next_item' : 'next_layer',
+          'marker': request.marker,
+          'layer': request.layer.value,
+          'letra': request.selectedOption.name,
+          'sinal': request.signal.value,
+          'correct': request.correct,
+        },
+      ],
+    );
+  }
+}
+
 StudentLearningState _classroomState() {
   const items = [
     CurriculumItem(marker: 'M1', text: 'Item 1'),
@@ -266,6 +315,51 @@ void main() {
     expect(snap.itemMarker, 'M1');
     expect(service.read('cyber-class')?.current?.layer, LessonLayer.l3);
   });
+
+  test(
+    'Classroom follows official route after answer, signal and advance',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = FakeClassroomT02();
+      final gate = OfficialRouteAdvanceGateClient();
+      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      await runtime.open(lessonLocalId: 'cyber-class');
+
+      runtime.select(AnswerLetter.B);
+      await runtime.signal(DecisionSignal.two);
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
+      expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l2);
+      await runtime.advance();
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.lendo);
+      expect(runtime.snapshot().itemMarker, 'M1');
+      expect(service.read('cyber-class')?.current?.layer, LessonLayer.l2);
+
+      runtime.select(AnswerLetter.C);
+      await runtime.signal(DecisionSignal.three);
+      expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
+      await runtime.advance();
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.lendo);
+      expect(runtime.snapshot().itemMarker, 'M1');
+      expect(service.read('cyber-class')?.current?.layer, LessonLayer.l3);
+
+      runtime.select(AnswerLetter.B);
+      await runtime.signal(DecisionSignal.one);
+      expect(service.read('cyber-class')?.progress?.itemIdx, 1);
+      expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l1);
+      await runtime.advance();
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.lendo);
+      expect(runtime.snapshot().itemMarker, 'M2');
+      expect(service.read('cyber-class')?.current?.layer, LessonLayer.l1);
+
+      expect(gate.requests.map((request) => request.layer), [
+        LessonLayer.l1,
+        LessonLayer.l2,
+        LessonLayer.l3,
+      ]);
+    },
+  );
 
   test(
     'answer signal without server does not write false mastery truth',
