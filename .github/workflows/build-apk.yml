@@ -5,6 +5,24 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      server_url:
+        description: "SIM API URL used by the APK"
+        required: false
+        default: "http://167.179.109.137:3000"
+      app_mode:
+        description: "Flutter app mode"
+        required: false
+        default: "development"
+        type: choice
+        options:
+          - development
+          - production
+      allow_http:
+        description: "Allow HTTP API URL in this APK build"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   build:
@@ -31,12 +49,46 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Configure cleartext HTTP for selected API host
+        shell: bash
+        env:
+          SERVER_URL: ${{ github.event.inputs.server_url || 'http://167.179.109.137:3000' }}
+          ALLOW_HTTP: ${{ github.event.inputs.allow_http || 'true' }}
+        run: |
+          set -euo pipefail
+          network_config="android/app/src/main/res/xml/network_security_config.xml"
+          if [[ "$ALLOW_HTTP" == "true" && "$SERVER_URL" == http://* ]]; then
+            host="$(node -e "console.log(new URL(process.env.SERVER_URL).hostname)")"
+            printf '%s\n' \
+              '<?xml version="1.0" encoding="utf-8"?>' \
+              '<network-security-config>' \
+              '    <base-config cleartextTrafficPermitted="false" />' \
+              '    <domain-config cleartextTrafficPermitted="true">' \
+              "        <domain includeSubdomains=\"false\">${host}</domain>" \
+              '    </domain-config>' \
+              '</network-security-config>' > "$network_config"
+          else
+            printf '%s\n' \
+              '<?xml version="1.0" encoding="utf-8"?>' \
+              '<network-security-config>' \
+              '    <base-config cleartextTrafficPermitted="false" />' \
+              '</network-security-config>' > "$network_config"
+          fi
+
       - name: Build debug APK
-        run: flutter build apk --debug --no-shrink
+        env:
+          SERVER_URL: ${{ github.event.inputs.server_url || 'http://167.179.109.137:3000' }}
+          APP_MODE: ${{ github.event.inputs.app_mode || 'development' }}
+          ALLOW_HTTP: ${{ github.event.inputs.allow_http || 'true' }}
+        run: >
+          flutter build apk --debug --no-shrink
+          --dart-define=FLUTTER_APP_MODE=${APP_MODE}
+          --dart-define=SIM_SERVER_URL=${SERVER_URL}
+          --dart-define=SIM_ALLOW_HTTP_IN_PRODUCTION=${ALLOW_HTTP}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: sim-debug-apk
+          name: sim-debug-apk-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 30
