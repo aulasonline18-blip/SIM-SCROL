@@ -7,6 +7,7 @@ import 'account_deletion.dart';
 import 'credits_functions.dart';
 import 'payments_functions.dart';
 import 'play_billing_functions.dart';
+import 'sim_pricing.dart';
 
 class SimServerPaymentsClient implements PaymentsFunctions {
   SimServerPaymentsClient({
@@ -106,14 +107,16 @@ class SimServerCreditsClient implements CreditsFunctions {
     required this.config,
     SimHttpTransport? transport,
     this.snapshotPath = '/api/credits/me',
-    this.chargeLessonPath = '/api/credits/charge-lesson-generation',
+    this.reservePath = '/api/credits/reserve',
+    this.capturePath = '/api/credits/capture',
     this.timeout = const Duration(seconds: 30),
   }) : transport = transport ?? DartIoSimHttpTransport();
 
   final SimAiServerConfig config;
   final SimHttpTransport transport;
   final String snapshotPath;
-  final String chargeLessonPath;
+  final String reservePath;
+  final String capturePath;
   final Duration timeout;
 
   @override
@@ -132,11 +135,21 @@ class SimServerCreditsClient implements CreditsFunctions {
   @override
   Future<int> chargeLessonGeneration(ChargeLessonGenerationInput input) async {
     final normalized = input.normalized();
-    final data = await _post(chargeLessonPath, {
-      'lessonLocalId': normalized.lessonLocalId,
-      'legacyLessonLocalIds': normalized.legacyLessonLocalIds,
+    final operationId = [
+      'lesson-generation',
+      normalized.lessonLocalId,
+      ...normalized.legacyLessonLocalIds,
+    ].join(':');
+    final reserve = await _post(reservePath, {
+      'cost': simPricing.lessonCostCredits,
+      'reason': 'lesson',
+      'operationId': operationId,
     });
-    return (data['balance'] as num?)?.toInt() ?? 0;
+    final reservationId = reserve['reservationId']?.toString();
+    if (reservationId != null && reservationId.isNotEmpty) {
+      await _post(capturePath, {'reservationId': reservationId});
+    }
+    return (reserve['balance'] as num?)?.toInt() ?? 0;
   }
 
   Future<JsonMap> _post(String path, Object body) async {

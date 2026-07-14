@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/billing/account_deletion.dart';
+import 'package:sim_mobile/sim/billing/credits_functions.dart';
 import 'package:sim_mobile/sim/billing/payments_functions.dart';
 import 'package:sim_mobile/sim/billing/sim_server_billing_clients.dart';
 import 'package:sim_mobile/sim/cloud/cloud_functions.dart';
@@ -16,6 +17,9 @@ class RecordingTransport implements SimHttpTransport {
   Uri? lastUri;
   Map<String, String>? lastHeaders;
   Object? lastBody;
+  final uris = <Uri>[];
+  final bodies = <Object?>[];
+  final queuedBodies = <String>[];
   String jsonBody = '';
   int statusCode = 200;
   Map<String, String> responseHeaders = const {};
@@ -30,9 +34,11 @@ class RecordingTransport implements SimHttpTransport {
     lastUri = uri;
     lastHeaders = headers;
     lastBody = body;
+    uris.add(uri);
+    bodies.add(body);
     return SimHttpResponse(
       statusCode: 200,
-      body: jsonBody,
+      body: queuedBodies.isNotEmpty ? queuedBodies.removeAt(0) : jsonBody,
       headers: responseHeaders,
     );
   }
@@ -158,6 +164,34 @@ void main() {
     expect(transport.lastUri.toString(), contains('/api/payments/'));
     expect((transport.lastBody as Map).keys, isNot(contains('amount')));
     expect((transport.lastBody as Map)['packId'], 'credits_100');
+  });
+
+  test('creditos de aula usam reserve/capture oficiais do servidor', () async {
+    final transport = RecordingTransport()
+      ..queuedBodies.addAll([
+        '{"reservationId":"res-1","balance":17}',
+        '{"ok":true}',
+      ]);
+    final client = SimServerCreditsClient(
+      config: config(),
+      transport: transport,
+    );
+
+    final balance = await client.chargeLessonGeneration(
+      const ChargeLessonGenerationInput(lessonLocalId: 'lesson-1'),
+    );
+
+    expect(balance, 17);
+    expect(transport.uris.map((uri) => uri.path).toList(), [
+      '/api/credits/reserve',
+      '/api/credits/capture',
+    ]);
+    expect(transport.bodies.first, {
+      'cost': 3,
+      'reason': 'lesson',
+      'operationId': 'lesson-generation:lesson-1',
+    });
+    expect(transport.bodies.last, {'reservationId': 'res-1'});
   });
 
   test('cloud sync client envia snapshot completo com bearer', () async {
