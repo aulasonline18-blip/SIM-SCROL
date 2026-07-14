@@ -70,7 +70,7 @@ class LessonDoneScreen extends StatelessWidget {
             child: SimPreparationExperience(
               stage: 'done',
               ready: true,
-              onContinue: () => session.openSupport('/cyber/objeto'),
+              onContinue: () => unawaited(session.continueAfterLessonDone()),
             ),
           ),
         ),

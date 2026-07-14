@@ -2340,17 +2340,48 @@ class LabSession extends ChangeNotifier {
     aulaRuntimeLoading = true;
     aulaRuntimeError = null;
     notifyListeners();
+    // CG-1 §13/§14/§18.13: fim de parte NAO e fim de curriculo. Quando o avanco
+    // encerra a parte atual e existe uma proxima parte ja preparada, o app deve
+    // atravessar para ela preservando o progresso global — nunca declarar o
+    // curriculo concluido enquanto houver continuacao.
+    var crossedToNextPart = false;
     try {
       await organism.lessonRuntimeEngine.advance();
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
       _persistActiveLessonToCloud();
+      final currentId = lessonLocalId;
+      if (aulaSnapshot?.isDone == true &&
+          currentId != null &&
+          _activateReadyNextCurriculumPartIfNeeded(currentId)) {
+        crossedToNextPart = true;
+      }
     } catch (error) {
       aulaRuntimeError = error.toString();
     } finally {
       aulaRuntimeLoading = false;
       notifyListeners();
     }
+    if (crossedToNextPart) {
+      // lessonLocalId ja aponta para a proxima parte (root::part-N); abre a aula
+      // na nova parte, que reinicia no item local 0 = proximo item global.
+      await openAulaRuntime();
+    }
+  }
+
+  /// Acao do botao "continuar" da tela de aula concluida. CG-1 §13/§14: se uma
+  /// proxima parte do curriculo global ja estiver preparada, atravessa para ela
+  /// preservando o progresso global; caso contrario (fim real), volta ao
+  /// objetivo. Defesa adicional caso a proxima parte so tenha ficado pronta
+  /// depois que a parte atual foi concluida.
+  Future<void> continueAfterLessonDone() async {
+    final currentId = lessonLocalId;
+    if (currentId != null &&
+        _activateReadyNextCurriculumPartIfNeeded(currentId)) {
+      await openAulaRuntime();
+      return;
+    }
+    openSupport('/cyber/objeto');
   }
 
   void stopActiveAudio({bool notify = true}) {
