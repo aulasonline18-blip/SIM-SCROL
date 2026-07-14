@@ -522,26 +522,30 @@ class LessonImagePanel extends StatelessWidget {
             ? constraints.maxWidth
             : size.width;
         final horizontalPadding = ready ? 20.0 : 28.0;
-        final maxSquareSize = SimBreakpoints.isTablet(size.width)
+        final maxPortraitWidth = SimBreakpoints.isTablet(size.width)
             ? 520.0
             : 420.0;
-        final viewportMaxSide = (size.height * 0.58).clamp(
+        final viewportMaxWidth = (size.height * 0.58 * 9 / 16).clamp(
           136.0,
-          maxSquareSize,
+          maxPortraitWidth,
         );
-        final parentMaxSide = constraints.maxHeight.isFinite
-            ? (constraints.maxHeight - 104).clamp(96.0, viewportMaxSide)
-            : viewportMaxSide;
-        final imageSide = (panelWidth - horizontalPadding).clamp(
+        final parentMaxWidth = constraints.maxHeight.isFinite
+            ? ((constraints.maxHeight - 104) * 9 / 16).clamp(
+                96.0,
+                viewportMaxWidth,
+              )
+            : viewportMaxWidth;
+        final imageWidth = (panelWidth - horizontalPadding).clamp(
           96.0,
-          parentMaxSide,
+          parentMaxWidth,
         );
+        final imageHeight = imageWidth * 16 / 9;
         final palette = SimThemeScope.paletteOf(context);
         return Container(
           width: double.infinity,
           constraints: BoxConstraints(
             minHeight: loading ? 88 : 0,
-            maxHeight: ready ? imageSide + 104 : double.infinity,
+            maxHeight: ready ? imageHeight + 104 : double.infinity,
           ),
           padding: EdgeInsets.all(ready ? 10 : 14),
           decoration: BoxDecoration(
@@ -567,7 +571,8 @@ class LessonImagePanel extends StatelessWidget {
               if (ready)
                 LessonImageStudySurface(
                   data: imageData,
-                  height: imageSide,
+                  width: imageWidth,
+                  height: imageHeight,
                   caption: lessonImageCaption(session),
                   onImageSettled: onImageSettled,
                 )
@@ -600,6 +605,7 @@ String lessonImageCaption(LabSession session) {
 class LessonImageStudySurface extends StatelessWidget {
   const LessonImageStudySurface({
     required this.data,
+    required this.width,
     required this.height,
     required this.caption,
     this.onImageSettled,
@@ -607,6 +613,7 @@ class LessonImageStudySurface extends StatelessWidget {
   });
 
   final String data;
+  final double width;
   final double height;
   final String caption;
   final VoidCallback? onImageSettled;
@@ -627,7 +634,7 @@ class LessonImageStudySurface extends StatelessWidget {
               color: palette.surfaceSoft,
               child: SizedBox(
                 height: height,
-                width: height,
+                width: width,
                 child: LessonMediaImageView(
                   data: data,
                   onImageSettled: onImageSettled,
