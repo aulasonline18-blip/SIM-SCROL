@@ -10,8 +10,60 @@ class LessonContentValidationException implements Exception {
   String toString() => message;
 }
 
+String normalizeDidacticMathNotation(String value) {
+  var text = value.trim();
+  if (text.isEmpty) return text;
+
+  final looksPortuguese = RegExp(
+    r'\b(você|voce|força|forca|ângulo|angulo|chão|chao|calcula|mala|eixo|opção|opcao|correta)\b',
+    caseSensitive: false,
+  ).hasMatch(text) ||
+      RegExp(r'[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]').hasMatch(text);
+  final sine = looksPortuguese ? 'sen' : 'sin';
+
+  text = text.replaceAllMapped(
+    RegExp(r'\\text\{([^{}]*)\}'),
+    (match) => match.group(1)!.trim(),
+  );
+  text = text.replaceAll(RegExp(r'\^\s*\{\\circ\}'), '°');
+  text = text.replaceAll(RegExp(r'\^\s*\\circ'), '°');
+  text = text.replaceAll(r'\cdot', '×');
+  text = text.replaceAll(r'\times', '×');
+  text = text.replaceAll(r'\sin', sine);
+  text = text.replaceAll(r'\cos', 'cos');
+  text = text.replaceAll(r'\tan', 'tan');
+  text = text.replaceAllMapped(
+    RegExp(r'\\frac\{([^{}]+)\}\{([^{}]+)\}'),
+    (match) => '(${match.group(1)})/(${match.group(2)})',
+  );
+  text = text.replaceAllMapped(
+    RegExp(r'\\sqrt\{([^{}]+)\}'),
+    (match) => '√(${match.group(1)})',
+  );
+  text = text.replaceAllMapped(
+    RegExp(r'\b([A-Za-z])_([A-Za-z0-9])\b'),
+    (match) => '${match.group(1)}${match.group(2)}',
+  );
+  text = text.replaceAll(r'$', '');
+  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return text;
+}
+
+Object? normalizeDidacticMathObject(Object? value) {
+  if (value is String) return normalizeDidacticMathNotation(value);
+  if (value is Map) {
+    return value.map(
+      (key, item) => MapEntry(key, normalizeDidacticMathObject(item)),
+    );
+  }
+  if (value is List) {
+    return value.map(normalizeDidacticMathObject).toList();
+  }
+  return value;
+}
+
 String _requiredText(Object? value, String field) {
-  final text = (value ?? '').toString().trim();
+  final text = normalizeDidacticMathNotation((value ?? '').toString());
   if (text.isEmpty) {
     throw LessonContentValidationException('$field ausente/vazio');
   }
@@ -53,7 +105,11 @@ LessonContent validatedLessonContentFromJson(JsonMap source) {
     correctAnswer: parseRequiredCorrectAnswer(
       source['correct_answer'] ?? source['correctAnswer'],
     ),
-    whyCorrect: (source['why_correct'] ?? source['whyCorrect'])?.toString(),
-    whyWrong: source['why_wrong'] ?? source['whyWrong'],
+    whyCorrect: normalizeDidacticMathObject(
+      source['why_correct'] ?? source['whyCorrect'],
+    )?.toString(),
+    whyWrong: normalizeDidacticMathObject(
+      source['why_wrong'] ?? source['whyWrong'],
+    ),
   );
 }

@@ -357,6 +357,7 @@ void main() {
         home: Scaffold(
           body: LessonImageStudySurface(
             data: 'data:image/png;base64,$png',
+            width: 320,
             height: 180,
             caption: 'parábola com eixo e intercepto',
           ),
@@ -458,6 +459,7 @@ void main() {
               height: 330,
               child: LessonImageStudySurface(
                 data: 'data:image/png;base64,$png',
+                width: 320,
                 height: 220,
                 caption: 'Imagem rasterizada pelo servidor',
               ),

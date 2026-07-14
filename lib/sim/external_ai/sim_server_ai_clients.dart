@@ -116,16 +116,17 @@ class SimWarmupLesson {
     if (optionsRaw is! Map) return null;
     final options = <String, String>{
       for (final letter in const ['A', 'B', 'C'])
-        letter: (optionsRaw[letter] ?? optionsRaw[letter.toLowerCase()] ?? '')
-            .toString()
-            .trim(),
+        letter: normalizeDidacticMathNotation(
+          (optionsRaw[letter] ?? optionsRaw[letter.toLowerCase()] ?? '')
+              .toString(),
+        ),
     };
-    final explanation = (source['explanation'] ?? source['explicacao'] ?? '')
-        .toString()
-        .trim();
-    final question = (source['question'] ?? source['pergunta'] ?? '')
-        .toString()
-        .trim();
+    final explanation = normalizeDidacticMathNotation(
+      (source['explanation'] ?? source['explicacao'] ?? '').toString(),
+    );
+    final question = normalizeDidacticMathNotation(
+      (source['question'] ?? source['pergunta'] ?? '').toString(),
+    );
     final correct = (source['correct_answer'] ?? source['correctAnswer'] ?? '')
         .toString()
         .trim()
@@ -142,15 +143,19 @@ class SimWarmupLesson {
         for (final letter in const ['A', 'B', 'C'])
           if ((whyWrongRaw[letter] ?? whyWrongRaw[letter.toLowerCase()]) !=
               null)
-            letter: (whyWrongRaw[letter] ?? whyWrongRaw[letter.toLowerCase()])
-                .toString(),
+            letter: normalizeDidacticMathNotation(
+              (whyWrongRaw[letter] ?? whyWrongRaw[letter.toLowerCase()])
+                  .toString(),
+            ),
     };
     return SimWarmupLesson(
       explanation: explanation,
       question: question,
       options: options,
       correctAnswer: correct,
-      whyCorrect: (source['why_correct'] ?? source['whyCorrect'])?.toString(),
+      whyCorrect: normalizeDidacticMathObject(
+        source['why_correct'] ?? source['whyCorrect'],
+      )?.toString(),
       whyWrong: whyWrong,
       welcomeBridge: source['welcomeBridge'] != false,
     );
