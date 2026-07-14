@@ -217,6 +217,8 @@ const Map<String, String> _simStrings = {
   'aula_registering': 'Registrando...',
   'aula_advance_pending':
       'Nao consegui confirmar seu avanco agora. Sua resposta foi guardada; tente novamente.',
+  'aula_next_part_preparing':
+      'Estou preparando a proxima parte da aula. Tente novamente em instantes.',
   'aula_retry_prepare': 'Tentar novamente preparar aula',
   'aula_tools': 'Ferramentas da aula',
   'aula_header_short': 'AULA',
@@ -672,6 +674,8 @@ const Map<String, String> _enStrings = {
   'aula_registering': 'Registering...',
   'aula_advance_pending':
       'I could not confirm your progress yet. Your answer was saved; try again.',
+  'aula_next_part_preparing':
+      'I am preparing the next part of the lesson. Try again in a moment.',
   'aula_retry_prepare': 'Try preparing the lesson again',
   'aula_tools': 'Lesson tools',
   'aula_header_short': 'LESSON',
@@ -1116,6 +1120,8 @@ const Map<String, String> _ptStrings = {
   'aula_registering': 'Registrando...',
   'aula_advance_pending':
       'Nao consegui confirmar seu avanco agora. Sua resposta foi guardada; tente novamente.',
+  'aula_next_part_preparing':
+      'Estou preparando a proxima parte da aula. Tente novamente em instantes.',
   'aula_retry_prepare': 'Tentar novamente preparar aula',
   'aula_tools': 'Ferramentas da aula',
   'aula_audio_playing': 'Áudio da aula tocando',
@@ -1318,6 +1324,8 @@ const Map<String, String> _frStrings = {
   'aula_registering': 'Enregistrement...',
   'aula_advance_pending':
       'Je n ai pas pu confirmer ta progression. Ta reponse a ete gardee; reessaie.',
+  'aula_next_part_preparing':
+      'Je prepare la partie suivante de la lecon. Reessaie dans un instant.',
   'preparing_failed_title': 'Je n’ai pas pu préparer maintenant.',
   'preparing_change_goal': 'Changer l’objectif',
   'aula_next_layer': 'Couche suivante',
@@ -1611,6 +1619,8 @@ const Map<String, String> _esStrings = {
   'aula_registering': 'Registrando...',
   'aula_advance_pending':
       'No pude confirmar tu avance ahora. Tu respuesta fue guardada; intenta de nuevo.',
+  'aula_next_part_preparing':
+      'Estoy preparando la siguiente parte de la clase. Intenta de nuevo en un momento.',
   'aula_retry_prepare': 'Intentar preparar la clase de nuevo',
   'aula_tools': 'Herramientas de la clase',
   'aula_header_short': 'CLASE',
@@ -1807,6 +1817,7 @@ const Map<String, String> _jaStrings = {
   'aula_doubt_processing': '質問を分析中...',
   'aula_registering': '登録中...',
   'aula_advance_pending': '進行をまだ確認できませんでした。回答は保存されました。もう一度試してください。',
+  'aula_next_part_preparing': '授業の次のパートを準備しています。少ししてからもう一度お試しください。',
   'preparing_failed_title': '今は準備できませんでした。',
   'preparing_change_goal': '目標を変更',
   'aula_next_layer': '次のレイヤー',

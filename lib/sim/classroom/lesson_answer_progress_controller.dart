@@ -158,6 +158,12 @@ class LessonAnswerProgressController {
           decision: decision,
         );
         final savedState = stateService.write(nextState);
+        if (hasPendingCgPartTransition(savedState)) {
+          position.phase = const ClassroomPhase.engineError(
+            'aula_next_part_preparing',
+          );
+          return;
+        }
         final view = activeLessonView(savedState);
         if (view != null && !view.ended) {
           materialService.maintainLessonReadyWindow(

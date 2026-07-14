@@ -5,6 +5,7 @@ import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/external_ai/sim_http_transport.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
+import 'package:sim_mobile/sim/state/student_lesson_executor.dart';
 
 class RecordingTransport implements SimHttpTransport {
   Uri? lastUri;
@@ -305,6 +306,35 @@ void main() {
       nextPartNumber: 2,
       authoritativeRootLessonLocalId: 'lesson-cg',
       authoritativePartLessonLocalId: 'lesson-cg::part-2',
+      authoritativeLayer: LessonLayer.l1,
+      partStatus: 'ready',
+      nextPartStatus: 'ready',
+      liveWindow: {
+        'version': 1,
+        'policy': 'current_plus_next_three',
+        'slots': [
+          {
+            'itemIdx': 80,
+            'layer': 1,
+            'rootLessonLocalId': 'lesson-cg',
+            'partLessonLocalId': 'lesson-cg::part-2',
+            'partNumber': 2,
+            'globalItemNumber': 81,
+            'localItemIdx': 0,
+            'item': {
+              'itemIdx': 80,
+              'localItemIdx': 0,
+              'globalItemNumber': 81,
+              'partNumber': 2,
+              'rootLessonLocalId': 'lesson-cg',
+              'partLessonLocalId': 'lesson-cg::part-2',
+              'marker': 'M81',
+              'title': 'Item 81',
+              'text': 'Item 81',
+            },
+          },
+        ],
+      },
       highWaterMark: 80,
       events: [
         {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_item'},
@@ -319,13 +349,189 @@ void main() {
     );
 
     expect(next.progress?.mainAdvances, 80);
+    expect(next.progress?.itemIdx, 80);
+    expect(next.current?.marker, 'M81');
     expect(next.progress?.totalItems, 180);
     expect(next.progress?.pctAvanco, lessThan(100));
     expect(next.progress?.pctAvanco, 44);
+    expect(next.curriculum?.items, hasLength(81));
+    expect(next.curriculum?.items[80].marker, 'M81');
+    expect(
+      next.curriculum?.items[80].extra['partLessonLocalId'],
+      'lesson-cg::part-2',
+    );
+    expect(activeLessonView(next)?.ended, isFalse);
     expect(next.extra['serverAdvanceGate']?['lastDecision']?['partNumber'], 2);
     expect(
       next.extra['serverAdvanceGate']?['lastDecision']?['partLessonLocalId'],
       'lesson-cg::part-2',
+    );
+    expect(
+      next.extra['serverAdvanceGate']?['lastDecision']?['partStatus'],
+      'ready',
+    );
+    expect(
+      next.extra['serverAdvanceGate']?['liveWindow']?['slots'],
+      isA<List>(),
+    );
+  });
+
+  test('App parseia envelope CG-1 autoritativo do Advance Gate', () {
+    final decision = ServerAdvanceGateDecision.fromJson({
+      'accepted': true,
+      'decision': 'next_item',
+      'reason': 'l3_to_next_item',
+      'next': {
+        'itemIdx': 80,
+        'layer': 1,
+        'globalItemNumber': 81,
+        'localItemIdx': 0,
+        'partNumber': 2,
+        'rootLessonLocalId': 'lesson-cg',
+        'partLessonLocalId': 'lesson-cg::part-2',
+      },
+      'authoritativeRootLessonLocalId': 'lesson-cg',
+      'authoritativePartLessonLocalId': 'lesson-cg::part-2',
+      'authoritativeGlobalItemNumber': 81,
+      'authoritativeLocalItemIdx': 0,
+      'authoritativeLayer': 1,
+      'partStatus': 'ready',
+      'nextPartStatus': 'preparing',
+      'eventId': 'evt-cg-81',
+      'requestId': 'req-cg-81',
+      'liveWindow': {
+        'slots': [
+          {'globalItemNumber': 81, 'localItemIdx': 0, 'partNumber': 2},
+        ],
+      },
+      'conflicts': [
+        {'code': 'none'},
+      ],
+      'recoveryAction': {'action': 'none'},
+      'highWaterMark': 80,
+    });
+
+    expect(decision.nextGlobalItemNumber, 81);
+    expect(decision.nextLocalItemIdx, 0);
+    expect(decision.authoritativeLayer, LessonLayer.l1);
+    expect(decision.partStatus, 'ready');
+    expect(decision.nextPartStatus, 'preparing');
+    expect(decision.eventId, 'evt-cg-81');
+    expect(decision.requestId, 'req-cg-81');
+    expect(decision.liveWindow?['slots'], isA<List>());
+    expect(decision.conflicts.single['code'], 'none');
+    expect(decision.recoveryAction?['action'], 'none');
+  });
+
+  test('App trata proxima parte ausente como pendencia recuperavel CG-1', () {
+    final items = List<CurriculumItem>.generate(
+      80,
+      (index) =>
+          CurriculumItem(marker: 'M${index + 1}', text: 'Item ${index + 1}'),
+    );
+    final state =
+        StudentLearningState.empty(
+          lessonLocalId: 'lesson-cg-pending',
+          userId: 'user-m4',
+          now: 1,
+        ).copyWith(
+          curriculum: StudentCurriculum(
+            topic: 'Curriculo grande',
+            totalItems: 80,
+            generatedAt: null,
+            provisional: false,
+            items: items,
+            globalPlan: const CurriculumGlobalPlan(
+              globalTotalItems: 180,
+              batchStartItem: 1,
+              batchEndItem: 80,
+              operationalBatchLimit: 80,
+              partNumber: 1,
+              nextGlobalItemToRequest: 81,
+              continuationNeeded: true,
+            ),
+          ),
+          current: const LessonCurrent(
+            itemIdx: 79,
+            marker: 'M80',
+            layer: LessonLayer.l3,
+            amparoLvl: 0,
+          ),
+          progress: const LessonProgress(
+            itemIdx: 79,
+            layer: LessonLayer.l3,
+            erros: 0,
+            amparoLvl: 0,
+            historia: [],
+            mainAdvances: 79,
+            concluidos: [],
+            pendentesMarkers: [],
+            totalItems: 180,
+            pctAvanco: 43,
+          ),
+        );
+    final request = ServerAdvanceGateRequest(
+      lessonLocalId: state.lessonLocalId,
+      userId: state.userId,
+      marker: 'M80',
+      itemIdx: 79,
+      layer: LessonLayer.l3,
+      selectedOption: AnswerLetter.A,
+      signal: DecisionSignal.one,
+      correct: true,
+      idempotencyKey: 'cg-boundary-pending',
+      currentState: state,
+    );
+    const decision = ServerAdvanceGateDecision(
+      accepted: true,
+      decision: 'next_item',
+      reason: 'l3_to_next_item',
+      nextItemIdx: 80,
+      nextLayer: LessonLayer.l1,
+      nextGlobalItemNumber: 81,
+      nextLocalItemIdx: 0,
+      nextPartNumber: 2,
+      authoritativeRootLessonLocalId: 'lesson-cg-pending',
+      authoritativePartLessonLocalId: 'lesson-cg-pending::part-2',
+      authoritativeLayer: LessonLayer.l1,
+      partStatus: 'preparing',
+      nextPartStatus: 'preparing',
+      liveWindow: {
+        'slots': [
+          {
+            'itemIdx': 80,
+            'layer': 1,
+            'globalItemNumber': 81,
+            'localItemIdx': 0,
+            'partNumber': 2,
+            'partLessonLocalId': 'lesson-cg-pending::part-2',
+            'status': 'pending',
+            'textStatus': 'pending',
+          },
+        ],
+      },
+      highWaterMark: 80,
+      events: [
+        {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_item'},
+      ],
+    );
+
+    final next = applyServerAdvanceGateDecision(
+      state: state,
+      request: request,
+      decision: decision,
+      now: 2,
+    );
+
+    expect(next.curriculum?.items, hasLength(80));
+    expect(next.progress?.itemIdx, 79);
+    expect(next.progress?.mainAdvances, 80);
+    expect(next.progress?.pctAvanco, 44);
+    expect(activeLessonView(next)?.ended, isFalse);
+    expect(hasPendingCgPartTransition(next), isTrue);
+    expect(
+      next.extra['cgPartTransitionPending']?['partLessonLocalId'],
+      'lesson-cg-pending::part-2',
     );
   });
 

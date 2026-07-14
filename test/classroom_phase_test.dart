@@ -205,6 +205,63 @@ StudentLearningState _classroomState() {
   );
 }
 
+StudentLearningState _largeCurriculumBoundaryState() {
+  final items = List<CurriculumItem>.generate(
+    80,
+    (index) => CurriculumItem(
+      marker: 'M${index + 1}',
+      text: 'Item ${index + 1}',
+      extra: {'globalItemNumber': index + 1, 'partNumber': 1},
+    ),
+  );
+  return StudentLearningState.empty(
+    lessonLocalId: 'lesson-cg-root',
+    userId: 'user-cg',
+    now: 1,
+  ).copyWith(
+    profile: const StudentProfile(
+      objetivo: 'Curriculo grande',
+      stableLang: 'pt-BR',
+      nivel: 'base',
+    ),
+    curriculum: StudentCurriculum(
+      topic: 'Curriculo grande',
+      totalItems: 80,
+      generatedAt: null,
+      provisional: false,
+      items: items,
+      globalPlan: const CurriculumGlobalPlan(
+        globalTotalItems: 180,
+        batchStartItem: 1,
+        batchEndItem: 80,
+        operationalBatchLimit: 80,
+        partNumber: 1,
+        nextGlobalItemToRequest: 81,
+        continuationNeeded: true,
+      ),
+    ),
+    current: const LessonCurrent(
+      itemIdx: 79,
+      marker: 'M80',
+      layer: LessonLayer.l3,
+      amparoLvl: 0,
+    ),
+    progress: const LessonProgress(
+      itemIdx: 79,
+      layer: LessonLayer.l3,
+      erros: 0,
+      amparoLvl: 0,
+      historia: ['M1:L1:A:1'],
+      mainAdvances: 79,
+      concluidos: ['M1'],
+      pendentesMarkers: [],
+      totalItems: 180,
+      pctAvanco: 43,
+    ),
+    extra: const {'curriculumPlanRootLessonId': 'lesson-cg-root'},
+  );
+}
+
 LessonRuntimeEngine _runtime(
   StudentLearningStateService stateService,
   FakeClassroomT02 t02, {
@@ -404,6 +461,93 @@ void main() {
         LessonLayer.l2,
         LessonLayer.l3,
       ]);
+    },
+  );
+
+  test(
+    'CG-1 runtime atravessa Parte 1 para item global 81 servidor-first',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'lesson-cg-root': _largeCurriculumBoundaryState()},
+      );
+      final t02 = FakeClassroomT02();
+      final gate = FakeServerAdvanceGateClient(
+        const ServerAdvanceGateDecision(
+          accepted: true,
+          decision: 'next_item',
+          reason: 'l3_to_next_item',
+          nextItemIdx: 80,
+          nextLayer: LessonLayer.l1,
+          nextGlobalItemNumber: 81,
+          nextLocalItemIdx: 0,
+          nextPartNumber: 2,
+          authoritativeRootLessonLocalId: 'lesson-cg-root',
+          authoritativePartLessonLocalId: 'lesson-cg-root::part-2',
+          authoritativeLayer: LessonLayer.l1,
+          partStatus: 'ready',
+          nextPartStatus: 'ready',
+          liveWindow: {
+            'version': 1,
+            'policy': 'current_plus_next_three',
+            'slots': [
+              {
+                'itemIdx': 80,
+                'layer': 1,
+                'rootLessonLocalId': 'lesson-cg-root',
+                'partLessonLocalId': 'lesson-cg-root::part-2',
+                'partNumber': 2,
+                'globalItemNumber': 81,
+                'localItemIdx': 0,
+                'item': {
+                  'itemIdx': 80,
+                  'localItemIdx': 0,
+                  'globalItemNumber': 81,
+                  'partNumber': 2,
+                  'rootLessonLocalId': 'lesson-cg-root',
+                  'partLessonLocalId': 'lesson-cg-root::part-2',
+                  'marker': 'M81',
+                  'title': 'Item 81',
+                  'text': 'Item 81',
+                },
+              },
+            ],
+          },
+          highWaterMark: 80,
+          events: [
+            {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_item'},
+          ],
+        ),
+      );
+      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      await runtime.open(lessonLocalId: 'lesson-cg-root');
+
+      expect(runtime.snapshot().itemMarker, 'M80');
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.one);
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
+      expect(service.read('lesson-cg-root')?.curriculum?.items, hasLength(81));
+      expect(service.read('lesson-cg-root')?.current?.marker, 'M81');
+
+      await runtime.advance();
+      final snapshot = runtime.snapshot();
+      final state = service.read('lesson-cg-root')!;
+
+      expect(snapshot.phase.type, ClassroomPhaseType.lendo);
+      expect(snapshot.itemMarker, 'M81');
+      expect(snapshot.isDone, isFalse);
+      expect(
+        snapshot.viewModel?.headerLabel,
+        'aula_item_of:81/180:aula_layer_1',
+      );
+      expect(state.lessonLocalId, 'lesson-cg-root');
+      expect(state.progress?.itemIdx, 80);
+      expect(state.progress?.layer, LessonLayer.l1);
+      expect(state.progress?.historia, contains('M1:L1:A:1'));
+      expect(
+        state.curriculum?.items[80].extra['partLessonLocalId'],
+        'lesson-cg-root::part-2',
+      );
+      expect(gate.requests.single.lessonLocalId, 'lesson-cg-root');
     },
   );
 
