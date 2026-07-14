@@ -20,6 +20,7 @@ class ReviewRoomService {
     ReviewRoomContext context,
     int count,
   ) async {
+    final boundedCount = count == 10 ? 10 : 5;
     final server = serverReviewClient;
     if (server != null) {
       try {
@@ -30,7 +31,7 @@ class ReviewRoomService {
         if (item == null) {
           return ReviewRoomView(
             status: ReviewRoomStatus.failed,
-            count: 1,
+            count: boundedCount,
             queue: const [],
             idx: 0,
             errMsg: 'Sem revisao pendente agora.',
@@ -38,7 +39,7 @@ class ReviewRoomService {
         }
         return ReviewRoomView(
           status: item.ready ? ReviewRoomStatus.ready : ReviewRoomStatus.failed,
-          count: 1,
+          count: boundedCount,
           queue: [item.marker],
           idx: 0,
           conteudo: _contentFromServer(item),
@@ -49,14 +50,14 @@ class ReviewRoomService {
       } catch (_) {
         return ReviewRoomView(
           status: ReviewRoomStatus.failed,
-          count: 1,
+          count: boundedCount,
           queue: const [],
           idx: 0,
-          errMsg: 'Nao consegui abrir a revisao agora. Sua aula foi preservada.',
+          errMsg:
+              'Nao consegui abrir a revisao agora. Sua aula foi preservada.',
         );
       }
     }
-    final boundedCount = count == 10 ? 10 : 5;
     final queue = service.buildReviewQueueForLesson(
       lessonLocalId: context.lessonLocalId,
       topic: context.topic,
@@ -177,7 +178,9 @@ class ReviewRoomService {
         ),
       );
       return view.copyWith(
-        status: result.accepted ? ReviewRoomStatus.result : ReviewRoomStatus.failed,
+        status: result.accepted
+            ? ReviewRoomStatus.result
+            : ReviewRoomStatus.failed,
         sinal: sinal,
         resultCorrect: result.correct,
         errMsg: result.humanError?['message']?.toString(),
@@ -194,6 +197,20 @@ class ReviewRoomService {
     ReviewRoomContext context,
     ReviewRoomView view,
   ) async {
+    if (serverReviewClient != null) {
+      if (view.idx + 1 >= view.count) {
+        service.completeReviewSession(context.lessonLocalId);
+        return view.copyWith(status: ReviewRoomStatus.done, idx: view.idx + 1);
+      }
+      final next = await startReviewRoom(context, view.count);
+      if (next.status == ReviewRoomStatus.failed &&
+          next.queue.isEmpty &&
+          (next.errMsg ?? '').contains('Sem revisao pendente')) {
+        service.completeReviewSession(context.lessonLocalId);
+        return view.copyWith(status: ReviewRoomStatus.done, idx: view.idx + 1);
+      }
+      return next.copyWith(idx: view.idx + 1, count: view.count);
+    }
     final nextIdx = view.idx + 1;
     if (nextIdx >= view.queue.length || nextIdx >= view.count) {
       service.completeReviewSession(context.lessonLocalId);

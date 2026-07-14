@@ -382,6 +382,247 @@ class LabSession extends ChangeNotifier {
     lessonUiState.setRecoveryRoom(v);
   }
 
+  ReviewRoomContext _reviewRoomContext(SimOrganism organism) {
+    final state = organism.stateService.ensure(
+      lessonLocalId: organism.lessonLocalId,
+    );
+    final curriculum = state.curriculum;
+    final items = [
+      for (final item in curriculum?.items ?? const <CurriculumItem>[])
+        AuxRoomItem(marker: item.marker, text: item.text),
+    ];
+    final progress = state.progress;
+    return ReviewRoomContext(
+      lessonLocalId: organism.lessonLocalId,
+      topic:
+          curriculum?.topic ??
+          state.profile.objetivo ??
+          state.profile.targetTopic ??
+          '',
+      items: items,
+      fallbackStartIdx: progress?.itemIdx ?? state.current?.itemIdx ?? 0,
+      layer: progress?.layer ?? state.current?.layer ?? LessonLayer.l1,
+      profile: AuxRoomProfile(
+        stableLang: state.profile.stableLang ?? state.profile.language,
+        academicLevel: state.profile.academicLevel ?? state.profile.nivel,
+        preferredName: state.profile.preferredName,
+        notes: state.profile.extra['student_profile_internal']?.toString(),
+        extra: state.profile.toJson(),
+      ),
+    );
+  }
+
+  RecoveryRoomContext _recoveryRoomContext(SimOrganism organism) {
+    final reviewContext = _reviewRoomContext(organism);
+    return RecoveryRoomContext(
+      lessonLocalId: reviewContext.lessonLocalId,
+      topic: reviewContext.topic,
+      items: reviewContext.items,
+      layer: reviewContext.layer,
+      profile: reviewContext.profile,
+    );
+  }
+
+  Future<void> startReviewRoom(int count) async {
+    ReviewRoomView? previous;
+    try {
+      final organism = _activeOrganism ?? _organismForActiveLesson();
+      previous = lessonUiState.reviewRoom;
+      setReviewRoom(
+        ReviewRoomView(
+          status: ReviewRoomStatus.preparing,
+          count: count == 10 ? 10 : 5,
+          queue: previous?.queue ?? const [],
+          idx: previous?.idx ?? 0,
+        ),
+      );
+      await organism.auxRoomsController.startReview(
+        _reviewRoomContext(organism),
+        count,
+      );
+      setReviewRoom(organism.auxRoomsController.review);
+    } catch (error) {
+      setReviewRoom(
+        ReviewRoomView(
+          status: ReviewRoomStatus.failed,
+          count: count == 10 ? 10 : 5,
+          queue: previous?.queue ?? const [],
+          idx: previous?.idx ?? 0,
+          errMsg:
+              'Nao consegui abrir a revisao agora. Sua aula foi preservada.',
+        ),
+      );
+    }
+  }
+
+  void reviewSelecionar(AnswerLetter letter) {
+    final organism = _activeOrganism ?? _organismForActiveLesson();
+    organism.auxRoomsController.reviewSelecionar(letter);
+    setReviewRoom(organism.auxRoomsController.review);
+  }
+
+  void reviewContinue() {
+    final current = reviewRoom;
+    if (current == null) return;
+    setReviewRoom(current.copyWith(status: ReviewRoomStatus.answering));
+  }
+
+  Future<void> reviewSignal(DecisionSignal signal) async {
+    try {
+      final organism = _activeOrganism ?? _organismForActiveLesson();
+      await organism.auxRoomsController.reviewEnviarSinal(
+        _reviewRoomContext(organism),
+        signal,
+      );
+      setReviewRoom(organism.auxRoomsController.review);
+      _persistActiveLessonToCloud();
+    } catch (error) {
+      final current = reviewRoom;
+      setReviewRoom(
+        (current ??
+                const ReviewRoomView(
+                  status: ReviewRoomStatus.failed,
+                  count: 5,
+                  queue: [],
+                  idx: 0,
+                ))
+            .copyWith(
+              status: ReviewRoomStatus.failed,
+              errMsg:
+                  'Nao consegui enviar a revisao agora. Sua aula foi preservada.',
+            ),
+      );
+    }
+  }
+
+  Future<void> reviewNext() async {
+    try {
+      final organism = _activeOrganism ?? _organismForActiveLesson();
+      await organism.auxRoomsController.reviewNext(
+        _reviewRoomContext(organism),
+      );
+      setReviewRoom(organism.auxRoomsController.review);
+    } catch (error) {
+      final current = reviewRoom;
+      setReviewRoom(
+        (current ??
+                const ReviewRoomView(
+                  status: ReviewRoomStatus.failed,
+                  count: 5,
+                  queue: [],
+                  idx: 0,
+                ))
+            .copyWith(
+              status: ReviewRoomStatus.failed,
+              errMsg:
+                  'Nao consegui preparar a proxima revisao agora. Sua aula foi preservada.',
+            ),
+      );
+    }
+  }
+
+  Future<void> startRecoveryRoom() async {
+    try {
+      final organism = _activeOrganism ?? _organismForActiveLesson();
+      setRecoveryRoom(
+        const RecoveryRoomView(
+          status: RecoveryRoomStatus.preparing,
+          queue: [],
+          idx: 0,
+        ),
+      );
+      await organism.auxRoomsController.startRecovery(
+        _recoveryRoomContext(organism),
+      );
+      setRecoveryRoom(organism.auxRoomsController.recovery!);
+    } catch (error) {
+      setRecoveryRoom(
+        const RecoveryRoomView(
+          status: RecoveryRoomStatus.failed,
+          queue: [],
+          idx: 0,
+          errMsg:
+              'Nao consegui abrir a recuperacao agora. Sua aula foi preservada.',
+        ),
+      );
+    }
+  }
+
+  void recoverySelecionar(AnswerLetter letter) {
+    final organism = _activeOrganism ?? _organismForActiveLesson();
+    organism.auxRoomsController.recoverySelecionar(letter);
+    final view = organism.auxRoomsController.recovery;
+    if (view != null) setRecoveryRoom(view);
+  }
+
+  void recoveryContinue() {
+    final organism = _activeOrganism ?? _organismForActiveLesson();
+    organism.auxRoomsController.continueRecovery();
+    final view = organism.auxRoomsController.recovery;
+    if (view != null) setRecoveryRoom(view);
+  }
+
+  Future<void> recoverySignal(DecisionSignal signal) async {
+    try {
+      final organism = _activeOrganism ?? _organismForActiveLesson();
+      await organism.auxRoomsController.recoveryEnviarSinal(
+        _recoveryRoomContext(organism),
+        signal,
+      );
+      final view = organism.auxRoomsController.recovery;
+      if (view != null) setRecoveryRoom(view);
+      _persistActiveLessonToCloud();
+    } catch (error) {
+      final current = recoveryRoom;
+      setRecoveryRoom(
+        (current ??
+                const RecoveryRoomView(
+                  status: RecoveryRoomStatus.failed,
+                  queue: [],
+                  idx: 0,
+                ))
+            .copyWith(
+              status: RecoveryRoomStatus.failed,
+              errMsg:
+                  'Nao consegui enviar a recuperacao agora. Sua aula foi preservada.',
+            ),
+      );
+    }
+  }
+
+  Future<void> recoveryNext() async {
+    try {
+      final organism = _activeOrganism ?? _organismForActiveLesson();
+      await organism.auxRoomsController.recoveryNext(
+        _recoveryRoomContext(organism),
+      );
+      final view = organism.auxRoomsController.recovery;
+      if (view != null) setRecoveryRoom(view);
+    } catch (error) {
+      final current = recoveryRoom;
+      setRecoveryRoom(
+        (current ??
+                const RecoveryRoomView(
+                  status: RecoveryRoomStatus.failed,
+                  queue: [],
+                  idx: 0,
+                ))
+            .copyWith(
+              status: RecoveryRoomStatus.failed,
+              errMsg:
+                  'Nao consegui preparar a proxima recuperacao agora. Sua aula foi preservada.',
+            ),
+      );
+    }
+  }
+
+  void finishRecovery() {
+    final organism = _activeOrganism ?? _organismForActiveLesson();
+    organism.auxRoomsController.finishRecovery(organism.lessonLocalId);
+    final view = organism.auxRoomsController.recovery;
+    if (view != null) setRecoveryRoom(view);
+  }
+
   void goPortal() => navigationState.goPortal();
 
   void goLogin({String target = '/'}) =>
@@ -2277,6 +2518,7 @@ class LabSession extends ChangeNotifier {
       await organism.lessonRuntimeEngine.signal(signal);
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
+      await _openAuxRoomForLastAdvanceDecision(organism);
       _persistActiveLessonToCloud();
     } catch (error) {
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
@@ -2284,6 +2526,25 @@ class LabSession extends ChangeNotifier {
     } finally {
       aulaRuntimeLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _openAuxRoomForLastAdvanceDecision(SimOrganism organism) async {
+    final state = organism.stateService.read(organism.lessonLocalId);
+    final serverAdvanceGate = state?.extra['serverAdvanceGate'];
+    final lastDecision = serverAdvanceGate is Map
+        ? serverAdvanceGate['lastDecision']
+        : null;
+    final decision = lastDecision is Map
+        ? (lastDecision['decision'] ?? '').toString()
+        : '';
+    if (decision == 'recovery') {
+      await startRecoveryRoom();
+      return;
+    }
+    if (decision == 'review' || decision == 'support') {
+      openReviewRoom();
+      await startReviewRoom(5);
     }
   }
 

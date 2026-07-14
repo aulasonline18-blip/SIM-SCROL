@@ -4,6 +4,13 @@ import '../billing/account_deletion.dart';
 import '../billing/credits_route_controller.dart';
 import '../billing/payment_return_store.dart';
 import '../billing/sim_server_billing_clients.dart';
+import '../auxiliary/aux_room_t02_caller.dart';
+import '../auxiliary/aux_rooms_controller.dart';
+import '../auxiliary/recovery_room_service.dart';
+import '../auxiliary/review_room_service.dart';
+import '../auxiliary/server_recovery_contract.dart';
+import '../auxiliary/server_review_contract.dart';
+import '../auxiliary/student_aux_room_service.dart';
 import '../classroom/lesson_answer_progress_controller.dart';
 import '../classroom/lesson_hydration_engine.dart';
 import '../classroom/lesson_material_controller.dart';
@@ -74,6 +81,7 @@ class SimOrganism {
     required this.lessonAudioController,
     required this.creditsController,
     required this.accountDeletionController,
+    required this.auxRoomsController,
   });
 
   final String lessonLocalId;
@@ -100,6 +108,7 @@ class SimOrganism {
   final LessonAudioController lessonAudioController;
   final CreditsRouteController creditsController;
   final AccountDeletionController accountDeletionController;
+  final AuxRoomsController auxRoomsController;
 
   StudentLearningState get activeState {
     return stateService.ensure(lessonLocalId: lessonLocalId);
@@ -218,6 +227,25 @@ class SimOrganism {
       stateService: stateService,
       materialService: materialService,
     );
+    final auxRoomService = StudentAuxRoomService(
+      readState: (id) => stateService.ensure(lessonLocalId: id),
+      writeState: stateService.write,
+      t02Caller: AuxRoomT02Caller(client: t02Client),
+    );
+    final auxRoomsController = AuxRoomsController(
+      reviewRoomService: ReviewRoomService(
+        auxRoomService,
+        serverReviewClient: ServerReviewClient(
+          SimServerReviewTransport(config: aiConfig),
+        ),
+      ),
+      recoveryRoomService: RecoveryRoomService(
+        auxRoomService,
+        serverRecoveryClient: ServerRecoveryClient(
+          SimServerRecoveryTransport(config: aiConfig),
+        ),
+      ),
+    );
     final lessonRuntimeEngine = LessonRuntimeEngine(
       stateService: stateService,
       sessionEngine: LessonSessionEngine(service: stateService),
@@ -297,6 +325,7 @@ class SimOrganism {
       lessonAudioController: lessonAudioController,
       creditsController: creditsController,
       accountDeletionController: accountDeletionController,
+      auxRoomsController: auxRoomsController,
     );
   }
 }

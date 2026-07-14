@@ -575,12 +575,8 @@ class ReviewRoomScreen extends StatelessWidget {
                             width: 72,
                             child: SimActionButton(
                               label: '$count',
-                              onPressed: () => session.setReviewRoom(
-                                review.copyWith(
-                                  status: ReviewRoomStatus.preparing,
-                                  count: count,
-                                ),
-                              ),
+                              onPressed: () =>
+                                  unawaited(session.startReviewRoom(count)),
                               tone: SimActionTone.danger,
                             ),
                           ),
@@ -611,9 +607,7 @@ class ReviewRoomScreen extends StatelessWidget {
             child: SimPreparationExperience(
               stage: 'review',
               ready: status == ReviewRoomStatus.ready,
-              onContinue: () => session.setReviewRoom(
-                review.copyWith(status: ReviewRoomStatus.answering),
-              ),
+              onContinue: session.reviewContinue,
             ),
           ),
         ),
@@ -657,10 +651,16 @@ class ReviewRoomScreen extends StatelessWidget {
                     ],
                     const SizedBox(height: 20),
                     SimActionButton(
-                      label: t('aux_review_fail_back'),
-                      onPressed: session.closeReviewRoom,
+                      label: t('aula_retry_prepare'),
+                      onPressed: () =>
+                          unawaited(session.startReviewRoom(review.count)),
                       tone: SimActionTone.danger,
                       height: 48,
+                    ),
+                    const SizedBox(height: 12),
+                    SimTextAction(
+                      label: t('aux_review_fail_back'),
+                      onPressed: session.closeReviewRoom,
                     ),
                   ],
                 ),
@@ -721,34 +721,9 @@ class ReviewRoomScreen extends StatelessWidget {
           source: 'review:${review.idx}',
         ),
       ),
-      onSelect: (letter) =>
-          session.setReviewRoom(review.copyWith(letra: letter)),
-      onSignal: (signal) {
-        final correct = review.letra == review.conteudo!.correctAnswer;
-        session.setReviewRoom(
-          review.copyWith(
-            sinal: signal,
-            status: ReviewRoomStatus.result,
-            resultCorrect: correct,
-            resultMsg: correct ? t('aula_fb_correct') : t('aula_fb_redo'),
-          ),
-        );
-      },
-      onNext: () {
-        final nextIdx = review.idx + 1;
-        if (nextIdx >= review.count) {
-          session.setReviewRoom(review.copyWith(status: ReviewRoomStatus.done));
-        } else {
-          session.setReviewRoom(
-            ReviewRoomView(
-              status: ReviewRoomStatus.preparing,
-              count: review.count,
-              queue: review.queue,
-              idx: nextIdx,
-            ),
-          );
-        }
-      },
+      onSelect: session.reviewSelecionar,
+      onSignal: (signal) => unawaited(session.reviewSignal(signal)),
+      onNext: () => unawaited(session.reviewNext()),
     );
   }
 }
@@ -800,10 +775,15 @@ class RecoveryRoomScreen extends StatelessWidget {
                     ],
                     const SizedBox(height: 20),
                     SimActionButton(
-                      label: t('aux_recovery_finish_cta'),
-                      onPressed: session.closeRecoveryRoom,
+                      label: t('aula_retry_prepare'),
+                      onPressed: () => unawaited(session.startRecoveryRoom()),
                       tone: SimActionTone.danger,
                       height: 48,
+                    ),
+                    const SizedBox(height: 12),
+                    SimTextAction(
+                      label: t('aux_recovery_finish_cta'),
+                      onPressed: session.closeRecoveryRoom,
                     ),
                   ],
                 ),
@@ -823,9 +803,7 @@ class RecoveryRoomScreen extends StatelessWidget {
             child: SimPreparationExperience(
               stage: 'recovery',
               ready: recovery.conteudo != null,
-              onContinue: () => session.setRecoveryRoom(
-                recovery.copyWith(status: RecoveryRoomStatus.answering),
-              ),
+              onContinue: session.recoveryContinue,
             ),
           ),
         ),
@@ -876,35 +854,9 @@ class RecoveryRoomScreen extends StatelessWidget {
           source: 'recovery:${recovery.idx}',
         ),
       ),
-      onSelect: (letter) =>
-          session.setRecoveryRoom(recovery.copyWith(letra: letter)),
-      onSignal: (signal) {
-        final correct = recovery.letra == recovery.conteudo!.correctAnswer;
-        session.setRecoveryRoom(
-          recovery.copyWith(
-            sinal: signal,
-            status: RecoveryRoomStatus.result,
-            resultCorrect: correct,
-            resultMsg: correct ? t('aula_fb_correct') : t('aula_fb_redo'),
-          ),
-        );
-      },
-      onNext: () {
-        final nextIdx = recovery.idx + 1;
-        if (nextIdx >= recovery.queue.length) {
-          session.setRecoveryRoom(
-            recovery.copyWith(status: RecoveryRoomStatus.done),
-          );
-        } else {
-          session.setRecoveryRoom(
-            RecoveryRoomView(
-              status: RecoveryRoomStatus.preparing,
-              queue: recovery.queue,
-              idx: nextIdx,
-            ),
-          );
-        }
-      },
+      onSelect: session.recoverySelecionar,
+      onSignal: (signal) => unawaited(session.recoverySignal(signal)),
+      onNext: () => unawaited(session.recoveryNext()),
     );
   }
 }

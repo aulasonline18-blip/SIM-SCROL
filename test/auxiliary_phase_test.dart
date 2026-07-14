@@ -8,6 +8,8 @@ import 'package:sim_mobile/sim/auxiliary/lesson_doubt_controller.dart';
 import 'package:sim_mobile/sim/auxiliary/lesson_recovery_gate.dart';
 import 'package:sim_mobile/sim/auxiliary/recovery_room_service.dart';
 import 'package:sim_mobile/sim/auxiliary/review_room_service.dart';
+import 'package:sim_mobile/sim/auxiliary/server_recovery_contract.dart';
+import 'package:sim_mobile/sim/auxiliary/server_review_contract.dart';
 import 'package:sim_mobile/sim/auxiliary/student_aux_room_service.dart';
 import 'package:sim_mobile/sim/auxiliary/student_aux_rooms.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
@@ -56,6 +58,87 @@ class FakeT02Client implements T02LessonClient {
   @override
   Future<T02LessonMaterial> placement(T02LessonRequest request) async {
     return _material('placement');
+  }
+}
+
+class FakeServerReviewTransport implements ServerReviewTransport {
+  FakeServerReviewTransport({this.failNext = false});
+
+  final bool failNext;
+  final bodies = <JsonMap>[];
+
+  @override
+  Future<JsonMap> postReview(JsonMap body) async {
+    bodies.add(JsonMap.of(body));
+    if (failNext && body['action'] == 'next') {
+      throw StateError('server down');
+    }
+    if (body['action'] == 'answer') {
+      return {
+        'ok': true,
+        'accepted': true,
+        'duplicate': false,
+        'mainProgressPreserved': true,
+        'result': {'correct': body['selectedOption'] == 'B'},
+      };
+    }
+    return {
+      'ok': true,
+      'item': {
+        'reviewId': 'rev-m1',
+        'slotKey': 'review:rev-m1',
+        'marker': 'M1',
+        'itemIdx': 0,
+        'question': 'Pergunta de revisao do servidor?',
+        'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+        'correctOption': 'B',
+        'explanation': 'Explicacao de revisao.',
+        'status': 'ready',
+        'schemaVersion': 1,
+        'updatedAt': '2026-07-14T00:00:00.000Z',
+      },
+    };
+  }
+}
+
+class FakeServerRecoveryTransport implements ServerRecoveryTransport {
+  FakeServerRecoveryTransport({this.failNext = false});
+
+  final bool failNext;
+  final bodies = <JsonMap>[];
+
+  @override
+  Future<JsonMap> postRecovery(JsonMap body) async {
+    bodies.add(JsonMap.of(body));
+    if (failNext && body['action'] == 'next') {
+      throw StateError('server down');
+    }
+    if (body['action'] == 'answer') {
+      return {
+        'ok': true,
+        'accepted': true,
+        'duplicate': false,
+        'blocksConclusion': false,
+        'mainProgressPreserved': true,
+        'result': {'correct': body['selectedOption'] == 'B', 'repaired': true},
+      };
+    }
+    return {
+      'ok': true,
+      'item': {
+        'recoveryId': 'rec-m1',
+        'slotKey': 'recovery:rec-m1',
+        'marker': 'M1',
+        'itemIdx': 0,
+        'weaknessId': 'weak-m1',
+        'question': 'Pergunta de recuperacao do servidor?',
+        'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+        'correctOption': 'B',
+        'explanation': 'Explicacao de recuperacao.',
+        'status': 'ready',
+        'schemaVersion': 1,
+      },
+    };
   }
 }
 
@@ -271,6 +354,80 @@ void main() {
   });
 
   test(
+    'review room usa servidor, sai de preparing com conteudo real e registra resposta',
+    () async {
+      final transport = FakeServerReviewTransport();
+      final service = StudentAuxRoomService(
+        readState: (_) => seedState(),
+        writeState: (state) => state,
+        t02Caller: AuxRoomT02Caller(client: FakeT02Client()),
+      );
+      final review = ReviewRoomService(
+        service,
+        serverReviewClient: ServerReviewClient(transport),
+      );
+      const context = ReviewRoomContext(
+        lessonLocalId: 'l1',
+        topic: 'Matematica',
+        items: [AuxRoomItem(marker: 'M1', text: 'Item 1')],
+        fallbackStartIdx: 0,
+        layer: LessonLayer.l1,
+        profile: AuxRoomProfile(stableLang: 'Portuguese'),
+      );
+
+      var view = await review.startReviewRoom(context, 5);
+      expect(view.status, ReviewRoomStatus.ready);
+      expect(view.count, 5);
+      expect(view.conteudo?.question, contains('servidor'));
+      expect(transport.bodies.single['action'], 'next');
+
+      view = review.selectLetter(view, AnswerLetter.B);
+      view = await review.answerServerReviewRoom(
+        context,
+        view,
+        DecisionSignal.one,
+      );
+
+      expect(view.status, ReviewRoomStatus.result);
+      expect(view.resultCorrect, isTrue);
+      expect(transport.bodies.last['action'], 'answer');
+      expect(transport.bodies.last['reviewId'], 'rev-m1');
+      expect(transport.bodies.last['selectedOption'], 'B');
+    },
+  );
+
+  test(
+    'review room falha de servidor vira failed controlado sem spinner infinito',
+    () async {
+      final review = ReviewRoomService(
+        StudentAuxRoomService(
+          readState: (_) => seedState(),
+          writeState: (state) => state,
+          t02Caller: AuxRoomT02Caller(client: FakeT02Client()),
+        ),
+        serverReviewClient: ServerReviewClient(
+          FakeServerReviewTransport(failNext: true),
+        ),
+      );
+      const context = ReviewRoomContext(
+        lessonLocalId: 'l1',
+        topic: 'Matematica',
+        items: [AuxRoomItem(marker: 'M1', text: 'Item 1')],
+        fallbackStartIdx: 0,
+        layer: LessonLayer.l1,
+        profile: AuxRoomProfile(stableLang: 'Portuguese'),
+      );
+
+      final view = await review.startReviewRoom(context, 10);
+
+      expect(view.status, ReviewRoomStatus.failed);
+      expect(view.count, 10);
+      expect(view.conteudo, isNull);
+      expect(view.errMsg, contains('revisao'));
+    },
+  );
+
+  test(
     'recovery room starts only when pending blocks final completion',
     () async {
       final client = FakeT02Client();
@@ -318,6 +475,76 @@ void main() {
       expect(done.status, RecoveryRoomStatus.ready);
       expect(states['l1']?.current?.marker, 'M1');
       expect(states['l1']?.current?.layer, LessonLayer.l1);
+    },
+  );
+
+  test(
+    'recovery room usa servidor, apresenta conteudo e registra resposta',
+    () async {
+      final transport = FakeServerRecoveryTransport();
+      final recovery = RecoveryRoomService(
+        StudentAuxRoomService(
+          readState: (_) => seedState(),
+          writeState: (state) => state,
+          t02Caller: AuxRoomT02Caller(client: FakeT02Client()),
+        ),
+        serverRecoveryClient: ServerRecoveryClient(transport),
+      );
+      const context = RecoveryRoomContext(
+        lessonLocalId: 'l1',
+        topic: 'Matematica',
+        items: [AuxRoomItem(marker: 'M1', text: 'Item 1')],
+        layer: LessonLayer.l1,
+        profile: AuxRoomProfile(stableLang: 'Portuguese'),
+      );
+
+      var view = await recovery.startRecoveryRoom(context);
+      expect(view.status, RecoveryRoomStatus.intro);
+      expect(view.conteudo?.question, contains('servidor'));
+      expect(transport.bodies.single['action'], 'next');
+
+      view = recovery.continueRecovery(view);
+      view = recovery.selectLetter(view, AnswerLetter.B);
+      view = await recovery.answerServerRecoveryRoom(
+        context,
+        view,
+        DecisionSignal.two,
+      );
+
+      expect(view.status, RecoveryRoomStatus.result);
+      expect(view.resultCorrect, isTrue);
+      expect(view.restartRequired, isFalse);
+      expect(transport.bodies.last['action'], 'answer');
+      expect(transport.bodies.last['recoveryId'], 'rec-m1');
+    },
+  );
+
+  test(
+    'recovery room falha de servidor vira failed controlado sem spinner infinito',
+    () async {
+      final recovery = RecoveryRoomService(
+        StudentAuxRoomService(
+          readState: (_) => seedState(),
+          writeState: (state) => state,
+          t02Caller: AuxRoomT02Caller(client: FakeT02Client()),
+        ),
+        serverRecoveryClient: ServerRecoveryClient(
+          FakeServerRecoveryTransport(failNext: true),
+        ),
+      );
+      const context = RecoveryRoomContext(
+        lessonLocalId: 'l1',
+        topic: 'Matematica',
+        items: [AuxRoomItem(marker: 'M1', text: 'Item 1')],
+        layer: LessonLayer.l1,
+        profile: AuxRoomProfile(stableLang: 'Portuguese'),
+      );
+
+      final view = await recovery.startRecoveryRoom(context);
+
+      expect(view.status, RecoveryRoomStatus.failed);
+      expect(view.conteudo, isNull);
+      expect(view.errMsg, contains('recuperacao'));
     },
   );
 

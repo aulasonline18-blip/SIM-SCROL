@@ -200,6 +200,9 @@ class RecoveryRoomService {
     RecoveryRoomContext context,
     RecoveryRoomView view,
   ) async {
+    if (serverRecoveryClient != null) {
+      return startRecoveryRoom(context);
+    }
     final built = service.buildRecoveryQueueForLesson(
       lessonLocalId: context.lessonLocalId,
       topic: context.topic,

@@ -1326,6 +1326,7 @@ const Map<String, String> _frStrings = {
       'Je n ai pas pu confirmer ta progression. Ta reponse a ete gardee; reessaie.',
   'aula_next_part_preparing':
       'Je prepare la partie suivante de la lecon. Reessaie dans un instant.',
+  'aula_retry_prepare': 'Reessayer de preparer la lecon',
   'preparing_failed_title': 'Je n’ai pas pu préparer maintenant.',
   'preparing_change_goal': 'Changer l’objectif',
   'aula_next_layer': 'Couche suivante',
@@ -1818,6 +1819,7 @@ const Map<String, String> _jaStrings = {
   'aula_registering': '登録中...',
   'aula_advance_pending': '進行をまだ確認できませんでした。回答は保存されました。もう一度試してください。',
   'aula_next_part_preparing': '授業の次のパートを準備しています。少ししてからもう一度お試しください。',
+  'aula_retry_prepare': '授業の準備をもう一度試す',
   'preparing_failed_title': '今は準備できませんでした。',
   'preparing_change_goal': '目標を変更',
   'aula_next_layer': '次のレイヤー',
