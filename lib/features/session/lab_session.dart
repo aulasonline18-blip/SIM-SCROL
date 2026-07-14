@@ -220,6 +220,10 @@ class LabSession extends ChangeNotifier {
   Future<void>? _launchExperienceInFlight;
   int _experienceGeneration = 0;
   int _aulaRuntimeGeneration = 0;
+  bool _entryOfficialLessonReady = false;
+  bool _entryWarmupExpected = false;
+  bool _entryWarmupContinueRequested = false;
+  bool _entryAulaNavigationStarted = false;
   late SimLocaleSettings localeSettings = SimLocaleSettings.load(prefs);
 
   late final AudioPreference _audioPreference = AudioPreference(
@@ -1195,6 +1199,7 @@ class LabSession extends ChangeNotifier {
     warmupError = null;
     warmupSelectedAnswer = null;
     warmupWaitingForOfficialLesson = false;
+    _resetEntryCoordinator(warmupExpected: !_runningUnderFlutterTest);
     notifyListeners();
 
     try {
@@ -1273,17 +1278,17 @@ class LabSession extends ChangeNotifier {
       );
 
       if (!_isCurrentExperience(id, generation)) return;
+      _entryOfficialLessonReady = true;
       entryStatus = 'primeira_aula_pronta';
       notifyListeners();
 
       debugPrint('[SIM] CLASSROOM_OPENED route=${result.destination}');
-      if (route == '/cyber/warmup' && warmupWaitingForOfficialLesson) {
-        warmupWaitingForOfficialLesson = false;
-        navigationState.openRoute('/cyber/aula');
-        unawaited(openAulaRuntime());
-      } else if (route == '/cyber/curriculo') {
+      if (route == '/cyber/warmup' || warmupWaitingForOfficialLesson) {
+        unawaited(_tryOpenOfficialAula(source: 'official_ready'));
+      } else if (route == '/cyber/curriculo' && !_entryWarmupExpected) {
         navigationState.openRoute(result.destination);
         if (result.destination == '/cyber/aula') {
+          _entryAulaNavigationStarted = true;
           unawaited(openAulaRuntime());
         }
       }
@@ -1331,6 +1336,7 @@ class LabSession extends ChangeNotifier {
       warmupLesson = lesson;
       warmupLoading = false;
       warmupError = lesson == null ? 'Aquecimento indisponível.' : null;
+      if (lesson == null) _entryWarmupExpected = false;
       if (lesson != null) {
         canonicalStore?.patchState(lessonLocalId, (state) {
           return state.copyWith(
@@ -1342,15 +1348,19 @@ class LabSession extends ChangeNotifier {
         }
       }
       notifyListeners();
+      unawaited(_tryOpenOfficialAula(source: 'warmup_ready'));
     } catch (error) {
       if (!_isCurrentExperience(lessonLocalId, generation)) return;
+      debugPrint('[SIM] WARMUP_PREPARE_FAILED error=${error.toString()}');
       warmupLoading = false;
+      _entryWarmupExpected = false;
       warmupError = humanErrorMessage(
         error,
         fallback:
             'Nao consegui preparar o aquecimento agora. Continue para a aula principal.',
       );
       notifyListeners();
+      unawaited(_tryOpenOfficialAula(source: 'warmup_failed'));
     }
   }
 
@@ -1396,17 +1406,45 @@ class LabSession extends ChangeNotifier {
     if (controller != null && controller.destination != '/cyber/aula') {
       controller.continueToAula();
     }
-    if (entryStatus != 'primeira_aula_pronta') {
-      warmupWaitingForOfficialLesson = true;
-      notifyListeners();
+    _entryWarmupContinueRequested = true;
+    warmupWaitingForOfficialLesson = !_entryOfficialLessonReady;
+    notifyListeners();
+    if (!_entryOfficialLessonReady) return;
+    await _tryOpenOfficialAula(source: 'warmup_continue');
+  }
+
+  void _resetEntryCoordinator({required bool warmupExpected}) {
+    _entryOfficialLessonReady = false;
+    _entryWarmupExpected = warmupExpected;
+    _entryWarmupContinueRequested = false;
+    _entryAulaNavigationStarted = false;
+  }
+
+  Future<void> _tryOpenOfficialAula({required String source}) async {
+    if (_entryAulaNavigationStarted) return;
+    if (!_entryOfficialLessonReady) return;
+    if (_entryWarmupExpected &&
+        route == '/cyber/warmup' &&
+        !_entryWarmupContinueRequested) {
+      return;
+    }
+    if (_entryWarmupExpected &&
+        route == '/cyber/curriculo' &&
+        !_entryWarmupContinueRequested) {
       return;
     }
     warmupWaitingForOfficialLesson = false;
+    final controller = activePlacementController;
     if (controller == null) {
+      _entryAulaNavigationStarted = true;
+      debugPrint('[SIM] ENTRY_NAVIGATE_AULA source=$source placement=false');
       navigationState.openRoute('/cyber/aula');
       await openAulaRuntime();
       return;
     }
+    if (controller.destination != '/cyber/aula') return;
+    _entryAulaNavigationStarted = true;
+    debugPrint('[SIM] ENTRY_NAVIGATE_AULA source=$source placement=true');
     await openAulaAfterPlacementIfReady();
   }
 
@@ -1470,6 +1508,9 @@ class LabSession extends ChangeNotifier {
   }) async {
     final token = await _freshServerAccessToken(forceRefresh: forceRefresh);
     if (token == null || token.trim().isEmpty) {
+      debugPrint(
+        '[SIM] PROTECTED_SESSION_FAILED returnTo=$returnTo forceRefresh=$forceRefresh',
+      );
       goLogin(target: returnTo);
       return false;
     }
@@ -2448,13 +2489,23 @@ class LabSession extends ChangeNotifier {
     final controller = activePlacementController;
     if (controller != null) {
       controller.continueToAula();
-      unawaited(openAulaAfterPlacementIfReady());
+      if (_entryOfficialLessonReady) {
+        _entryWarmupContinueRequested = true;
+        unawaited(_tryOpenOfficialAula(source: 'placement_finished'));
+      } else {
+        warmupWaitingForOfficialLesson = true;
+      }
       notifyListeners();
       return;
     }
     lessonUiState.finishPlacement();
-    navigationState.openRoute('/cyber/aula');
-    unawaited(openAulaRuntime());
+    if (_entryOfficialLessonReady) {
+      _entryWarmupContinueRequested = true;
+      unawaited(_tryOpenOfficialAula(source: 'placement_finished'));
+    } else {
+      navigationState.openRoute('/cyber/aula');
+      unawaited(openAulaRuntime());
+    }
   }
 
   void chooseAulaAnswer(String letter) {

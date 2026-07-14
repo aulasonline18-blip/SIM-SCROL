@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,6 +17,19 @@ import 'package:sim_mobile/sim/external_ai/sim_server_ai_clients.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
+
+class CountingAulaLabSession extends LabSession {
+  CountingAulaLabSession({
+    super.experiencePreparerOverride,
+  });
+
+  int aulaOpenCalls = 0;
+
+  @override
+  Future<void> openAulaRuntime() async {
+    aulaOpenCalls += 1;
+  }
+}
 
 void main() {
   test('default API URL points to the official Scroll API host', () {
@@ -190,6 +205,58 @@ void main() {
     expect(session.route, '/cyber/warmup');
     expect(session.warmupWaitingForOfficialLesson, isTrue);
   });
+
+  test(
+    'entrada coordena warmup e aula oficial com uma navegacao unica',
+    () async {
+      final officialReady = Completer<void>();
+      final session =
+          CountingAulaLabSession(
+              experiencePreparerOverride: (args) async {
+                args.onStage?.call(StudentExperienceRouteStage.curriculum);
+                args.onStage?.call(StudentExperienceRouteStage.lesson);
+                await officialReady.future;
+                args.onStage?.call(StudentExperienceRouteStage.ready);
+                return const StudentExperienceResult(
+                  destination: '/cyber/aula',
+                  curriculum: StudentCurriculum(
+                    topic: 'Fisica',
+                    totalItems: 1,
+                    generatedAt: null,
+                    provisional: false,
+                    items: [CurriculumItem(marker: 'M1', text: 'Força')],
+                  ),
+                  startMarker: 'M1',
+                  startItemIndex: 0,
+                );
+              },
+            )
+            ..selectedLanguageCode = 'pt'
+            ..stableLang = 'pt-BR'
+            ..freeText = 'Quero aprender deslocamento em física começando do zero.';
+
+      expect(session.saveObjectiveEntry(), isTrue);
+      final launch = session.launchExperience();
+      await Future<void>.delayed(Duration.zero);
+
+      session.openWarmupBridge();
+      await session.continueFromWarmupToAula();
+      expect(session.route, '/cyber/warmup');
+      expect(session.warmupWaitingForOfficialLesson, isTrue);
+      expect(session.aulaOpenCalls, 0);
+
+      officialReady.complete();
+      await launch;
+      await Future<void>.delayed(Duration.zero);
+
+      expect(session.route, '/cyber/aula');
+      expect(session.warmupWaitingForOfficialLesson, isFalse);
+      expect(session.aulaOpenCalls, 1);
+
+      await session.continueFromWarmupToAula();
+      expect(session.aulaOpenCalls, 1);
+    },
+  );
 
   test(
     'warmup T02 pronto abre ponte diretamente enquanto aula oficial prepara',
