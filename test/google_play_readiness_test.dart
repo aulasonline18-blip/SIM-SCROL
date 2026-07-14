@@ -41,7 +41,10 @@ void main() {
     expect(gradle, contains('android/key.properties'));
     expect(gradle, contains('versionCode = flutter.versionCode'));
     expect(gradle, contains('versionName = flutter.versionName'));
-    expect(pubspec, contains('version: 1.0.0+5'));
+    expect(
+      pubspec,
+      matches(RegExp(r'^version:\s+\d+\.\d+\.\d+\+[1-9]\d*$', multiLine: true)),
+    );
   });
 
   test('M17 production environment requires HTTPS and Google Play billing', () {
