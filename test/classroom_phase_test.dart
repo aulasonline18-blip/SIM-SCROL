@@ -120,6 +120,18 @@ class OfficialRouteAdvanceGateClient implements ServerAdvanceGateClient {
   }
 }
 
+class FailingServerAdvanceGateClient implements ServerAdvanceGateClient {
+  final requests = <ServerAdvanceGateRequest>[];
+
+  @override
+  Future<ServerAdvanceGateDecision> decide(
+    ServerAdvanceGateRequest request,
+  ) async {
+    requests.add(request);
+    throw Exception('advance gate unavailable');
+  }
+}
+
 StudentLearningState _classroomState() {
   const items = [
     CurriculumItem(marker: 'M1', text: 'Item 1'),
@@ -450,6 +462,36 @@ void main() {
       expect(eventTypes, isNot(contains('NEXT_ACTION_DECIDED')));
       expect(eventTypes, isNot(contains('ITEM_MASTERED')));
       expect(eventTypes, isNot(contains('ITEM_ADVANCED')));
+    },
+  );
+
+  test(
+    'remote advance gate failure does not unlock fake feedback advance',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = FakeClassroomT02();
+      final gate = FailingServerAdvanceGateClient();
+      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      await runtime.open(lessonLocalId: 'cyber-class');
+
+      runtime.select(AnswerLetter.A);
+      await expectLater(
+        runtime.signal(DecisionSignal.one),
+        throwsA(isA<Exception>()),
+      );
+
+      final snapshot = runtime.snapshot();
+      expect(snapshot.phase.type, ClassroomPhaseType.lendo);
+      expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l1);
+      expect(
+        service
+            .read('cyber-class')
+            ?.queuedActions
+            .map((action) => action['type']),
+        contains('ADVANCE_GATE_PENDING'),
+      );
     },
   );
 

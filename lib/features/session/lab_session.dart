@@ -2217,6 +2217,7 @@ class LabSession extends ChangeNotifier {
   }
 
   void chooseAulaAnswer(String letter) {
+    if (aulaRuntimeLoading) return;
     stopActiveAudio();
     final answer = AnswerLetter.values.firstWhere(
       (value) => value.name == letter,
@@ -2239,7 +2240,8 @@ class LabSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  void submitAulaSignal(int value) {
+  Future<void> submitAulaSignal(int value) async {
+    if (aulaRuntimeLoading) return;
     stopActiveAudio();
     final signal = switch (value) {
       1 => DecisionSignal.one,
@@ -2264,7 +2266,7 @@ class LabSession extends ChangeNotifier {
       return;
     }
     final organism = _activeOrganism ?? _organismForActiveLesson();
-    unawaited(_doSignal(organism, signal));
+    await _doSignal(organism, signal);
   }
 
   Future<void> _doSignal(SimOrganism organism, DecisionSignal signal) async {
@@ -2339,6 +2341,7 @@ class LabSession extends ChangeNotifier {
   }
 
   Future<void> advanceAula() async {
+    if (aulaRuntimeLoading) return;
     final organism = _activeOrganism ?? _organismForActiveLesson();
     stopActiveAudio(notify: false);
     aulaRuntimeLoading = true;

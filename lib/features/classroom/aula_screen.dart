@@ -524,6 +524,7 @@ class _AulaLabScreenState extends State<AulaLabScreen>
         (session.audioEnabled && session.audioPlaying ? 74 : 0) +
         (_pendingScrollTarget != null ? 72 : 0);
     final pendingTarget = _pendingScrollTarget;
+    final aulaBusy = session.aulaRuntimeLoading || isProcessing;
     Widget answerWithSignals(AnswerLetter letter, String label) {
       final isActive = effectiveSelected == letter;
       return Column(
@@ -533,7 +534,7 @@ class _AulaLabScreenState extends State<AulaLabScreen>
             label: label,
             text: content?.options[letter] ?? '',
             active: isActive,
-            enabled: true,
+            enabled: !aulaBusy,
             onTap: () {
               _prepareUserDrivenScroll();
               session.chooseAulaAnswer(label);
@@ -544,9 +545,10 @@ class _AulaLabScreenState extends State<AulaLabScreen>
             KeyedSubtree(
               key: _signalKey,
               child: _SinalRow(
+                busy: aulaBusy,
                 onSignal: (value) {
                   _prepareUserDrivenScroll();
-                  session.submitAulaSignal(value);
+                  unawaited(session.submitAulaSignal(value));
                 },
               ),
             ),
@@ -1018,9 +1020,12 @@ class _AulaLabScreenState extends State<AulaLabScreen>
                             viewModel?.nextLabel ?? 'aula_next',
                           ),
                           busy: session.doubt.status == DoubtStatus.processing,
+                          nextBusy: session.aulaRuntimeLoading,
                           onAskDoubt: () {
                             _prepareUserDrivenScroll();
-                            session.toggleDoubt();
+                            if (!session.aulaRuntimeLoading) {
+                              session.toggleDoubt();
+                            }
                           },
                           onNext: () {
                             _prepareUserDrivenScroll();
@@ -1684,6 +1689,7 @@ class _FeedbackBox extends StatefulWidget {
     required this.doubtLabel,
     required this.nextLabel,
     required this.busy,
+    required this.nextBusy,
     required this.onAskDoubt,
     required this.onNext,
   });
@@ -1693,6 +1699,7 @@ class _FeedbackBox extends StatefulWidget {
   final String doubtLabel;
   final String nextLabel;
   final bool busy;
+  final bool nextBusy;
   final VoidCallback onAskDoubt;
   final VoidCallback onNext;
 
@@ -1780,7 +1787,7 @@ class _FeedbackBoxState extends State<_FeedbackBox>
                 Expanded(
                   child: _FeedbackActionButton(
                     label: widget.doubtLabel,
-                    enabled: true,
+                    enabled: !widget.busy && !widget.nextBusy,
                     primary: false,
                     onTap: widget.onAskDoubt,
                   ),
@@ -1789,7 +1796,7 @@ class _FeedbackBoxState extends State<_FeedbackBox>
                 Expanded(
                   child: _FeedbackActionButton(
                     label: widget.nextLabel,
-                    enabled: true,
+                    enabled: !widget.nextBusy,
                     primary: true,
                     onTap: widget.onNext,
                   ),
@@ -1806,14 +1813,14 @@ class _FeedbackBoxState extends State<_FeedbackBox>
                       children: [
                         _FeedbackActionButton(
                           label: widget.doubtLabel,
-                          enabled: true,
+                          enabled: !widget.busy && !widget.nextBusy,
                           primary: false,
                           onTap: widget.onAskDoubt,
                         ),
                         const SizedBox(height: 10),
                         _FeedbackActionButton(
                           label: widget.nextLabel,
-                          enabled: true,
+                          enabled: !widget.nextBusy,
                           primary: true,
                           onTap: widget.onNext,
                         ),
@@ -1976,7 +1983,8 @@ class _StaggeredAnswerListState extends State<_StaggeredAnswerList>
 
 // AUL-8: Row of 3 equal signal buttons, mono-18 number, label-11 uppercase
 class _SinalRow extends StatelessWidget {
-  const _SinalRow({required this.onSignal});
+  const _SinalRow({required this.busy, required this.onSignal});
+  final bool busy;
   final void Function(int) onSignal;
 
   @override
@@ -2009,7 +2017,7 @@ class _SinalRow extends StatelessWidget {
                   color: Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                   child: InkWell(
-                    onTap: () => onSignal(labels[i].$1),
+                    onTap: busy ? null : () => onSignal(labels[i].$1),
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
                       constraints: const BoxConstraints(

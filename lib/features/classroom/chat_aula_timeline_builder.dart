@@ -221,15 +221,17 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     );
 
     final selected = phase?.letter;
+    final answerBusy =
+        input.runtimeLoading || phase?.type == ClassroomPhaseType.processando;
     messages.add(
       ChatLessonMessage(
         id: 'options-$activeId',
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.options,
         selectedAnswer: selected,
-        options: _options(content, selected: selected, enabled: true),
+        options: _options(content, selected: selected, enabled: !answerBusy),
         signals: phase?.type == ClassroomPhaseType.expandida
-            ? _signals(enabled: true)
+            ? _signals(enabled: !answerBusy)
             : const [],
         lessonLocalId: input.lessonLocalId,
         marker: marker,

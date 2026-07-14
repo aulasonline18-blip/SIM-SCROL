@@ -177,7 +177,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
 
   void _submitSignal(int value) {
     _runConversationAction('signal', () {
-      widget.session.submitAulaSignal(value);
+      return widget.session.submitAulaSignal(value);
     });
   }
 

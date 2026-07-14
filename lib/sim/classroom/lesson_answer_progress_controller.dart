@@ -177,6 +177,8 @@ class LessonAnswerProgressController {
           error: error,
         );
         stateService.write(pending);
+        position.phase = const ClassroomPhase.reading();
+        rethrow;
       }
       final message = buildLessonAnswerFeedback(
         correct: correct,
