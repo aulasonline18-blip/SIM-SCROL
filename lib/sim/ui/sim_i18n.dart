@@ -215,6 +215,8 @@ const Map<String, String> _simStrings = {
   'aula_doubt_about_question': 'Tenho dúvida sobre essa questão',
   'aula_doubt_processing': 'Analisando sua dúvida...',
   'aula_registering': 'Registrando...',
+  'aula_advance_pending':
+      'Nao consegui confirmar seu avanco agora. Sua resposta foi guardada; tente novamente.',
   'aula_retry_prepare': 'Tentar novamente preparar aula',
   'aula_tools': 'Ferramentas da aula',
   'aula_header_short': 'AULA',
@@ -668,6 +670,8 @@ const Map<String, String> _enStrings = {
   'aula_doubt_about_question': 'I have a question about this',
   'aula_doubt_processing': 'Analyzing your question...',
   'aula_registering': 'Registering...',
+  'aula_advance_pending':
+      'I could not confirm your progress yet. Your answer was saved; try again.',
   'aula_retry_prepare': 'Try preparing the lesson again',
   'aula_tools': 'Lesson tools',
   'aula_header_short': 'LESSON',
@@ -1110,6 +1114,8 @@ const Map<String, String> _ptStrings = {
   'aula_doubt_about_question': 'Tenho dúvida sobre essa questão',
   'aula_doubt_processing': 'Analisando sua dúvida...',
   'aula_registering': 'Registrando...',
+  'aula_advance_pending':
+      'Nao consegui confirmar seu avanco agora. Sua resposta foi guardada; tente novamente.',
   'aula_retry_prepare': 'Tentar novamente preparar aula',
   'aula_tools': 'Ferramentas da aula',
   'aula_audio_playing': 'Áudio da aula tocando',
@@ -1310,6 +1316,8 @@ const Map<String, String> _frStrings = {
   'aula_doubt_about_question': 'J’ai une question sur ce point',
   'aula_doubt_processing': 'Analyse de votre question...',
   'aula_registering': 'Enregistrement...',
+  'aula_advance_pending':
+      'Je n ai pas pu confirmer ta progression. Ta reponse a ete gardee; reessaie.',
   'preparing_failed_title': 'Je n’ai pas pu préparer maintenant.',
   'preparing_change_goal': 'Changer l’objectif',
   'aula_next_layer': 'Couche suivante',
@@ -1601,6 +1609,8 @@ const Map<String, String> _esStrings = {
   'aula_doubt_about_question': 'Tengo una duda sobre esta pregunta',
   'aula_doubt_processing': 'Analizando tu duda...',
   'aula_registering': 'Registrando...',
+  'aula_advance_pending':
+      'No pude confirmar tu avance ahora. Tu respuesta fue guardada; intenta de nuevo.',
   'aula_retry_prepare': 'Intentar preparar la clase de nuevo',
   'aula_tools': 'Herramientas de la clase',
   'aula_header_short': 'CLASE',
@@ -1796,6 +1806,7 @@ const Map<String, String> _jaStrings = {
   'aula_doubt_about_question': 'この問題について質問があります',
   'aula_doubt_processing': '質問を分析中...',
   'aula_registering': '登録中...',
+  'aula_advance_pending': '進行をまだ確認できませんでした。回答は保存されました。もう一度試してください。',
   'preparing_failed_title': '今は準備できませんでした。',
   'preparing_change_goal': '目標を変更',
   'aula_next_layer': '次のレイヤー',

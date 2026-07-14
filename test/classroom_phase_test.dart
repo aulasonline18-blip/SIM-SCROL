@@ -132,6 +132,40 @@ class FailingServerAdvanceGateClient implements ServerAdvanceGateClient {
   }
 }
 
+class FlakyServerAdvanceGateClient implements ServerAdvanceGateClient {
+  final requests = <ServerAdvanceGateRequest>[];
+
+  @override
+  Future<ServerAdvanceGateDecision> decide(
+    ServerAdvanceGateRequest request,
+  ) async {
+    requests.add(request);
+    if (requests.length == 1) {
+      throw Exception('advance gate unavailable');
+    }
+    return ServerAdvanceGateDecision(
+      accepted: true,
+      decision: 'next_layer',
+      reason: 'retry_accepted',
+      nextItemIdx: request.itemIdx,
+      nextLayer: LessonLayer.l3,
+      highWaterMark: 2,
+      duplicate: true,
+      events: [
+        {
+          'type': 'ADVANCE_GATE_DECIDED',
+          'decision': 'next_layer',
+          'marker': request.marker,
+          'layer': request.layer.value,
+          'letra': request.selectedOption.name,
+          'sinal': request.signal.value,
+          'correct': request.correct,
+        },
+      ],
+    );
+  }
+}
+
 StudentLearningState _classroomState() {
   const items = [
     CurriculumItem(marker: 'M1', text: 'Item 1'),
@@ -466,7 +500,7 @@ void main() {
   );
 
   test(
-    'remote advance gate failure does not unlock fake feedback advance',
+    'remote advance gate failure keeps explicit retry pending state',
     () async {
       final service = StudentLearningStateService(
         seed: {'cyber-class': _classroomState()},
@@ -477,13 +511,12 @@ void main() {
       await runtime.open(lessonLocalId: 'cyber-class');
 
       runtime.select(AnswerLetter.A);
-      await expectLater(
-        runtime.signal(DecisionSignal.one),
-        throwsA(isA<Exception>()),
-      );
+      await runtime.signal(DecisionSignal.one);
 
       final snapshot = runtime.snapshot();
-      expect(snapshot.phase.type, ClassroomPhaseType.lendo);
+      expect(snapshot.phase.type, ClassroomPhaseType.avancoPendente);
+      expect(snapshot.phase.letter, AnswerLetter.A);
+      expect(snapshot.phase.signal, DecisionSignal.one);
       expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l1);
       expect(
         service
@@ -492,6 +525,33 @@ void main() {
             .map((action) => action['type']),
         contains('ADVANCE_GATE_PENDING'),
       );
+    },
+  );
+
+  test(
+    'remote advance gate retry reuses idempotency key and applies decision',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = FakeClassroomT02();
+      final gate = FlakyServerAdvanceGateClient();
+      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      await runtime.open(lessonLocalId: 'cyber-class');
+
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.one);
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.avancoPendente);
+
+      await runtime.signal(DecisionSignal.one);
+
+      expect(gate.requests, hasLength(2));
+      expect(
+        gate.requests.first.idempotencyKey,
+        gate.requests.last.idempotencyKey,
+      );
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
+      expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
     },
   );
 

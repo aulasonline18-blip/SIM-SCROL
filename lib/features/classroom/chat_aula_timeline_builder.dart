@@ -257,6 +257,22 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           deliveryStatus: ChatLessonDeliveryStatus.processing,
         ),
       );
+    } else if (phase?.type == ClassroomPhaseType.avancoPendente) {
+      messages.add(
+        ChatLessonMessage(
+          id: 'advance-gate-pending-$activeId',
+          role: ChatLessonMessageRole.system,
+          kind: ChatLessonMessageKind.error,
+          text: t(phase?.message ?? 'aula_advance_pending'),
+          actionKey: 'retry',
+          lessonLocalId: input.lessonLocalId,
+          marker: marker,
+          itemIdx: itemIdx,
+          layer: layer,
+          isActionable: true,
+          deliveryStatus: ChatLessonDeliveryStatus.failed,
+        ),
+      );
     } else if (phase?.type == ClassroomPhaseType.concluido) {
       messages.add(
         ChatLessonMessage(

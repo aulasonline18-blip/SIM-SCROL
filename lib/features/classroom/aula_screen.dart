@@ -480,6 +480,7 @@ class _AulaLabScreenState extends State<AulaLabScreen>
     final selected = phase?.letter;
     final isExpanded = phase?.type == ClassroomPhaseType.expandida;
     final isProcessing = phase?.type == ClassroomPhaseType.processando;
+    final isAdvancePending = phase?.type == ClassroomPhaseType.avancoPendente;
     final isCompleted = phase?.type == ClassroomPhaseType.concluido;
     final isEngineError = phase?.type == ClassroomPhaseType.erroEngine;
     final isDone = snapshot?.isDone ?? false;
@@ -540,18 +541,32 @@ class _AulaLabScreenState extends State<AulaLabScreen>
               session.chooseAulaAnswer(label);
             },
           ),
-          if (effectiveExpanded && isActive) ...[
+          if ((effectiveExpanded || isAdvancePending) && isActive) ...[
             const SizedBox(height: 4),
-            KeyedSubtree(
-              key: _signalKey,
-              child: _SinalRow(
-                busy: aulaBusy,
-                onSignal: (value) {
-                  _prepareUserDrivenScroll();
-                  unawaited(session.submitAulaSignal(value));
-                },
+            if (isAdvancePending)
+              KeyedSubtree(
+                key: _signalKey,
+                child: _AdvanceGatePendingBox(
+                  busy: session.aulaRuntimeLoading,
+                  onRetry: () {
+                    final signal = phase?.signal;
+                    if (signal == null) return;
+                    _prepareUserDrivenScroll();
+                    unawaited(session.submitAulaSignal(signal.value));
+                  },
+                ),
+              )
+            else
+              KeyedSubtree(
+                key: _signalKey,
+                child: _SinalRow(
+                  busy: aulaBusy,
+                  onSignal: (value) {
+                    _prepareUserDrivenScroll();
+                    unawaited(session.submitAulaSignal(value));
+                  },
+                ),
               ),
-            ),
             const SizedBox(height: 10),
           ],
         ],
@@ -2068,6 +2083,42 @@ class _SinalRow extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AdvanceGatePendingBox extends StatelessWidget {
+  const _AdvanceGatePendingBox({required this.busy, required this.onRetry});
+
+  final bool busy;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Container(
+      margin: const EdgeInsets.only(left: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: palette.surfaceSoft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: simWarn),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            t('aula_advance_pending'),
+            style: TextStyle(color: palette.text, fontSize: 14, height: 1.35),
+          ),
+          const SizedBox(height: 12),
+          SimActionButton(
+            label: busy ? t('aula_retrying') : t('aula_try_again_2'),
+            onPressed: busy ? null : onRetry,
+            height: 46,
+          ),
         ],
       ),
     );

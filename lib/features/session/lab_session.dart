@@ -2270,7 +2270,6 @@ class LabSession extends ChangeNotifier {
   }
 
   Future<void> _doSignal(SimOrganism organism, DecisionSignal signal) async {
-    final previousSnapshot = aulaSnapshot;
     aulaRuntimeLoading = true;
     aulaRuntimeError = null;
     notifyListeners();
@@ -2280,13 +2279,7 @@ class LabSession extends ChangeNotifier {
       _bindActiveLessonMedia(organism);
       _persistActiveLessonToCloud();
     } catch (error) {
-      if (previousSnapshot != null) {
-        final recovered = previousSnapshot.copyWith(
-          phase: const ClassroomPhase.reading(),
-        );
-        organism.lessonRuntimeEngine.restoreTransientSnapshot(recovered);
-        aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
-      }
+      aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       aulaRuntimeError = error.toString();
     } finally {
       aulaRuntimeLoading = false;

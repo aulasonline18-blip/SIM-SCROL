@@ -55,7 +55,8 @@ class LessonAnswerProgressController {
     final phase = position.phase;
     final content = position.conteudo;
     final item = position.itemAtivo;
-    if (phase.type != ClassroomPhaseType.expandida ||
+    if ((phase.type != ClassroomPhaseType.expandida &&
+            phase.type != ClassroomPhaseType.avancoPendente) ||
         phase.letter == null ||
         content == null ||
         item == null) {
@@ -177,8 +178,12 @@ class LessonAnswerProgressController {
           error: error,
         );
         stateService.write(pending);
-        position.phase = const ClassroomPhase.reading();
-        rethrow;
+        position.phase = ClassroomPhase.advancePending(
+          message: 'aula_advance_pending',
+          letter: letter,
+          signal: signal,
+        );
+        return;
       }
       final message = buildLessonAnswerFeedback(
         correct: correct,

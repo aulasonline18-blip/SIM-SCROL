@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/auxiliary/doubt_input_sheet.dart';
+import '../../sim/classroom/classroom_models.dart';
 import '../../sim/classroom/classroom_text_scale.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_theme.dart';
@@ -182,6 +183,16 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   }
 
   void _retryLessonRuntime() {
+    final phase = widget.session.aulaSnapshot?.phase;
+    final pendingSignal = phase?.type == ClassroomPhaseType.avancoPendente
+        ? phase?.signal
+        : null;
+    if (pendingSignal != null) {
+      _runConversationAction('retry', () {
+        return widget.session.submitAulaSignal(pendingSignal.value);
+      });
+      return;
+    }
     _runConversationAction('retry', widget.session.openAulaRuntime);
   }
 

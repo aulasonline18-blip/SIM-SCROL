@@ -101,7 +101,8 @@ LessonMainViewModel buildLessonMainViewModel({
     options: options,
     locked:
         phase.type == ClassroomPhaseType.concluido ||
-        phase.type == ClassroomPhaseType.processando,
+        phase.type == ClassroomPhaseType.processando ||
+        phase.type == ClassroomPhaseType.avancoPendente,
     nextLabel: nextLabel,
     itemUnit: itemAtivo?.unit,
     itemMarker: itemAtivo?.marker,

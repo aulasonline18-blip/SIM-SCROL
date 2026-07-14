@@ -6,6 +6,7 @@ enum ClassroomPhaseType {
   lendo,
   expandida,
   processando,
+  avancoPendente,
   concluido,
   fim,
 }
@@ -38,6 +39,16 @@ class ClassroomPhase {
         letter: letter,
         signal: signal,
       );
+  const ClassroomPhase.advancePending({
+    required String message,
+    required AnswerLetter letter,
+    required DecisionSignal signal,
+  }) : this(
+         type: ClassroomPhaseType.avancoPendente,
+         message: message,
+         letter: letter,
+         signal: signal,
+       );
   const ClassroomPhase.completed({
     required String message,
     required bool wasCorrect,
