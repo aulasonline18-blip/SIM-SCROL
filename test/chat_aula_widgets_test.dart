@@ -2638,6 +2638,41 @@ void main() {
     },
   );
 
+  testWidgets(
+    'chat timeline restores to current item when messages load after open',
+    (tester) async {
+      final key = GlobalKey<_DeferredInitialTimelineHarnessState>();
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 320,
+              child: _DeferredInitialTimelineHarness(
+                key: key,
+                scrollController: controller,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(controller.hasClients, isTrue);
+      expect(controller.position.pixels, 0);
+      expect(find.text('Item atual carregado.'), findsNothing);
+
+      key.currentState!.loadCurrentLessonMessages();
+      await tester.pumpAndSettle();
+
+      expect(controller.position.pixels, greaterThan(0));
+      expect(find.text('Item atual carregado.'), findsOneWidget);
+      expect(find.text('Alternativa carregada A'), findsOneWidget);
+    },
+  );
+
   testWidgets('chat classroom covers normal flow through feedback', (
     tester,
   ) async {
@@ -3081,6 +3116,79 @@ class _RestoredTimelineHarnessState extends State<_RestoredTimelineHarness> {
     return ChatAulaTimeline(
       messages: _messages,
       scrollController: widget.scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      onChooseAnswer: (_) {},
+      onSignal: (_) {},
+      onRetry: () {},
+      onNext: () {},
+      onOpenDoubt: () {},
+    );
+  }
+}
+
+class _DeferredInitialTimelineHarness extends StatefulWidget {
+  const _DeferredInitialTimelineHarness({
+    required this.scrollController,
+    super.key,
+  });
+
+  final ScrollController scrollController;
+
+  @override
+  State<_DeferredInitialTimelineHarness> createState() =>
+      _DeferredInitialTimelineHarnessState();
+}
+
+class _DeferredInitialTimelineHarnessState
+    extends State<_DeferredInitialTimelineHarness> {
+  var _messages = const <ChatLessonMessage>[];
+
+  void loadCurrentLessonMessages() {
+    setState(() {
+      _messages = [
+        for (var i = 1; i <= 24; i++)
+          ChatLessonMessage(
+            id: 'deferred-history-$i',
+            role: ChatLessonMessageRole.sim,
+            kind: ChatLessonMessageKind.explanation,
+            text: 'Historico carregado $i\nLinha preservada.',
+          ),
+        const ChatLessonMessage(
+          id: 'deferred-current-explanation',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.explanation,
+          text: 'Item atual carregado.',
+        ),
+        const ChatLessonMessage(
+          id: 'deferred-current-question',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.question,
+          text: 'Pergunta carregada?',
+        ),
+        const ChatLessonMessage(
+          id: 'deferred-current-options',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.options,
+          options: [
+            ChatLessonOption(
+              letter: AnswerLetter.A,
+              text: 'Alternativa carregada A',
+              selected: false,
+              enabled: true,
+            ),
+          ],
+        ),
+      ];
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ChatAulaTimeline(
+      messages: _messages,
+      scrollController: widget.scrollController,
+      initialScrollToCurrent: true,
+      initialScrollKey: 'lesson-deferred',
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       onChooseAnswer: (_) {},
       onSignal: (_) {},

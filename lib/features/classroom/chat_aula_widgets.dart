@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -27,6 +29,7 @@ class ChatAulaTimeline extends StatefulWidget {
     this.pendingActionKeys = const {},
     this.scrollController,
     this.initialScrollToCurrent = false,
+    this.initialScrollKey,
     this.padding = const EdgeInsets.fromLTRB(16, 112, 16, 128),
     super.key,
   });
@@ -42,6 +45,7 @@ class ChatAulaTimeline extends StatefulWidget {
   final Set<String> pendingActionKeys;
   final ScrollController? scrollController;
   final bool initialScrollToCurrent;
+  final String? initialScrollKey;
   final EdgeInsets padding;
 
   @override
@@ -59,27 +63,28 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     debugLabel: 'chat-aula-timeline-focus',
   );
   String _messageSignature = '';
+  late bool _initialScrollToCurrentPending = widget.initialScrollToCurrent;
   _ExplicitScrollIntent? _pendingScrollIntent;
 
   @override
   void initState() {
     super.initState();
     _messageSignature = _signatureOf(widget.messages);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          !widget.initialScrollToCurrent ||
-          widget.messages.isEmpty) {
-        return;
-      }
-      _scrollToCurrent(immediate: true);
-    });
+    _scheduleInitialScrollToCurrent();
   }
 
   @override
   void didUpdateWidget(ChatAulaTimeline oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if ((!oldWidget.initialScrollToCurrent && widget.initialScrollToCurrent) ||
+        oldWidget.initialScrollKey != widget.initialScrollKey) {
+      _initialScrollToCurrentPending = widget.initialScrollToCurrent;
+    }
     final nextSignature = _signatureOf(widget.messages);
-    if (nextSignature == _messageSignature) return;
+    if (nextSignature == _messageSignature) {
+      _scheduleInitialScrollToCurrent();
+      return;
+    }
     _messageSignature = nextSignature;
     _retainMessageKeys(widget.messages);
     final fallbackOffset = _scrollController.hasClients
@@ -93,6 +98,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         _scrollForIntent(intent, initialFallbackOffset: fallbackOffset);
       }
     });
+    _scheduleInitialScrollToCurrent();
   }
 
   @override
@@ -114,6 +120,33 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
           preferNewTurnStart || intent == _ExplicitScrollIntent.nextExplanation,
       initialFallbackOffset: initialFallbackOffset,
     );
+  }
+
+  void _scheduleInitialScrollToCurrent() {
+    if (!_initialScrollToCurrentPending ||
+        !widget.initialScrollToCurrent ||
+        !_hasInitialScrollTarget(widget.messages)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_initialScrollToCurrentPending ||
+          !widget.initialScrollToCurrent ||
+          !_hasInitialScrollTarget(widget.messages)) {
+        return;
+      }
+      _initialScrollToCurrentPending = false;
+      unawaited(_scrollToCurrent(immediate: true));
+    });
+  }
+
+  bool _hasInitialScrollTarget(List<ChatLessonMessage> messages) {
+    return messages.any((message) {
+      return switch (message.kind) {
+        ChatLessonMessageKind.loading => false,
+        _ => true,
+      };
+    });
   }
 
   Future<void> _scrollToCurrent({
