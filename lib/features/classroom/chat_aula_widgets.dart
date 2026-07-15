@@ -65,6 +65,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   String _messageSignature = '';
   late bool _initialScrollToCurrentPending = widget.initialScrollToCurrent;
   _ExplicitScrollIntent? _pendingScrollIntent;
+  int _scrollToEndGeneration = 0;
 
   @override
   void initState() {
@@ -87,15 +88,14 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     }
     _messageSignature = nextSignature;
     _retainMessageKeys(widget.messages);
-    final fallbackOffset = _scrollController.hasClients
-        ? _scrollController.position.pixels
-        : null;
     final intent = _pendingScrollIntent;
     _pendingScrollIntent = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (intent != null) {
-        _scrollForIntent(intent, initialFallbackOffset: fallbackOffset);
+        _scrollForIntent(intent);
+      } else {
+        _scheduleScrollToEnd();
       }
     });
     _scheduleInitialScrollToCurrent();
@@ -103,6 +103,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
 
   @override
   void dispose() {
+    _scrollToEndGeneration++;
     if (_ownsScrollController) _scrollController.dispose();
     _timelineFocusNode.dispose();
     super.dispose();
@@ -111,15 +112,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   Future<void> _scrollForIntent(
     _ExplicitScrollIntent intent, {
     bool immediate = false,
-    bool preferNewTurnStart = false,
-    double? initialFallbackOffset,
-  }) {
-    return _scrollToCurrent(
-      immediate: immediate,
-      preferNewTurnStart:
-          preferNewTurnStart || intent == _ExplicitScrollIntent.nextExplanation,
-      initialFallbackOffset: initialFallbackOffset,
-    );
+  }) async {
+    _scheduleScrollToEnd(immediate: immediate);
   }
 
   void _scheduleInitialScrollToCurrent() {
@@ -136,7 +130,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         return;
       }
       _initialScrollToCurrentPending = false;
-      unawaited(_scrollToCurrent(immediate: true));
+      _scheduleScrollToEnd(immediate: true);
     });
   }
 
@@ -154,6 +148,10 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     bool preferNewTurnStart = false,
     double? initialFallbackOffset,
   }) async {
+    if (!preferNewTurnStart && initialFallbackOffset == null) {
+      _scheduleScrollToEnd(immediate: immediate);
+      return;
+    }
     if (!_scrollController.hasClients) return;
     final disableAnimations =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -220,6 +218,64 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
           );
         }
       }
+    }
+  }
+
+  void _scheduleScrollToEnd({bool immediate = false}) {
+    final generation = ++_scrollToEndGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _scrollToEndGeneration) return;
+      _scrollToEnd(generation: generation, immediate: immediate);
+    });
+  }
+
+  Future<void> _scrollToEnd({
+    required int generation,
+    bool immediate = false,
+    int pass = 0,
+  }) async {
+    if (!mounted ||
+        generation != _scrollToEndGeneration ||
+        !_scrollController.hasClients) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (!position.hasContentDimensions) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToEnd(
+          generation: generation,
+          immediate: immediate,
+          pass: pass + 1,
+        );
+      });
+      return;
+    }
+    final target = position.maxScrollExtent;
+    final disableAnimations =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (immediate || disableAnimations) {
+      _scrollController.jumpTo(target);
+    } else {
+      await _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (!mounted || generation != _scrollToEndGeneration || pass >= 2) {
+      return;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted ||
+        generation != _scrollToEndGeneration ||
+        !_scrollController.hasClients) {
+      return;
+    }
+    final nextTarget = _scrollController.position.maxScrollExtent;
+    if ((nextTarget - _scrollController.position.pixels).abs() > 1) {
+      unawaited(
+        _scrollToEnd(generation: generation, immediate: true, pass: pass + 1),
+      );
     }
   }
 
@@ -532,6 +588,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                                             widget.pendingActionKeys,
                                         onImageSettled: () {
                                           widget.onImageSettled?.call();
+                                          _scheduleScrollToEnd();
                                         },
                                       ),
                                     ),

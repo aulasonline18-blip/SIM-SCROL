@@ -1,4 +1,5 @@
 import java.io.FileInputStream
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -28,7 +29,35 @@ fun boolProperty(name: String, fallback: Boolean = false): Boolean =
         ?.let { it == "1" || it == "true" || it == "yes" }
         ?: fallback
 
+fun dartDefineValue(name: String): String? {
+    val rawDefines = project.findProperty("dart-defines") as String? ?: return null
+    return rawDefines
+        .split(",")
+        .mapNotNull { encoded ->
+            runCatching {
+                String(Base64.getDecoder().decode(encoded), Charsets.UTF_8)
+            }.getOrNull()
+        }
+        .firstOrNull { decoded -> decoded.startsWith("$name=") }
+        ?.substringAfter("=")
+}
+
+fun boolDartDefine(name: String, fallback: Boolean = false): Boolean =
+    dartDefineValue(name)
+        ?.lowercase()
+        ?.let { it == "1" || it == "true" || it == "yes" }
+        ?: fallback
+
 val simApplicationId = stringProperty("SIM_ANDROID_APPLICATION_ID", "com.example.sim_mobile")
+val simUsesCleartextTraffic =
+    boolProperty("SIM_ANDROID_ALLOW_CLEARTEXT") ||
+        boolDartDefine("SIM_ALLOW_HTTP_IN_PRODUCTION")
+val simNetworkSecurityConfig =
+    if (simUsesCleartextTraffic) {
+        "@xml/network_security_config_cleartext"
+    } else {
+        "@xml/network_security_config"
+    }
 val simReleaseSigningReady =
     !signingValue("storeFile").isNullOrBlank() &&
         !signingValue("storePassword").isNullOrBlank() &&
@@ -54,6 +83,10 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["simUsesCleartextTraffic"] =
+            simUsesCleartextTraffic.toString()
+        manifestPlaceholders["simNetworkSecurityConfig"] =
+            simNetworkSecurityConfig
     }
 
     signingConfigs {

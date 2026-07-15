@@ -233,10 +233,22 @@ void main() {
     expect(find.byKey(const Key('signal-button-2')), findsOneWidget);
     expect(find.byKey(const Key('signal-button-3')), findsOneWidget);
 
+    await Scrollable.ensureVisible(
+      tester.element(find.text('Alternativa B')),
+      duration: Duration.zero,
+      alignment: 0.5,
+    );
+    await tester.pump();
     await tester.tap(find.text('Alternativa B'));
     await tester.pump();
     expect(selected, AnswerLetter.B);
 
+    await Scrollable.ensureVisible(
+      tester.element(find.text('Alternativa C')),
+      duration: Duration.zero,
+      alignment: 0.5,
+    );
+    await tester.pump();
     await tester.tap(find.text('Alternativa C'));
     await tester.pump();
     expect(selected, AnswerLetter.C);
@@ -971,110 +983,98 @@ void main() {
     expect(session.autoAdvances, 1);
   });
 
-  testWidgets(
-    'chat timeline preserves reader scroll without floating return button',
-    (tester) async {
-      final key = GlobalKey<_ChatTimelineHarnessState>();
-      final controller = ScrollController();
-      addTearDown(controller.dispose);
+  testWidgets('chat timeline follows new messages to the end', (tester) async {
+    final key = GlobalKey<_ChatTimelineHarnessState>();
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              height: 320,
-              child: _ChatTimelineHarness(
-                key: key,
-                scrollController: controller,
-              ),
-            ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: _ChatTimelineHarness(key: key, scrollController: controller),
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await tester.scrollUntilVisible(
-        find.textContaining('Mensagem 32'),
-        240,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.pump(const Duration(milliseconds: 120));
-      expect(find.textContaining('Mensagem 32'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.textContaining('Mensagem 32'),
+      240,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(find.textContaining('Mensagem 32'), findsOneWidget);
 
-      key.currentState!.appendMessage('Mensagem nova');
-      await tester.pump(const Duration(milliseconds: 700));
+    key.currentState!.appendMessage('Mensagem nova');
+    await tester.pump(const Duration(milliseconds: 700));
 
-      expect(find.text('Mensagem nova'), findsOneWidget);
-      expect(controller.position.maxScrollExtent, greaterThan(96));
+    expect(find.text('Mensagem nova'), findsOneWidget);
+    expect(controller.position.maxScrollExtent, greaterThan(96));
 
-      unawaited(
-        controller.animateTo(
-          0,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 220));
+    unawaited(
+      controller.animateTo(
+        0,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 220));
 
-      key.currentState!.appendMessage('Mensagem mais nova');
-      await tester.pump(const Duration(milliseconds: 120));
+    key.currentState!.appendMessage('Mensagem mais nova');
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
-      expect(find.textContaining('Voltar ao feedback'), findsNothing);
-      expect(find.text('Mensagem mais nova'), findsNothing);
+    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+    expect(find.textContaining('Voltar ao feedback'), findsNothing);
+    expect(find.text('Mensagem mais nova'), findsOneWidget);
+    expect(
+      controller.position.pixels,
+      closeTo(controller.position.maxScrollExtent, 1),
+    );
+  });
 
-      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
-      expect(find.text('Mensagem mais nova'), findsNothing);
-    },
-  );
+  testWidgets('chat timeline follows new lesson content to the end', (
+    tester,
+  ) async {
+    final key = GlobalKey<_ChatTimelineHarnessState>();
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
 
-  testWidgets(
-    'chat timeline does not jump to new lesson content without explicit action',
-    (tester) async {
-      final key = GlobalKey<_ChatTimelineHarnessState>();
-      final controller = ScrollController();
-      addTearDown(controller.dispose);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              height: 320,
-              child: _ChatTimelineHarness(
-                key: key,
-                scrollController: controller,
-              ),
-            ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: _ChatTimelineHarness(key: key, scrollController: controller),
           ),
         ),
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-      controller.jumpTo(controller.position.maxScrollExtent);
-      await tester.pump();
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump();
 
-      final beforePassiveUpdate = controller.position.pixels;
-      await tester.drag(
-        find.byKey(const Key('chat-aula-timeline')),
-        const Offset(0, 900),
-      );
-      await tester.pump(const Duration(milliseconds: 220));
-      final afterManualDrag = controller.position.pixels;
-      expect(afterManualDrag, lessThan(beforePassiveUpdate));
+    final beforePassiveUpdate = controller.position.pixels;
+    await tester.drag(
+      find.byKey(const Key('chat-aula-timeline')),
+      const Offset(0, 900),
+    );
+    await tester.pump(const Duration(milliseconds: 220));
+    final afterManualDrag = controller.position.pixels;
+    expect(afterManualDrag, lessThan(beforePassiveUpdate));
 
-      key.currentState!.appendNewLessonTurn();
-      await tester.pump(const Duration(milliseconds: 120));
+    key.currentState!.appendNewLessonTurn();
+    await tester.pumpAndSettle();
 
-      expect(controller.position.pixels, afterManualDrag);
-      expect(find.text('Nova explicacao do item.'), findsNothing);
-      expect(find.text('Nova alternativa B'), findsNothing);
-      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
-      expect(find.textContaining('Voltar às alternativas'), findsNothing);
+    expect(controller.position.pixels, greaterThan(afterManualDrag));
+    expect(find.text('Nova alternativa B'), findsOneWidget);
+    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+    expect(find.textContaining('Voltar às alternativas'), findsNothing);
+  });
 
-      expect(find.text('Nova alternativa B'), findsNothing);
-    },
-  );
-
-  testWidgets('chat timeline auto scrolls to new explanation after advance', (
+  testWidgets('chat timeline auto scrolls to the end after advance', (
     tester,
   ) async {
     final key = GlobalKey<_ChatTimelineHarnessState>();
@@ -1106,27 +1106,12 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
     await tester.pumpAndSettle();
 
-    final timelineRect = tester.getRect(
-      find.byKey(const Key('chat-aula-timeline')),
-    );
-    final explanationRect = tester.getRect(
-      find.text('Nova explicacao do item.'),
-    );
-    expect(explanationRect.top, greaterThanOrEqualTo(timelineRect.top));
-    expect(explanationRect.top, lessThan(timelineRect.top + 96));
-
     final optionsFinder = find.text('Nova alternativa B');
-    if (optionsFinder.evaluate().isNotEmpty) {
-      expect(tester.getRect(optionsFinder).top, greaterThan(timelineRect.top));
-    }
-
-    await tester.scrollUntilVisible(
-      optionsFinder,
-      180,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.pump(const Duration(milliseconds: 80));
     expect(optionsFinder, findsOneWidget);
+    expect(
+      controller.position.pixels,
+      closeTo(controller.position.maxScrollExtent, 1),
+    );
 
     final beforeManualDrag = controller.position.pixels;
     await tester.drag(
@@ -1227,15 +1212,25 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    controller.jumpTo(controller.position.maxScrollExtent);
-    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.textContaining('Mensagem 32'),
+      240,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
     expect(controller.position.pixels, greaterThan(0));
 
+    await tester.tap(find.byKey(const Key('chat-aula-timeline')));
+    await tester.pump();
+    Focus.of(
+      tester.element(find.byKey(const Key('chat-aula-timeline'))),
+    ).requestFocus();
+    await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
     expect(controller.position.pixels, 0);
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
     await tester.pumpAndSettle();
     expect(controller.position.pixels, greaterThan(0));
 
@@ -2601,45 +2596,45 @@ void main() {
     },
   );
 
-  testWidgets(
-    'chat restored timeline return targets current item instead of old feedback',
-    (tester) async {
-      final key = GlobalKey<_RestoredTimelineHarnessState>();
-      final controller = ScrollController();
-      addTearDown(controller.dispose);
+  testWidgets('chat restored timeline follows latest restored message', (
+    tester,
+  ) async {
+    final key = GlobalKey<_RestoredTimelineHarnessState>();
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              height: 320,
-              child: _RestoredTimelineHarness(
-                key: key,
-                scrollController: controller,
-              ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: _RestoredTimelineHarness(
+              key: key,
+              scrollController: controller,
             ),
           ),
         ),
-      );
-      await tester.pump(const Duration(milliseconds: 500));
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
 
-      await tester.drag(
-        find.byKey(const Key('chat-aula-timeline')),
-        const Offset(0, 900),
-      );
-      await tester.pump(const Duration(milliseconds: 220));
+    await tester.drag(
+      find.byKey(const Key('chat-aula-timeline')),
+      const Offset(0, 900),
+    );
+    await tester.pump(const Duration(milliseconds: 220));
 
-      key.currentState!.appendRestoredStudentMessage();
-      await tester.pump(const Duration(milliseconds: 120));
+    key.currentState!.appendRestoredStudentMessage();
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
-      expect(find.textContaining('Voltar às alternativas'), findsNothing);
-      expect(find.textContaining('Voltar ao feedback'), findsNothing);
-    },
-  );
+    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+    expect(find.textContaining('Voltar às alternativas'), findsNothing);
+    expect(find.textContaining('Voltar ao feedback'), findsNothing);
+    expect(find.text('Mensagem restaurada depois da volta.'), findsOneWidget);
+  });
 
   testWidgets(
-    'chat timeline restores to current item when messages load after open',
+    'chat timeline restores to the latest message when messages load after open',
     (tester) async {
       final key = GlobalKey<_DeferredInitialTimelineHarnessState>();
       final controller = ScrollController();
@@ -2668,8 +2663,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(controller.position.pixels, greaterThan(0));
-      expect(find.text('Item atual carregado.'), findsOneWidget);
       expect(find.text('Alternativa carregada A'), findsOneWidget);
+      expect(
+        controller.position.pixels,
+        closeTo(controller.position.maxScrollExtent, 1),
+      );
     },
   );
 
