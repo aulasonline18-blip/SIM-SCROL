@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:sim_mobile/features/classroom/aula_widgets.dart';
+import 'package:sim_mobile/features/classroom/visual_webview_renderer.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
@@ -62,6 +63,14 @@ class FakeAttachmentTransport implements SimHttpTransport {
 }
 
 void main() {
+  setUp(() {
+    debugUseVisualWebViewPlaceholder = false;
+  });
+
+  tearDown(() {
+    debugUseVisualWebViewPlaceholder = false;
+  });
+
   test('acabamento cobre todos os itens mandatarios', () {
     expect(simFinishIsComplete(), true);
     expect(simFinishRequirements.length, SimFinishArea.values.length);
@@ -413,6 +422,61 @@ void main() {
     );
     await tester.pump();
 
+    expect(find.text(t('aula_image_unavailable_short')), findsOneWidget);
+    expect(settled, 1);
+  });
+
+  testWidgets('SVG seguro usa renderizador WebView no apoio visual', (
+    tester,
+  ) async {
+    debugUseVisualWebViewPlaceholder = true;
+    var settled = 0;
+    final svg = Uri.encodeComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200"><title>Apoio visual</title><desc>Diagrama seguro</desc><rect x="80" y="80" width="740" height="1040" fill="#fff"/><text x="450" y="180" text-anchor="middle">Diagrama</text></svg>',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 240,
+            height: 320,
+            child: LessonMediaImageView(
+              data: 'data:image/svg+xml;utf8,$svg',
+              onImageSettled: () => settled++,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(VisualWebViewRenderer), findsOneWidget);
+    expect(find.byKey(const Key('visual-webview-placeholder')), findsOneWidget);
+    expect(find.text(t('aula_image_unavailable_short')), findsNothing);
+    expect(settled, 1);
+  });
+
+  testWidgets('SVG inseguro e bloqueado antes da WebView', (tester) async {
+    debugUseVisualWebViewPlaceholder = true;
+    var settled = 0;
+    final svg = Uri.encodeComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(1)</script><rect width="10" height="10"/></svg>',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LessonMediaImageView(
+            data: 'data:image/svg+xml;utf8,$svg',
+            onImageSettled: () => settled++,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(VisualWebViewRenderer), findsNothing);
     expect(find.text(t('aula_image_unavailable_short')), findsOneWidget);
     expect(settled, 1);
   });

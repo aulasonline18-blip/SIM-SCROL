@@ -33,6 +33,7 @@ import '../../sim/media/audio_preference.dart';
 import '../../sim/media/image_data_url_compression.dart';
 import '../../sim/media/lesson_audio_controller.dart';
 import '../../sim/media/student_lesson_media_service.dart';
+import '../../sim/media/visual_svg_safety.dart';
 import '../../sim/state/shared_prefs_state_storage.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/state/student_state_store.dart';
@@ -54,6 +55,7 @@ import '../onboarding/preparation_and_placement.dart';
 import '../classroom/aula_screen.dart';
 import '../classroom/aux_room_screens.dart';
 import '../classroom/aula_widgets.dart';
+import '../classroom/visual_webview_renderer.dart';
 import '../billing/billing_and_simple_pages.dart';
 import '../../shared/widgets/shared_widgets.dart';
 
@@ -804,8 +806,14 @@ class _LessonMediaImageViewState extends State<LessonMediaImageView> {
   Widget build(BuildContext context) {
     final trimmed = widget.data.trim();
     if (trimmed.startsWith('data:image/svg+xml')) {
-      _notifySettled();
-      return LessonImageErrorView(compact: widget.compact);
+      if (!isSafeLessonSvgDataUrl(trimmed)) {
+        _notifySettled();
+        return LessonImageErrorView(compact: widget.compact);
+      }
+      return VisualWebViewRenderer(
+        svgDataUrl: trimmed,
+        onSettled: _notifySettled,
+      );
     }
     if (isUsableRasterImageDataUrl(trimmed)) {
       final comma = trimmed.indexOf(',');
