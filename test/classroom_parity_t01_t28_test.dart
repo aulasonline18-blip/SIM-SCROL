@@ -1,5 +1,7 @@
 // Bateria de paridade T01–T28 (Planta Sala de Aula, seção 18).
 // Cada teste é isolado e roda <50ms.
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,7 @@ import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
 import 'package:sim_mobile/sim/cloud/cloud_queue.dart';
 import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
+import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
@@ -219,6 +222,32 @@ class _FakeServerAdvanceGateClient implements ServerAdvanceGateClient {
   }
 }
 
+class _CompleterServerAdvanceGateClient implements ServerAdvanceGateClient {
+  final completer = Completer<ServerAdvanceGateDecision>();
+  final requests = <ServerAdvanceGateRequest>[];
+
+  @override
+  Future<ServerAdvanceGateDecision> decide(ServerAdvanceGateRequest request) {
+    requests.add(request);
+    return completer.future;
+  }
+}
+
+class _FailingServerAdvanceGateClient implements ServerAdvanceGateClient {
+  final requests = <ServerAdvanceGateRequest>[];
+
+  @override
+  Future<ServerAdvanceGateDecision> decide(
+    ServerAdvanceGateRequest request,
+  ) async {
+    requests.add(request);
+    throw const SimExternalAiException(
+      'Falha simulada no Advance Gate.',
+      code: 'ADVANCE_GATE_CLIENT_FAILED',
+    );
+  }
+}
+
 ServerAdvanceGateDecision _serverNextLayer(LessonLayer layer) {
   return ServerAdvanceGateDecision(
     accepted: true,
@@ -241,11 +270,7 @@ LessonAnswerProgressController _controller(
   final t02 = _FakeT02();
   final cache = LessonMaterialCache();
   final bus = LessonEventBus();
-  final orch = LessonOrchestrator(
-    t02Client: t02,
-    cache: cache,
-    bus: bus,
-  );
+  final orch = LessonOrchestrator(t02Client: t02, cache: cache, bus: bus);
   final rwe = DopamineReadyWindowEngine(service: svc, orchestrator: orch);
   final mat = StudentLessonMaterialService(
     stateService: svc,
@@ -1060,6 +1085,193 @@ void main() {
   });
 
   test(
+    'M6-A: cliente lento nao bloqueia feedback local nem cria tentativa',
+    () async {
+      final svc = StudentLearningStateService(seed: {'L1': _state0()});
+      final gate = _CompleterServerAdvanceGateClient();
+      final ctrl = _controller(svc, serverAdvanceGateClient: gate);
+      final pos = LessonPositionState(
+        items: _items
+            .map((item) => PlannedItem(marker: item.marker, text: item.text))
+            .toList(),
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        erros: 0,
+        historia: const [],
+        history: const [],
+        mainAdvances: 0,
+        loadingLayer: LessonLayer.l1,
+        conteudo: const LessonContent(
+          explanation: 'Texto',
+          question: 'Pergunta?',
+          options: {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+        imagem: null,
+        teoriaPronta: true,
+        phase: ClassroomPhase.expanded(AnswerLetter.A),
+      );
+
+      await ctrl.enviarSinal(
+        lessonLocalId: 'L1',
+        topic: 'Cinematica',
+        position: pos,
+        signal: DecisionSignal.one,
+        baseItems: pos.items,
+      );
+
+      expect(gate.requests, hasLength(1));
+      expect(pos.phase.type, ClassroomPhaseType.concluido);
+      expect(svc.read('L1')?.attempts, isEmpty);
+      expect(svc.read('L1')?.current?.layer, LessonLayer.l1);
+      expect(
+        svc
+            .read('L1')
+            ?.queuedActions
+            .where((action) => action['type'] == 'ADVANCE_GATE_PENDING'),
+        hasLength(1),
+      );
+
+      gate.completer.complete(_serverNextLayer(LessonLayer.l2));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(svc.read('L1')?.current?.layer, LessonLayer.l2);
+      expect(svc.read('L1')?.attempts, hasLength(1));
+      expect(
+        svc
+            .read('L1')
+            ?.queuedActions
+            .where((action) => action['type'] == 'ADVANCE_GATE_PENDING'),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'M6-A: falha do servidor fica pendente sem erro tecnico na UI',
+    () async {
+      final svc = StudentLearningStateService(seed: {'L1': _state0()});
+      final gate = _FailingServerAdvanceGateClient();
+      final ctrl = _controller(svc, serverAdvanceGateClient: gate);
+      final pos = LessonPositionState(
+        items: _items
+            .map((item) => PlannedItem(marker: item.marker, text: item.text))
+            .toList(),
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        erros: 0,
+        historia: const [],
+        history: const [],
+        mainAdvances: 0,
+        loadingLayer: LessonLayer.l1,
+        conteudo: const LessonContent(
+          explanation: 'Texto',
+          question: 'Pergunta?',
+          options: {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+        imagem: null,
+        teoriaPronta: true,
+        phase: ClassroomPhase.expanded(AnswerLetter.B),
+      );
+
+      await ctrl.enviarSinal(
+        lessonLocalId: 'L1',
+        topic: 'Cinematica',
+        position: pos,
+        signal: DecisionSignal.three,
+        baseItems: pos.items,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(gate.requests, hasLength(1));
+      expect(pos.phase.type, ClassroomPhaseType.concluido);
+      expect(svc.read('L1')?.attempts, isEmpty);
+      final pendingEvents = svc
+          .read('L1')!
+          .events
+          .where((event) => event.type == 'ADVANCE_GATE_PENDING')
+          .toList();
+      expect(pendingEvents, hasLength(1));
+      final humanError = pendingEvents.single.payload['humanError'].toString();
+      expect(humanError, isNot(contains('HTTP')));
+      expect(humanError, isNot(contains('stack')));
+      expect(humanError, isNot(contains('payload')));
+      expect(humanError, isNot(contains('{')));
+    },
+  );
+
+  test('M6-A: toque repetido nao duplica pendencia idempotente', () async {
+    final svc = StudentLearningStateService(seed: {'L1': _state0()});
+    final gate = _CompleterServerAdvanceGateClient();
+    final ctrl = _controller(svc, serverAdvanceGateClient: gate);
+    final pos = LessonPositionState(
+      items: _items
+          .map((item) => PlannedItem(marker: item.marker, text: item.text))
+          .toList(),
+      itemIdx: 0,
+      layer: LessonLayer.l1,
+      erros: 0,
+      historia: const [],
+      history: const [],
+      mainAdvances: 0,
+      loadingLayer: LessonLayer.l1,
+      conteudo: const LessonContent(
+        explanation: 'Texto',
+        question: 'Pergunta?',
+        options: {
+          AnswerLetter.A: 'A',
+          AnswerLetter.B: 'B',
+          AnswerLetter.C: 'C',
+        },
+        correctAnswer: AnswerLetter.A,
+      ),
+      imagem: null,
+      teoriaPronta: true,
+      phase: ClassroomPhase.expanded(AnswerLetter.A),
+    );
+
+    await ctrl.enviarSinal(
+      lessonLocalId: 'L1',
+      topic: 'Cinematica',
+      position: pos,
+      signal: DecisionSignal.one,
+      baseItems: pos.items,
+    );
+    pos.phase = ClassroomPhase.expanded(AnswerLetter.A);
+    await ctrl.enviarSinal(
+      lessonLocalId: 'L1',
+      topic: 'Cinematica',
+      position: pos,
+      signal: DecisionSignal.one,
+      baseItems: pos.items,
+    );
+
+    expect(
+      svc
+          .read('L1')
+          ?.queuedActions
+          .where((action) => action['type'] == 'ADVANCE_GATE_PENDING'),
+      hasLength(1),
+    );
+    expect(
+      svc
+          .read('L1')
+          ?.events
+          .where((event) => event.type == 'ADVANCE_GATE_PENDING'),
+      hasLength(1),
+    );
+  });
+
+  test(
     'S12: resposta, sinal, feedback, proxima experiencia e restore',
     () async {
       final svc = StudentLearningStateService(seed: {'L1': _state0()});
@@ -1105,6 +1317,7 @@ void main() {
         signal: DecisionSignal.two,
         baseItems: pos.items,
       );
+      await Future<void>.delayed(Duration.zero);
 
       expect(pos.phase.type, ClassroomPhaseType.concluido);
       expect(pos.phase.signal, DecisionSignal.two);
@@ -1112,6 +1325,13 @@ void main() {
       expect(svc.read('L1')?.current?.itemIdx, 0);
       expect(svc.read('L1')?.current?.layer, LessonLayer.l2);
       expect(svc.read('L1')?.attempts.single.letra, AnswerLetter.B);
+      expect(
+        svc
+            .read('L1')
+            ?.queuedActions
+            .where((action) => action['type'] == 'ADVANCE_GATE_PENDING'),
+        isEmpty,
+      );
       expect(gate.requests, hasLength(1));
 
       await ctrl.avancar(

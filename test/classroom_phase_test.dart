@@ -656,10 +656,10 @@ void main() {
 
       runtime.select(AnswerLetter.A);
       await runtime.signal(DecisionSignal.one);
+      await Future<void>.delayed(Duration.zero);
 
       final snapshot = runtime.snapshot();
-      expect(snapshot.phase.type, ClassroomPhaseType.avancoPendente);
-      expect(snapshot.phase.letter, AnswerLetter.A);
+      expect(snapshot.phase.type, ClassroomPhaseType.concluido);
       expect(snapshot.phase.signal, DecisionSignal.one);
       expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l1);
       expect(
@@ -685,9 +685,12 @@ void main() {
 
       runtime.select(AnswerLetter.A);
       await runtime.signal(DecisionSignal.one);
-      expect(runtime.snapshot().phase.type, ClassroomPhaseType.avancoPendente);
+      await Future<void>.delayed(Duration.zero);
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
 
+      runtime.select(AnswerLetter.A);
       await runtime.signal(DecisionSignal.one);
+      await Future<void>.delayed(Duration.zero);
 
       expect(gate.requests, hasLength(2));
       expect(
@@ -696,6 +699,13 @@ void main() {
       );
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
       expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
+      expect(
+        service
+            .read('cyber-class')
+            ?.queuedActions
+            .where((action) => action['type'] == 'ADVANCE_GATE_PENDING'),
+        isEmpty,
+      );
     },
   );
 

@@ -244,7 +244,19 @@ StudentLearningState applyServerAdvanceGateDecision({
   final progress = state.progress;
   if (curriculum == null || progress == null) return state;
   final seenKeys = _seenServerDecisionKeys(state);
-  if (seenKeys.contains(request.idempotencyKey)) return state;
+  final queuedWithoutConfirmedPending = state.queuedActions
+      .where(
+        (action) =>
+            action['type'] != 'ADVANCE_GATE_PENDING' ||
+            action['idempotencyKey'] != request.idempotencyKey,
+      )
+      .toList(growable: false);
+  if (seenKeys.contains(request.idempotencyKey)) {
+    if (queuedWithoutConfirmedPending.length == state.queuedActions.length) {
+      return state;
+    }
+    return state.copyWith(queuedActions: queuedWithoutConfirmedPending);
+  }
   final ts = now ?? DateTime.now().millisecondsSinceEpoch;
   final attempt = LessonAttempt(
     marker: request.marker,
@@ -281,6 +293,7 @@ StudentLearningState applyServerAdvanceGateDecision({
       amparoLvl: nextProgress.amparoLvl,
     ),
     attempts: [...state.attempts, attempt],
+    queuedActions: queuedWithoutConfirmedPending,
     events: [
       ...state.events,
       ...decision.events.map(
@@ -346,36 +359,50 @@ StudentLearningState recordPendingServerAdvanceGate({
   int? now,
 }) {
   final ts = now ?? DateTime.now().millisecondsSinceEpoch;
+  final alreadyQueued = state.queuedActions.any(
+    (action) =>
+        action['type'] == 'ADVANCE_GATE_PENDING' &&
+        action['idempotencyKey'] == request.idempotencyKey,
+  );
+  final alreadyLogged = state.events.any(
+    (event) =>
+        event.type == 'ADVANCE_GATE_PENDING' &&
+        event.payload['idempotencyKey'] == request.idempotencyKey,
+  );
   return state.copyWith(
     updatedAt: ts,
-    queuedActions: [
-      ...state.queuedActions,
-      {
-        'type': 'ADVANCE_GATE_PENDING',
-        'idempotencyKey': request.idempotencyKey,
-        'payload': request.toJson(),
-        'createdAt': ts,
-      },
-    ],
-    events: [
-      ...state.events,
-      StudentLearningEvent(
-        type: 'ADVANCE_GATE_PENDING',
-        ts: ts,
-        payload: {
-          'marker': request.marker,
-          'layer': request.layer.value,
-          'letra': request.selectedOption.name,
-          'sinal': request.signal.value,
-          'idempotencyKey': request.idempotencyKey,
-          'humanError':
-              'Nao conseguimos confirmar o avanco agora. Sua resposta foi guardada para sincronizar.',
-          'technicalCode': error is SimExternalAiException
-              ? error.code
-              : 'ADVANCE_GATE_CLIENT_FAILED',
-        },
-      ),
-    ],
+    queuedActions: alreadyQueued
+        ? state.queuedActions
+        : [
+            ...state.queuedActions,
+            {
+              'type': 'ADVANCE_GATE_PENDING',
+              'idempotencyKey': request.idempotencyKey,
+              'payload': request.toJson(),
+              'createdAt': ts,
+            },
+          ],
+    events: alreadyLogged
+        ? state.events
+        : [
+            ...state.events,
+            StudentLearningEvent(
+              type: 'ADVANCE_GATE_PENDING',
+              ts: ts,
+              payload: {
+                'marker': request.marker,
+                'layer': request.layer.value,
+                'letra': request.selectedOption.name,
+                'sinal': request.signal.value,
+                'idempotencyKey': request.idempotencyKey,
+                'humanError':
+                    'Nao conseguimos confirmar o avanco agora. Sua resposta foi guardada para sincronizar.',
+                'technicalCode': error is SimExternalAiException
+                    ? error.code
+                    : 'ADVANCE_GATE_CLIENT_FAILED',
+              },
+            ),
+          ],
   );
 }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../core/signal_tracker.dart';
 import '../constitution/sim_constitutional_contract.dart';
 import '../external_ai/sim_ai_server_config.dart';
@@ -112,130 +114,42 @@ class LessonAnswerProgressController {
       position.history = [...position.history, entry];
     }
 
-    position.phase = ClassroomPhase.processing(letter, signal);
-    final delayedPhase = position.phase;
-    if (delayedPhase.type != ClassroomPhaseType.processando ||
-        delayedPhase.letter != letter ||
-        delayedPhase.signal != signal) {
-      return;
-    }
     final currentState = stateService.read(lessonLocalId);
-    final remoteClient = serverAdvanceGateClient;
-    if (remoteClient != null &&
-        currentState != null &&
-        !position.isReviewAtivo) {
-      final request = ServerAdvanceGateRequest(
-        lessonLocalId: lessonLocalId,
-        userId: currentState.userId,
-        marker: item.marker,
-        itemIdx: position.itemIdx,
-        layer: position.layer,
-        selectedOption: letter,
-        signal: signal,
-        correct: correct,
-        questionId: questionId,
-        questionText: content.question,
-        correctOption: content.correctAnswer,
-        attempts: currentState.attempts,
-        history: position.historia,
-        highWaterMark: currentState.syncStatus?.highWaterMark,
-        pending: currentState.auxRooms ?? const {},
-        currentState: currentState,
-        idempotencyKey: [
-          lessonLocalId,
-          item.marker,
-          position.layer.value,
-          letter.name,
-          signal.value,
-          questionId,
-        ].join(':'),
-      );
-      try {
-        final decision = await remoteClient.decide(request);
-        final nextState = applyServerAdvanceGateDecision(
-          state: currentState,
-          request: request,
-          decision: decision,
-        );
-        final savedState = stateService.write(nextState);
-        if (hasPendingCgPartTransition(savedState)) {
-          position.phase = const ClassroomPhase.engineError(
-            'aula_next_part_preparing',
-          );
-          return;
-        }
-        final view = activeLessonView(savedState);
-        if (view != null && !view.ended) {
-          materialService.maintainLessonReadyWindow(
+    final request = currentState == null || position.isReviewAtivo
+        ? null
+        : ServerAdvanceGateRequest(
             lessonLocalId: lessonLocalId,
-            topic: topic,
-            itemIdx: view.itemIdx,
-            layer: view.layer,
-            items: dopamineItemsFromCurriculum(baseItems),
-            source: 'cyber.aula.server-advance-gate',
-            priority: 'active',
-            reason: 'server_decision_prepares_next_experience',
+            userId: currentState.userId,
+            marker: item.marker,
+            itemIdx: position.itemIdx,
+            layer: position.layer,
+            selectedOption: letter,
+            signal: signal,
+            correct: correct,
+            questionId: questionId,
+            questionText: content.question,
+            correctOption: content.correctAnswer,
+            attempts: currentState.attempts,
+            history: position.historia,
+            highWaterMark: currentState.syncStatus?.highWaterMark,
+            pending: currentState.auxRooms ?? const {},
+            currentState: currentState,
+            idempotencyKey: [
+              lessonLocalId,
+              item.marker,
+              position.layer.value,
+              letter.name,
+              signal.value,
+              questionId,
+            ].join(':'),
           );
-        }
-      } catch (error) {
-        final pending = recordPendingServerAdvanceGate(
-          state: currentState,
-          request: request,
-          error: error,
-        );
-        stateService.write(pending);
-        position.phase = ClassroomPhase.advancePending(
-          message: 'aula_advance_pending',
-          letter: letter,
-          signal: signal,
-        );
-        return;
-      }
-      final message = buildLessonAnswerFeedback(
-        correct: correct,
-        signal: signal,
-        isReview: position.isReviewAtivo,
-      );
-      position.phase = ClassroomPhase.completed(
-        message: message,
-        wasCorrect: correct,
-        signal: signal,
-      );
-      return;
-    }
-    if (currentState != null && !position.isReviewAtivo) {
-      final request = ServerAdvanceGateRequest(
-        lessonLocalId: lessonLocalId,
-        userId: currentState.userId,
-        marker: item.marker,
-        itemIdx: position.itemIdx,
-        layer: position.layer,
-        selectedOption: letter,
-        signal: signal,
-        correct: correct,
-        questionId: questionId,
-        questionText: content.question,
-        correctOption: content.correctAnswer,
-        attempts: currentState.attempts,
-        history: position.historia,
-        highWaterMark: currentState.syncStatus?.highWaterMark,
-        pending: currentState.auxRooms ?? const {},
-        currentState: currentState,
-        idempotencyKey: [
-          lessonLocalId,
-          item.marker,
-          position.layer.value,
-          letter.name,
-          signal.value,
-          questionId,
-        ].join(':'),
-      );
+    if (request != null) {
       final pending = recordPendingServerAdvanceGate(
-        state: currentState,
+        state: currentState!,
         request: request,
         error: const SimExternalAiException(
-          'Servidor de avanco indisponivel.',
-          code: 'ADVANCE_GATE_CLIENT_MISSING',
+          'Confirmacao de avanco pendente.',
+          code: 'ADVANCE_GATE_CONFIRMATION_PENDING',
         ),
       );
       stateService.write(pending);
@@ -276,6 +190,85 @@ class LessonAnswerProgressController {
         },
       ),
     ]);
+
+    final remoteClient = serverAdvanceGateClient;
+    if (remoteClient != null && request != null) {
+      unawaited(
+        _confirmServerAdvanceGate(
+          remoteClient: remoteClient,
+          request: request,
+          topic: topic,
+          position: position,
+          baseItems: baseItems,
+          letter: letter,
+          signal: signal,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmServerAdvanceGate({
+    required ServerAdvanceGateClient remoteClient,
+    required ServerAdvanceGateRequest request,
+    required String? topic,
+    required LessonPositionState position,
+    required List<PlannedItem> baseItems,
+    required AnswerLetter letter,
+    required DecisionSignal signal,
+  }) async {
+    try {
+      final decision = await remoteClient.decide(request);
+      final latestState =
+          stateService.read(request.lessonLocalId) ?? request.currentState;
+      if (latestState == null) return;
+      final nextState = applyServerAdvanceGateDecision(
+        state: latestState,
+        request: request,
+        decision: decision,
+      );
+      final savedState = stateService.write(
+        nextState,
+        acceptServerAuthority: true,
+      );
+      if (hasPendingCgPartTransition(savedState)) {
+        position.phase = const ClassroomPhase.engineError(
+          'aula_next_part_preparing',
+        );
+        return;
+      }
+      final view = activeLessonView(savedState);
+      if (view != null && !view.ended) {
+        materialService.maintainLessonReadyWindow(
+          lessonLocalId: request.lessonLocalId,
+          topic: topic,
+          itemIdx: view.itemIdx,
+          layer: view.layer,
+          items: dopamineItemsFromCurriculum(baseItems),
+          source: 'cyber.aula.server-advance-gate',
+          priority: 'active',
+          reason: 'server_decision_prepares_next_experience',
+        );
+      }
+    } catch (error) {
+      final latestState =
+          stateService.read(request.lessonLocalId) ?? request.currentState;
+      if (latestState == null) return;
+      final pending = recordPendingServerAdvanceGate(
+        state: latestState,
+        request: request,
+        error: error,
+      );
+      stateService.write(pending);
+      if (position.phase.type == ClassroomPhaseType.processando &&
+          position.phase.letter == letter &&
+          position.phase.signal == signal) {
+        position.phase = ClassroomPhase.advancePending(
+          message: 'aula_advance_pending',
+          letter: letter,
+          signal: signal,
+        );
+      }
+    }
   }
 
   Future<void> avancar({
