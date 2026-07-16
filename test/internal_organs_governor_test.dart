@@ -50,11 +50,7 @@ void main() {
     expect(state.extra['foundation']['revision'], 3);
     expect(
       store.getEventLog('lesson-1').map((event) => event.type),
-      containsAll([
-        'AUDIO_REQUESTED',
-        'AUDIO_READY',
-        'IMAGE_READY',
-      ]),
+      containsAll(['AUDIO_REQUESTED', 'AUDIO_READY', 'IMAGE_READY']),
     );
   });
 
@@ -156,8 +152,15 @@ void main() {
     );
   });
 
-  test('sync real passa pelo StateStore', () async {
-    final sync = SyncStateGovernor(store: store);
+  test('sync real passa por porta oficial sem persistencia direta', () async {
+    var calls = 0;
+    final sync = SyncStateGovernor(
+      store: store,
+      remoteSync: ({required lessonLocalId, required source}) async {
+        calls += 1;
+        cloud.states[lessonLocalId] = store.readState(lessonLocalId);
+      },
+    );
 
     store.patchState(
       'lesson-1',
@@ -176,6 +179,25 @@ void main() {
     expect(
       store.getEventLog('lesson-1').map((event) => event.type),
       containsAll(['SYNC_STARTED', 'SYNC_COMPLETED']),
+    );
+    expect(calls, 1);
+  });
+
+  test('sync sem porta oficial falha sem chamar cofre direto', () async {
+    final sync = SyncStateGovernor(store: store);
+
+    store.patchState(
+      'lesson-1',
+      (state) => state.copyWith(extra: {...state.extra, 'seed': true}),
+    );
+    final event = await sync.syncToCloud(lessonLocalId: 'lesson-1');
+
+    expect(event.type, 'SYNC_FAILED');
+    expect(cloud.states['lesson-1'], isNull);
+    expect(store.readState('lesson-1').extra['sync']['status'], 'failed');
+    expect(
+      store.readState('lesson-1').extra['sync']['error'],
+      contains('REMOTE_SYNC_PORT_NOT_CONFIGURED'),
     );
   });
 
@@ -342,7 +364,15 @@ void main() {
   );
 
   test('duvida entra no Estado, sincroniza e preserva historico', () async {
-    final coordinator = InternalOrgansCoordinator(store: store);
+    final coordinator = InternalOrgansCoordinator(
+      store: store,
+      sync: SyncStateGovernor(
+        store: store,
+        remoteSync: ({required lessonLocalId, required source}) async {
+          cloud.states[lessonLocalId] = store.readState(lessonLocalId);
+        },
+      ),
+    );
 
     final result = await coordinator.askDoubt(
       lessonLocalId: 'lesson-1',
@@ -371,7 +401,15 @@ void main() {
   });
 
   test('duvida falha sem fingir explicacao pronta', () async {
-    final coordinator = InternalOrgansCoordinator(store: store);
+    final coordinator = InternalOrgansCoordinator(
+      store: store,
+      sync: SyncStateGovernor(
+        store: store,
+        remoteSync: ({required lessonLocalId, required source}) async {
+          cloud.states[lessonLocalId] = store.readState(lessonLocalId);
+        },
+      ),
+    );
 
     final result = await coordinator.askDoubt(
       lessonLocalId: 'lesson-1',

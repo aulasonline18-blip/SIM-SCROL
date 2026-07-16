@@ -255,7 +255,7 @@ void main() {
   });
 
   test(
-    '7 A1 enviarSinal sem servidor guarda pendencia sem tentativa oficial',
+    '7 A1 enviarSinal sem servidor guarda evidencia local e pendencia remota',
     () async {
       final service = StudentLearningStateService(
         seed: {'constitutional': _state()},
@@ -273,10 +273,16 @@ void main() {
       );
 
       final state = service.read('constitutional')!;
-      expect(state.attempts, isEmpty);
+      expect(state.attempts, hasLength(1));
+      expect(state.attempts.single.marker, 'M1');
+      expect(state.attempts.single.layer, LessonLayer.l1);
+      expect(state.attempts.single.letra, AnswerLetter.A);
+      expect(state.attempts.single.sinal, DecisionSignal.one);
+      expect(state.attempts.single.correct, isTrue);
       expect(state.queuedActions.single['type'], 'ADVANCE_GATE_PENDING');
       expect(state.progress?.itemIdx, 0);
       expect(state.progress?.layer, LessonLayer.l1);
+      expect(state.progress?.concluidos, isEmpty);
       expect(position.phase.type, ClassroomPhaseType.concluido);
     },
   );

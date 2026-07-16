@@ -258,13 +258,14 @@ StudentLearningState applyServerAdvanceGateDecision({
     return state.copyWith(queuedActions: queuedWithoutConfirmedPending);
   }
   final ts = now ?? DateTime.now().millisecondsSinceEpoch;
+  final attemptTs = _matchingRequestAttemptTs(request) ?? ts;
   final attempt = LessonAttempt(
     marker: request.marker,
     layer: request.layer,
     letra: request.selectedOption,
     sinal: request.signal,
     correct: request.correct,
-    ts: ts,
+    ts: attemptTs,
   );
   final nextCurriculum = _reconcileCurriculumFromAuthoritativeDecision(
     curriculum,
@@ -292,7 +293,7 @@ StudentLearningState applyServerAdvanceGateDecision({
       layer: nextProgress.layer,
       amparoLvl: nextProgress.amparoLvl,
     ),
-    attempts: [...state.attempts, attempt],
+    attempts: _appendAttemptIfMissing(state.attempts, attempt),
     queuedActions: queuedWithoutConfirmedPending,
     events: [
       ...state.events,
@@ -350,6 +351,36 @@ StudentLearningState applyServerAdvanceGateDecision({
     },
   );
   return nextState;
+}
+
+List<LessonAttempt> _appendAttemptIfMissing(
+  List<LessonAttempt> attempts,
+  LessonAttempt attempt,
+) {
+  final alreadyRecorded = attempts.any(
+    (existing) =>
+        existing.marker == attempt.marker &&
+        existing.layer == attempt.layer &&
+        existing.letra == attempt.letra &&
+        existing.sinal == attempt.sinal &&
+        existing.correct == attempt.correct &&
+        existing.ts == attempt.ts,
+  );
+  if (alreadyRecorded) return attempts;
+  return [...attempts, attempt];
+}
+
+int? _matchingRequestAttemptTs(ServerAdvanceGateRequest request) {
+  for (final attempt in request.attempts.reversed) {
+    if (attempt.marker == request.marker &&
+        attempt.layer == request.layer &&
+        attempt.letra == request.selectedOption &&
+        attempt.sinal == request.signal &&
+        attempt.correct == request.correct) {
+      return attempt.ts;
+    }
+  }
+  return null;
 }
 
 StudentLearningState recordPendingServerAdvanceGate({

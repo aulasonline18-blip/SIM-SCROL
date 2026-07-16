@@ -113,7 +113,6 @@ class MemoryStudentStateLocalStorage implements StudentStateLocalStorage {
 
 abstract interface class StudentStateCloudStorage {
   Future<StudentLearningState?> loadCloud(String lessonLocalId);
-  Future<void> persistCloud(StudentLearningState state);
 }
 
 class MemoryStudentStateCloudStorage implements StudentStateCloudStorage {
@@ -122,11 +121,6 @@ class MemoryStudentStateCloudStorage implements StudentStateCloudStorage {
   @override
   Future<StudentLearningState?> loadCloud(String lessonLocalId) async {
     return states[lessonLocalId];
-  }
-
-  @override
-  Future<void> persistCloud(StudentLearningState state) async {
-    states[state.lessonLocalId] = state;
   }
 }
 
@@ -334,12 +328,6 @@ class StudentStateStore {
     final resolved = syncState(localState, remote);
     writeState(resolved);
     return resolved;
-  }
-
-  Future<void> persistCloud(String lessonLocalId) async {
-    final target = cloud;
-    if (target == null) return;
-    await target.persistCloud(readState(lessonLocalId));
   }
 
   StudentLearningState syncState(

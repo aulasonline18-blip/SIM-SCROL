@@ -65,8 +65,6 @@ class ConversationalEntryScreen extends StatefulWidget {
 }
 
 class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
-  bool interfaceLanguageMenuOpen = false;
-  bool learningLanguageMenuOpen = false;
   bool attachmentMenuOpen = false;
   bool sending = false;
   String? error;
@@ -130,7 +128,7 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
       await widget.session.setLearningLanguage(localeTag: option.localeTag);
     }
     widget.session.submitInterfaceLanguage();
-    if (mounted) setState(() => interfaceLanguageMenuOpen = false);
+    if (mounted) setState(() {});
   }
 
   Future<void> _selectLearningLanguage(_EntryLanguageOption option) async {
@@ -139,7 +137,33 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
         : option.localeTag;
     await widget.session.setLearningLanguage(localeTag: localeTag);
     widget.session.submitLearningLanguage();
-    if (mounted) setState(() => learningLanguageMenuOpen = false);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openInterfaceLanguageSheet() async {
+    await _showLanguagePickerSheet(
+      context: context,
+      title: t('entry_language_app_label'),
+      currentLocaleTag: widget.session.interfaceLanguageSubmitted
+          ? widget.session.interfaceLocaleTag
+          : null,
+      listKey: const Key('sim-entry-interface-language-list'),
+      searchKey: const Key('sim-entry-interface-language-search'),
+      onSelect: _selectInterfaceLanguage,
+    );
+  }
+
+  Future<void> _openLearningLanguageSheet() async {
+    await _showLanguagePickerSheet(
+      context: context,
+      title: t('entry_language_lesson_label'),
+      currentLocaleTag: widget.session.learningLanguageSubmitted
+          ? widget.session.learningLocaleTag
+          : null,
+      listKey: const Key('sim-entry-learning-language-list'),
+      searchKey: const Key('sim-entry-learning-language-search'),
+      onSelect: _selectLearningLanguage,
+    );
   }
 
   void _setEntryField(String key, String value) {
@@ -278,7 +302,6 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
-    final palette = SimThemeScope.paletteOf(context);
     final ficha = session.buildPedagogicalFicha();
     final path = session.entryPath;
     final isMaterialPath = path == 'tenho_material';
@@ -303,7 +326,7 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
     return CyberStepShell(
       step: 1,
       total: 5,
-      child: OnboardingChatFlow(
+      child: OnboardingTimeline(
         semanticLabel: t('onboarding_chat_region'),
         children: [
           _TimelineTurn(
@@ -313,14 +336,10 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
               completed: session.interfaceLanguageSubmitted,
               child: _LanguageSelector(
                 currentLocaleTag: session.interfaceLocaleTag,
+                label: t('entry_language_app_label'),
+                submitted: session.interfaceLanguageSubmitted,
                 buttonKey: const Key('sim-entry-interface-language-button'),
-                listKey: const Key('sim-entry-interface-language-list'),
-                expanded: interfaceLanguageMenuOpen,
-                onToggle: () => setState(
-                  () => interfaceLanguageMenuOpen = !interfaceLanguageMenuOpen,
-                ),
-                onSelect: (option) =>
-                    unawaited(_selectInterfaceLanguage(option)),
+                onTap: () => unawaited(_openInterfaceLanguageSheet()),
               ),
             ),
           ),
@@ -332,14 +351,10 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 completed: session.learningLanguageSubmitted,
                 child: _LanguageSelector(
                   currentLocaleTag: session.learningLocaleTag,
+                  label: t('entry_language_lesson_label'),
+                  submitted: session.learningLanguageSubmitted,
                   buttonKey: const Key('sim-entry-learning-language-button'),
-                  listKey: const Key('sim-entry-learning-language-list'),
-                  expanded: learningLanguageMenuOpen,
-                  onToggle: () => setState(
-                    () => learningLanguageMenuOpen = !learningLanguageMenuOpen,
-                  ),
-                  onSelect: (option) =>
-                      unawaited(_selectLearningLanguage(option)),
+                  onTap: () => unawaited(_openLearningLanguageSheet()),
                 ),
               ),
             ),
@@ -421,7 +436,7 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                         icon: Icons.account_tree_outlined,
                         title: 'Quero que o SIM monte minhas aulas',
                         description:
-                            'Conte o que você precisa aprender. O SIM organiza o plano, cria microaulas e exercícios para te conduzir do ponto certo até o objetivo.',
+                            'Diga o que precisa aprender. O SIM monta o plano, cria microaulas e te conduz até o objetivo.',
                         shortPhrase:
                             'Você diz o objetivo. O SIM monta o caminho.',
                         selected: isSimPath,
@@ -431,7 +446,7 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                         icon: Icons.photo_camera_outlined,
                         title: 'Quero mostrar meu material ao SIM',
                         description:
-                            'Envie foto, lista, livro, caderno, prova, PDF, questão ou resposta que tentou fazer. O SIM olha seu material e te ensina a resolver aquilo.',
+                            'Mostre foto, lista, livro, caderno, prova, PDF, questão ou resposta. O SIM usa esse material para te orientar.',
                         shortPhrase:
                             'Você mostra o material. O SIM te ajuda com ele.',
                         selected: isMaterialPath,
@@ -516,19 +531,6 @@ class _ConversationalEntryScreenState extends State<ConversationalEntryScreen> {
                 onPrepare: _prepareLesson,
               ),
             ),
-          if (languagesComplete && group1Complete)
-            Padding(
-              padding: const EdgeInsets.only(left: 44),
-              child: Text(
-                'Uma timeline. Duas entradas fortes. Uma ficha pedagógica estruturada.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: palette.muted,
-                  fontSize: 14,
-                  height: 1.35,
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -574,6 +576,161 @@ String _entryLanguageLabel(String localeTag) {
 
 String _entryLanguageOptionLabel(_EntryLanguageOption option) {
   return option.followDevice ? t('language_follow_device') : option.label;
+}
+
+Future<void> _showLanguagePickerSheet({
+  required BuildContext context,
+  required String title,
+  required String? currentLocaleTag,
+  required Key listKey,
+  required Key searchKey,
+  required Future<void> Function(_EntryLanguageOption option) onSelect,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (context) => _LanguagePickerSheet(
+      title: title,
+      currentLocaleTag: currentLocaleTag,
+      listKey: listKey,
+      searchKey: searchKey,
+      onSelect: onSelect,
+    ),
+  );
+}
+
+class _LanguagePickerSheet extends StatefulWidget {
+  const _LanguagePickerSheet({
+    required this.title,
+    required this.currentLocaleTag,
+    required this.listKey,
+    required this.searchKey,
+    required this.onSelect,
+  });
+
+  final String title;
+  final String? currentLocaleTag;
+  final Key listKey;
+  final Key searchKey;
+  final Future<void> Function(_EntryLanguageOption option) onSelect;
+
+  @override
+  State<_LanguagePickerSheet> createState() => _LanguagePickerSheetState();
+}
+
+class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final filtered = _entryLanguageOptions.where((option) {
+      final query = _query.trim().toLowerCase();
+      if (query.isEmpty) return true;
+      return _entryLanguageOptionLabel(option).toLowerCase().contains(query) ||
+          option.localeTag.toLowerCase().contains(query);
+    }).toList();
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.72,
+      minChildSize: 0.42,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: t('entry_language_close'),
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                key: widget.searchKey,
+                controller: _searchController,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: t('entry_language_search'),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: ListView.separated(
+                  key: widget.listKey,
+                  controller: scrollController,
+                  itemCount: filtered.length,
+                  separatorBuilder: (context, index) => Divider(
+                    height: 1,
+                    color: palette.border.withValues(alpha: 0.65),
+                  ),
+                  itemBuilder: (context, index) {
+                    final option = filtered[index];
+                    final selected =
+                        !option.followDevice &&
+                        widget.currentLocaleTag == option.localeTag;
+                    return ListTile(
+                      minVerticalPadding: 10,
+                      leading: Icon(
+                        option.followDevice
+                            ? Icons.phone_android
+                            : Icons.language,
+                        color: selected ? palette.primary : palette.muted,
+                      ),
+                      title: Text(
+                        _entryLanguageOptionLabel(option),
+                        style: TextStyle(
+                          color: palette.text,
+                          fontWeight: selected
+                              ? FontWeight.w900
+                              : FontWeight.w700,
+                        ),
+                      ),
+                      trailing: selected
+                          ? Icon(Icons.check_circle, color: palette.primary)
+                          : null,
+                      onTap: () async {
+                        await widget.onSelect(option);
+                        if (context.mounted) Navigator.of(context).pop();
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _TimelineTurn extends StatelessWidget {
@@ -628,80 +785,77 @@ class _TimelineTurn extends StatelessWidget {
 class _LanguageSelector extends StatelessWidget {
   const _LanguageSelector({
     required this.currentLocaleTag,
+    required this.label,
+    required this.submitted,
     required this.buttonKey,
-    required this.listKey,
-    required this.expanded,
-    required this.onToggle,
-    required this.onSelect,
+    required this.onTap,
   });
 
   final String currentLocaleTag;
+  final String label;
+  final bool submitted;
   final Key buttonKey;
-  final Key listKey;
-  final bool expanded;
-  final VoidCallback onToggle;
-  final ValueChanged<_EntryLanguageOption> onSelect;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    final current = _entryLanguageLabel(currentLocaleTag);
+    final value = submitted ? _entryLanguageLabel(currentLocaleTag) : null;
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 300),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            OutlinedButton.icon(
-              key: buttonKey,
-              onPressed: onToggle,
-              icon: const Icon(Icons.language),
-              label: Text('$current  ▾'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(180, 52),
-                foregroundColor: palette.text,
-                side: BorderSide(color: palette.border),
-                textStyle: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Material(
+          color: palette.surface,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            key: buttonKey,
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 56),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: submitted ? palette.primary : palette.border,
+                  width: submitted ? 1.6 : 1,
                 ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.language, color: palette.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          label,
+                          style: TextStyle(
+                            color: palette.muted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          value ?? t('entry_language_choose'),
+                          style: TextStyle(
+                            color: palette.text,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.expand_more, color: palette.muted),
+                ],
               ),
             ),
-            if (expanded) ...[
-              const SizedBox(height: 8),
-              Material(
-                elevation: 8,
-                color: palette.surface,
-                borderRadius: BorderRadius.circular(12),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 292),
-                  child: ListView(
-                    key: listKey,
-                    shrinkWrap: true,
-                    children: [
-                      for (final option in _entryLanguageOptions)
-                        ListTile(
-                          dense: true,
-                          leading: Icon(
-                            option.followDevice
-                                ? Icons.phone_android
-                                : Icons.language,
-                          ),
-                          title: Text(_entryLanguageOptionLabel(option)),
-                          trailing:
-                              !option.followDevice &&
-                                  option.localeTag == currentLocaleTag
-                              ? Icon(Icons.check, color: palette.primary)
-                              : null,
-                          onTap: () => onSelect(option),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );
@@ -721,17 +875,13 @@ class _LanguageStepCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SimChatBubble(text: 'SIM: $question'),
         const SizedBox(height: 10),
         child,
       ],
-    );
-    return Opacity(
-      opacity: completed ? 0.55 : 1,
-      child: IgnorePointer(ignoring: completed, child: content),
     );
   }
 }
@@ -888,8 +1038,8 @@ class _ProfileDifficultiesCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Wrap(
-            spacing: 6,
-            runSpacing: 6,
+            spacing: 10,
+            runSpacing: 10,
             children: [
               for (final option in options)
                 _CompactCheckOption(
@@ -1067,8 +1217,8 @@ class _CompactCheckOption extends StatelessWidget {
         onTap: enabled ? onTap : null,
         borderRadius: BorderRadius.circular(999),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 34),
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
@@ -1101,8 +1251,8 @@ class _CompactCheckOption extends StatelessWidget {
                   softWrap: true,
                   style: TextStyle(
                     color: palette.text,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
                   ),
                 ),
               ),
@@ -1147,7 +1297,7 @@ class _EntryPathButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
           child: Container(
-            constraints: const BoxConstraints(minHeight: 154),
+            constraints: const BoxConstraints(minHeight: 126),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
@@ -1159,13 +1309,20 @@ class _EntryPathButton extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(icon, color: palette.primary),
+                Row(
+                  children: [
+                    Icon(icon, color: palette.primary),
+                    const Spacer(),
+                    if (selected)
+                      Icon(Icons.check_circle, color: palette.primary),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 Text(
                   title,
                   style: TextStyle(
                     color: palette.text,
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -1174,8 +1331,8 @@ class _EntryPathButton extends StatelessWidget {
                   description,
                   style: TextStyle(
                     color: palette.text,
-                    fontSize: 12,
-                    height: 1.25,
+                    fontSize: 13,
+                    height: 1.28,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1232,53 +1389,60 @@ class _MaterialPathCard extends StatelessWidget {
             attachments: session.attachments,
             onRemove: onRemoveAttachment,
           ),
-          _MaterialAction(
-            icon: Icons.photo_camera_outlined,
-            label: 'Foto do caderno',
-            selected: session.materialType == 'Foto do caderno',
-            onTap: () => onPickAttachment('camera', 'Foto do caderno'),
-          ),
-          _MaterialAction(
-            icon: Icons.format_list_bulleted,
-            label: 'Lista',
-            selected: session.materialType == 'Lista',
-            onTap: () => onMaterialType('Lista'),
-          ),
-          _MaterialAction(
-            icon: Icons.menu_book_outlined,
-            label: 'Livro',
-            selected: session.materialType == 'Livro',
-            onTap: () => onMaterialType('Livro'),
-          ),
-          _MaterialAction(
-            icon: Icons.edit_note_outlined,
-            label: 'Caderno',
-            selected: session.materialType == 'Caderno',
-            onTap: () => onMaterialType('Caderno'),
-          ),
-          _MaterialAction(
-            icon: Icons.description_outlined,
-            label: 'Prova',
-            selected: session.materialType == 'Prova',
-            onTap: () => onMaterialType('Prova'),
-          ),
-          _MaterialAction(
-            icon: Icons.picture_as_pdf_outlined,
-            label: 'PDF',
-            selected: session.materialType == 'PDF',
-            onTap: () => onPickAttachment('document', 'PDF'),
-          ),
-          _MaterialAction(
-            icon: Icons.quiz_outlined,
-            label: 'Questão',
-            selected: session.materialType == 'Questão',
-            onTap: () => onMaterialType('Questão'),
-          ),
-          _MaterialAction(
-            icon: Icons.edit_outlined,
-            label: 'Resposta que tentei fazer',
-            selected: session.materialType == 'Resposta que tentei fazer',
-            onTap: () => onMaterialType('Resposta que tentei fazer'),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _MaterialAction(
+                icon: Icons.photo_camera_outlined,
+                label: 'Foto do caderno',
+                selected: session.materialType == 'Foto do caderno',
+                onTap: () => onPickAttachment('camera', 'Foto do caderno'),
+              ),
+              _MaterialAction(
+                icon: Icons.format_list_bulleted,
+                label: 'Lista',
+                selected: session.materialType == 'Lista',
+                onTap: () => onMaterialType('Lista'),
+              ),
+              _MaterialAction(
+                icon: Icons.menu_book_outlined,
+                label: 'Livro',
+                selected: session.materialType == 'Livro',
+                onTap: () => onMaterialType('Livro'),
+              ),
+              _MaterialAction(
+                icon: Icons.edit_note_outlined,
+                label: 'Caderno',
+                selected: session.materialType == 'Caderno',
+                onTap: () => onMaterialType('Caderno'),
+              ),
+              _MaterialAction(
+                icon: Icons.description_outlined,
+                label: 'Prova',
+                selected: session.materialType == 'Prova',
+                onTap: () => onMaterialType('Prova'),
+              ),
+              _MaterialAction(
+                icon: Icons.picture_as_pdf_outlined,
+                label: 'PDF',
+                selected: session.materialType == 'PDF',
+                onTap: () => onPickAttachment('document', 'PDF'),
+              ),
+              _MaterialAction(
+                icon: Icons.quiz_outlined,
+                label: 'Questão',
+                selected: session.materialType == 'Questão',
+                onTap: () => onMaterialType('Questão'),
+              ),
+              _MaterialAction(
+                icon: Icons.edit_outlined,
+                label: 'Resposta que tentei fazer',
+                selected: session.materialType == 'Resposta que tentei fazer',
+                onTap: () => onMaterialType('Resposta que tentei fazer'),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           TextField(
@@ -1612,21 +1776,51 @@ class _MaterialAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    return Material(
-      color: Colors.transparent,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        minLeadingWidth: 30,
-        leading: Icon(icon, color: selected ? palette.primary : palette.text),
-        title: Text(
-          label,
-          style: TextStyle(
-            color: palette.text,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: selected
+            ? palette.primary.withValues(alpha: 0.09)
+            : palette.surface,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: selected ? palette.primary : palette.border,
+                width: selected ? 1.6 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  selected ? Icons.check_circle : icon,
+                  size: 18,
+                  color: selected ? palette.primary : palette.muted,
+                ),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    label,
+                    softWrap: true,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        trailing: selected ? Icon(Icons.check, color: palette.primary) : null,
-        onTap: onTap,
       ),
     );
   }
@@ -1686,6 +1880,35 @@ class _FichaSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
     final summary = (ficha['human_summary'] ?? '').toString();
+    final highlights = <_FichaSummaryLine>[
+      _FichaSummaryLine(
+        icon: Icons.flag_outlined,
+        label: 'Objetivo',
+        value: _fichaValue(['learning_goal', 'topic', 'objective']),
+      ),
+      _FichaSummaryLine(
+        icon: Icons.school_outlined,
+        label: 'Nível',
+        value: _fichaValue(['academic_level', 'nivel']),
+      ),
+      _FichaSummaryLine(
+        icon: Icons.psychology_alt_outlined,
+        label: 'Dificuldades',
+        value:
+            _fichaListValue('profile_difficulties') ??
+            _fichaValue(['known_weaknesses']),
+      ),
+      _FichaSummaryLine(
+        icon: Icons.event_outlined,
+        label: 'Prazo',
+        value: _fichaValue(['deadline_custom', 'session_goal', 'deadline']),
+      ),
+      _FichaSummaryLine(
+        icon: Icons.track_changes_outlined,
+        label: 'Alvo real',
+        value: _fichaValue(['real_use_goal', 'exam_goal', 'traversal_goal']),
+      ),
+    ].where((line) => line.value != null && line.value!.isNotEmpty).toList();
     return SimChatInputCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1699,6 +1922,16 @@ class _FichaSummaryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
+          if (highlights.isNotEmpty) ...[
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final line in highlights) _FichaSummaryPill(line: line),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           for (final line
               in summary.split('\n').where((line) => line.isNotEmpty))
             Padding(
@@ -1755,6 +1988,97 @@ class _FichaSummaryCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  String? _fichaValue(List<String> keys) {
+    for (final key in keys) {
+      final value = ficha[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  String? _fichaListValue(String key) {
+    final value = ficha[key];
+    if (value is Iterable) {
+      final clean = value
+          .map((entry) => entry.toString().trim())
+          .where((entry) => entry.isNotEmpty)
+          .join(', ');
+      return clean.isEmpty ? null : clean;
+    }
+    return value?.toString().trim();
+  }
+}
+
+class _FichaSummaryLine {
+  const _FichaSummaryLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? value;
+}
+
+class _FichaSummaryPill extends StatelessWidget {
+  const _FichaSummaryPill({required this.line});
+
+  final _FichaSummaryLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: palette.surfaceSoft,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: palette.border),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(line.icon, size: 18, color: palette.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      line.label,
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      line.value!,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 13,
+                        height: 1.25,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2080,6 +2404,22 @@ class OnboardingChatFlow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return OnboardingTimeline(semanticLabel: semanticLabel, children: children);
+  }
+}
+
+class OnboardingTimeline extends StatelessWidget {
+  const OnboardingTimeline({
+    required this.children,
+    required this.semanticLabel,
+    super.key,
+  });
+
+  final List<Widget> children;
+  final String semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
     return Semantics(
       container: true,
       label: semanticLabel,
@@ -2260,8 +2600,8 @@ class SimChatChoiceWrap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 10,
+      runSpacing: 10,
       children: [
         for (var i = 0; i < children.length; i++)
           staggered
@@ -2324,27 +2664,42 @@ class SimChatChoiceChip extends StatelessWidget {
       selected: selected,
       label: label,
       child: Material(
-        color: selected ? palette.primary : palette.surface,
+        color: selected
+            ? palette.primary.withValues(alpha: 0.1)
+            : palette.surface,
         borderRadius: BorderRadius.circular(999),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(999),
           child: Container(
             constraints: const BoxConstraints(minHeight: SimTouch.min),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
                 color: selected ? palette.primary : palette.border,
+                width: selected ? 1.6 : 1,
               ),
             ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: selected ? palette.onPrimary : palette.text,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (selected) ...[
+                  Icon(Icons.check_circle, size: 17, color: palette.primary),
+                  const SizedBox(width: 7),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    softWrap: true,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

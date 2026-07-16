@@ -4,12 +4,15 @@ import 'package:sim_mobile/sim/cloud/cloud_queue.dart';
 import 'package:sim_mobile/sim/cloud/lesson_cloud_bootstrap.dart';
 import 'package:sim_mobile/sim/cloud/lesson_curriculum_sync_engine.dart';
 import 'package:sim_mobile/sim/cloud/student_learning_sync.dart';
+import 'package:sim_mobile/sim/cloud/student_remote_vault_sync_engine.dart';
 import 'package:sim_mobile/sim/cloud/supabase_student_state_cloud_storage.dart';
 import 'package:sim_mobile/sim/cloud/student_lesson_cloud_progress_service.dart';
 import 'package:sim_mobile/sim/cloud/student_lesson_progress_service.dart';
 import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
+import 'package:sim_mobile/sim/state/student_state_store.dart';
+import 'package:sim_mobile/sim/state/student_state_store_adapter.dart';
 
 class FakeSessionProvider implements SupabaseSessionProvider {
   SupabaseSession? session = const SupabaseSession(
@@ -25,6 +28,8 @@ class FakeCloudFunctions implements StudentStateCloudFunctions {
   int persistCalls = 0;
   int deleteCalls = 0;
   PersistStudentStateResult? nextPersist;
+  Object? nextError;
+  final states = <String, StudentLearningState>{};
 
   @override
   Future<void> deleteStudentStateByLesson(
@@ -44,7 +49,7 @@ class FakeCloudFunctions implements StudentStateCloudFunctions {
     SupabaseSession session,
   ) async {
     lastSession = session;
-    final state = remoteState;
+    final state = remoteState ?? states[lessonLocalId];
     if (state == null || state.lessonLocalId != lessonLocalId) return null;
     return StudentStateRow(
       lessonLocalId: lessonLocalId,
@@ -76,12 +81,18 @@ class FakeCloudFunctions implements StudentStateCloudFunctions {
     persistCalls += 1;
     lastSession = session;
     lastPersistInput = input;
-    return nextPersist ??
-        PersistStudentStateResult.accepted(
-          lessonLocalId: input.lessonLocalId,
-          highWaterMark: input.clientScore,
-          schemaVersion: input.schemaVersion,
-        );
+    final error = nextError;
+    nextError = null;
+    if (error != null) throw error;
+    final next = nextPersist;
+    nextPersist = null;
+    if (next != null) return next;
+    states[input.lessonLocalId] = input.state;
+    return PersistStudentStateResult.accepted(
+      lessonLocalId: input.lessonLocalId,
+      highWaterMark: input.clientScore,
+      schemaVersion: input.schemaVersion,
+    );
   }
 }
 
@@ -128,7 +139,7 @@ StudentLearningState stateWithProgress({
 
 void main() {
   test(
-    'supabase cloud storage loads and persists through authenticated session',
+    'supabase cloud storage only loads through authenticated session',
     () async {
       final cloud = FakeCloudFunctions()
         ..remoteState = stateWithProgress(
@@ -146,20 +157,6 @@ void main() {
       final loaded = await storage.loadCloud('l1');
       expect(loaded?.progress?.itemIdx, 2);
       expect(cloud.lastSession?.userId, 'u1');
-
-      final local = stateWithProgress(
-        id: 'l1',
-        itemIdx: 1,
-        layer: LessonLayer.l2,
-        mainAdvances: 1,
-      );
-      await storage.persistCloud(local);
-      expect(cloud.persistCalls, 1);
-      expect(cloud.lastPersistInput?.lessonLocalId, 'l1');
-      expect(
-        cloud.lastPersistInput?.clientScore,
-        scoreOfStudentLearningState(local),
-      );
     },
   );
 
@@ -174,14 +171,6 @@ void main() {
       );
 
       expect(await storage.loadCloud('l1'), isNull);
-      await storage.persistCloud(
-        stateWithProgress(
-          id: 'l1',
-          itemIdx: 1,
-          layer: LessonLayer.l1,
-          mainAdvances: 1,
-        ),
-      );
       expect(cloud.persistCalls, 0);
     },
   );
@@ -227,8 +216,78 @@ void main() {
       await queue.drainQueue();
       expect(cloud.persistCalls, 1);
       expect(queue.getQueueSnapshot(), isEmpty);
+      expect(
+        states.read('l1')?.events.map((event) => event.type),
+        contains('REMOTE_VAULT_SYNC_CONFIRMED'),
+      );
     },
   );
+
+  test(
+    'cloud queue keeps durable pending item and records error when server fails',
+    () async {
+      final states = StudentLearningStateService(
+        seed: {
+          'l1': stateWithProgress(
+            id: 'l1',
+            itemIdx: 1,
+            layer: LessonLayer.l2,
+            mainAdvances: 1,
+          ),
+        },
+      );
+      final cloud = FakeCloudFunctions()..nextError = StateError('offline');
+      final queue = CloudQueue(
+        storage: MemoryCloudQueueStorage(),
+        stateService: states,
+        sessionProvider: FakeSessionProvider(),
+        cloudFunctions: cloud,
+        now: () => 1000,
+      );
+
+      queue.enqueueStudentStateSync(lessonLocalId: 'l1');
+      await queue.drainQueue();
+
+      expect(queue.getQueueSnapshot(), contains('l1'));
+      expect(queue.getQueueSnapshot()['l1']?.attempts, 1);
+      expect(states.read('l1')?.syncStatus?.status, 'failed');
+      expect(
+        states.read('l1')?.events.map((event) => event.type),
+        contains('REMOTE_VAULT_SYNC_FAILED'),
+      );
+    },
+  );
+
+  test('cloud queue keeps pending item when auth session is missing', () async {
+    final states = StudentLearningStateService(
+      seed: {
+        'l1': stateWithProgress(
+          id: 'l1',
+          itemIdx: 1,
+          layer: LessonLayer.l1,
+          mainAdvances: 1,
+        ),
+      },
+    );
+    final session = FakeSessionProvider()..session = null;
+    final queue = CloudQueue(
+      storage: MemoryCloudQueueStorage(),
+      stateService: states,
+      sessionProvider: session,
+      cloudFunctions: FakeCloudFunctions(),
+      now: () => 1000,
+    );
+
+    queue.enqueueStudentStateSync(lessonLocalId: 'l1');
+    await queue.drainQueue();
+
+    expect(queue.getQueueSnapshot(), contains('l1'));
+    expect(states.read('l1')?.syncStatus?.status, 'blocked');
+    expect(
+      states.read('l1')?.events.map((event) => event.type),
+      contains('REMOTE_VAULT_SYNC_BLOCKED'),
+    );
+  });
 
   test(
     'cloud queue merges remote state when server rejects regression',
@@ -263,6 +322,71 @@ void main() {
       await queue.drainQueue();
       expect(states.read('l1')?.progress?.itemIdx, 2);
       expect(queue.getQueueSnapshot(), contains('l1'));
+      expect(states.read('l1')?.syncStatus?.status, 'blocked_regression');
+      expect(
+        states.read('l1')?.events.map((event) => event.type),
+        contains('REMOTE_VAULT_SYNC_REJECTED'),
+      );
+    },
+  );
+
+  test(
+    'remote vault sync engine restores synced progress on another device',
+    () async {
+      final cloud = FakeCloudFunctions();
+      final session = FakeSessionProvider();
+      final deviceAState =
+          stateWithProgress(
+            id: 'lesson-multi',
+            itemIdx: 14,
+            layer: LessonLayer.l3,
+            mainAdvances: 15,
+          ).copyWith(
+            attempts: const [
+              LessonAttempt(
+                marker: 'M15',
+                layer: LessonLayer.l3,
+                letra: AnswerLetter.A,
+                sinal: DecisionSignal.one,
+                correct: true,
+                ts: 15,
+              ),
+            ],
+          );
+      final storeA = StudentStateStore(local: MemoryStudentStateLocalStorage())
+        ..writeState(deviceAState);
+      final deviceA = StudentStateStoreAdapter(storeA);
+      final queue = CloudQueue(
+        storage: MemoryCloudQueueStorage(),
+        stateService: deviceA,
+        sessionProvider: session,
+        cloudFunctions: cloud,
+        now: () => 1000,
+      );
+      final engineA = StudentRemoteVaultSyncEngine(
+        store: storeA,
+        sync: StudentLearningSync(queue),
+      );
+
+      engineA.enqueueState(
+        lessonLocalId: 'lesson-multi',
+        reason: 'device_a_progressed',
+      );
+      await engineA.drain();
+
+      final storeB = StudentStateStore(
+        local: MemoryStudentStateLocalStorage(),
+        cloud: SupabaseStudentStateCloudStorage(
+          cloudFunctions: cloud,
+          sessionProvider: session,
+        ),
+      );
+      final hydrated = await storeB.hydrateFromCloud('lesson-multi');
+
+      expect(hydrated.progress?.itemIdx, 14);
+      expect(hydrated.progress?.layer, LessonLayer.l3);
+      expect(hydrated.progress?.mainAdvances, 15);
+      expect(hydrated.attempts.single.marker, 'M15');
     },
   );
 

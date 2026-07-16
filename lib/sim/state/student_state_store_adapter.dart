@@ -140,7 +140,7 @@ class StudentStateStoreAdapter implements StudentLearningStateService {
     LessonAttempt attempt, {
     int maxAttempts = 300,
   }) {
-    return _store.patchState(lessonLocalId, (state) {
+    return mutate(lessonLocalId, (state) {
       final nextAttempts = [...state.attempts, attempt];
       final trimmed = nextAttempts.length > maxAttempts
           ? nextAttempts.sublist(nextAttempts.length - maxAttempts)

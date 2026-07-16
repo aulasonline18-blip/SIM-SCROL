@@ -22,6 +22,7 @@ import '../../sim/billing/sim_pricing.dart';
 import '../../sim/analytics/visual_learning_feedback.dart';
 import '../../sim/cloud/cloud_functions.dart';
 import '../../sim/cloud/sim_server_cloud_functions.dart';
+import '../../sim/cloud/student_remote_vault_sync_engine.dart';
 import '../../sim/cloud/supabase_client_contract.dart';
 import '../../sim/cloud/supabase_flutter_session_provider.dart';
 import '../../sim/cloud/supabase_student_state_cloud_storage.dart';
@@ -193,6 +194,8 @@ class LabSession extends ChangeNotifier {
     canonicalStore: canonicalStore!,
     aiConfig: _serverConfig(),
     prefs: prefs!,
+    cloudFunctions: _cloudFunctionsForDrawer(),
+    sessionProvider: _sessionProviderForDrawer(),
   );
   final PaymentReturnStore _paymentReturnStore = PaymentReturnStore();
   SimOrganism? _activeOrganism;
@@ -479,7 +482,7 @@ class LabSession extends ChangeNotifier {
         signal,
       );
       setReviewRoom(organism.auxRoomsController.review);
-      _persistActiveLessonToCloud();
+      _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
     } catch (error) {
       final current = reviewRoom;
       setReviewRoom(
@@ -575,7 +578,7 @@ class LabSession extends ChangeNotifier {
       );
       final view = organism.auxRoomsController.recovery;
       if (view != null) setRecoveryRoom(view);
-      _persistActiveLessonToCloud();
+      _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
     } catch (error) {
       final current = recoveryRoom;
       setRecoveryRoom(
@@ -862,23 +865,15 @@ class LabSession extends ChangeNotifier {
     final ids = _lessonIdsFromBackup(backup);
     final state = store.importBackup(backup);
     lessonLocalId = state.lessonLocalId;
+    for (final id in ids.isEmpty ? <String>[state.lessonLocalId] : ids) {
+      final imported = _readExistingLocalState(id);
+      if (imported == null || _stateDeleted(imported)) continue;
+      _enqueueLessonForRemoteVaultSync(id, reason: 'drawer_backup_imported');
+    }
     if (authed) {
-      final session = await _drawerSession();
-      if (session != null) {
-        for (final id in ids.isEmpty ? <String>[state.lessonLocalId] : ids) {
-          final imported = _readExistingLocalState(id);
-          if (imported == null || _stateDeleted(imported)) continue;
-          await _cloudFunctionsForDrawer().persistStudentState(
-            PersistStudentStateInput(
-              lessonLocalId: id,
-              state: imported,
-              clientUpdatedAt: imported.updatedAt,
-              clientScore: scoreOfStudentLearningState(imported),
-              schemaVersion: studentLearningStateSchemaVersion,
-            ),
-            session,
-          );
-        }
+      final engine = _remoteVaultSync();
+      if (engine != null) {
+        await engine.drain();
       }
     }
     notifyListeners();
@@ -1922,19 +1917,59 @@ class LabSession extends ChangeNotifier {
   void _hydrateActiveLessonFromCloud() {
     final id = lessonLocalId;
     if (id == null || id.trim().isEmpty) return;
-    final store = canonicalStore;
-    if (store == null) return;
-    unawaited(
-      store.hydrateFromCloud(id).catchError((_) => store.readState(id)),
-    );
+    unawaited(_hydrateActiveLessonFromRemoteVault(id));
   }
 
-  void _persistActiveLessonToCloud() {
+  Future<void> _hydrateActiveLessonFromRemoteVault(String id) async {
+    final engine = _remoteVaultSync();
+    if (engine == null) return;
+    try {
+      final hydrated = await engine.hydrate(lessonLocalId: id);
+      if (lessonLocalId != hydrated.lessonLocalId) return;
+      if (route == '/cyber/aula') {
+        await openAulaRuntime();
+      } else {
+        notifyListeners();
+      }
+    } catch (error) {
+      final store = canonicalStore;
+      if (store == null) return;
+      final local = store.readState(id);
+      store.writeState(
+        local.copyWith(
+          events: [
+            ...local.events,
+            StudentLearningEvent(
+              type: 'REMOTE_VAULT_HYDRATE_FAILED',
+              ts: DateTime.now().millisecondsSinceEpoch,
+              payload: {'lessonLocalId': id, 'message': error.toString()},
+            ),
+          ],
+        ),
+      );
+      notifyListeners();
+    }
+  }
+
+  void _enqueueActiveLessonForRemoteVaultSync({required String reason}) {
     final id = lessonLocalId;
     if (id == null || id.trim().isEmpty) return;
-    final store = canonicalStore;
-    if (store == null) return;
-    unawaited(store.persistCloud(id).catchError((_) {}));
+    _enqueueLessonForRemoteVaultSync(id, reason: reason);
+  }
+
+  void _enqueueLessonForRemoteVaultSync(
+    String lessonLocalId, {
+    required String reason,
+  }) {
+    final engine = _remoteVaultSync();
+    if (engine == null) return;
+    engine.enqueueState(lessonLocalId: lessonLocalId, reason: reason);
+    unawaited(engine.drain());
+  }
+
+  StudentRemoteVaultSyncEngine? _remoteVaultSync() {
+    if (canonicalStore == null || prefs == null) return null;
+    return simOrganismProvider.remoteVaultSyncEngine;
   }
 
   SimAiServerConfig _serverConfig() {
@@ -2014,16 +2049,8 @@ class LabSession extends ChangeNotifier {
       },
     );
     canonicalStore?.writeState(renamed);
-    await _cloudFunctionsForDrawer().persistStudentState(
-      PersistStudentStateInput(
-        lessonLocalId: lessonLocalId,
-        state: renamed,
-        clientUpdatedAt: renamed.updatedAt,
-        clientScore: scoreOfStudentLearningState(renamed),
-        schemaVersion: studentLearningStateSchemaVersion,
-      ),
-      session,
-    );
+    _enqueueLessonForRemoteVaultSync(lessonLocalId, reason: 'drawer_renamed');
+    await _remoteVaultSync()?.drain();
     return true;
   }
 
@@ -2362,7 +2389,7 @@ class LabSession extends ChangeNotifier {
   void preparationDone() {
     lessonUiState.markPreparationDone();
     navigationState.openRoute('/cyber/placement');
-    _persistActiveLessonToCloud();
+    _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
   }
 
   PlacementRouteController? get activePlacementController {
@@ -2456,7 +2483,7 @@ class LabSession extends ChangeNotifier {
         ],
       );
     });
-    _persistActiveLessonToCloud();
+    _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
   }
 
   void skipPlacement() {
@@ -2570,7 +2597,7 @@ class LabSession extends ChangeNotifier {
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
       await _openAuxRoomForLastAdvanceDecision(organism);
-      _persistActiveLessonToCloud();
+      _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
     } catch (error) {
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       aulaRuntimeError = error.toString();
@@ -2661,7 +2688,7 @@ class LabSession extends ChangeNotifier {
       await organism.lessonRuntimeEngine.advance();
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
-      _persistActiveLessonToCloud();
+      _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
       final currentId = lessonLocalId;
       if (aulaSnapshot?.isDone == true &&
           currentId != null &&
@@ -2821,7 +2848,7 @@ class LabSession extends ChangeNotifier {
           ),
         );
       }
-      _persistActiveLessonToCloud();
+      _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
     }
   }
 

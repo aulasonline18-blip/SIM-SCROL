@@ -555,6 +555,8 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(480, 1200));
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
     final cloud = _FakeDrawerCloud()
       ..put(_drawerState('lesson-a', 'Duplicada na conta', 1))
       ..put(_drawerState('cloud-c', 'Geometria na conta', 1))
@@ -562,6 +564,7 @@ void main() {
       ..put(_drawerState('cloud-e', 'Química na conta', 1));
     final session =
         LabSession(
+            prefs: prefs,
             drawerCloudFunctions: cloud,
             drawerSessionProvider: _FakeDrawerSessionProvider(),
           )
@@ -721,9 +724,12 @@ void main() {
   });
 
   test('drawer_backup_import_export_test exports and imports backup', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
     final cloud = _FakeDrawerCloud();
     final session =
         LabSession(
+            prefs: prefs,
             drawerCloudFunctions: cloud,
             drawerSessionProvider: _FakeDrawerSessionProvider(),
           )

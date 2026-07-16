@@ -212,7 +212,11 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const Key('sim-entry-name-input')), findsNothing);
-    expect(find.textContaining('Português'), findsWidgets);
+    expect(find.textContaining('Português'), findsNothing);
+    expect(
+      find.byKey(const Key('sim-entry-interface-language-list')),
+      findsNothing,
+    );
 
     await tester.tap(
       find.byKey(const Key('sim-entry-interface-language-button')),
@@ -251,6 +255,10 @@ void main() {
     expect(session.interfaceLocaleTag, 'pt-BR');
     expect(session.interfaceLanguageSubmitted, isTrue);
     expect(find.textContaining('Português'), findsWidgets);
+    expect(
+      find.byKey(const Key('sim-entry-interface-language-list')),
+      findsNothing,
+    );
     expect(
       find.text('SIM: Em que idioma você quer que eu ensine as aulas?'),
       findsOneWidget,
@@ -488,7 +496,7 @@ void main() {
     );
     expect(
       find.text(
-        'Conte o que você precisa aprender. O SIM organiza o plano, cria microaulas e exercícios para te conduzir do ponto certo até o objetivo.',
+        'Diga o que precisa aprender. O SIM monta o plano, cria microaulas e te conduz até o objetivo.',
       ),
       findsOneWidget,
     );
@@ -631,7 +639,7 @@ void main() {
 
     expect(
       find.text(
-        'Envie foto, lista, livro, caderno, prova, PDF, questão ou resposta que tentou fazer. O SIM olha seu material e te ensina a resolver aquilo.',
+        'Mostre foto, lista, livro, caderno, prova, PDF, questão ou resposta. O SIM usa esse material para te orientar.',
       ),
       findsOneWidget,
     );

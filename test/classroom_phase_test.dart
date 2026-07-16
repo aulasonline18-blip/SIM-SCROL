@@ -707,20 +707,7 @@ void main() {
     'M-EXP4 avanço com servidor pendente usa experiência preparada sem T02',
     () async {
       final service = StudentLearningStateService(
-        seed: {
-          'cyber-class': _classroomState().copyWith(
-            attempts: const [
-              LessonAttempt(
-                marker: 'M1',
-                layer: LessonLayer.l1,
-                letra: AnswerLetter.A,
-                sinal: DecisionSignal.two,
-                correct: true,
-                ts: 1,
-              ),
-            ],
-          ),
-        },
+        seed: {'cyber-class': _classroomState()},
       );
       final t02 = FakeClassroomT02();
       final gate = PendingServerAdvanceGateClient();
@@ -760,7 +747,15 @@ void main() {
       runtime.select(AnswerLetter.A);
       await runtime.signal(DecisionSignal.two);
       expect(gate.requests, hasLength(1));
-      expect(service.read('cyber-class')?.current?.layer, LessonLayer.l1);
+      final afterSignal = service.read('cyber-class')!;
+      expect(afterSignal.current?.layer, LessonLayer.l1);
+      expect(afterSignal.attempts, hasLength(1));
+      expect(afterSignal.attempts.single.marker, 'M1');
+      expect(afterSignal.attempts.single.layer, LessonLayer.l1);
+      expect(afterSignal.attempts.single.letra, AnswerLetter.A);
+      expect(afterSignal.attempts.single.sinal, DecisionSignal.two);
+      expect(afterSignal.attempts.single.correct, isTrue);
+      expect(gate.requests.single.attempts, hasLength(1));
 
       await runtime.advance();
       final snap = runtime.snapshot();
@@ -800,20 +795,7 @@ void main() {
 
   test('M-EXP4 servidor pendente reabre no avanço local exibido', () async {
     final service = StudentLearningStateService(
-      seed: {
-        'cyber-class': _classroomState().copyWith(
-          attempts: const [
-            LessonAttempt(
-              marker: 'M1',
-              layer: LessonLayer.l1,
-              letra: AnswerLetter.A,
-              sinal: DecisionSignal.two,
-              correct: true,
-              ts: 1,
-            ),
-          ],
-        ),
-      },
+      seed: {'cyber-class': _classroomState()},
     );
     final t02 = FakeClassroomT02();
     final gate = PendingServerAdvanceGateClient();
@@ -853,6 +835,7 @@ void main() {
     runtime.select(AnswerLetter.A);
     await runtime.signal(DecisionSignal.two);
     expect(gate.requests, hasLength(1));
+    expect(service.read('cyber-class')?.attempts, hasLength(1));
     await runtime.advance();
 
     final advanced = runtime.snapshot();
@@ -986,6 +969,75 @@ void main() {
     expect(snap.conteudo?.question, 'Abriu offline?');
     expect(t02.calls, 0);
   });
+
+  test(
+    'M-EXP4 servidor offline nao bloqueia avanco preparado nem chama T02',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = FakeClassroomT02();
+      final gate = FailingServerAdvanceGateClient();
+      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      await runtime.open(lessonLocalId: 'cyber-class');
+      expect(t02.calls, 1);
+
+      service.mutate('cyber-class', (state) {
+        final prepared = preparedMaterialFromLesson(
+          lesson: const CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Texto preparado mesmo sem servidor.',
+              question: 'Servidor offline travou?',
+              options: {
+                AnswerLetter.A: 'Nao',
+                AnswerLetter.B: 'Sim',
+                AnswerLetter.C: 'Chamou T02',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: null,
+            audioText: 'Texto preparado mesmo sem servidor.',
+          ),
+          itemIdx: 0,
+          marker: 'M1',
+          layer: LessonLayer.l2,
+        );
+        return state.copyWith(
+          readyLessonMaterials: {
+            ...state.readyLessonMaterials,
+            preparedLessonMaterialKey(0, 'M1', LessonLayer.l2): prepared,
+          },
+        );
+      });
+
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.two);
+      await Future<void>.delayed(Duration.zero);
+
+      final afterSignal = service.read('cyber-class')!;
+      expect(afterSignal.attempts, hasLength(1));
+      expect(
+        afterSignal.queuedActions.map((action) => action['type']),
+        contains('ADVANCE_GATE_PENDING'),
+      );
+
+      await runtime.advance();
+      final snap = runtime.snapshot();
+      final state = service.read('cyber-class')!;
+
+      expect(snap.phase.type, ClassroomPhaseType.lendo);
+      expect(snap.conteudo?.question, 'Servidor offline travou?');
+      expect(t02.calls, 1);
+      expect(gate.requests, hasLength(1));
+      expect(state.current?.layer, LessonLayer.l2);
+      expect(state.progress?.layer, LessonLayer.l2);
+      expect(state.attempts, hasLength(1));
+      expect(
+        state.queuedActions.map((action) => action['type']),
+        contains('ADVANCE_GATE_PENDING'),
+      );
+    },
+  );
 
   test('M-EXP4 material de slot errado e recusado', () async {
     final wrongSlot = _classroomState().copyWith(
@@ -1503,6 +1555,65 @@ void main() {
   );
 
   test(
+    'M-EXP4 tentativa repetida legitima no mesmo marker layer nao e apagada',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {
+          'cyber-class': _classroomState().copyWith(
+            attempts: const [
+              LessonAttempt(
+                marker: 'M1',
+                layer: LessonLayer.l1,
+                letra: AnswerLetter.A,
+                sinal: DecisionSignal.one,
+                correct: true,
+                ts: 1,
+              ),
+            ],
+          ),
+        },
+      );
+      final t02 = FakeClassroomT02();
+      final gate = FakeServerAdvanceGateClient(
+        const ServerAdvanceGateDecision(
+          accepted: true,
+          decision: 'next_layer',
+          reason: 'accepted_repeated_attempt',
+          nextItemIdx: 0,
+          nextLayer: LessonLayer.l3,
+          highWaterMark: 1,
+          events: [
+            {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
+          ],
+        ),
+      );
+      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      await runtime.open(lessonLocalId: 'cyber-class');
+
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.one);
+
+      final afterLocalEvidence = service.read('cyber-class')!;
+      expect(afterLocalEvidence.attempts, hasLength(2));
+      expect(afterLocalEvidence.attempts.first.ts, 1);
+      expect(afterLocalEvidence.attempts.last.ts, isNot(1));
+      expect(gate.requests.single.attempts, hasLength(2));
+
+      await Future<void>.delayed(Duration.zero);
+
+      final afterRemoteDecision = service.read('cyber-class')!;
+      expect(afterRemoteDecision.attempts, hasLength(2));
+      expect(
+        afterRemoteDecision.queuedActions.where(
+          (action) => action['type'] == 'ADVANCE_GATE_PENDING',
+        ),
+        isEmpty,
+      );
+      expect(afterRemoteDecision.progress?.layer, LessonLayer.l3);
+    },
+  );
+
+  test(
     'remote advance gate failure keeps explicit retry pending state',
     () async {
       final service = StudentLearningStateService(
@@ -1558,6 +1669,7 @@ void main() {
       );
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
       expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
+      expect(service.read('cyber-class')?.attempts, hasLength(1));
       expect(
         service
             .read('cyber-class')

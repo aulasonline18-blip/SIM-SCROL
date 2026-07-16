@@ -276,6 +276,71 @@ void main() {
     },
   );
 
+  testWidgets('language picker fixed labels follow selected app language', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final session = LabSession(prefs: prefs);
+    setSimActiveLanguage('pt-BR');
+
+    await tester.pumpWidget(
+      MaterialApp(home: ConversationalEntryScreen(session: session)),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 50));
+
+    expect(find.textContaining('Português'), findsNothing);
+    expect(
+      find.text(
+        'Uma timeline. Duas entradas fortes. Uma ficha pedagógica estruturada.',
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const Key('sim-entry-interface-language-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('sim-entry-interface-language-list')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('sim-entry-interface-language-search')),
+      findsOneWidget,
+    );
+    expect(find.text('Buscar idioma'), findsOneWidget);
+    expect(find.byTooltip('Fechar'), findsOneWidget);
+
+    await tester.tap(find.text('English').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('App language'), findsOneWidget);
+    expect(find.text('Lesson language'), findsOneWidget);
+    expect(find.text('Choose'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const Key('sim-entry-learning-language-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('sim-entry-learning-language-list')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('sim-entry-learning-language-search')),
+      findsOneWidget,
+    );
+    expect(find.text('Search language'), findsOneWidget);
+    expect(find.byTooltip('Close'), findsOneWidget);
+
+    session.dispose();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
+
   testWidgets(
     'lesson drawer exposes separate app and lesson language settings',
     (tester) async {

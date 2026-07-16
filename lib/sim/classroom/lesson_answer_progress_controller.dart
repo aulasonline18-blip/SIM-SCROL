@@ -83,7 +83,23 @@ class LessonAnswerProgressController {
       'layer-${position.layer.value}',
       content.question,
     ].join('::');
+    final idempotencyKey = [
+      lessonLocalId,
+      item.marker,
+      position.layer.value,
+      letter.name,
+      signal.value,
+      questionId,
+    ].join(':');
     final answeredAt = DateTime.now().millisecondsSinceEpoch;
+    final localAttempt = LessonAttempt(
+      marker: item.marker,
+      layer: position.layer,
+      letra: letter,
+      sinal: signal,
+      correct: correct,
+      ts: answeredAt,
+    );
     final entry = QuestionHistoryEntry(
       id: questionId,
       text: content.question,
@@ -115,11 +131,15 @@ class LessonAnswerProgressController {
     }
 
     final currentState = stateService.read(lessonLocalId);
-    final request = currentState == null || position.isReviewAtivo
+    final stateWithLocalEvidence =
+        currentState == null || position.isReviewAtivo
+        ? currentState
+        : _withLocalAttemptEvidence(currentState, localAttempt, idempotencyKey);
+    final request = stateWithLocalEvidence == null || position.isReviewAtivo
         ? null
         : ServerAdvanceGateRequest(
             lessonLocalId: lessonLocalId,
-            userId: currentState.userId,
+            userId: stateWithLocalEvidence.userId,
             marker: item.marker,
             itemIdx: position.itemIdx,
             layer: position.layer,
@@ -129,30 +149,23 @@ class LessonAnswerProgressController {
             questionId: questionId,
             questionText: content.question,
             correctOption: content.correctAnswer,
-            attempts: currentState.attempts,
+            attempts: stateWithLocalEvidence.attempts,
             history: position.historia,
-            highWaterMark: currentState.syncStatus?.highWaterMark,
-            pending: currentState.auxRooms ?? const {},
-            currentState: currentState,
-            idempotencyKey: [
-              lessonLocalId,
-              item.marker,
-              position.layer.value,
-              letter.name,
-              signal.value,
-              questionId,
-            ].join(':'),
+            highWaterMark: stateWithLocalEvidence.syncStatus?.highWaterMark,
+            pending: stateWithLocalEvidence.auxRooms ?? const {},
+            currentState: stateWithLocalEvidence,
+            idempotencyKey: idempotencyKey,
           );
     if (request != null) {
       final pending = recordPendingServerAdvanceGate(
-        state: currentState!,
+        state: stateWithLocalEvidence!,
         request: request,
         error: const SimExternalAiException(
           'Confirmacao de avanco pendente.',
           code: 'ADVANCE_GATE_CONFIRMATION_PENDING',
         ),
       );
-      stateService.write(pending);
+      stateService.write(pending, scheduleShadow: false);
     }
 
     final message = buildLessonAnswerFeedback(
@@ -472,6 +485,20 @@ class LessonAnswerProgressController {
       }
     }
     return false;
+  }
+
+  StudentLearningState _withLocalAttemptEvidence(
+    StudentLearningState state,
+    LessonAttempt attempt,
+    String idempotencyKey,
+  ) {
+    final alreadyPending = state.queuedActions.any(
+      (action) =>
+          action['type'] == 'ADVANCE_GATE_PENDING' &&
+          action['idempotencyKey'] == idempotencyKey,
+    );
+    if (alreadyPending) return state;
+    return state.copyWith(attempts: [...state.attempts, attempt]);
   }
 
   void _recordLocalPendingAdvanceDisplayed({

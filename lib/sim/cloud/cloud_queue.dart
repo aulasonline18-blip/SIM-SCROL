@@ -75,6 +75,7 @@ class CloudQueue with WidgetsBindingObserver {
     required this.sessionProvider,
     required this.cloudFunctions,
     this.now,
+    this.enableRetryTimers = true,
   });
 
   static const int debounceMs = 1500;
@@ -86,6 +87,7 @@ class CloudQueue with WidgetsBindingObserver {
   final SupabaseSessionProvider sessionProvider;
   final StudentStateCloudFunctions cloudFunctions;
   final int Function()? now;
+  final bool enableRetryTimers;
   bool draining = false;
   final Map<String, Timer> _retryTimers = {};
   final Set<String> _flushingIds = {};
@@ -130,9 +132,18 @@ class CloudQueue with WidgetsBindingObserver {
     _flushingIds.add(lessonLocalId);
     try {
       final session = await sessionProvider.currentSession();
-      if (session == null) return;
+      if (session == null) {
+        _markSyncBlocked(
+          lessonLocalId,
+          entry,
+          reason: 'missing_authenticated_session',
+        );
+        _scheduleRetry(entry);
+        return;
+      }
       final snap = stateService.read(lessonLocalId);
       if (snap == null) {
+        _markSyncFailed(lessonLocalId, entry, 'local_state_missing');
         _scheduleRetry(entry);
         return;
       }
@@ -160,18 +171,37 @@ class CloudQueue with WidgetsBindingObserver {
       );
       if (result.rejected && result.remoteState != null) {
         stateService.write(
-          mergeStudentLearningStateFromServerAuthority(
-            snap,
-            result.remoteState!,
+          _withSyncEvent(
+            mergeStudentLearningStateFromServerAuthority(
+              snap,
+              result.remoteState!,
+            ),
+            'REMOTE_VAULT_SYNC_REJECTED',
+            entry,
+            status: 'blocked_regression',
+            message: 'remote_state_stronger',
+            highWaterMark: result.remoteHighWaterMark,
           ),
           acceptServerAuthority: true,
+          scheduleShadow: false,
         );
         enqueueStudentStateSync(lessonLocalId: lessonLocalId);
         return;
       }
+      stateService.write(
+        _withSyncEvent(
+          snap,
+          'REMOTE_VAULT_SYNC_CONFIRMED',
+          entry,
+          status: 'synced',
+          highWaterMark: result.highWaterMark,
+        ),
+        scheduleShadow: false,
+      );
       storage.writeLastHash(lessonLocalId, contentHash);
       _remove(lessonLocalId);
-    } catch (_) {
+    } catch (error) {
+      _markSyncFailed(lessonLocalId, entry, error.toString());
       _scheduleRetry(entry);
     } finally {
       _flushingIds.remove(lessonLocalId);
@@ -215,10 +245,104 @@ class CloudQueue with WidgetsBindingObserver {
       nextRetryAt: _now + delay,
     );
     storage.writeQueue(bag);
+    if (!enableRetryTimers) return;
     _retryTimers[entry.lessonLocalId]?.cancel();
     _retryTimers[entry.lessonLocalId] = Timer(
       Duration(milliseconds: delay),
       () => flushOne(entry.lessonLocalId, force: false),
+    );
+  }
+
+  void _markSyncFailed(
+    String lessonLocalId,
+    CloudQueueEntry entry,
+    String message,
+  ) {
+    final state = stateService.read(lessonLocalId);
+    if (state == null) return;
+    stateService.write(
+      _withSyncEvent(
+        state,
+        'REMOTE_VAULT_SYNC_FAILED',
+        entry,
+        status: 'failed',
+        message: message,
+      ),
+      scheduleShadow: false,
+    );
+  }
+
+  void _markSyncBlocked(
+    String lessonLocalId,
+    CloudQueueEntry entry, {
+    required String reason,
+  }) {
+    final state = stateService.read(lessonLocalId);
+    if (state == null) return;
+    stateService.write(
+      _withSyncEvent(
+        state,
+        'REMOTE_VAULT_SYNC_BLOCKED',
+        entry,
+        status: 'blocked',
+        message: reason,
+      ),
+      scheduleShadow: false,
+    );
+  }
+
+  StudentLearningState _withSyncEvent(
+    StudentLearningState state,
+    String type,
+    CloudQueueEntry entry, {
+    required String status,
+    String? message,
+    int? highWaterMark,
+  }) {
+    final ts = _now;
+    final syncInfo = state.extra['syncInfo'] is Map
+        ? Map<String, dynamic>.from(state.extra['syncInfo'] as Map)
+        : <String, dynamic>{};
+    return state.copyWith(
+      syncStatus: StudentSyncStatus(
+        status: status,
+        highWaterMark: highWaterMark ?? state.syncStatus?.highWaterMark ?? 0,
+        pendingJobs: status == 'synced' ? 0 : 1,
+        updatedAt: ts,
+        lastSyncedAt: status == 'synced' ? ts : state.syncStatus?.lastSyncedAt,
+        lastError: status == 'synced' ? null : message,
+      ),
+      events: [
+        ...state.events,
+        StudentLearningEvent(
+          type: type,
+          ts: ts,
+          payload: {
+            'lessonLocalId': entry.lessonLocalId,
+            'operation': entry.operation.name,
+            'attempts': entry.attempts,
+            'pendingSince': entry.pendingSince,
+            'status': status,
+            ...message == null ? const {} : {'message': message},
+            ...highWaterMark == null
+                ? const {}
+                : {'highWaterMark': highWaterMark},
+          },
+        ),
+      ],
+      extra: {
+        ...state.extra,
+        'syncInfo': {
+          ...syncInfo,
+          'status': status,
+          'operation': entry.operation.name,
+          'updatedAt': ts,
+          ...message == null ? const {} : {'lastError': message},
+          ...highWaterMark == null
+              ? const {}
+              : {'highWaterMark': highWaterMark},
+        },
+      },
     );
   }
 }

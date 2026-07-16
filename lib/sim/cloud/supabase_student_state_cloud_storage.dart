@@ -22,20 +22,4 @@ class SupabaseStudentStateCloudStorage implements StudentStateCloudStorage {
     );
     return row?.state;
   }
-
-  @override
-  Future<void> persistCloud(StudentLearningState state) async {
-    final session = await sessionProvider.currentSession();
-    if (session == null) return;
-    await cloudFunctions.persistStudentState(
-      PersistStudentStateInput(
-        lessonLocalId: state.lessonLocalId,
-        state: state,
-        clientUpdatedAt: state.updatedAt,
-        clientScore: scoreOfStudentLearningState(state),
-        schemaVersion: studentLearningStateSchemaVersion,
-      ),
-      session,
-    );
-  }
 }

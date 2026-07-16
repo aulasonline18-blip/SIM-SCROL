@@ -978,7 +978,11 @@ void main() {
     await future;
 
     expect(pos.phase.type, ClassroomPhaseType.concluido);
-    expect(svc.read('L1')?.attempts, isEmpty);
+    expect(svc.read('L1')?.attempts, hasLength(1));
+    expect(svc.read('L1')?.attempts.single.marker, 'M-1');
+    expect(svc.read('L1')?.attempts.single.layer, LessonLayer.l1);
+    expect(svc.read('L1')?.attempts.single.letra, AnswerLetter.A);
+    expect(svc.read('L1')?.attempts.single.sinal, DecisionSignal.one);
     expect(
       svc.read('L1')?.queuedActions.map((action) => action['type']),
       contains('ADVANCE_GATE_PENDING'),
@@ -1085,7 +1089,7 @@ void main() {
   });
 
   test(
-    'M6-A: cliente lento nao bloqueia feedback local nem cria tentativa',
+    'M6-A: cliente lento nao bloqueia feedback local e grava evidencia local',
     () async {
       final svc = StudentLearningStateService(seed: {'L1': _state0()});
       final gate = _CompleterServerAdvanceGateClient();
@@ -1126,7 +1130,8 @@ void main() {
 
       expect(gate.requests, hasLength(1));
       expect(pos.phase.type, ClassroomPhaseType.concluido);
-      expect(svc.read('L1')?.attempts, isEmpty);
+      expect(svc.read('L1')?.attempts, hasLength(1));
+      expect(gate.requests.single.attempts, hasLength(1));
       expect(svc.read('L1')?.current?.layer, LessonLayer.l1);
       expect(
         svc
@@ -1194,7 +1199,7 @@ void main() {
 
       expect(gate.requests, hasLength(1));
       expect(pos.phase.type, ClassroomPhaseType.concluido);
-      expect(svc.read('L1')?.attempts, isEmpty);
+      expect(svc.read('L1')?.attempts, hasLength(1));
       final pendingEvents = svc
           .read('L1')!
           .events
@@ -1269,6 +1274,7 @@ void main() {
           .where((event) => event.type == 'ADVANCE_GATE_PENDING'),
       hasLength(1),
     );
+    expect(svc.read('L1')?.attempts, hasLength(1));
   });
 
   test(

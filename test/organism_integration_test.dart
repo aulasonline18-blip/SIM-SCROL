@@ -2,28 +2,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
-import 'package:sim_mobile/sim/media/audio_core.dart';
 import 'package:sim_mobile/sim/organism/sim_organism.dart';
+import 'package:sim_mobile/sim/organism/sim_organism_provider.dart';
 import 'package:sim_mobile/sim/organism/sim_organism_router.dart';
 import 'package:sim_mobile/sim/school/sim_school_routes.dart';
 import 'package:sim_mobile/sim/state/student_state_store.dart';
 
 SimAiServerConfig _testConfig() => const SimAiServerConfig(
-      baseUrl: 'http://localhost',
-      t00Path: '/api/bootstrap-t00',
-      t02Path: '/api/complete-lesson',
-    );
+  baseUrl: 'http://localhost',
+  t00Path: '/api/bootstrap-t00',
+  t02Path: '/api/complete-lesson',
+);
 
-Future<SimOrganism> _makeOrganism({String id = 'test', StudentStateStore? store}) async {
+Future<SimOrganism> _makeOrganism({
+  String id = 'test',
+  StudentStateStore? store,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
-  return SimOrganism.production(
-    lessonLocalId: id,
+  final provider = SimOrganismProvider(
+    canonicalStore:
+        store ?? StudentStateStore(local: MemoryStudentStateLocalStorage()),
     aiConfig: _testConfig(),
     prefs: prefs,
-    canonicalStore: store,
-    playback: NoopAudioPlaybackAdapter(),
   );
+  return provider.forLesson(id);
 }
 
 void main() {
@@ -47,6 +50,34 @@ void main() {
 
     final stored = canonicalStore.readState('canonical-organism');
     expect(stored.extra['proof'], 'canonical');
+  });
+
+  test('provider entrega uma unica fila oficial de cofre remoto', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final canonicalStore = StudentStateStore(
+      local: MemoryStudentStateLocalStorage(),
+    );
+    final provider = SimOrganismProvider(
+      canonicalStore: canonicalStore,
+      aiConfig: _testConfig(),
+      prefs: prefs,
+    );
+
+    final aulaA = provider.forLesson('lesson-a');
+    final aulaB = provider.forLesson('lesson-b');
+
+    expect(identical(aulaA.cloudQueue, provider.remoteVaultQueue), isTrue);
+    expect(identical(aulaB.cloudQueue, provider.remoteVaultQueue), isTrue);
+    expect(identical(aulaA.cloudQueue, aulaB.cloudQueue), isTrue);
+
+    provider.remoteVaultSyncEngine.enqueueState(
+      lessonLocalId: 'lesson-a',
+      reason: 'test_shared_remote_vault',
+    );
+
+    expect(provider.remoteVaultQueue.getQueueSnapshot(), contains('lesson-a'));
+    expect(aulaA.cloudQueue.getQueueSnapshot(), contains('lesson-a'));
   });
 
   test('organismo ideal nasce com todos os orgaos vivos conectados', () async {

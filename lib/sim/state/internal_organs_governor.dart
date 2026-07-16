@@ -5,6 +5,12 @@ import 'student_learning_state.dart';
 import 'student_learning_governor.dart';
 import 'student_state_store.dart';
 
+typedef RemoteStateSyncPort =
+    Future<void> Function({
+      required String lessonLocalId,
+      required String source,
+    });
+
 class MediaStateGovernor {
   MediaStateGovernor({required this.store});
 
@@ -448,9 +454,10 @@ class AuxiliaryStateGovernor {
 }
 
 class SyncStateGovernor {
-  SyncStateGovernor({required this.store});
+  SyncStateGovernor({required this.store, this.remoteSync});
 
   final StudentStateStore store;
+  final RemoteStateSyncPort? remoteSync;
 
   Future<CanonicalLearningEvent> syncToCloud({
     required String lessonLocalId,
@@ -463,7 +470,11 @@ class SyncStateGovernor {
       source: source,
     );
     try {
-      await store.persistCloud(lessonLocalId);
+      final syncPort = remoteSync;
+      if (syncPort == null) {
+        throw StateError('REMOTE_SYNC_PORT_NOT_CONFIGURED');
+      }
+      await syncPort(lessonLocalId: lessonLocalId, source: source);
       return recorder.recordCompleted(
         lessonLocalId: lessonLocalId,
         direction: 'push',
