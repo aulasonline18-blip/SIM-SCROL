@@ -320,6 +320,12 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       _fontScaleLevel,
       MediaQuery.sizeOf(context).width,
     );
+    final snapshotImage = snapshot?.imagem;
+    final chatImageStatus =
+        session.aulaRuntimeLoading &&
+            (snapshotImage == null || snapshotImage.trim().isEmpty)
+        ? 'loading'
+        : session.imageStatus;
     final messages = _mergeConversationMessages(
       session,
       buildChatLessonMessages(
@@ -328,7 +334,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
           runtimeLoading: session.aulaRuntimeLoading,
           runtimeError: session.aulaRuntimeError,
           showImagePanel: _hasLessonImagePanel(),
-          imageStatus: session.imageStatus,
+          imageStatus: chatImageStatus,
           imageError: session.imageError,
           doubtProcessing: session.doubt.status == DoubtStatus.processing,
           doubtProgress: session.doubt.progress,

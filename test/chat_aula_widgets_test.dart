@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -815,7 +814,7 @@ void main() {
     expect(advanced, isFalse);
   });
 
-  testWidgets('chat feedback pending actions block duplicate taps', (
+  testWidgets('chat feedback pending next action remains tappable', (
     tester,
   ) async {
     var openedDoubt = 0;
@@ -851,7 +850,7 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
 
     expect(openedDoubt, 0);
-    expect(advanced, 0);
+    expect(advanced, 1);
   });
 
   testWidgets('chat retry pending action is visible and inactive', (
@@ -887,7 +886,7 @@ void main() {
     expect(retries, 0);
   });
 
-  testWidgets('chat answer and signal actions respect pending guards', (
+  testWidgets('chat answer and signal actions stay tappable while pending', (
     tester,
   ) async {
     AnswerLetter? chosen;
@@ -933,8 +932,8 @@ void main() {
     await tester.tap(find.text('Alternativa A'));
     await tester.tap(find.text(t('aula_sig_certeza')));
 
-    expect(chosen, isNull);
-    expect(signal, 0);
+    expect(chosen, AnswerLetter.A);
+    expect(signal, 1);
   });
 
   testWidgets('chat aula advances only when next button is tapped', (
@@ -983,7 +982,9 @@ void main() {
     expect(session.autoAdvances, 1);
   });
 
-  testWidgets('chat timeline follows new messages to the end', (tester) async {
+  testWidgets('chat timeline opens at end and respects manual scroll up', (
+    tester,
+  ) async {
     final key = GlobalKey<_ChatTimelineHarnessState>();
     final controller = ScrollController();
     addTearDown(controller.dispose);
@@ -1014,28 +1015,51 @@ void main() {
     expect(find.text('Mensagem nova'), findsOneWidget);
     expect(controller.position.maxScrollExtent, greaterThan(96));
 
-    unawaited(
-      controller.animateTo(
-        0,
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-      ),
+    await tester.drag(
+      find.byKey(const Key('chat-aula-timeline')),
+      const Offset(0, 900),
     );
     await tester.pump(const Duration(milliseconds: 220));
+    final afterManualDrag = controller.position.pixels;
 
     key.currentState!.appendMessage('Mensagem mais nova');
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
     expect(find.textContaining('Voltar ao feedback'), findsNothing);
-    expect(find.text('Mensagem mais nova'), findsOneWidget);
+    expect(controller.position.pixels, closeTo(afterManualDrag, 1));
+  });
+
+  testWidgets('chat timeline near end follows a new message', (tester) async {
+    final key = GlobalKey<_ChatTimelineHarnessState>();
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: _ChatTimelineHarness(key: key, scrollController: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump();
+
+    key.currentState!.appendMessage('Mensagem no fim');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mensagem no fim'), findsOneWidget);
     expect(
       controller.position.pixels,
       closeTo(controller.position.maxScrollExtent, 1),
     );
   });
 
-  testWidgets('chat timeline follows new lesson content to the end', (
+  testWidgets('chat image settling does not pull user away from old messages', (
     tester,
   ) async {
     final key = GlobalKey<_ChatTimelineHarnessState>();
@@ -1052,27 +1076,66 @@ void main() {
         ),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
     controller.jumpTo(controller.position.maxScrollExtent);
     await tester.pump();
 
-    final beforePassiveUpdate = controller.position.pixels;
     await tester.drag(
       find.byKey(const Key('chat-aula-timeline')),
       const Offset(0, 900),
     );
     await tester.pump(const Duration(milliseconds: 220));
     final afterManualDrag = controller.position.pixels;
-    expect(afterManualDrag, lessThan(beforePassiveUpdate));
+    expect(afterManualDrag, lessThan(controller.position.maxScrollExtent));
 
-    key.currentState!.appendNewLessonTurn();
+    key.currentState!.appendImageMessage();
     await tester.pumpAndSettle();
 
-    expect(controller.position.pixels, greaterThan(afterManualDrag));
-    expect(find.text('Nova alternativa B'), findsOneWidget);
-    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
-    expect(find.textContaining('Voltar às alternativas'), findsNothing);
+    expect(find.text(t('aula_image_ready')), findsNothing);
+    expect(controller.position.pixels, closeTo(afterManualDrag, 1));
   });
+
+  testWidgets(
+    'chat timeline keeps manual position on passive new lesson content',
+    (tester) async {
+      final key = GlobalKey<_ChatTimelineHarnessState>();
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 320,
+              child: _ChatTimelineHarness(
+                key: key,
+                scrollController: controller,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      controller.jumpTo(controller.position.maxScrollExtent);
+      await tester.pump();
+
+      final beforePassiveUpdate = controller.position.pixels;
+      await tester.drag(
+        find.byKey(const Key('chat-aula-timeline')),
+        const Offset(0, 900),
+      );
+      await tester.pump(const Duration(milliseconds: 220));
+      final afterManualDrag = controller.position.pixels;
+      expect(afterManualDrag, lessThan(beforePassiveUpdate));
+
+      key.currentState!.appendNewLessonTurn();
+      await tester.pumpAndSettle();
+
+      expect(controller.position.pixels, closeTo(afterManualDrag, 1));
+      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+      expect(find.textContaining('Voltar às alternativas'), findsNothing);
+    },
+  );
 
   testWidgets('chat timeline auto scrolls to the end after advance', (
     tester,
@@ -1524,6 +1587,61 @@ void main() {
         'Esta parte da aula tem uma imagem criada por inteligência artificial.',
       ),
       findsNothing,
+    );
+  });
+
+  testWidgets('chat image bubbles keep their own image data', (tester) async {
+    final session = _AutoAdvanceSession()
+      ..aulaSnapshot = _chatSnapshot(
+        phase: const ClassroomPhase.reading(),
+        imagem: 'data:image/png;base64,SESSION_IMAGE',
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            session: session,
+            messages: const [
+              ChatLessonMessage(
+                id: 'image-a',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.image,
+                imageData: 'data:image/png;base64,IMAGE_A',
+                imageStatus: 'ready',
+              ),
+              ChatLessonMessage(
+                id: 'image-b',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.image,
+                imageData: 'data:image/png;base64,IMAGE_B',
+                imageStatus: 'ready',
+              ),
+            ],
+            onChooseAnswer: (_) {},
+            onSignal: (_) {},
+            onRetry: () {},
+            onNext: () {},
+            onOpenDoubt: () {},
+          ),
+        ),
+      ),
+    );
+
+    final views = tester.widgetList<LessonMediaImageView>(
+      find.byType(LessonMediaImageView),
+    );
+    expect(
+      views.map((view) => view.data),
+      contains('data:image/png;base64,IMAGE_A'),
+    );
+    expect(
+      views.map((view) => view.data),
+      contains('data:image/png;base64,IMAGE_B'),
+    );
+    expect(
+      views.map((view) => view.data),
+      isNot(contains('data:image/png;base64,SESSION_IMAGE')),
     );
   });
 
@@ -2623,6 +2741,7 @@ void main() {
       const Offset(0, 900),
     );
     await tester.pump(const Duration(milliseconds: 220));
+    final afterManualDrag = controller.position.pixels;
 
     key.currentState!.appendRestoredStudentMessage();
     await tester.pumpAndSettle();
@@ -2630,7 +2749,7 @@ void main() {
     expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
     expect(find.textContaining('Voltar às alternativas'), findsNothing);
     expect(find.textContaining('Voltar ao feedback'), findsNothing);
-    expect(find.text('Mensagem restaurada depois da volta.'), findsOneWidget);
+    expect(controller.position.pixels, closeTo(afterManualDrag, 1));
   });
 
   testWidgets(
@@ -2912,6 +3031,20 @@ class _ChatTimelineHarnessState extends State<_ChatTimelineHarness> {
           kind: ChatLessonMessageKind.feedback,
           text: text,
           actionKey: 'aula_next',
+        ),
+      );
+    });
+  }
+
+  void appendImageMessage() {
+    setState(() {
+      _messages.add(
+        ChatLessonMessage(
+          id: 'image-${_nextId++}',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.image,
+          imageData: _pngDataUrl(),
+          imageStatus: 'ready',
         ),
       );
     });

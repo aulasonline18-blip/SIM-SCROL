@@ -66,6 +66,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   late bool _initialScrollToCurrentPending = widget.initialScrollToCurrent;
   _ExplicitScrollIntent? _pendingScrollIntent;
   int _scrollToEndGeneration = 0;
+  bool _userScrolledAwayFromEnd = false;
 
   @override
   void initState() {
@@ -94,7 +95,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       if (!mounted) return;
       if (intent != null) {
         _scrollForIntent(intent);
-      } else {
+      } else if (_shouldFollowPassiveUpdate()) {
         _scheduleScrollToEnd();
       }
     });
@@ -113,7 +114,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     _ExplicitScrollIntent intent, {
     bool immediate = false,
   }) async {
-    _scheduleScrollToEnd(immediate: immediate);
+    _scheduleScrollToEnd(immediate: immediate, force: true);
   }
 
   void _scheduleInitialScrollToCurrent() {
@@ -130,7 +131,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         return;
       }
       _initialScrollToCurrentPending = false;
-      _scheduleScrollToEnd(immediate: true);
+      _scheduleScrollToEnd(immediate: true, force: true);
     });
   }
 
@@ -149,7 +150,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     double? initialFallbackOffset,
   }) async {
     if (!preferNewTurnStart && initialFallbackOffset == null) {
-      _scheduleScrollToEnd(immediate: immediate);
+      _scheduleScrollToEnd(immediate: immediate, force: true);
       return;
     }
     if (!_scrollController.hasClients) return;
@@ -221,17 +222,18 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     }
   }
 
-  void _scheduleScrollToEnd({bool immediate = false}) {
+  void _scheduleScrollToEnd({bool immediate = false, bool force = false}) {
     final generation = ++_scrollToEndGeneration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || generation != _scrollToEndGeneration) return;
-      _scrollToEnd(generation: generation, immediate: immediate);
+      _scrollToEnd(generation: generation, immediate: immediate, force: force);
     });
   }
 
   Future<void> _scrollToEnd({
     required int generation,
     bool immediate = false,
+    bool force = false,
     int pass = 0,
   }) async {
     if (!mounted ||
@@ -245,9 +247,14 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         _scrollToEnd(
           generation: generation,
           immediate: immediate,
+          force: force,
           pass: pass + 1,
         );
       });
+      return;
+    }
+    if (!force && !_isNearEnd(position)) {
+      _userScrolledAwayFromEnd = true;
       return;
     }
     final target = position.maxScrollExtent;
@@ -274,9 +281,37 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     final nextTarget = _scrollController.position.maxScrollExtent;
     if ((nextTarget - _scrollController.position.pixels).abs() > 1) {
       unawaited(
-        _scrollToEnd(generation: generation, immediate: true, pass: pass + 1),
+        _scrollToEnd(
+          generation: generation,
+          immediate: true,
+          force: force,
+          pass: pass + 1,
+        ),
       );
     }
+  }
+
+  bool _shouldFollowPassiveUpdate() {
+    if (!_scrollController.hasClients) return true;
+    final position = _scrollController.position;
+    if (!position.hasContentDimensions) return true;
+    final nearEnd = _isNearEnd(position);
+    _userScrolledAwayFromEnd = !nearEnd;
+    return nearEnd;
+  }
+
+  bool _isNearEnd(ScrollMetrics metrics) {
+    final threshold = metrics.viewportDimension.clamp(96.0, 220.0);
+    return metrics.extentAfter <= threshold;
+  }
+
+  bool _handleUserScroll(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    if (notification is ScrollUpdateNotification ||
+        notification is UserScrollNotification) {
+      _userScrolledAwayFromEnd = !_isNearEnd(notification.metrics);
+    }
+    return false;
   }
 
   void _handleSignal(int value) {
@@ -529,8 +564,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                       onNotification: (_) {
                         return false;
                       },
-                      child: NotificationListener<UserScrollNotification>(
-                        onNotification: (_) => false,
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: _handleUserScroll,
                         child: ListView(
                           key: const Key('chat-aula-timeline'),
                           controller: _scrollController,
@@ -588,7 +623,10 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                                             widget.pendingActionKeys,
                                         onImageSettled: () {
                                           widget.onImageSettled?.call();
-                                          _scheduleScrollToEnd();
+                                          if (!_userScrolledAwayFromEnd &&
+                                              _shouldFollowPassiveUpdate()) {
+                                            _scheduleScrollToEnd();
+                                          }
                                         },
                                       ),
                                     ),
@@ -941,13 +979,10 @@ class _ChatAulaMessageBody extends StatelessWidget {
         onSignal: onSignal,
         pendingActionKeys: pendingActionKeys,
       ),
-      ChatLessonMessageKind.image =>
-        session == null
-            ? ChatImageBubble(message: message)
-            : LessonImagePanel(
-                session: session!,
-                onImageSettled: onImageSettled,
-              ),
+      ChatLessonMessageKind.image => ChatImageBubble(
+        message: message,
+        onImageSettled: onImageSettled,
+      ),
       ChatLessonMessageKind.loading || ChatLessonMessageKind.processing =>
         message.id == 'doubt-processing'
             ? _DoubtProgressMessage(
@@ -1075,8 +1110,9 @@ class _FeedbackMessageActions extends StatelessWidget {
                 label: nextBusy
                     ? t('preparing_next_lesson')
                     : nextBtnText(message.actionKey ?? 'aula_next'),
-                enabled: effectiveActionable && !nextBusy,
+                enabled: effectiveActionable,
                 busy: nextBusy,
+                blockWhileBusy: false,
                 icon: Icons.arrow_forward_rounded,
                 onPressed: onNext,
               );
@@ -1356,17 +1392,59 @@ class _HistoryOptionRow extends StatelessWidget {
   }
 }
 
-class ChatImageBubble extends StatelessWidget {
-  const ChatImageBubble({required this.message, super.key});
+class ChatImageBubble extends StatefulWidget {
+  const ChatImageBubble({
+    required this.message,
+    this.onImageSettled,
+    super.key,
+  });
 
   final ChatLessonMessage message;
+  final VoidCallback? onImageSettled;
+
+  @override
+  State<ChatImageBubble> createState() => _ChatImageBubbleState();
+}
+
+class _ChatImageBubbleState extends State<ChatImageBubble> {
+  String? _settledImageData;
+
+  @override
+  void initState() {
+    super.initState();
+    _notifySettledIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(ChatImageBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.imageData != widget.message.imageData ||
+        oldWidget.message.imageStatus != widget.message.imageStatus) {
+      _notifySettledIfNeeded();
+    }
+  }
+
+  void _notifySettledIfNeeded() {
+    final imageData = widget.message.imageData?.trim();
+    if (imageData == null ||
+        imageData.isEmpty ||
+        imageData == _settledImageData) {
+      return;
+    }
+    _settledImageData = imageData;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onImageSettled?.call();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final imageReady =
-        message.imageData != null && message.imageData!.trim().isNotEmpty;
-    final loading = message.imageStatus == 'loading';
-    final hasError = (message.text ?? '').trim().isNotEmpty;
+        widget.message.imageData != null &&
+        widget.message.imageData!.trim().isNotEmpty;
+    final loading = widget.message.imageStatus == 'loading';
+    final hasError = (widget.message.text ?? '').trim().isNotEmpty;
     final palette = SimThemeScope.paletteOf(context);
     final icon = imageReady
         ? Icons.image_outlined
@@ -1378,7 +1456,7 @@ class ChatImageBubble extends StatelessWidget {
         : loading
         ? t('aula_image_loading')
         : hasError
-        ? message.text!
+        ? widget.message.text!
         : t('aula_image_unavailable');
     return Container(
       constraints: const BoxConstraints(minHeight: 72),
@@ -1388,28 +1466,44 @@ class ChatImageBubble extends StatelessWidget {
         borderRadius: BorderRadius.circular(SimRadius.lg),
         border: Border.all(color: palette.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (loading)
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: palette.primary,
-              ),
-            )
-          else
-            Icon(icon, color: hasError ? simWarn : palette.primary, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              label,
-              style: SimTypography.lessonBody.copyWith(
-                color: palette.text,
-                fontWeight: FontWeight.w700,
-              ),
+          if (imageReady) ...[
+            LessonMediaImageView(
+              data: widget.message.imageData!.trim(),
+              compact: true,
             ),
+            const SizedBox(height: 10),
+          ],
+          Row(
+            children: [
+              if (loading)
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: palette.primary,
+                  ),
+                )
+              else
+                Icon(
+                  icon,
+                  color: hasError ? simWarn : palette.primary,
+                  size: 24,
+                ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: SimTypography.lessonBody.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1539,10 +1633,8 @@ class _ChatOptions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final answerEnabled =
-        message.isActionable && !pendingActionKeys.contains('answer');
-    final signalEnabled =
-        message.isActionable && !pendingActionKeys.contains('signal');
+    final answerEnabled = message.isActionable;
+    final signalEnabled = message.isActionable;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1724,7 +1816,7 @@ class _ChatSignals extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SignalButtonGroup(
-          signals: message.isActionable && !pendingActionKeys.contains('signal')
+          signals: message.isActionable
               ? message.signals
               : [
                   for (final signal in message.signals)
@@ -1950,6 +2042,7 @@ class _ChatActionButton extends StatelessWidget {
     required this.onPressed,
     this.enabled = true,
     this.busy = false,
+    this.blockWhileBusy = true,
     this.primary = true,
     this.compact = false,
     this.icon,
@@ -1960,6 +2053,7 @@ class _ChatActionButton extends StatelessWidget {
   final VoidCallback onPressed;
   final bool enabled;
   final bool busy;
+  final bool blockWhileBusy;
   final bool primary;
   final bool compact;
   final IconData? icon;
@@ -1967,7 +2061,7 @@ class _ChatActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    final active = enabled && !busy;
+    final active = enabled && (!busy || !blockWhileBusy);
     final background = primary ? palette.surface : palette.surface;
     final foreground = primary ? palette.primary : palette.text;
     final borderColor = primary ? palette.primary : palette.border;
