@@ -198,18 +198,17 @@ void main() {
     expect(find.textContaining('Qual alternativa'), findsOneWidget);
     expect(find.text('Resposta curta A'), findsOneWidget);
     await tester.tap(find.text('Resposta curta A'));
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('signal-button-1')), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const Key('signal-button-1'))).height,
       greaterThanOrEqualTo(SimTouch.min),
     );
 
-    await tester.drag(
-      find.byKey(const Key('chat-aula-timeline')),
-      const Offset(0, -120),
-    );
+    await tester.ensureVisible(find.byKey(const Key('signal-button-1')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('signal-button-1')));
+    await tester.pump();
 
     expect(chosen, AnswerLetter.A);
     expect(signal, 1);

@@ -31,6 +31,147 @@ enum ChatLessonMessageKind {
   error,
 }
 
+enum AulaConversationBlockType {
+  explanation,
+  visual,
+  question,
+  answerOptions,
+  signalOptions,
+  studentAnswer,
+  studentSignal,
+  feedback,
+  advanceAction,
+  loading,
+  recoverableError,
+  studentDoubt,
+  doubtAnswer,
+  review,
+  recovery,
+  historyQuestion,
+  unsupported,
+}
+
+enum AulaConversationAction {
+  chooseAnswer,
+  submitSignal,
+  advance,
+  retry,
+  openDoubt,
+}
+
+class AulaConversationBlock {
+  const AulaConversationBlock({
+    required this.id,
+    required this.type,
+    required this.role,
+    required this.active,
+    required this.deliveryStatus,
+    required this.message,
+    this.text,
+    this.imageData,
+    this.options = const [],
+    this.signals = const [],
+    this.action,
+    this.metadata = const {},
+  });
+
+  final String id;
+  final AulaConversationBlockType type;
+  final ChatLessonMessageRole role;
+  final bool active;
+  final ChatLessonDeliveryStatus deliveryStatus;
+  final ChatLessonMessage message;
+  final String? text;
+  final String? imageData;
+  final List<ChatLessonOption> options;
+  final List<ChatLessonSignal> signals;
+  final AulaConversationAction? action;
+  final Map<String, Object?> metadata;
+
+  bool get isHistorical => !active;
+
+  static AulaConversationBlock fromMessage(ChatLessonMessage message) {
+    final type = _typeFor(message);
+    return AulaConversationBlock(
+      id: 'aula-block-${message.id}',
+      type: type,
+      role: message.role,
+      active: message.isActionable && !message.isHistorical,
+      deliveryStatus: message.deliveryStatus,
+      message: message,
+      text: message.text,
+      imageData: message.imageData,
+      options: message.options,
+      signals: message.signals,
+      action: _actionFor(message, type),
+      metadata: {
+        'messageId': message.id,
+        'kind': message.kind.name,
+        'lessonLocalId': message.lessonLocalId,
+        'marker': message.marker,
+        'itemIdx': message.itemIdx,
+        'layer': message.layer,
+        'actionKey': message.actionKey,
+      },
+    );
+  }
+
+  static AulaConversationBlockType _typeFor(ChatLessonMessage message) {
+    return switch (message.kind) {
+      ChatLessonMessageKind.explanation =>
+        AulaConversationBlockType.explanation,
+      ChatLessonMessageKind.image => AulaConversationBlockType.visual,
+      ChatLessonMessageKind.question => AulaConversationBlockType.question,
+      ChatLessonMessageKind.options => AulaConversationBlockType.answerOptions,
+      ChatLessonMessageKind.signals => AulaConversationBlockType.signalOptions,
+      ChatLessonMessageKind.studentAnswer ||
+      ChatLessonMessageKind.historyAnswer =>
+        AulaConversationBlockType.studentAnswer,
+      ChatLessonMessageKind.studentSignal =>
+        AulaConversationBlockType.studentSignal,
+      ChatLessonMessageKind.feedback =>
+        (message.actionKey ?? '').isEmpty
+            ? AulaConversationBlockType.doubtAnswer
+            : AulaConversationBlockType.feedback,
+      ChatLessonMessageKind.doubtAction =>
+        AulaConversationBlockType.advanceAction,
+      ChatLessonMessageKind.loading ||
+      ChatLessonMessageKind.processing => AulaConversationBlockType.loading,
+      ChatLessonMessageKind.error => AulaConversationBlockType.recoverableError,
+      ChatLessonMessageKind.studentDoubt =>
+        AulaConversationBlockType.studentDoubt,
+      ChatLessonMessageKind.review => AulaConversationBlockType.review,
+      ChatLessonMessageKind.recovery => AulaConversationBlockType.recovery,
+      ChatLessonMessageKind.historyQuestion =>
+        AulaConversationBlockType.historyQuestion,
+    };
+  }
+
+  static AulaConversationAction? _actionFor(
+    ChatLessonMessage message,
+    AulaConversationBlockType type,
+  ) {
+    if (!message.isActionable || message.isHistorical) return null;
+    return switch (type) {
+      AulaConversationBlockType.answerOptions =>
+        AulaConversationAction.chooseAnswer,
+      AulaConversationBlockType.signalOptions =>
+        AulaConversationAction.submitSignal,
+      AulaConversationBlockType.feedback =>
+        (message.actionKey ?? '').isEmpty
+            ? null
+            : AulaConversationAction.advance,
+      AulaConversationBlockType.advanceAction =>
+        message.kind == ChatLessonMessageKind.doubtAction
+            ? AulaConversationAction.openDoubt
+            : AulaConversationAction.advance,
+      AulaConversationBlockType.recoverableError =>
+        message.actionKey == 'retry' ? AulaConversationAction.retry : null,
+      _ => null,
+    };
+  }
+}
+
 class ChatLessonOption {
   const ChatLessonOption({
     required this.letter,

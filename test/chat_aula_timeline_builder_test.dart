@@ -40,6 +40,131 @@ void main() {
     expect(options.options.every((option) => option.enabled), isTrue);
   });
 
+  test('typed blocks preserve pedagogical order and metadata', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        lessonLocalId: 'lesson-m9',
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.reading(),
+          imagem: 'data:image/png;base64,AAAA',
+        ),
+        showImagePanel: true,
+      ),
+    );
+    final blocks = messages.map(AulaConversationBlock.fromMessage).toList();
+
+    expect(
+      blocks.map((block) => block.type),
+      containsAllInOrder([
+        AulaConversationBlockType.explanation,
+        AulaConversationBlockType.visual,
+        AulaConversationBlockType.question,
+        AulaConversationBlockType.answerOptions,
+      ]),
+    );
+    expect(blocks.every((block) => block.id.startsWith('aula-block-')), isTrue);
+
+    final visual = blocks.singleWhere(
+      (block) => block.type == AulaConversationBlockType.visual,
+    );
+    expect(visual.imageData, 'data:image/png;base64,AAAA');
+    expect(visual.metadata['lessonLocalId'], 'lesson-m9');
+    expect(visual.metadata['marker'], 'M1');
+    expect(visual.metadata['itemIdx'], 0);
+    expect(visual.metadata['layer'], 1);
+
+    final options = blocks.singleWhere(
+      (block) => block.type == AulaConversationBlockType.answerOptions,
+    );
+    expect(options.active, isTrue);
+    expect(options.action, AulaConversationAction.chooseAnswer);
+    expect(options.options.map((option) => option.letter), [
+      AnswerLetter.A,
+      AnswerLetter.B,
+      AnswerLetter.C,
+    ]);
+  });
+
+  test('typed blocks keep historical actions inert', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.reading(),
+          history: const [
+            QuestionHistoryEntry(
+              id: 'h1',
+              text: 'Pergunta antiga?',
+              options: [
+                QuestionOptionEntry(id: AnswerLetter.A, text: 'Alpha'),
+                QuestionOptionEntry(id: AnswerLetter.B, text: 'Beta'),
+                QuestionOptionEntry(id: AnswerLetter.C, text: 'Gamma'),
+              ],
+              chosenOptionId: AnswerLetter.B,
+              correct: true,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final historical = AulaConversationBlock.fromMessage(
+      messages.singleWhere(
+        (message) => message.kind == ChatLessonMessageKind.historyQuestion,
+      ),
+    );
+    final active = AulaConversationBlock.fromMessage(
+      messages.singleWhere(
+        (message) => message.kind == ChatLessonMessageKind.options,
+      ),
+    );
+
+    expect(historical.type, AulaConversationBlockType.historyQuestion);
+    expect(historical.active, isFalse);
+    expect(historical.isHistorical, isTrue);
+    expect(historical.action, isNull);
+    expect(historical.options.every((option) => !option.enabled), isTrue);
+    expect(active.type, AulaConversationBlockType.answerOptions);
+    expect(active.active, isTrue);
+    expect(active.action, AulaConversationAction.chooseAnswer);
+  });
+
+  test('typed blocks expose feedback and recoverable error actions', () {
+    const feedback = ChatLessonMessage(
+      id: 'feedback',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.feedback,
+      text: 'Muito bem.',
+      actionKey: 'aula_next',
+      isActionable: true,
+    );
+    const doubtAnswer = ChatLessonMessage(
+      id: 'doubt-answer',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.feedback,
+      text: 'Resposta da dúvida.',
+      isActionable: false,
+    );
+    const error = ChatLessonMessage(
+      id: 'error',
+      role: ChatLessonMessageRole.system,
+      kind: ChatLessonMessageKind.error,
+      text: 'Vamos tentar de novo.',
+      actionKey: 'retry',
+      isActionable: true,
+    );
+
+    final feedbackBlock = AulaConversationBlock.fromMessage(feedback);
+    final doubtAnswerBlock = AulaConversationBlock.fromMessage(doubtAnswer);
+    final errorBlock = AulaConversationBlock.fromMessage(error);
+
+    expect(feedbackBlock.type, AulaConversationBlockType.feedback);
+    expect(feedbackBlock.action, AulaConversationAction.advance);
+    expect(doubtAnswerBlock.type, AulaConversationBlockType.doubtAnswer);
+    expect(doubtAnswerBlock.action, isNull);
+    expect(errorBlock.type, AulaConversationBlockType.recoverableError);
+    expect(errorBlock.action, AulaConversationAction.retry);
+  });
+
   test('expanded phase opens signal choices under the selected option', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(

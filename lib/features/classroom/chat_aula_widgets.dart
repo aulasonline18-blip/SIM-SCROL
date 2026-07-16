@@ -54,6 +54,7 @@ class ChatAulaTimeline extends StatefulWidget {
 
 class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   static const _scrollDuration = Duration(milliseconds: 840);
+  static const _bottomFollowThreshold = 96.0;
 
   late final ScrollController _scrollController =
       widget.scrollController ?? ScrollController();
@@ -67,6 +68,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   _ExplicitScrollIntent? _pendingScrollIntent;
   int _scrollToEndGeneration = 0;
   bool _userScrolledAwayFromEnd = false;
+  bool _hasUnseenLatest = false;
 
   @override
   void initState() {
@@ -97,6 +99,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         _scrollForIntent(intent);
       } else if (_shouldFollowPassiveUpdate()) {
         _scheduleScrollToEnd();
+      } else {
+        _markUnseenLatest();
       }
     });
     _scheduleInitialScrollToCurrent();
@@ -149,10 +153,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     bool preferNewTurnStart = false,
     double? initialFallbackOffset,
   }) async {
-    if (!preferNewTurnStart && initialFallbackOffset == null) {
-      _scheduleScrollToEnd(immediate: immediate, force: true);
-      return;
-    }
     if (!_scrollController.hasClients) return;
     final disableAnimations =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -254,7 +254,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       return;
     }
     if (!force && !_isNearEnd(position)) {
-      _userScrolledAwayFromEnd = true;
+      _setUserScrolledAwayFromEnd(true);
       return;
     }
     final target = position.maxScrollExtent;
@@ -289,6 +289,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         ),
       );
     }
+    _setHasUnseenLatest(false);
+    _setUserScrolledAwayFromEnd(false);
   }
 
   bool _shouldFollowPassiveUpdate() {
@@ -296,12 +298,15 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     final position = _scrollController.position;
     if (!position.hasContentDimensions) return true;
     final nearEnd = _isNearEnd(position);
-    _userScrolledAwayFromEnd = !nearEnd;
+    _setUserScrolledAwayFromEnd(!nearEnd);
     return nearEnd;
   }
 
   bool _isNearEnd(ScrollMetrics metrics) {
-    final threshold = metrics.viewportDimension.clamp(96.0, 220.0);
+    final threshold = metrics.viewportDimension.clamp(
+      _bottomFollowThreshold,
+      220.0,
+    );
     return metrics.extentAfter <= threshold;
   }
 
@@ -309,19 +314,54 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     if (notification.metrics.axis != Axis.vertical) return false;
     if (notification is ScrollUpdateNotification ||
         notification is UserScrollNotification) {
-      _userScrolledAwayFromEnd = !_isNearEnd(notification.metrics);
+      final nearEnd = _isNearEnd(notification.metrics);
+      _setUserScrolledAwayFromEnd(!nearEnd);
+      if (nearEnd) {
+        _setHasUnseenLatest(false);
+      }
     }
     return false;
   }
 
+  void _setUserScrolledAwayFromEnd(bool value) {
+    if (_userScrolledAwayFromEnd == value || !mounted) return;
+    setState(() => _userScrolledAwayFromEnd = value);
+  }
+
+  void _markUnseenLatest() {
+    if (!_hasUnseenLatest) {
+      setState(() => _hasUnseenLatest = true);
+    }
+  }
+
+  void _setHasUnseenLatest(bool value) {
+    if (_hasUnseenLatest == value || !mounted) return;
+    setState(() => _hasUnseenLatest = value);
+  }
+
+  void _returnToLatestMessage() {
+    _setHasUnseenLatest(false);
+    _setUserScrolledAwayFromEnd(false);
+    _scheduleScrollToEnd(force: true);
+  }
+
   void _handleSignal(int value) {
     _pendingScrollIntent = _ExplicitScrollIntent.currentFeedback;
+    _setHasUnseenLatest(false);
     widget.onSignal(value);
+    _consumePendingIntentIfWidgetDoesNotUpdate();
+  }
+
+  void _handleChooseAnswer(AnswerLetter letter) {
+    _pendingScrollIntent = _ExplicitScrollIntent.currentFeedback;
+    _setHasUnseenLatest(false);
+    widget.onChooseAnswer(letter);
     _consumePendingIntentIfWidgetDoesNotUpdate();
   }
 
   void _handleNext() {
     _pendingScrollIntent = _ExplicitScrollIntent.nextExplanation;
+    _setHasUnseenLatest(false);
     widget.onNext();
     _consumePendingIntentIfWidgetDoesNotUpdate();
   }
@@ -614,7 +654,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                                         message: widget.messages[index],
                                         semanticIndex: index,
                                         session: widget.session,
-                                        onChooseAnswer: widget.onChooseAnswer,
+                                        onChooseAnswer: _handleChooseAnswer,
                                         onSignal: _handleSignal,
                                         onRetry: widget.onRetry,
                                         onNext: _handleNext,
@@ -623,9 +663,10 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                                             widget.pendingActionKeys,
                                         onImageSettled: () {
                                           widget.onImageSettled?.call();
-                                          if (!_userScrolledAwayFromEnd &&
-                                              _shouldFollowPassiveUpdate()) {
+                                          if (_shouldFollowPassiveUpdate()) {
                                             _scheduleScrollToEnd();
+                                          } else {
+                                            _markUnseenLatest();
                                           }
                                         },
                                       ),
@@ -638,6 +679,14 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
                       ),
                     ),
                   ),
+                  if (_hasUnseenLatest || _userScrolledAwayFromEnd)
+                    Positioned(
+                      right: horizontalPadding + 8,
+                      bottom: 18 + bottomInset,
+                      child: _ChatReturnToLatestButton(
+                        onPressed: _returnToLatestMessage,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -682,6 +731,53 @@ class _ChatEmptyState extends StatelessWidget {
   }
 }
 
+class _ChatReturnToLatestButton extends StatelessWidget {
+  const _ChatReturnToLatestButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      label: t('aula_return_latest_semantics'),
+      child: Material(
+        color: palette.surface,
+        elevation: 6,
+        shadowColor: Colors.black.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          key: const Key('chat-return-current-button'),
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: palette.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  t('aula_return_latest'),
+                  style: SimTypography.caption.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ChatScrollTarget {
   const _ChatScrollTarget({required this.message, required this.alignment});
 
@@ -703,6 +799,22 @@ class _ChatScrollTarget {
       },
     );
   }
+}
+
+class AulaConversationActions {
+  const AulaConversationActions({
+    required this.chooseAnswer,
+    required this.submitSignal,
+    required this.advance,
+    required this.retry,
+    required this.openDoubt,
+  });
+
+  final void Function(AnswerLetter letter) chooseAnswer;
+  final void Function(int value) submitSignal;
+  final VoidCallback advance;
+  final VoidCallback retry;
+  final VoidCallback openDoubt;
 }
 
 class ChatAulaMessageBubble extends StatelessWidget {
@@ -734,8 +846,9 @@ class ChatAulaMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    final isStudent = message.role == ChatLessonMessageRole.student;
-    final isSystem = message.role == ChatLessonMessageRole.system;
+    final block = AulaConversationBlock.fromMessage(message);
+    final isStudent = block.role == ChatLessonMessageRole.student;
+    final isSystem = block.role == ChatLessonMessageRole.system;
     final maxWidth = MediaQuery.sizeOf(context).width < 520
         ? double.infinity
         : 520.0;
@@ -770,14 +883,15 @@ class ChatAulaMessageBubble extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: _ChatAulaMessageBody(
-            message: message,
-            session: session,
-            onChooseAnswer: onChooseAnswer,
-            onSignal: onSignal,
-            onRetry: onRetry,
-            onNext: onNext,
-            onOpenDoubt: onOpenDoubt,
+          child: AulaConversationBlockRenderer(
+            block: block,
+            actions: AulaConversationActions(
+              chooseAnswer: onChooseAnswer,
+              submitSignal: onSignal,
+              retry: onRetry,
+              advance: onNext,
+              openDoubt: onOpenDoubt,
+            ),
             pendingActionKeys: pendingActionKeys,
             onImageSettled: onImageSettled,
           ),
@@ -789,7 +903,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
       alignment: isStudent ? Alignment.centerRight : Alignment.centerLeft,
       child: bubble,
     );
-    final animatedMessage = _isInteractive(message.kind)
+    final animatedMessage = _isInteractive(block)
         ? messageContent
         : _ChatMessageReveal(messageId: message.id, child: messageContent);
 
@@ -802,13 +916,13 @@ class ChatAulaMessageBubble extends StatelessWidget {
     );
   }
 
-  bool _isInteractive(ChatLessonMessageKind kind) {
-    return switch (kind) {
-      ChatLessonMessageKind.options ||
-      ChatLessonMessageKind.signals ||
-      ChatLessonMessageKind.feedback ||
-      ChatLessonMessageKind.error ||
-      ChatLessonMessageKind.doubtAction => true,
+  bool _isInteractive(AulaConversationBlock block) {
+    return switch (block.type) {
+      AulaConversationBlockType.answerOptions ||
+      AulaConversationBlockType.signalOptions ||
+      AulaConversationBlockType.feedback ||
+      AulaConversationBlockType.recoverableError ||
+      AulaConversationBlockType.advanceAction => block.active,
       _ => false,
     };
   }
@@ -942,48 +1056,40 @@ class _ChatFeedbackActionReveal extends StatelessWidget {
   }
 }
 
-class _ChatAulaMessageBody extends StatelessWidget {
-  const _ChatAulaMessageBody({
-    required this.message,
-    required this.onChooseAnswer,
-    required this.onSignal,
-    required this.onRetry,
-    required this.onNext,
-    required this.onOpenDoubt,
+class AulaConversationBlockRenderer extends StatelessWidget {
+  const AulaConversationBlockRenderer({
+    required this.block,
+    required this.actions,
     this.pendingActionKeys = const {},
-    this.session,
     this.onImageSettled,
+    super.key,
   });
 
-  final ChatLessonMessage message;
-  final LabSession? session;
-  final void Function(AnswerLetter letter) onChooseAnswer;
-  final void Function(int value) onSignal;
-  final VoidCallback onRetry;
-  final VoidCallback onNext;
-  final VoidCallback onOpenDoubt;
+  final AulaConversationBlock block;
+  final AulaConversationActions actions;
   final Set<String> pendingActionKeys;
   final VoidCallback? onImageSettled;
 
   @override
   Widget build(BuildContext context) {
-    return switch (message.kind) {
-      ChatLessonMessageKind.options => _ChatOptions(
+    final message = block.message;
+    return switch (block.type) {
+      AulaConversationBlockType.answerOptions => _ChatOptions(
         message: message,
-        onChooseAnswer: onChooseAnswer,
-        onSignal: onSignal,
+        onChooseAnswer: actions.chooseAnswer,
+        onSignal: actions.submitSignal,
         pendingActionKeys: pendingActionKeys,
       ),
-      ChatLessonMessageKind.signals => _ChatSignals(
+      AulaConversationBlockType.signalOptions => _ChatSignals(
         message: message,
-        onSignal: onSignal,
+        onSignal: actions.submitSignal,
         pendingActionKeys: pendingActionKeys,
       ),
-      ChatLessonMessageKind.image => ChatImageBubble(
+      AulaConversationBlockType.visual => ChatImageBubble(
         message: message,
         onImageSettled: onImageSettled,
       ),
-      ChatLessonMessageKind.loading || ChatLessonMessageKind.processing =>
+      AulaConversationBlockType.loading =>
         message.id == 'doubt-processing'
             ? _DoubtProgressMessage(
                 text: message.text ?? t('aula_doubt_processing'),
@@ -994,19 +1100,19 @@ class _ChatAulaMessageBody extends StatelessWidget {
                 loading: true,
                 retryPending: pendingActionKeys.contains('retry'),
                 onRetry: message.isActionable && message.actionKey == 'retry'
-                    ? onRetry
+                    ? actions.retry
                     : null,
               ),
-      ChatLessonMessageKind.error => _StatusMessage(
+      AulaConversationBlockType.recoverableError => _StatusMessage(
         text: message.text ?? t('aula_gen_fail'),
         loading: false,
         warn: true,
         retryPending: pendingActionKeys.contains('retry'),
         onRetry: message.isActionable && message.actionKey == 'retry'
-            ? onRetry
+            ? actions.retry
             : null,
       ),
-      ChatLessonMessageKind.feedback => _ChatFeedbackActionReveal(
+      AulaConversationBlockType.feedback => _ChatFeedbackActionReveal(
         messageId: message.id,
         enabled:
             (message.actionKey ?? '').isNotEmpty &&
@@ -1015,31 +1121,34 @@ class _ChatAulaMessageBody extends StatelessWidget {
         child: _FeedbackMessageActions(
           message: message,
           pendingActionKeys: pendingActionKeys,
-          onOpenDoubt: onOpenDoubt,
-          onNext: onNext,
+          onOpenDoubt: actions.openDoubt,
+          onNext: actions.advance,
         ),
       ),
-      ChatLessonMessageKind.doubtAction => _ChatActionButton(
+      AulaConversationBlockType.advanceAction => _ChatActionButton(
         key: const Key('chat-doubt-action'),
         label: message.text ?? t('aula_doubt'),
         enabled: message.isActionable,
         busy: false,
-        onPressed: onOpenDoubt,
+        onPressed: actions.openDoubt,
       ),
-      ChatLessonMessageKind.studentAnswer ||
-      ChatLessonMessageKind.historyAnswer ||
-      ChatLessonMessageKind.studentSignal => _StudentShortMessage(
+      AulaConversationBlockType.studentAnswer ||
+      AulaConversationBlockType.studentSignal => _StudentShortMessage(
         text: message.text ?? '',
       ),
-      ChatLessonMessageKind.studentDoubt => _StudentDoubtMessage(
+      AulaConversationBlockType.studentDoubt => _StudentDoubtMessage(
         message: message,
       ),
-      ChatLessonMessageKind.explanation => _ExplanationMessage(
+      AulaConversationBlockType.explanation => _ExplanationMessage(
         message: message,
       ),
-      ChatLessonMessageKind.historyQuestion => _HistoryQuestionMessage(
+      AulaConversationBlockType.historyQuestion => _HistoryQuestionMessage(
         message: message,
       ),
+      AulaConversationBlockType.question ||
+      AulaConversationBlockType.doubtAnswer ||
+      AulaConversationBlockType.review ||
+      AulaConversationBlockType.recovery => _TextMessage(message.text ?? ''),
       _ => _TextMessage(message.text ?? ''),
     };
   }

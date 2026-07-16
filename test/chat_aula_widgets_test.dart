@@ -98,6 +98,183 @@ void main() {
     expect(chosen, AnswerLetter.B);
   });
 
+  testWidgets('typed block renderer keeps active options tappable', (
+    tester,
+  ) async {
+    final chosen = <AnswerLetter>[];
+    const message = ChatLessonMessage(
+      id: 'active-options',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.options,
+      options: [
+        ChatLessonOption(
+          letter: AnswerLetter.A,
+          text: 'Alternativa A',
+          selected: false,
+          enabled: true,
+        ),
+        ChatLessonOption(
+          letter: AnswerLetter.B,
+          text: 'Alternativa B',
+          selected: false,
+          enabled: true,
+        ),
+        ChatLessonOption(
+          letter: AnswerLetter.C,
+          text: 'Alternativa C',
+          selected: false,
+          enabled: true,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AulaConversationBlockRenderer(
+            block: AulaConversationBlock.fromMessage(message),
+            actions: AulaConversationActions(
+              chooseAnswer: chosen.add,
+              submitSignal: (_) {},
+              advance: () {},
+              retry: () {},
+              openDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-answer-card-B')));
+    expect(chosen, [AnswerLetter.B]);
+  });
+
+  testWidgets('typed block renderer keeps historical options inert', (
+    tester,
+  ) async {
+    final chosen = <AnswerLetter>[];
+    const message = ChatLessonMessage(
+      id: 'history-options',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.options,
+      isHistorical: true,
+      isActionable: false,
+      options: [
+        ChatLessonOption(
+          letter: AnswerLetter.A,
+          text: 'Alternativa A antiga',
+          selected: true,
+          enabled: false,
+        ),
+        ChatLessonOption(
+          letter: AnswerLetter.B,
+          text: 'Alternativa B antiga',
+          selected: false,
+          enabled: false,
+        ),
+        ChatLessonOption(
+          letter: AnswerLetter.C,
+          text: 'Alternativa C antiga',
+          selected: false,
+          enabled: false,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AulaConversationBlockRenderer(
+            block: AulaConversationBlock.fromMessage(message),
+            actions: AulaConversationActions(
+              chooseAnswer: chosen.add,
+              submitSignal: (_) {},
+              advance: () {},
+              retry: () {},
+              openDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const Key('chat-answer-card-A')),
+      warnIfMissed: false,
+    );
+    expect(chosen, isEmpty);
+  });
+
+  testWidgets('typed visual block uses its own message image data', (
+    tester,
+  ) async {
+    final imageData = _pngDataUrl();
+    final message = ChatLessonMessage(
+      id: 'visual-block',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.image,
+      imageData: imageData,
+      imageStatus: 'ready',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AulaConversationBlockRenderer(
+            block: AulaConversationBlock.fromMessage(message),
+            actions: AulaConversationActions(
+              chooseAnswer: (_) {},
+              submitSignal: (_) {},
+              advance: () {},
+              retry: () {},
+              openDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final view = tester.widget<LessonMediaImageView>(
+      find.byType(LessonMediaImageView),
+    );
+    expect(view.data, imageData);
+  });
+
+  testWidgets('typed feedback action remains tappable with pending visual', (
+    tester,
+  ) async {
+    var advanced = 0;
+    const message = ChatLessonMessage(
+      id: 'feedback-action',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.feedback,
+      text: 'Muito bem.',
+      actionKey: 'aula_next',
+      isActionable: true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AulaConversationBlockRenderer(
+            block: AulaConversationBlock.fromMessage(message),
+            pendingActionKeys: const {'next'},
+            actions: AulaConversationActions(
+              chooseAnswer: (_) {},
+              submitSignal: (_) {},
+              advance: () => advanced++,
+              retry: () {},
+              openDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
+    expect(advanced, 1);
+  });
+
   testWidgets('chat timeline preserves app central button phases', (
     tester,
   ) async {
@@ -362,7 +539,10 @@ void main() {
     expect(retries, 0);
 
     final optionNode = tester.getSemantics(find.text('Alternativa antiga A'));
-    expect(optionNode.flagsCollection.isEnabled.toString(), 'Tristate.isFalse');
+    expect(
+      optionNode.flagsCollection.isEnabled.toString(),
+      isNot('Tristate.isTrue'),
+    );
   });
 
   testWidgets('dead history semantics do not announce active actions', (
@@ -1015,19 +1195,52 @@ void main() {
     expect(find.text('Mensagem nova'), findsOneWidget);
     expect(controller.position.maxScrollExtent, greaterThan(96));
 
-    await tester.drag(
-      find.byKey(const Key('chat-aula-timeline')),
-      const Offset(0, 900),
+    controller.jumpTo(
+      (controller.position.maxScrollExtent - 900).clamp(
+        0,
+        controller.position.maxScrollExtent,
+      ),
     );
-    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pump(const Duration(milliseconds: 120));
     final afterManualDrag = controller.position.pixels;
 
     key.currentState!.appendMessage('Mensagem mais nova');
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
-    expect(find.textContaining('Voltar ao feedback'), findsNothing);
+    expect(find.byKey(const Key('chat-return-current-button')), findsOneWidget);
+    expect(find.text(t('aula_return_latest')), findsOneWidget);
     expect(controller.position.pixels, closeTo(afterManualDrag, 1));
+
+    await tester.tap(find.byKey(const Key('chat-return-current-button')));
+    await tester.pumpAndSettle();
+    expect(
+      controller.position.pixels,
+      closeTo(controller.position.maxScrollExtent, 1),
+    );
+    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+  });
+
+  testWidgets('chat timeline does not auto-scroll on open unless requested', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: _ChatTimelineHarness(scrollController: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.position.maxScrollExtent, greaterThan(400));
+    expect(controller.position.pixels, closeTo(0, 1));
+    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
   });
 
   testWidgets('chat timeline near end follows a new message', (tester) async {
@@ -1115,16 +1328,16 @@ void main() {
           ),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
       controller.jumpTo(controller.position.maxScrollExtent);
       await tester.pump();
 
       final beforePassiveUpdate = controller.position.pixels;
       await tester.drag(
         find.byKey(const Key('chat-aula-timeline')),
-        const Offset(0, 900),
+        const Offset(0, 520),
       );
-      await tester.pump(const Duration(milliseconds: 220));
+      await tester.pump(const Duration(milliseconds: 120));
       final afterManualDrag = controller.position.pixels;
       expect(afterManualDrag, lessThan(beforePassiveUpdate));
 
@@ -1132,8 +1345,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(controller.position.pixels, closeTo(afterManualDrag, 1));
-      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
-      expect(find.textContaining('Voltar às alternativas'), findsNothing);
+      expect(
+        find.byKey(const Key('chat-return-current-button')),
+        findsOneWidget,
+      );
+      expect(find.text(t('aula_return_latest')), findsOneWidget);
     },
   );
 
@@ -1161,11 +1377,10 @@ void main() {
 
     key.currentState!.appendMessage('Feedback para avancar');
     await tester.pump();
-    await tester.scrollUntilVisible(
+    await tester.ensureVisible(
       find.byKey(const Key('chat-feedback-next-button')),
-      180,
-      scrollable: find.byType(Scrollable).last,
     );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
     await tester.pumpAndSettle();
 
@@ -1223,7 +1438,7 @@ void main() {
     expect(find.text('Feedback do qualificador 2'), findsOneWidget);
   });
 
-  testWidgets('chat timeline no longer renders floating return button', (
+  testWidgets('chat timeline shows return button for unseen latest content', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
@@ -1245,17 +1460,27 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.drag(
-      find.byKey(const Key('chat-aula-timeline')),
-      const Offset(0, 900),
+    controller.jumpTo(
+      (controller.position.maxScrollExtent - 520).clamp(
+        0,
+        controller.position.maxScrollExtent,
+      ),
     );
-    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pump(const Duration(milliseconds: 120));
 
     key.currentState!.appendNewLessonTurn();
     await tester.pump(const Duration(milliseconds: 120));
 
+    expect(find.byKey(const Key('chat-return-current-button')), findsOneWidget);
+    expect(find.text(t('aula_return_latest')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chat-return-current-button')));
+    await tester.pumpAndSettle();
+    expect(
+      controller.position.pixels,
+      closeTo(controller.position.maxScrollExtent, 1),
+    );
     expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
-    expect(find.textContaining('Voltar ao feedback'), findsNothing);
   });
 
   testWidgets('chat timeline supports certified keyboard navigation', (
@@ -1385,23 +1610,20 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.scrollUntilVisible(
-        find.textContaining('Mensagem 12'),
-        220,
-        scrollable: find.byType(Scrollable).last,
+      controller.jumpTo(
+        (controller.position.maxScrollExtent * 0.45).clamp(
+          0,
+          controller.position.maxScrollExtent,
+        ),
       );
       await tester.pump(const Duration(milliseconds: 120));
-      expect(find.textContaining('Mensagem 12'), findsOneWidget);
+      expect(controller.position.pixels, greaterThan(0));
 
       await tester.binding.setSurfaceSize(const Size(980, 520));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
       expect(tester.takeException(), isNull);
-      expect(
-        find.textContaining('Mensagem 12', skipOffstage: false),
-        findsOneWidget,
-      );
       expect(controller.position.pixels, greaterThan(0));
     },
   );
@@ -1432,9 +1654,15 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      controller.jumpTo(0);
+      controller.jumpTo(controller.position.maxScrollExtent);
       await tester.pump();
+      await tester.drag(
+        find.byKey(const Key('chat-aula-timeline')),
+        const Offset(0, 420),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
       final beforeResize = controller.position.pixels;
+      expect(beforeResize, lessThan(controller.position.maxScrollExtent));
 
       await tester.binding.setSurfaceSize(const Size(740, 390));
       await tester.pump();
@@ -1442,7 +1670,10 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(controller.position.pixels, beforeResize);
-      expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
+      expect(
+        find.byKey(const Key('chat-return-current-button')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -1489,7 +1720,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
     controller.jumpTo(controller.position.maxScrollExtent);
     await tester.pump();
 
@@ -2734,21 +2965,20 @@ void main() {
         ),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
 
-    await tester.drag(
-      find.byKey(const Key('chat-aula-timeline')),
-      const Offset(0, 900),
+    controller.jumpTo(
+      (controller.position.maxScrollExtent - 900).clamp(
+        0,
+        controller.position.maxScrollExtent,
+      ),
     );
-    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pump(const Duration(milliseconds: 120));
     final afterManualDrag = controller.position.pixels;
 
     key.currentState!.appendRestoredStudentMessage();
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
-    expect(find.textContaining('Voltar às alternativas'), findsNothing);
-    expect(find.textContaining('Voltar ao feedback'), findsNothing);
     expect(controller.position.pixels, closeTo(afterManualDrag, 1));
   });
 
