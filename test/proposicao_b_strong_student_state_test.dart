@@ -132,6 +132,43 @@ void main() {
       expect(queue.getQueueSnapshot(), contains('lesson-b'));
     },
   );
+
+  test(
+    'B merge preserva eventos com mesmo tipo e ts mas payload diferente',
+    () {
+      final local = _state(itemIdx: 2, layer: LessonLayer.l2, advances: 2)
+          .copyWith(
+            events: const [
+              StudentLearningEvent(
+                type: 'ANSWER_SUBMITTED',
+                ts: 10,
+                payload: {'marker': 'M2', 'source': 'local'},
+              ),
+            ],
+          );
+      final remote = _state(itemIdx: 2, layer: LessonLayer.l2, advances: 2)
+          .copyWith(
+            events: const [
+              StudentLearningEvent(
+                type: 'ANSWER_SUBMITTED',
+                ts: 10,
+                payload: {'marker': 'M1', 'source': 'remote'},
+              ),
+            ],
+          );
+
+      final merged = mergeStudentLearningStateFromServerAuthority(
+        local,
+        remote,
+      );
+
+      expect(merged.events, hasLength(2));
+      expect(
+        merged.events.map((event) => event.payload['source']),
+        containsAll(['local', 'remote']),
+      );
+    },
+  );
 }
 
 StudentLearningState _state({

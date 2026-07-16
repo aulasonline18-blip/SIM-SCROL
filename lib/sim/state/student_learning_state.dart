@@ -1400,10 +1400,20 @@ List<StudentLearningEvent> mergeEvents(
 ) {
   final byKey = <String, StudentLearningEvent>{};
   for (final event in [...a, ...b]) {
-    final key = '${event.type}:${event.ts}';
+    final key = _eventMergeKey(event);
     byKey.putIfAbsent(key, () => event);
   }
   return byKey.values.toList()..sort((x, y) => x.ts.compareTo(y.ts));
+}
+
+String _eventMergeKey(StudentLearningEvent event) {
+  final id =
+      event.payload['id'] ??
+      event.payload['event_id'] ??
+      event.payload['eventId'] ??
+      event.payload['idempotencyKey'];
+  if (id != null && id.toString().isNotEmpty) return id.toString();
+  return '${event.type}:${event.ts}:${event.payload}';
 }
 
 List<String> mergeConcluidos(List<String> a, List<String> b) {
