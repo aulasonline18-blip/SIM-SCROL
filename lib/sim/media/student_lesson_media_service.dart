@@ -134,7 +134,6 @@ class StudentLessonMediaService {
       position.itemMarker ?? 'no-marker',
       position.layer?.value ?? 'L?',
     ].join(':');
-    markLessonAudioStarted(position);
     try {
       final ok = await audioCore.speakSequence(
         sequence,
@@ -142,7 +141,10 @@ class StudentLessonMediaService {
           lessonKey: lessonKey,
           lang: language,
           voice: voice ?? voiceByLang(language ?? ''),
-          onStart: onStart,
+          onStart: () {
+            markLessonAudioStarted(position);
+            onStart?.call();
+          },
           onEnd: onEnd,
         ),
       );
@@ -158,7 +160,7 @@ class StudentLessonMediaService {
       }
       return ok;
     } catch (error) {
-      markLessonAudioFailed(position, error: error.toString());
+      markLessonAudioFailed(position, error: 'audio_playback_unavailable');
       return false;
     }
   }

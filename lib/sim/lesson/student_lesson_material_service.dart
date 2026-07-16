@@ -91,6 +91,17 @@ class StudentLessonMaterialService {
       );
       _prepareLessonAudio(input, visualReady.conteudo);
       _mirrorCurrentLessonMaterial(input, visualReady);
+      _appendLessonTextReady(
+        input,
+        visualReady.conteudo,
+        LessonMaterialSource.studentState,
+        0,
+      );
+      _appendInstantExperienceMetric(
+        input,
+        source: LessonMaterialSource.studentState,
+        textReadyMs: 0,
+      );
       return ResolveLessonMaterialResult(
         conteudo: visualReady.conteudo,
         imagem: visualReady.imagem,
@@ -108,6 +119,17 @@ class StudentLessonMaterialService {
     );
     _prepareLessonAudio(input, visualReady.conteudo);
     _mirrorCurrentLessonMaterial(input, visualReady);
+    _appendLessonTextReady(
+      input,
+      visualReady.conteudo,
+      LessonMaterialSource.memoryCacheFromMotor,
+      0,
+    );
+    _appendInstantExperienceMetric(
+      input,
+      source: LessonMaterialSource.memoryCacheFromMotor,
+      textReadyMs: 0,
+    );
     return ResolveLessonMaterialResult(
       conteudo: visualReady.conteudo,
       imagem: visualReady.imagem,
@@ -138,6 +160,11 @@ class StudentLessonMaterialService {
       lesson.conteudo,
       LessonMaterialSource.studentStateAfterWait,
       waitedMs,
+    );
+    _appendInstantExperienceMetric(
+      input,
+      source: LessonMaterialSource.studentStateAfterWait,
+      textReadyMs: waitedMs,
     );
     return ResolveLessonMaterialResult(
       conteudo: lesson.conteudo,
@@ -180,6 +207,31 @@ class StudentLessonMaterialService {
           'source': source.name,
           'waitedMs': waitedMs,
           'question': content.question,
+        },
+      ),
+    );
+  }
+
+  void _appendInstantExperienceMetric(
+    ResolveLessonMaterialInput input, {
+    required LessonMaterialSource source,
+    required int textReadyMs,
+  }) {
+    stateService.appendEvent(
+      input.lessonLocalId,
+      StudentLearningEvent(
+        type: 'INSTANT_EXPERIENCE_MEASURED',
+        ts: DateTime.now().millisecondsSinceEpoch,
+        payload: {
+          'lessonLocalId': input.lessonLocalId,
+          'itemIdx': input.itemIdx,
+          'marker': input.marker,
+          'layer': input.layer.value,
+          'source': source.name,
+          'textReadyMs': textReadyMs,
+          'mediaMeasuredSeparately': true,
+          'warmCacheCount': orchestrator.warmCacheEntryCount,
+          'coldCacheCount': orchestrator.coldCacheEntryCount,
         },
       ),
     );
@@ -258,7 +310,14 @@ class StudentLessonMaterialService {
     final window = _buildReadyWindow(itemIdx, layer, items);
     stateService.mutate(lessonLocalId, (state) {
       final now = DateTime.now().millisecondsSinceEpoch;
-      final idempotencyKey = '$source:$lessonLocalId:$itemIdx:L${layer.value}';
+      final marker = items.length > itemIdx ? items[itemIdx].marker : null;
+      final idempotencyKey = [
+        'ready-window',
+        lessonLocalId,
+        itemIdx,
+        marker ?? '',
+        'L${layer.value}',
+      ].join(':');
       final jobs = [...state.queuedActions];
       final hasActiveDuplicate = jobs.any(
         (job) =>
@@ -279,7 +338,7 @@ class StudentLessonMaterialService {
             'reason': reason ?? 'lesson_window_visible',
             'itemIdx': itemIdx,
             'layer': layer.value,
-            'marker': items.length > itemIdx ? items[itemIdx].marker : null,
+            'marker': marker,
             'topic': topic,
           },
           'created_at': now,

@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_answer_progress_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_hydration_engine.dart';
@@ -11,9 +15,11 @@ import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
+import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
 import 'package:sim_mobile/sim/lesson/student_lesson_material_service.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
+import 'package:sim_mobile/sim/state/live_entry_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
 import 'package:sim_mobile/sim/state/student_state_store.dart';
@@ -41,6 +47,28 @@ class FakeClassroomT02 implements T02LessonClient {
       generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
       source: 'fake-classroom',
     );
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
+}
+
+class FailingClassroomT02 implements T02LessonClient {
+  int calls = 0;
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) {
+    calls += 1;
+    throw StateError('offline');
   }
 
   @override
@@ -129,6 +157,17 @@ class FailingServerAdvanceGateClient implements ServerAdvanceGateClient {
   ) async {
     requests.add(request);
     throw Exception('advance gate unavailable');
+  }
+}
+
+class PendingServerAdvanceGateClient implements ServerAdvanceGateClient {
+  final requests = <ServerAdvanceGateRequest>[];
+  final completer = Completer<ServerAdvanceGateDecision>();
+
+  @override
+  Future<ServerAdvanceGateDecision> decide(ServerAdvanceGateRequest request) {
+    requests.add(request);
+    return completer.future;
   }
 }
 
@@ -264,13 +303,14 @@ StudentLearningState _largeCurriculumBoundaryState() {
 
 LessonRuntimeEngine _runtime(
   StudentLearningStateService stateService,
-  FakeClassroomT02 t02, {
+  T02LessonClient t02, {
   StudentStateStore? store,
   ServerAdvanceGateClient? serverAdvanceGateClient,
+  LessonMaterialCache? cache,
 }) {
   final orchestrator = LessonOrchestrator(
     t02Client: t02,
-    cache: LessonMaterialCache(),
+    cache: cache ?? LessonMaterialCache(),
     bus: LessonEventBus(),
   );
   late DopamineReadyWindowEngine readyWindow;
@@ -318,6 +358,131 @@ void main() {
 
       expect(snap.hasCurriculum, isTrue);
       expect(snap.phase.type, ClassroomPhaseType.lendo);
+      expect(snap.conteudo?.question, 'Pergunta M1?');
+      expect(t02.calls, greaterThanOrEqualTo(1));
+    },
+  );
+
+  test(
+    'M-EXP3-B runtime reopens from hydrated cache without T02 when offline',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final seedState = _classroomState();
+      final params = const CompleteLessonParams(
+        lessonLocalId: 'cyber-class',
+        item: 'Item 1',
+        lang: 'pt-BR',
+        academic: 'intermediario (base solida)',
+        layer: LessonLayer.l1,
+        mode: LessonMode.session,
+        marker: 'M1',
+        itemIdx: 0,
+        curriculumItems: [
+          {
+            'order': 1,
+            'marker': 'M1',
+            'title': 'Item 1',
+            'text': 'Item 1',
+            'purpose': 'Item 1',
+            'microitem_for_teacher': 'Item 1',
+          },
+          {
+            'order': 2,
+            'marker': 'M2',
+            'title': 'Item 2',
+            'text': 'Item 2',
+            'purpose': 'Item 2',
+            'microitem_for_teacher': 'Item 2',
+          },
+        ],
+        topic: 'Aprender regra de tres',
+        pedagogicalEnvelope: {
+          'marker': 'M1',
+          'stable_lang': 'pt-BR',
+          'original_text_preserved': 'Aprender regra de tres',
+        },
+      );
+      final firstCache = LessonMaterialCache();
+      expect(
+        firstCache.putForParams(
+          params,
+          const CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Texto persistido no boot.',
+              question: 'Qual texto abre offline?',
+              options: {
+                AnswerLetter.A: 'O local',
+                AnswerLetter.B: 'Um tecnico',
+                AnswerLetter.C: 'Nenhum',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: null,
+            audioText: 'Texto persistido no boot. Qual texto abre offline?',
+          ),
+        ),
+        isTrue,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      final hydratedCache = LessonMaterialCache();
+      hydratedCache.hydrateFromPreferences(prefs);
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': seedState},
+      );
+      final t02 = FailingClassroomT02();
+      final runtime = _runtime(service, t02, cache: hydratedCache);
+
+      final snap = await runtime.open(lessonLocalId: 'cyber-class');
+
+      expect(snap.phase.type, ClassroomPhaseType.lendo);
+      expect(snap.conteudo?.question, 'Qual texto abre offline?');
+      expect(snap.conteudo?.options.keys, containsAll(AnswerLetter.values));
+      expect(t02.calls, 0);
+    },
+  );
+
+  test(
+    'M-EXP3-B runtime discards invalid hydrated cache and tries official route',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'sim-lesson-text-cache-v1': jsonEncode({
+          lessonKeyFor(
+            const CompleteLessonParams(
+              lessonLocalId: 'cyber-class',
+              item: 'Item 1',
+              lang: 'pt-BR',
+              academic: 'intermediario (base solida)',
+              layer: LessonLayer.l1,
+              mode: LessonMode.session,
+              marker: 'M1',
+            ),
+          ): {
+            'savedAt': DateTime.now().millisecondsSinceEpoch,
+            'lesson': {
+              'conteudo': {
+                'explanation': 'Invalido',
+                'question': '',
+                'options': {'A': 'A', 'B': '', 'C': 'C'},
+                'correct_answer': 'A',
+              },
+              'audioText': 'Invalido',
+            },
+          },
+        }),
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final hydratedCache = LessonMaterialCache();
+      hydratedCache.hydrateFromPreferences(prefs);
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = FakeClassroomT02();
+      final runtime = _runtime(service, t02, cache: hydratedCache);
+
+      final snap = await runtime.open(lessonLocalId: 'cyber-class');
+
       expect(snap.conteudo?.question, 'Pergunta M1?');
       expect(t02.calls, greaterThanOrEqualTo(1));
     },
@@ -463,6 +628,700 @@ void main() {
       ]);
     },
   );
+
+  test(
+    'M-EXP4 avancar para proxima experiencia preparada sem chamar T02',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = FakeClassroomT02();
+      final gate = FakeServerAdvanceGateClient(
+        const ServerAdvanceGateDecision(
+          accepted: true,
+          decision: 'next_layer',
+          reason: 'server_to_l2',
+          nextItemIdx: 0,
+          nextLayer: LessonLayer.l2,
+          highWaterMark: 2,
+          events: [
+            {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
+          ],
+        ),
+      );
+      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      await runtime.open(lessonLocalId: 'cyber-class');
+      expect(t02.calls, 1);
+
+      service.mutate('cyber-class', (state) {
+        final material = preparedMaterialFromLesson(
+          lesson: const CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Texto preparado L2.',
+              question: 'Pergunta preparada L2?',
+              options: {
+                AnswerLetter.A: 'A preparada',
+                AnswerLetter.B: 'B preparada',
+                AnswerLetter.C: 'C preparada',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: null,
+            audioText: 'Texto preparado L2. Pergunta preparada L2?',
+          ),
+          itemIdx: 0,
+          marker: 'M1',
+          layer: LessonLayer.l2,
+        );
+        return state.copyWith(
+          readyLessonMaterials: {
+            ...state.readyLessonMaterials,
+            preparedLessonMaterialKey(0, 'M1', LessonLayer.l2): material,
+          },
+        );
+      });
+
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.two);
+      await Future<void>.delayed(Duration.zero);
+      await runtime.advance();
+      final snap = runtime.snapshot();
+
+      expect(snap.phase.type, ClassroomPhaseType.lendo);
+      expect(snap.itemMarker, 'M1');
+      expect(snap.conteudo?.question, 'Pergunta preparada L2?');
+      expect(t02.calls, 1);
+      expect(
+        service
+            .read('cyber-class')!
+            .events
+            .where((event) => event.type == 'INSTANT_EXPERIENCE_MEASURED')
+            .last
+            .payload['source'],
+        LessonMaterialSource.studentState.name,
+      );
+    },
+  );
+
+  test(
+    'M-EXP4 avanço com servidor pendente usa experiência preparada sem T02',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {
+          'cyber-class': _classroomState().copyWith(
+            attempts: const [
+              LessonAttempt(
+                marker: 'M1',
+                layer: LessonLayer.l1,
+                letra: AnswerLetter.A,
+                sinal: DecisionSignal.two,
+                correct: true,
+                ts: 1,
+              ),
+            ],
+          ),
+        },
+      );
+      final t02 = FakeClassroomT02();
+      final gate = PendingServerAdvanceGateClient();
+      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      await runtime.open(lessonLocalId: 'cyber-class');
+      expect(t02.calls, 1);
+
+      service.mutate('cyber-class', (state) {
+        final prepared = preparedMaterialFromLesson(
+          lesson: const CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Texto local enquanto servidor confirma.',
+              question: 'Servidor pendente bloqueou?',
+              options: {
+                AnswerLetter.A: 'Nao',
+                AnswerLetter.B: 'Sim',
+                AnswerLetter.C: 'Chamou T02',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: null,
+            audioText:
+                'Texto local enquanto servidor confirma. Servidor pendente bloqueou?',
+          ),
+          itemIdx: 0,
+          marker: 'M1',
+          layer: LessonLayer.l2,
+        );
+        return state.copyWith(
+          readyLessonMaterials: {
+            ...state.readyLessonMaterials,
+            preparedLessonMaterialKey(0, 'M1', LessonLayer.l2): prepared,
+          },
+        );
+      });
+
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.two);
+      expect(gate.requests, hasLength(1));
+      expect(service.read('cyber-class')?.current?.layer, LessonLayer.l1);
+
+      await runtime.advance();
+      final snap = runtime.snapshot();
+      final state = service.read('cyber-class')!;
+      final metric = state.events.lastWhere(
+        (event) => event.type == 'INSTANT_EXPERIENCE_MEASURED',
+      );
+      final window = state.events.lastWhere(
+        (event) => event.type == 'CACHE_WINDOW_UPDATED',
+      );
+
+      expect(snap.phase.type, ClassroomPhaseType.lendo);
+      expect(snap.itemMarker, 'M1');
+      expect(snap.conteudo?.question, 'Servidor pendente bloqueou?');
+      expect(t02.calls, 1);
+      expect(metric.payload['textReadyMs'], 0);
+      expect(metric.payload['source'], LessonMaterialSource.studentState.name);
+      expect(window.payload['currentLayer'], LessonLayer.l2.value);
+      expect(window.payload['windowSize'], 4);
+      expect(state.current?.layer, LessonLayer.l2);
+      expect(state.progress?.layer, LessonLayer.l2);
+      expect(
+        state.queuedActions.map((action) => action['type']),
+        contains('ADVANCE_GATE_PENDING'),
+      );
+      expect(
+        state.events.map((event) => event.type),
+        contains('LOCAL_PENDING_ADVANCE_DISPLAYED'),
+      );
+      expect(state.progress?.concluidos, isNot(contains('M1')));
+      expect(
+        state.events.map((event) => event.type),
+        isNot(contains('ITEM_MASTERED')),
+      );
+    },
+  );
+
+  test('M-EXP4 servidor pendente reabre no avanço local exibido', () async {
+    final service = StudentLearningStateService(
+      seed: {
+        'cyber-class': _classroomState().copyWith(
+          attempts: const [
+            LessonAttempt(
+              marker: 'M1',
+              layer: LessonLayer.l1,
+              letra: AnswerLetter.A,
+              sinal: DecisionSignal.two,
+              correct: true,
+              ts: 1,
+            ),
+          ],
+        ),
+      },
+    );
+    final t02 = FakeClassroomT02();
+    final gate = PendingServerAdvanceGateClient();
+    final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+    await runtime.open(lessonLocalId: 'cyber-class');
+    expect(t02.calls, 1);
+
+    service.mutate('cyber-class', (state) {
+      final prepared = preparedMaterialFromLesson(
+        lesson: const CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto local retomavel enquanto servidor confirma.',
+            question: 'Reabriu no avanco local?',
+            options: {
+              AnswerLetter.A: 'Sim',
+              AnswerLetter.B: 'Nao',
+              AnswerLetter.C: 'Chamou T02',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText:
+              'Texto local retomavel enquanto servidor confirma. Reabriu no avanco local?',
+        ),
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l2,
+      );
+      return state.copyWith(
+        readyLessonMaterials: {
+          ...state.readyLessonMaterials,
+          preparedLessonMaterialKey(0, 'M1', LessonLayer.l2): prepared,
+        },
+      );
+    });
+
+    runtime.select(AnswerLetter.A);
+    await runtime.signal(DecisionSignal.two);
+    expect(gate.requests, hasLength(1));
+    await runtime.advance();
+
+    final advanced = runtime.snapshot();
+    expect(advanced.phase.type, ClassroomPhaseType.lendo);
+    expect(advanced.conteudo?.question, 'Reabriu no avanco local?');
+
+    final saved = service.read('cyber-class')!;
+    expect(saved.current?.layer, LessonLayer.l2);
+    expect(saved.progress?.layer, LessonLayer.l2);
+    expect(
+      saved.queuedActions.map((action) => action['type']),
+      contains('ADVANCE_GATE_PENDING'),
+    );
+
+    final reopened = _runtime(service, t02, serverAdvanceGateClient: gate);
+    final reopenedSnap = await reopened.open(lessonLocalId: 'cyber-class');
+
+    expect(reopenedSnap.phase.type, ClassroomPhaseType.lendo);
+    expect(reopenedSnap.itemMarker, 'M1');
+    expect(reopenedSnap.conteudo?.question, 'Reabriu no avanco local?');
+    expect(t02.calls, 1);
+    expect(
+      service
+          .read('cyber-class')!
+          .queuedActions
+          .map((action) => action['type']),
+      contains('ADVANCE_GATE_PENDING'),
+    );
+  });
+
+  test(
+    'M-EXP4 fechar e reabrir aula volta ao ultimo item camada material',
+    () async {
+      final resumed = _classroomState().copyWith(
+        current: const LessonCurrent(
+          itemIdx: 1,
+          marker: 'M2',
+          layer: LessonLayer.l1,
+          amparoLvl: 0,
+        ),
+        progress: const LessonProgress(
+          itemIdx: 1,
+          layer: LessonLayer.l1,
+          erros: 0,
+          amparoLvl: 0,
+          historia: ['M1:L3:A:1'],
+          mainAdvances: 1,
+          concluidos: ['M1'],
+          pendentesMarkers: [],
+          totalItems: 2,
+          pctAvanco: 50,
+        ),
+        readyLessonMaterials: {
+          preparedLessonMaterialKey(
+            1,
+            'M2',
+            LessonLayer.l1,
+          ): preparedMaterialFromLesson(
+            lesson: const CompleteLesson(
+              conteudo: LessonContent(
+                explanation: 'Texto retomado M2.',
+                question: 'Retomou no M2?',
+                options: {
+                  AnswerLetter.A: 'Sim',
+                  AnswerLetter.B: 'Nao',
+                  AnswerLetter.C: 'Inicio',
+                },
+                correctAnswer: AnswerLetter.A,
+              ),
+              imagem: null,
+              audioText: 'Texto retomado M2. Retomou no M2?',
+            ),
+            itemIdx: 1,
+            marker: 'M2',
+            layer: LessonLayer.l1,
+          ),
+        },
+      );
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': resumed},
+      );
+      final t02 = FailingClassroomT02();
+      final runtime = _runtime(service, t02);
+
+      final snap = await runtime.open(lessonLocalId: 'cyber-class');
+
+      expect(snap.phase.type, ClassroomPhaseType.lendo);
+      expect(snap.itemMarker, 'M2');
+      expect(snap.conteudo?.question, 'Retomou no M2?');
+      expect(t02.calls, 0);
+    },
+  );
+
+  test('M-EXP4 offline abre experiencia preparada', () async {
+    final prepared = _classroomState().copyWith(
+      readyLessonMaterials: {
+        preparedLessonMaterialKey(
+          0,
+          'M1',
+          LessonLayer.l1,
+        ): preparedMaterialFromLesson(
+          lesson: const CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Texto offline instantaneo.',
+              question: 'Abriu offline?',
+              options: {
+                AnswerLetter.A: 'Sim',
+                AnswerLetter.B: 'Nao',
+                AnswerLetter.C: 'Erro tecnico',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: null,
+            audioText: 'Texto offline instantaneo. Abriu offline?',
+          ),
+          itemIdx: 0,
+          marker: 'M1',
+          layer: LessonLayer.l1,
+        ),
+      },
+    );
+    final service = StudentLearningStateService(
+      seed: {'cyber-class': prepared},
+    );
+    final t02 = FailingClassroomT02();
+    final runtime = _runtime(service, t02);
+
+    final snap = await runtime.open(lessonLocalId: 'cyber-class');
+
+    expect(snap.phase.type, ClassroomPhaseType.lendo);
+    expect(snap.conteudo?.question, 'Abriu offline?');
+    expect(t02.calls, 0);
+  });
+
+  test('M-EXP4 material de slot errado e recusado', () async {
+    final wrongSlot = _classroomState().copyWith(
+      current: const LessonCurrent(
+        itemIdx: 1,
+        marker: 'M2',
+        layer: LessonLayer.l1,
+        amparoLvl: 0,
+      ),
+      progress: const LessonProgress(
+        itemIdx: 1,
+        layer: LessonLayer.l1,
+        erros: 0,
+        amparoLvl: 0,
+        historia: [],
+        mainAdvances: 1,
+        concluidos: ['M1'],
+        pendentesMarkers: [],
+        totalItems: 2,
+        pctAvanco: 50,
+      ),
+      readyLessonMaterials: {
+        preparedLessonMaterialKey(1, 'M2', LessonLayer.l1): {
+          ...preparedMaterialFromLesson(
+            lesson: const CompleteLesson(
+              conteudo: LessonContent(
+                explanation: 'Texto contaminado.',
+                question: 'Slot errado?',
+                options: {
+                  AnswerLetter.A: 'A',
+                  AnswerLetter.B: 'B',
+                  AnswerLetter.C: 'C',
+                },
+                correctAnswer: AnswerLetter.A,
+              ),
+              imagem: null,
+              audioText: 'Texto contaminado. Slot errado?',
+            ),
+            itemIdx: 0,
+            marker: 'M1',
+            layer: LessonLayer.l1,
+          ),
+          'for_itemIdx': 0,
+          'for_marker': 'M1',
+        },
+      },
+    );
+    final service = StudentLearningStateService(
+      seed: {'cyber-class': wrongSlot},
+    );
+    final t02 = FakeClassroomT02();
+    final runtime = _runtime(service, t02);
+
+    final snap = await runtime.open(lessonLocalId: 'cyber-class');
+
+    expect(snap.phase.type, ClassroomPhaseType.lendo);
+    expect(snap.itemMarker, 'M2');
+    expect(snap.conteudo?.question, 'Pergunta M2?');
+    expect(t02.calls, 1);
+  });
+
+  test(
+    'M-EXP4 avanco dispara nova janela viva atual mais proximas tres',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = FakeClassroomT02();
+      final gate = FakeServerAdvanceGateClient(
+        const ServerAdvanceGateDecision(
+          accepted: true,
+          decision: 'next_layer',
+          reason: 'server_to_l2',
+          nextItemIdx: 0,
+          nextLayer: LessonLayer.l2,
+          highWaterMark: 2,
+          events: [
+            {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
+          ],
+        ),
+      );
+      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      await runtime.open(lessonLocalId: 'cyber-class');
+
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.two);
+      await Future<void>.delayed(Duration.zero);
+      await runtime.advance();
+
+      final event = service
+          .read('cyber-class')!
+          .events
+          .lastWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
+      expect(event.payload['currentItemIdx'], 0);
+      expect(event.payload['currentLayer'], LessonLayer.l2.value);
+      expect(event.payload['windowSize'], 4);
+    },
+  );
+
+  test('M-EXP5 mede tempo ate primeiro texto em caminho preparado', () async {
+    final prepared = _classroomState().copyWith(
+      readyLessonMaterials: {
+        preparedLessonMaterialKey(
+          0,
+          'M1',
+          LessonLayer.l1,
+        ): preparedMaterialFromLesson(
+          lesson: const CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Texto medido.',
+              question: 'Foi instantaneo?',
+              options: {
+                AnswerLetter.A: 'Sim',
+                AnswerLetter.B: 'Nao',
+                AnswerLetter.C: 'Talvez',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: null,
+            audioText: 'Texto medido. Foi instantaneo?',
+          ),
+          itemIdx: 0,
+          marker: 'M1',
+          layer: LessonLayer.l1,
+        ),
+      },
+    );
+    final service = StudentLearningStateService(
+      seed: {'cyber-class': prepared},
+    );
+    final t02 = FailingClassroomT02();
+    final runtime = _runtime(service, t02);
+
+    await runtime.open(lessonLocalId: 'cyber-class');
+
+    final metric = service
+        .read('cyber-class')!
+        .events
+        .lastWhere((event) => event.type == 'INSTANT_EXPERIENCE_MEASURED');
+    expect(metric.payload['textReadyMs'], 0);
+    expect(metric.payload['source'], LessonMaterialSource.studentState.name);
+    expect(metric.payload['mediaMeasuredSeparately'], isTrue);
+    expect(t02.calls, 0);
+  });
+
+  test('M-EXP5 mede tempo entre experiencias preparadas', () async {
+    final service = StudentLearningStateService(
+      seed: {'cyber-class': _classroomState()},
+    );
+    service.mutate('cyber-class', (state) {
+      return state.copyWith(
+        readyLessonMaterials: {
+          ...state.readyLessonMaterials,
+          preparedLessonMaterialKey(
+            0,
+            'M1',
+            LessonLayer.l1,
+          ): preparedMaterialFromLesson(
+            lesson: const CompleteLesson(
+              conteudo: LessonContent(
+                explanation: 'Texto L1 preparado.',
+                question: 'L1 pronta?',
+                options: {
+                  AnswerLetter.A: 'Sim',
+                  AnswerLetter.B: 'Nao',
+                  AnswerLetter.C: 'Talvez',
+                },
+                correctAnswer: AnswerLetter.A,
+              ),
+              imagem: null,
+              audioText: 'Texto L1 preparado. L1 pronta?',
+            ),
+            itemIdx: 0,
+            marker: 'M1',
+            layer: LessonLayer.l1,
+          ),
+          preparedLessonMaterialKey(
+            0,
+            'M1',
+            LessonLayer.l2,
+          ): preparedMaterialFromLesson(
+            lesson: const CompleteLesson(
+              conteudo: LessonContent(
+                explanation: 'Texto L2 preparado.',
+                question: 'L2 pronta?',
+                options: {
+                  AnswerLetter.A: 'Sim',
+                  AnswerLetter.B: 'Nao',
+                  AnswerLetter.C: 'Talvez',
+                },
+                correctAnswer: AnswerLetter.A,
+              ),
+              imagem: null,
+              audioText: 'Texto L2 preparado. L2 pronta?',
+            ),
+            itemIdx: 0,
+            marker: 'M1',
+            layer: LessonLayer.l2,
+          ),
+        },
+      );
+    });
+    final t02 = FailingClassroomT02();
+    final gate = FakeServerAdvanceGateClient(
+      const ServerAdvanceGateDecision(
+        accepted: true,
+        decision: 'next_layer',
+        reason: 'server_to_l2',
+        nextItemIdx: 0,
+        nextLayer: LessonLayer.l2,
+        highWaterMark: 2,
+        events: [
+          {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
+        ],
+      ),
+    );
+    final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+
+    await runtime.open(lessonLocalId: 'cyber-class');
+    runtime.select(AnswerLetter.A);
+    await runtime.signal(DecisionSignal.two);
+    await Future<void>.delayed(Duration.zero);
+    await runtime.advance();
+
+    final metrics = service
+        .read('cyber-class')!
+        .events
+        .where((event) => event.type == 'INSTANT_EXPERIENCE_MEASURED')
+        .toList();
+    expect(metrics, hasLength(greaterThanOrEqualTo(2)));
+    expect(metrics.last.ts - metrics.first.ts, greaterThanOrEqualTo(0));
+    expect(metrics.last.payload['textReadyMs'], 0);
+    expect(t02.calls, 0);
+  });
+
+  test(
+    'M-EXP5 confirma que midia e medida separadamente e nao bloqueia texto',
+    () async {
+      final prepared = _classroomState().copyWith(
+        readyLessonMaterials: {
+          preparedLessonMaterialKey(
+            0,
+            'M1',
+            LessonLayer.l1,
+          ): preparedMaterialFromLesson(
+            lesson: const CompleteLesson(
+              conteudo: LessonContent(
+                explanation: 'Texto antes da midia.',
+                question: 'Texto esperou midia?',
+                options: {
+                  AnswerLetter.A: 'Nao',
+                  AnswerLetter.B: 'Sim',
+                  AnswerLetter.C: 'Travou',
+                },
+                correctAnswer: AnswerLetter.A,
+              ),
+              imagem: null,
+              audioText: 'Texto antes da midia. Texto esperou midia?',
+            ),
+            itemIdx: 0,
+            marker: 'M1',
+            layer: LessonLayer.l1,
+          ),
+        },
+      );
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': prepared},
+      );
+      final t02 = FailingClassroomT02();
+      final runtime = _runtime(service, t02);
+
+      final snap = await runtime.open(lessonLocalId: 'cyber-class');
+
+      final metric = service
+          .read('cyber-class')!
+          .events
+          .lastWhere((event) => event.type == 'INSTANT_EXPERIENCE_MEASURED');
+      expect(snap.phase.type, ClassroomPhaseType.lendo);
+      expect(snap.conteudo?.question, 'Texto esperou midia?');
+      expect(snap.imagem, isNull);
+      expect(metric.payload['mediaMeasuredSeparately'], isTrue);
+      expect(metric.payload['textReadyMs'], 0);
+      expect(t02.calls, 0);
+    },
+  );
+
+  test('M-EXP5 confirma tamanho e contagem de cache quente frio', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final cache = LessonMaterialCache(maxLessons: 1, ttlMs: 1);
+    const params = CompleteLessonParams(
+      lessonLocalId: 'cyber-class',
+      item: 'Item 1',
+      lang: 'pt-BR',
+      academic: 'intermediario (base solida)',
+      layer: LessonLayer.l1,
+      mode: LessonMode.session,
+      marker: 'M1',
+      itemIdx: 0,
+      curriculumItems: [
+        {
+          'marker': 'M1',
+          'text': 'Item 1',
+          'rootLessonLocalId': 'cyber-class',
+          'partNumber': 1,
+          'globalItemNumber': 1,
+          'localItemIndex': 0,
+        },
+      ],
+    );
+    cache.putForParams(
+      params,
+      const CompleteLesson(
+        conteudo: LessonContent(
+          explanation: 'Texto cache.',
+          question: 'Cache medido?',
+          options: {
+            AnswerLetter.A: 'Sim',
+            AnswerLetter.B: 'Nao',
+            AnswerLetter.C: 'Talvez',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+        imagem: 'data:image/png;base64,abc',
+        audioText: 'Texto cache. Cache medido?',
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    cache.trimWarmCache();
+
+    expect(cache.warmEntryCount, 0);
+    expect(cache.coldEntryCount, 1);
+    expect(cache.coldEntry(lessonKeyFor(params))?.hadMaterial, isTrue);
+    expect(cache.coldEntry(lessonKeyFor(params))?.toJson()['imagem'], isNull);
+    expect(prefs.getString('sim-lesson-text-cache-v1'), isNotNull);
+  });
 
   test(
     'CG-1 runtime atravessa Parte 1 para item global 81 servidor-first',

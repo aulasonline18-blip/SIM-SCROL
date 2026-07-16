@@ -71,6 +71,7 @@ class PlannedItem {
     this.reviewLayer,
     this.reviewKind,
     this.originalMarker,
+    this.extra = const {},
   });
 
   final String marker;
@@ -81,12 +82,14 @@ class PlannedItem {
   final LessonLayer? reviewLayer;
   final String? reviewKind;
   final String? originalMarker;
+  final JsonMap extra;
 
   factory PlannedItem.fromCurriculum(CurriculumItem item) => PlannedItem(
     marker: item.marker,
     text: item.teacherText,
     unit: item.unit,
     title: item.title,
+    extra: item.extra,
   );
 }
 

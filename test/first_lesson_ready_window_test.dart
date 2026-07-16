@@ -83,6 +83,31 @@ class FakeT02Client implements T02LessonClient {
       completeLesson(request);
 }
 
+class FailingT02Client implements T02LessonClient {
+  FailingT02Client([this.error = 'offline']);
+
+  final String error;
+  int calls = 0;
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) {
+    calls += 1;
+    throw StateError(error);
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
+}
+
 class SequenceT02Client implements T02LessonClient {
   SequenceT02Client(this.materials);
 
@@ -329,6 +354,49 @@ class SlowFirstT02Client implements T02LessonClient {
   );
 }
 
+class BlockingVisualRefreshT02Client implements T02LessonClient {
+  final requests = <T02LessonRequest>[];
+  final visualRefresh = Completer<T02LessonMaterial>();
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) {
+    requests.add(request);
+    if (request.marker == 'M1' && request.layer == LessonLayer.l1) {
+      return visualRefresh.future;
+    }
+    return Future.value(material(request));
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
+
+  T02LessonMaterial material(T02LessonRequest request) => T02LessonMaterial(
+    explanation: 'Explicacao ${request.marker}/${request.layer.name}',
+    question: 'Pergunta ${request.marker}/${request.layer.name}?',
+    options: const {
+      AnswerLetter.A: 'A certa',
+      AnswerLetter.B: 'B errada',
+      AnswerLetter.C: 'C errada',
+    },
+    correctAnswer: AnswerLetter.A,
+    whyCorrect: 'Porque sim.',
+    whyWrong: const {'B': 'nao', 'C': 'nao'},
+    generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
+    source: 'blocking-visual-refresh-t02',
+    imageStatus: 'failed',
+    imageError: 'HTTP 500 stack trace tecnico',
+  );
+}
+
 StudentLearningState _stateWithCurriculum() {
   const items = [
     CurriculumItem(marker: 'M1', text: 'Item 1'),
@@ -394,6 +462,334 @@ void main() {
     expect(cache.peek('k0'), isNull);
     expect(cache.peek('k1'), isNotNull);
     expect(cache.peek('k3'), isNotNull);
+  });
+
+  test(
+    'M-EXP3: warm cache limits to 15 and preserves hot ready window keys',
+    () {
+      final cache = LessonMaterialCache();
+      final hotKeys = ['k2', 'k3', 'k4', 'k5'];
+      for (var i = 0; i < 20; i++) {
+        final key = 'k$i';
+        cache.put(
+          key,
+          CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Exp $i',
+              question: 'Pergunta $i?',
+              options: const {
+                AnswerLetter.A: 'A',
+                AnswerLetter.B: 'B',
+                AnswerLetter.C: 'C',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: 'data:image/png;base64,$i',
+            audioText: 'Exp $i. Pergunta $i?',
+          ),
+        );
+        if (i == 9) {
+          cache.trimWarmCache(protectedKeys: hotKeys);
+        }
+      }
+
+      cache.trimWarmCache(protectedKeys: hotKeys);
+
+      expect(cache.warmEntryCount, lessThanOrEqualTo(15));
+      for (final key in hotKeys) {
+        expect(cache.peek(key), isNotNull, reason: key);
+      }
+      expect(
+        cache.warmKeys
+            .where((key) => !hotKeys.contains(key))
+            .map((key) => cache.peek(key)?.imagem)
+            .whereType<String>(),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'M-EXP3-B: expired warm experience demotes to cold index without heavy media',
+    () async {
+      final cache = LessonMaterialCache(ttlMs: 1);
+      const params = CompleteLessonParams(
+        lessonLocalId: 'lesson-cold',
+        item: 'Item frio',
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: LessonLayer.l1,
+        mode: LessonMode.session,
+        marker: 'M1',
+        itemIdx: 0,
+        curriculumItems: [
+          {
+            'marker': 'M1',
+            'text': 'Item frio',
+            'rootLessonLocalId': 'lesson-cold',
+            'partNumber': 1,
+            'globalItemNumber': 1,
+            'localItemIndex': 0,
+          },
+        ],
+      );
+      final key = lessonKeyFor(params);
+      cache.putForParams(
+        params,
+        const CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto que pode esfriar.',
+            question: 'Pergunta fria?',
+            options: {
+              AnswerLetter.A: 'A',
+              AnswerLetter.B: 'B',
+              AnswerLetter.C: 'C',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: 'data:image/png;base64,PESADA',
+          audioText: 'Texto que pode esfriar. Pergunta fria?',
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      cache.trimWarmCache();
+
+      expect(cache.peek(key), isNull);
+      final cold = cache.coldEntry(key);
+      expect(cold, isNotNull);
+      expect(cold!.lessonKey, key);
+      expect(cold.lessonLocalId, 'lesson-cold');
+      expect(cold.marker, 'M1');
+      expect(cold.layer, LessonLayer.l1);
+      expect(cold.status, 'cold-index');
+      expect(cold.toJson().containsKey('imagem'), isFalse);
+      expect(cold.toJson().containsKey('audio'), isFalse);
+    },
+  );
+
+  test(
+    'M-EXP3-B: autolimpeza preserves strong state progress events and hot window',
+    () {
+      final strongState = _stateWithCurriculum().copyWith(
+        lessonLocalId: 'lesson-clean-state',
+        events: const [
+          StudentLearningEvent(type: 'ANSWER_RECORDED', ts: 1, payload: {}),
+        ],
+        progress: const LessonProgress(
+          itemIdx: 0,
+          layer: LessonLayer.l1,
+          erros: 0,
+          amparoLvl: 0,
+          historia: ['tentativa'],
+          mainAdvances: 1,
+          concluidos: ['M0'],
+          pendentesMarkers: [],
+          totalItems: 2,
+          pctAvanco: 50,
+        ),
+      );
+      final cache = LessonMaterialCache(maxLessons: 2);
+      final hot = <String>[];
+      for (var i = 0; i < 4; i++) {
+        final params = CompleteLessonParams(
+          lessonLocalId: 'lesson-clean-state',
+          item: 'Item $i',
+          lang: 'pt-BR',
+          academic: 'fundamental',
+          layer: LessonLayer.l1,
+          mode: LessonMode.session,
+          marker: 'M$i',
+          itemIdx: i,
+          curriculumItems: [
+            {
+              'marker': 'M$i',
+              'text': 'Item $i',
+              'rootLessonLocalId': 'lesson-clean-state',
+              'partNumber': 1,
+              'globalItemNumber': i + 1,
+              'localItemIndex': i,
+            },
+          ],
+        );
+        final key = lessonKeyFor(params);
+        if (i >= 2) hot.add(key);
+        cache.putForParams(
+          params,
+          CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Texto $i',
+              question: 'Pergunta $i?',
+              options: const {
+                AnswerLetter.A: 'A',
+                AnswerLetter.B: 'B',
+                AnswerLetter.C: 'C',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: 'data:image/png;base64,$i',
+            audioText: 'Texto $i. Pergunta $i?',
+          ),
+        );
+      }
+
+      cache.trimWarmCache(protectedKeys: hot, maxWarmLessons: 2);
+
+      expect(cache.warmEntryCount, 2);
+      for (final key in hot) {
+        expect(cache.peek(key), isNotNull);
+      }
+      expect(strongState.progress?.mainAdvances, 1);
+      expect(strongState.events.single.type, 'ANSWER_RECORDED');
+      expect(strongState.progress?.historia, ['tentativa']);
+    },
+  );
+
+  test(
+    'M-EXP3: prepared local material reopens without unnecessary T02 call',
+    () async {
+      const params = CompleteLessonParams(
+        lessonLocalId: 'cyber-resume-local',
+        item: 'Item 1',
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: LessonLayer.l1,
+        mode: LessonMode.session,
+        marker: 'M1',
+      );
+      final prepared = preparedMaterialFromLesson(
+        lesson: const CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto retomado local.',
+            question: 'Qual alternativa abre?',
+            options: {
+              AnswerLetter.A: 'A local',
+              AnswerLetter.B: 'B local',
+              AnswerLetter.C: 'C local',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText: 'Texto retomado local. Qual alternativa abre?',
+        ),
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l1,
+      );
+      final service = StudentLearningStateService(
+        seed: {
+          'cyber-resume-local': _stateWithCurriculum().copyWith(
+            lessonLocalId: 'cyber-resume-local',
+            current: const LessonCurrent(
+              itemIdx: 0,
+              marker: 'M1',
+              layer: LessonLayer.l1,
+              amparoLvl: 0,
+            ),
+            readyLessonMaterials: {
+              preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): prepared,
+            },
+          ),
+        },
+      );
+      final t02 = FakeT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      );
+      final materialService = StudentLessonMaterialService(
+        stateService: service,
+        orchestrator: orchestrator,
+        readyWindowEngine: DopamineReadyWindowEngine(
+          service: service,
+          orchestrator: orchestrator,
+        ),
+      );
+
+      final result = await materialService
+          .resolveLessonMaterialFromStateOrEngine(
+            ResolveLessonMaterialInput(
+              lessonLocalId: 'cyber-resume-local',
+              topic: 'Objetivo',
+              itemIdx: 0,
+              marker: 'M1',
+              layer: LessonLayer.l1,
+              params: params,
+            ),
+          );
+
+      expect(result?.conteudo.question, 'Qual alternativa abre?');
+      expect(result?.source, LessonMaterialSource.studentState);
+      expect(t02.calls, 0);
+    },
+  );
+
+  test('M-EXP3: offline prepared lesson opens with text and A/B/C', () async {
+    const params = CompleteLessonParams(
+      lessonLocalId: 'cyber-offline-ready',
+      item: 'Item 1',
+      lang: 'pt-BR',
+      academic: 'fundamental',
+      layer: LessonLayer.l1,
+      mode: LessonMode.session,
+      marker: 'M1',
+    );
+    final cache = LessonMaterialCache();
+    cache.put(
+      lessonKeyFor(params),
+      const CompleteLesson(
+        conteudo: LessonContent(
+          explanation: 'Texto offline preparado.',
+          question: 'O que abre sem internet?',
+          options: {
+            AnswerLetter.A: 'Texto',
+            AnswerLetter.B: 'Nada',
+            AnswerLetter.C: 'Erro tecnico',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+        imagem: null,
+        audioText: 'Texto offline preparado. O que abre sem internet?',
+      ),
+    );
+    final service = StudentLearningStateService(
+      seed: {
+        'cyber-offline-ready': _stateWithCurriculum().copyWith(
+          lessonLocalId: 'cyber-offline-ready',
+        ),
+      },
+    );
+    final t02 = FailingT02Client();
+    final orchestrator = LessonOrchestrator(
+      t02Client: t02,
+      cache: cache,
+      bus: LessonEventBus(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      ),
+    );
+
+    final result = await materialService.resolveLessonMaterialFromStateOrEngine(
+      ResolveLessonMaterialInput(
+        lessonLocalId: 'cyber-offline-ready',
+        topic: 'Objetivo',
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l1,
+        params: params,
+      ),
+    );
+
+    expect(result?.conteudo.explanation, 'Texto offline preparado.');
+    expect(result?.conteudo.options.keys, containsAll(AnswerLetter.values));
+    expect(result?.source, LessonMaterialSource.memoryCacheFromMotor);
+    expect(t02.calls, 0);
   });
 
   test(
@@ -811,6 +1207,447 @@ void main() {
     expect(result, [true, true, true, true]);
     expect(t02.calls, 4);
     expect(service.read('cyber-ready')?.readyLessonMaterials.length, 4);
+    final prepared = service.read('cyber-ready')!.readyLessonMaterials;
+    for (final material in prepared.values) {
+      expect(material['explanation'], isNotEmpty);
+      expect(material['question'], isNotEmpty);
+      expect(material['options'], isA<Map>());
+      expect(material['correct_answer'], 'A');
+      expect(material['for_itemIdx'], isA<int>());
+      expect(material['for_layer'], isA<String>());
+    }
+  });
+
+  test(
+    'M-EXP1: slow image refresh for current slot does not block text slots B/C/D',
+    () async {
+      final preparedA = preparedMaterialFromLesson(
+        lesson: CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto atual ja pronto.',
+            question: 'Pergunta atual?',
+            options: const {
+              AnswerLetter.A: 'A certa',
+              AnswerLetter.B: 'B errada',
+              AnswerLetter.C: 'C errada',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText: 'Texto atual ja pronto. Pergunta atual?',
+        ),
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l1,
+      );
+      final service = StudentLearningStateService(
+        seed: {
+          'cyber-image-nonblocking': _stateWithCurriculum().copyWith(
+            lessonLocalId: 'cyber-image-nonblocking',
+            readyLessonMaterials: {
+              preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): preparedA,
+            },
+          ),
+        },
+      );
+      final t02 = BlockingVisualRefreshT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+        imageRefreshDelays: const [Duration.zero],
+      );
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      );
+
+      final result = await engine
+          .runDopamineReadyWindowFromStudentState(
+            lessonLocalId: 'cyber-image-nonblocking',
+            source: 'm-exp1-image',
+            maxSlots: 4,
+          )
+          .timeout(const Duration(milliseconds: 500));
+
+      expect(result, [true, true, true, true]);
+      expect(
+        t02.requests
+            .map((request) => '${request.marker}:${request.layer.name}')
+            .toSet(),
+        containsAll({'M1:l2', 'M1:l3', 'M2:l1'}),
+      );
+      expect(
+        service
+            .read('cyber-image-nonblocking')!
+            .readyLessonMaterials
+            .values
+            .map((material) => material['question']),
+        everyElement(isNot(contains('HTTP'))),
+      );
+      if (!t02.visualRefresh.isCompleted) {
+        t02.visualRefresh.complete(t02.material(t02.requests.first));
+      }
+    },
+  );
+
+  test(
+    'M-EXP1: pending audio notification does not block text slots B/C/D',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-audio-nonblocking': _stateWithCurriculum()},
+      );
+      final t02 = FakeT02Client();
+      final audioPending = Completer<void>();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+        onAudioTextReady: (_, _) {
+          unawaited(audioPending.future);
+        },
+      );
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      );
+
+      final result = await engine.runDopamineReadyWindowFromStudentState(
+        lessonLocalId: 'cyber-audio-nonblocking',
+        source: 'm-exp1-audio',
+        maxSlots: 4,
+      );
+
+      expect(result, [true, true, true, true]);
+      expect(t02.calls, 4);
+      expect(audioPending.isCompleted, isFalse);
+      audioPending.complete();
+    },
+  );
+
+  test(
+    'M-EXP2: ready window queues secondary media only after textual A/B/C/D',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {
+          'cyber-media-priority': _stateWithCurriculum().copyWith(
+            lessonLocalId: 'cyber-media-priority',
+          ),
+        },
+      );
+      final t02 = FakeT02Client(imageStatus: 'processing');
+      final audioPrepared = <String>[];
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+        imageRefreshDelays: const [Duration.zero],
+        onAudioTextReady: (params, _) {
+          audioPrepared.add('${params.marker}:${params.layer.name}');
+        },
+      );
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      );
+
+      final result = await engine.runDopamineReadyWindowFromStudentState(
+        lessonLocalId: 'cyber-media-priority',
+        source: 'm-exp2-media',
+        maxSlots: 4,
+      );
+
+      expect(result, [true, true, true, true]);
+      final events = service.read('cyber-media-priority')!.events;
+      final firstMediaIndex = events.indexWhere(
+        (event) =>
+            event.type == 'DOPAMINE_SLOT_AUDIO_QUEUED' ||
+            event.type == 'DOPAMINE_SLOT_IMAGE_QUEUED',
+      );
+      final readyBeforeMedia = events
+          .take(firstMediaIndex)
+          .where((event) => event.type == 'DOPAMINE_SLOT_READY')
+          .length;
+      expect(readyBeforeMedia, 4);
+      expect(
+        events
+            .where(
+              (event) =>
+                  event.type == 'DOPAMINE_SLOT_AUDIO_QUEUED' ||
+                  event.type == 'DOPAMINE_SLOT_IMAGE_QUEUED',
+            )
+            .map(
+              (event) =>
+                  '${event.type}:${event.payload['slot']}:${event.payload['priority']}',
+            )
+            .toList(),
+        [
+          'DOPAMINE_SLOT_AUDIO_QUEUED:A:current',
+          'DOPAMINE_SLOT_IMAGE_QUEUED:A:current',
+          'DOPAMINE_SLOT_AUDIO_QUEUED:B:next',
+          'DOPAMINE_SLOT_AUDIO_QUEUED:C:next',
+          'DOPAMINE_SLOT_AUDIO_QUEUED:D:next',
+          'DOPAMINE_SLOT_IMAGE_QUEUED:B:next',
+          'DOPAMINE_SLOT_IMAGE_QUEUED:C:next',
+          'DOPAMINE_SLOT_IMAGE_QUEUED:D:next',
+        ],
+      );
+      expect(audioPrepared, ['M1:l1', 'M1:l2', 'M1:l3', 'M2:l1']);
+    },
+  );
+
+  test(
+    'M-EXP1: CG-1 boundary metadata is sent with current textual slot',
+    () async {
+      const items = [
+        CurriculumItem(
+          marker: 'M80',
+          text: 'Item global 80',
+          extra: {
+            'globalItemNumber': 80,
+            'partNumber': 1,
+            'localItemIndex': 79,
+          },
+        ),
+        CurriculumItem(
+          marker: 'M81',
+          text: 'Item global 81',
+          extra: {
+            'globalItemNumber': 81,
+            'partNumber': 2,
+            'localItemIndex': 0,
+            'globalMarker': 'G81',
+          },
+        ),
+      ];
+      final service = StudentLearningStateService(
+        seed: {
+          'cyber-cg-boundary':
+              StudentLearningState.empty(
+                lessonLocalId: 'cyber-cg-boundary',
+              ).copyWith(
+                profile: const StudentProfile(
+                  objetivo: 'Objetivo CG',
+                  stableLang: 'pt',
+                  academicLevel: 'fundamental',
+                ),
+                curriculum: const StudentCurriculum(
+                  topic: 'Objetivo CG',
+                  totalItems: 2,
+                  generatedAt: null,
+                  provisional: false,
+                  items: items,
+                ),
+                current: const LessonCurrent(
+                  itemIdx: 1,
+                  marker: 'M81',
+                  layer: LessonLayer.l1,
+                  amparoLvl: 0,
+                ),
+                progress: const LessonProgress(
+                  itemIdx: 1,
+                  layer: LessonLayer.l1,
+                  erros: 0,
+                  amparoLvl: 0,
+                  historia: [],
+                  mainAdvances: 0,
+                  concluidos: [],
+                  pendentesMarkers: [],
+                  totalItems: 2,
+                  pctAvanco: 50,
+                ),
+              ),
+        },
+      );
+      final t02 = FakeT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      );
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      );
+
+      final result = await engine.runDopamineReadyWindowFromStudentState(
+        lessonLocalId: 'cyber-cg-boundary',
+        source: 'm-exp1-cg',
+        maxSlots: 1,
+      );
+
+      expect(result, [true]);
+      expect(t02.requests.single.marker, 'M81');
+      expect(t02.requests.single.itemIdx, 1);
+      expect(t02.requests.single.curriculumItems[1]['globalItemNumber'], 81);
+      expect(t02.requests.single.curriculumItems[1]['partNumber'], 2);
+      expect(t02.requests.single.curriculumItems[1]['localItemIndex'], 0);
+      final key = preparedLessonMaterialKey(1, 'M81', LessonLayer.l1);
+      final prepared = service
+          .read('cyber-cg-boundary')!
+          .readyLessonMaterials[key]!;
+      expect(prepared['for_itemIdx'], 1);
+      expect(prepared['for_marker'], 'M81');
+      expect(prepared['for_layer'], LessonLayer.l1.name);
+    },
+  );
+
+  test(
+    'M-EXP3-B: cache preserves validated CG-1 part 2 cold index metadata',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      const params = CompleteLessonParams(
+        lessonLocalId: 'lesson-cg-part-2',
+        item: 'Item global 81',
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: LessonLayer.l2,
+        mode: LessonMode.session,
+        marker: 'M81',
+        itemIdx: 0,
+        curriculumItems: [
+          {
+            'marker': 'M81',
+            'text': 'Item global 81',
+            'rootLessonLocalId': 'lesson-cg-root',
+            'partLessonLocalId': 'lesson-cg-part-2',
+            'partNumber': 2,
+            'globalItemNumber': 81,
+            'localItemIndex': 0,
+          },
+        ],
+      );
+      final key = lessonKeyFor(params);
+      final cache = LessonMaterialCache(maxLessons: 1);
+      expect(
+        cache.putForParams(
+          params,
+          const CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Texto oficial da parte 2.',
+              question: 'Qual item global?',
+              options: {
+                AnswerLetter.A: '81',
+                AnswerLetter.B: '1 local sem raiz',
+                AnswerLetter.C: 'parte solta',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: null,
+            audioText: 'Texto oficial da parte 2. Qual item global?',
+          ),
+        ),
+        isTrue,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      final hydrated = LessonMaterialCache(maxLessons: 1);
+      hydrated.hydrateFromPreferences(prefs);
+      final cold = hydrated.coldEntry(key);
+
+      expect(cold, isNotNull);
+      expect(cold!.rootLessonLocalId, 'lesson-cg-root');
+      expect(cold.partLessonLocalId, 'lesson-cg-part-2');
+      expect(cold.partNumber, 2);
+      expect(cold.globalItemNumber, 81);
+      expect(cold.localItemIndex, 0);
+      expect(cold.marker, 'M81');
+      expect(cold.itemIdx, 0);
+      expect(cold.layer, LessonLayer.l2);
+      expect(hydrated.peek(key)?.conteudo.question, 'Qual item global?');
+    },
+  );
+
+  test(
+    'M-EXP3-B: cache refuses CG-1 part 2 without official minimum metadata',
+    () {
+      const params = CompleteLessonParams(
+        lessonLocalId: 'lesson-cg-part-2-untrusted',
+        item: 'Item global sem raiz',
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: LessonLayer.l1,
+        mode: LessonMode.session,
+        marker: 'M81',
+        itemIdx: 0,
+        curriculumItems: [
+          {'marker': 'M81', 'text': 'Item global sem raiz', 'partNumber': 2},
+        ],
+      );
+      final cache = LessonMaterialCache();
+      final key = lessonKeyFor(params);
+
+      final accepted = cache.putForParams(
+        params,
+        const CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto nao confiavel.',
+            question: 'Pode cachear?',
+            options: {
+              AnswerLetter.A: 'Nao',
+              AnswerLetter.B: 'Sim',
+              AnswerLetter.C: 'Inventar raiz',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText: 'Texto nao confiavel. Pode cachear?',
+        ),
+      );
+
+      expect(accepted, isFalse);
+      expect(cache.peek(key), isNull);
+      expect(cache.coldEntry(key), isNull);
+    },
+  );
+
+  test('M-EXP3-B: cache refuses CG-1 part 2 without partLessonLocalId', () {
+    const params = CompleteLessonParams(
+      lessonLocalId: 'lesson-cg-part-2-without-part-id',
+      item: 'Item global 81',
+      lang: 'pt-BR',
+      academic: 'fundamental',
+      layer: LessonLayer.l1,
+      mode: LessonMode.session,
+      marker: 'M81',
+      itemIdx: 0,
+      curriculumItems: [
+        {
+          'marker': 'M81',
+          'text': 'Item global 81',
+          'rootLessonLocalId': 'lesson-cg-root',
+          'partNumber': 2,
+          'globalItemNumber': 81,
+          'localItemIndex': 0,
+        },
+      ],
+    );
+    final cache = LessonMaterialCache();
+    final key = lessonKeyFor(params);
+
+    final accepted = cache.putForParams(
+      params,
+      const CompleteLesson(
+        conteudo: LessonContent(
+          explanation: 'Texto oficial incompleto.',
+          question: 'Pode cachear Parte 2 sem partLessonLocalId?',
+          options: {
+            AnswerLetter.A: 'Nao',
+            AnswerLetter.B: 'Sim',
+            AnswerLetter.C: 'Tratar como parte solta',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+        imagem: null,
+        audioText:
+            'Texto oficial incompleto. Pode cachear Parte 2 sem partLessonLocalId?',
+      ),
+    );
+
+    expect(accepted, isFalse);
+    expect(cache.coldEntry(key), isNull);
+    expect(cache.peek(key), isNull);
   });
 
   test('prepared material key contains item marker and layer', () {
@@ -882,6 +1719,68 @@ void main() {
         service.read('cyber-ready')?.events.map((event) => event.type),
         contains('LESSON_MATERIAL_INVALID_DISCARDED'),
       );
+    },
+  );
+
+  test(
+    'M-EXP3: ready material from wrong slot is ignored and official T02 is requested',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {
+          'cyber-wrong-slot': _stateWithCurriculum().copyWith(
+            lessonLocalId: 'cyber-wrong-slot',
+            readyLessonMaterials: {
+              preparedLessonMaterialKey(0, 'M1', LessonLayer.l2): {
+                'text_status': 'ready',
+                'explanation': 'Texto de outra camada.',
+                'question': 'Pergunta errada?',
+                'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+                'correct_answer': 'A',
+                'for_itemIdx': 0,
+                'for_marker': 'M1',
+                'for_layer': LessonLayer.l2.name,
+              },
+            },
+          ),
+        },
+      );
+      final t02 = FakeT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      );
+      final materialService = StudentLessonMaterialService(
+        stateService: service,
+        orchestrator: orchestrator,
+        readyWindowEngine: DopamineReadyWindowEngine(
+          service: service,
+          orchestrator: orchestrator,
+        ),
+      );
+
+      final result = await materialService
+          .resolveLessonMaterialFromStateOrEngine(
+            ResolveLessonMaterialInput(
+              lessonLocalId: 'cyber-wrong-slot',
+              topic: 'Objetivo',
+              itemIdx: 0,
+              marker: 'M1',
+              layer: LessonLayer.l1,
+              params: const CompleteLessonParams(
+                lessonLocalId: 'cyber-wrong-slot',
+                item: 'Item 1',
+                lang: 'pt',
+                academic: 'fundamental',
+                layer: LessonLayer.l1,
+                mode: LessonMode.session,
+                marker: 'M1',
+              ),
+            ),
+          );
+
+      expect(result?.conteudo.explanation, 'Explicacao de Item 1');
+      expect(t02.calls, 1);
     },
   );
 
@@ -999,7 +1898,7 @@ void main() {
         topic: 'Funções',
         itemIdx: 0,
         layer: LessonLayer.l1,
-        source: 'test-window',
+        source: i == 0 ? 'test-window' : 'test-window-second-source',
         items: const [
           DopamineWindowItem(text: 'Item 1', marker: 'M1'),
           DopamineWindowItem(text: 'Item 2', marker: 'M2'),
@@ -1011,7 +1910,7 @@ void main() {
     expect(state?.queuedActions, hasLength(1));
     expect(
       state?.queuedActions.single['idempotency_key'],
-      'test-window:cyber-window-dedupe:0:L1',
+      'ready-window:cyber-window-dedupe:0:M1:L1',
     );
     expect(
       state?.events.where((event) => event.type == 'CACHE_WINDOW_UPDATED'),

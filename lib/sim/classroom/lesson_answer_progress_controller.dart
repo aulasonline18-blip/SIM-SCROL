@@ -324,6 +324,50 @@ class LessonAnswerProgressController {
     if (!view.ended &&
         view.itemIdx == position.itemIdx &&
         view.layer == position.layer) {
+      final next = nextLessonSlot(position.itemIdx, position.layer, baseItems);
+      if (next != null &&
+          _hasCorrectEvidenceForCurrentPosition(state, position)) {
+        final previousItemIdx = position.itemIdx;
+        final previousLayer = position.layer;
+        final previousLoadingLayer = position.loadingLayer;
+        final previousErros = position.erros;
+        final previousHistoria = position.historia;
+        final previousMainAdvances = position.mainAdvances;
+        final previousPhase = position.phase;
+        position.loadingLayer = next.layer;
+        position.itemIdx = next.idx;
+        position.layer = next.layer;
+        position.erros = 0;
+        position.historia = view.historia;
+        position.mainAdvances = view.mainAdvances;
+        final loadedPrepared = materialController.carregarRapidoSePronto(
+          lessonLocalId: lessonLocalId,
+          topic: topic,
+          position: position,
+          idioma: idioma,
+          academic: academic,
+          mode: _modeForNextMaterial(activeState, position.isReviewAtivo),
+          baseItems: baseItems,
+        );
+        if (loadedPrepared) {
+          _recordLocalPendingAdvanceDisplayed(
+            lessonLocalId: lessonLocalId,
+            fromItemIdx: previousItemIdx,
+            fromLayer: previousLayer,
+            toItemIdx: next.idx,
+            toLayer: next.layer,
+            marker: position.itemAtivo?.marker,
+          );
+          return;
+        }
+        position.itemIdx = previousItemIdx;
+        position.layer = previousLayer;
+        position.loadingLayer = previousLoadingLayer;
+        position.erros = previousErros;
+        position.historia = previousHistoria;
+        position.mainAdvances = previousMainAdvances;
+        position.phase = previousPhase;
+      }
       position.historia = view.historia;
       position.mainAdvances = view.mainAdvances;
       position.erros = view.erros;
@@ -414,5 +458,93 @@ class LessonAnswerProgressController {
     return state.attempts.any(
       (attempt) => attempt.marker == marker && attempt.layer == position.layer,
     );
+  }
+
+  bool _hasCorrectEvidenceForCurrentPosition(
+    StudentLearningState state,
+    LessonPositionState position,
+  ) {
+    final marker = position.itemAtivo?.marker ?? state.current?.marker;
+    if (marker == null || marker.trim().isEmpty) return false;
+    for (final attempt in state.attempts.reversed) {
+      if (attempt.marker == marker && attempt.layer == position.layer) {
+        return attempt.correct;
+      }
+    }
+    return false;
+  }
+
+  void _recordLocalPendingAdvanceDisplayed({
+    required String lessonLocalId,
+    required int fromItemIdx,
+    required LessonLayer fromLayer,
+    required int toItemIdx,
+    required LessonLayer toLayer,
+    required String? marker,
+  }) {
+    final latest = stateService.read(lessonLocalId);
+    final progress = latest?.progress;
+    if (latest == null || progress == null) return;
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final pendingKey = _latestAdvanceGatePendingKey(latest);
+    final eventPayload = <String, dynamic>{
+      'lessonLocalId': lessonLocalId,
+      'fromItemIdx': fromItemIdx,
+      'fromLayer': fromLayer.value,
+      'toItemIdx': toItemIdx,
+      'toLayer': toLayer.value,
+      'reason': 'prepared_experience_displayed_before_remote_confirmation',
+      'remoteConfirmation': 'pending',
+    };
+    final localPendingAdvance = <String, dynamic>{
+      'fromItemIdx': fromItemIdx,
+      'fromLayer': fromLayer.value,
+      'toItemIdx': toItemIdx,
+      'toLayer': toLayer.value,
+      'remoteConfirmation': 'pending',
+      'updatedAt': ts,
+    };
+    if (marker != null) {
+      eventPayload['marker'] = marker;
+      localPendingAdvance['marker'] = marker;
+    }
+    if (pendingKey != null) {
+      eventPayload['idempotencyKey'] = pendingKey;
+      localPendingAdvance['idempotencyKey'] = pendingKey;
+    }
+    stateService.write(
+      latest.copyWith(
+        updatedAt: ts,
+        current: LessonCurrent(
+          itemIdx: toItemIdx,
+          marker: marker,
+          layer: toLayer,
+          amparoLvl: progress.amparoLvl,
+        ),
+        progress: progress.copyWith(
+          itemIdx: toItemIdx,
+          layer: toLayer,
+          erros: 0,
+        ),
+        events: [
+          ...latest.events,
+          StudentLearningEvent(
+            type: 'LOCAL_PENDING_ADVANCE_DISPLAYED',
+            ts: ts,
+            payload: eventPayload,
+          ),
+        ],
+        extra: {...latest.extra, 'localPendingAdvance': localPendingAdvance},
+      ),
+    );
+  }
+
+  String? _latestAdvanceGatePendingKey(StudentLearningState state) {
+    for (final action in state.queuedActions.reversed) {
+      if (action['type'] == 'ADVANCE_GATE_PENDING') {
+        return action['idempotencyKey']?.toString();
+      }
+    }
+    return null;
   }
 }

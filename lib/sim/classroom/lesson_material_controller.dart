@@ -20,6 +20,65 @@ class LessonMaterialController {
   final StudentLessonMaterialService materialService;
   final SimConstitutionalContract constitutionalContract;
 
+  bool carregarRapidoSePronto({
+    required String lessonLocalId,
+    required String? topic,
+    required LessonPositionState position,
+    required String idioma,
+    required String academic,
+    required LessonMode mode,
+    required List<PlannedItem> baseItems,
+  }) {
+    final item = position.itemAtivo;
+    if (item == null) return false;
+    final currentState = stateService.read(lessonLocalId);
+    final params = _paramsForPosition(
+      lessonLocalId: lessonLocalId,
+      topic: topic,
+      position: position,
+      item: item,
+      idioma: idioma,
+      academic: academic,
+      mode: mode,
+      baseItems: baseItems,
+      currentState: currentState,
+    );
+    final fast = materialService.resolveFastLessonMaterialFromStateOrCache(
+      ResolveLessonMaterialInput(
+        lessonLocalId: lessonLocalId,
+        topic: topic,
+        itemIdx: position.itemIdx,
+        marker: item.marker,
+        layer: position.layer,
+        params: params,
+      ),
+    );
+    if (fast == null) return false;
+    _applyMaterial(position, fast);
+    _mirrorDisplayedPreparedLesson(
+      lessonLocalId: lessonLocalId,
+      position: position,
+      item: item,
+      material: fast,
+    );
+    _markShowingFirstLessonIfNeeded(lessonLocalId, position, item);
+    materialService.maintainLessonReadyWindow(
+      lessonLocalId: lessonLocalId,
+      topic: topic,
+      itemIdx: position.itemIdx,
+      layer: position.layer,
+      items: baseItems
+          .map(
+            (item) => DopamineWindowItem(text: item.text, marker: item.marker),
+          )
+          .toList(),
+      source: 'cyber.aula.fast-window',
+      priority: 'background',
+      reason: 'fast_prepared_lesson_visible',
+    );
+    return true;
+  }
+
   Future<void> carregar({
     required String lessonLocalId,
     required String? topic,
@@ -37,24 +96,16 @@ class LessonMaterialController {
     }
 
     final currentState = stateService.read(lessonLocalId);
-    final params = CompleteLessonParams(
+    final params = _paramsForPosition(
       lessonLocalId: lessonLocalId,
-      item: item.text,
-      lang: idioma,
-      academic: academic,
-      layer: position.layer,
-      mode: mode,
-      errCount: position.erros,
-      history: position.historia,
-      marker: item.marker,
-      amparoLvl: currentState?.progress?.amparoLvl,
-      curriculumItems: _curriculumSnapshot(baseItems),
       topic: topic,
-      itemIdx: position.itemIdx,
-      pedagogicalEnvelope: _pedagogicalEnvelope(
-        currentState?.profile.toJson() ?? const {},
-        item,
-      ),
+      position: position,
+      item: item,
+      idioma: idioma,
+      academic: academic,
+      mode: mode,
+      baseItems: baseItems,
+      currentState: currentState,
     );
 
     final fast = forceRefresh
@@ -141,6 +192,38 @@ class LessonMaterialController {
       source: 'cyber.aula.loaded-window',
       priority: 'background',
       reason: 'lesson_loaded_keeps_ready_window_alive',
+    );
+  }
+
+  CompleteLessonParams _paramsForPosition({
+    required String lessonLocalId,
+    required String? topic,
+    required LessonPositionState position,
+    required PlannedItem item,
+    required String idioma,
+    required String academic,
+    required LessonMode mode,
+    required List<PlannedItem> baseItems,
+    required StudentLearningState? currentState,
+  }) {
+    return CompleteLessonParams(
+      lessonLocalId: lessonLocalId,
+      item: item.text,
+      lang: idioma,
+      academic: academic,
+      layer: position.layer,
+      mode: mode,
+      errCount: position.erros,
+      history: position.historia,
+      marker: item.marker,
+      amparoLvl: currentState?.progress?.amparoLvl,
+      curriculumItems: _curriculumSnapshot(baseItems),
+      topic: topic,
+      itemIdx: position.itemIdx,
+      pedagogicalEnvelope: _pedagogicalEnvelope(
+        currentState?.profile.toJson() ?? const {},
+        item,
+      ),
     );
   }
 
@@ -242,6 +325,7 @@ class LessonMaterialController {
     return [
       for (var index = 0; index < items.length; index += 1)
         {
+          ...items[index].extra,
           'order': index + 1,
           'marker': items[index].marker,
           if ((items[index].unit ?? '').trim().isNotEmpty)

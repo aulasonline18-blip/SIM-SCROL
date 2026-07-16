@@ -42,20 +42,30 @@ class LessonOrchestrator {
 
   bool get isLessonBusy => _textInflight.isNotEmpty;
 
+  int get warmCacheEntryCount => cache.warmEntryCount;
+
+  int get coldCacheEntryCount => cache.coldEntryCount;
+
   CompleteLesson? peekCachedLesson(String key) => cache.peek(key);
+
+  void protectWarmCachedLessons(Iterable<String> keys) {
+    cache.protectWarmKeys(keys);
+  }
 
   CompleteLesson ensureVisualForReadyLesson(
     CompleteLessonParams params,
     LessonContent conteudo, {
     String priority = 'active',
     String? initialImage,
+    bool deferMedia = false,
   }) {
     final key = lessonKeyFor(params);
     final cached = cache.peek(key);
     if (cached != null) {
-      onAudioTextReady?.call(params, cached);
-      _notifyReadyImage(params, cached);
-      _scheduleImageRefreshIfNeeded(params, cached);
+      if (!deferMedia) {
+        queueAudioForReadyLesson(params, cached);
+        queueImageForReadyLesson(params, cached);
+      }
       return cached;
     }
 
@@ -64,12 +74,28 @@ class LessonOrchestrator {
       imagem: initialImage?.trim().isEmpty == true ? null : initialImage,
       audioText: conteudo.audioText,
     );
-    cache.put(key, base);
+    cache.putForParams(params, base);
     bus.notify(key, base);
-    onAudioTextReady?.call(params, base);
-    _notifyReadyImage(params, base);
-    _scheduleImageRefreshIfNeeded(params, base);
+    if (!deferMedia) {
+      queueAudioForReadyLesson(params, base);
+      queueImageForReadyLesson(params, base);
+    }
     return base;
+  }
+
+  void queueAudioForReadyLesson(
+    CompleteLessonParams params,
+    CompleteLesson lesson,
+  ) {
+    onAudioTextReady?.call(params, lesson);
+  }
+
+  void queueImageForReadyLesson(
+    CompleteLessonParams params,
+    CompleteLesson lesson,
+  ) {
+    _notifyReadyImage(params, lesson);
+    _scheduleImageRefreshIfNeeded(params, lesson);
   }
 
   void setAudioTextPreparer(
@@ -82,13 +108,15 @@ class LessonOrchestrator {
     CompleteLessonParams params, {
     String priority = 'background',
     bool forceRefresh = false,
+    bool deferMedia = false,
   }) {
     final key = lessonKeyFor(params);
     final ready = cache.peek(key);
     if (ready != null && !forceRefresh) {
-      onAudioTextReady?.call(params, ready);
-      _notifyReadyImage(params, ready);
-      _scheduleImageRefreshIfNeeded(params, ready);
+      if (!deferMedia) {
+        queueAudioForReadyLesson(params, ready);
+        queueImageForReadyLesson(params, ready);
+      }
       return Future.value(ready);
     }
     final existing = _textInflight[key];
@@ -105,11 +133,12 @@ class LessonOrchestrator {
 
     final future = queued
         .then((lesson) {
-          cache.put(key, lesson);
+          cache.putForParams(params, lesson);
           bus.notify(key, lesson);
-          onAudioTextReady?.call(params, lesson);
-          _notifyReadyImage(params, lesson);
-          _scheduleImageRefreshIfNeeded(params, lesson);
+          if (!deferMedia) {
+            queueAudioForReadyLesson(params, lesson);
+            queueImageForReadyLesson(params, lesson);
+          }
           if (_textInflight[key] != null) _textInflight.remove(key);
           return lesson;
         })
@@ -241,9 +270,8 @@ class LessonOrchestrator {
           imagem: refreshed.imagem,
           imageMetadata: refreshed.imageMetadata,
         );
-        cache.put(key, completed);
+        cache.putForParams(params, completed);
         bus.notify(key, completed);
-        onAudioTextReady?.call(params, completed);
         _notifyReadyImage(params, completed);
         return;
       }
@@ -251,7 +279,7 @@ class LessonOrchestrator {
       final status = refreshed.imageMetadata?.status;
       if (status != null && !_isPendingImageStatus(status)) {
         final updated = base.copyWith(imageMetadata: refreshed.imageMetadata);
-        cache.put(key, updated);
+        cache.putForParams(params, updated);
         bus.notify(key, updated);
         return;
       }
@@ -282,9 +310,9 @@ class LessonOrchestrator {
       imagem: null,
       audioText: conteudo.audioText,
     );
-    cache.put(key, lesson);
+    cache.putForParams(params, lesson);
     bus.notify(key, lesson);
-    onAudioTextReady?.call(params, lesson);
+    queueAudioForReadyLesson(params, lesson);
     return lesson;
   }
 }

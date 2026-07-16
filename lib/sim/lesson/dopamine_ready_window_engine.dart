@@ -4,6 +4,7 @@ import '../experience/curriculum_utils.dart';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
+import 'lesson_content_validator.dart';
 import 'lesson_models.dart';
 import 'lesson_orchestrator.dart';
 
@@ -98,6 +99,9 @@ class DopamineReadyWindowEngine {
     int? maxSlots,
   }) async {
     final selected = slots.take(maxSlots ?? (returnMode ? 2 : 4)).toList();
+    orchestrator.protectWarmCachedLessons(
+      selected.map((slot) => lessonKeyFor(slot.params)),
+    );
     _event(lessonLocalId, 'DOPAMINE_WINDOW_REQUESTED', {
       'source': source,
       'returnMode': returnMode,
@@ -114,6 +118,7 @@ class DopamineReadyWindowEngine {
     });
 
     final results = <bool>[];
+    final mediaSlots = <_ReadyWindowMediaSlot>[];
     for (var index = 0; index < selected.length; index++) {
       final slot = selected[index];
       final key = lessonKeyFor(slot.params);
@@ -135,13 +140,15 @@ class DopamineReadyWindowEngine {
         slot.layer,
       );
       if (existing != null) {
-        _refreshTextOnlySlotInBackground(
+        final lesson = _prepareMediaFromPreparedMaterial(
           lessonLocalId: lessonLocalId,
           source: source,
           slot: slot,
           material: existing,
-          model: 'DopamineReadyWindowEngine-state-refresh',
         );
+        if (lesson != null) {
+          mediaSlots.add(_ReadyWindowMediaSlot(slot: slot, lesson: lesson));
+        }
         _markFirstLessonIfNeeded(lessonLocalId, slot);
         _event(lessonLocalId, 'DOPAMINE_SLOT_ALREADY_READY', {
           'source': source,
@@ -160,13 +167,13 @@ class DopamineReadyWindowEngine {
           lesson: cached,
           model: 'DopamineReadyWindowEngine-cache',
         );
-        _refreshCachedTextOnlySlotInBackground(
+        final lesson = _prepareMediaFromCachedLesson(
           lessonLocalId: lessonLocalId,
           source: source,
           slot: slot,
           lesson: cached,
-          model: 'DopamineReadyWindowEngine-cache-refresh',
         );
+        mediaSlots.add(_ReadyWindowMediaSlot(slot: slot, lesson: lesson));
         _markFirstLessonIfNeeded(lessonLocalId, slot);
         _event(lessonLocalId, 'DOPAMINE_SLOT_ALREADY_READY', {
           'source': source,
@@ -200,6 +207,7 @@ class DopamineReadyWindowEngine {
         final lesson = await orchestrator.prefetchCompleteLesson(
           slot.params,
           priority: index == 0 ? 'active' : 'background',
+          deferMedia: true,
         );
         _mirrorPreparedLesson(
           lessonLocalId: lessonLocalId,
@@ -207,6 +215,7 @@ class DopamineReadyWindowEngine {
           lesson: lesson,
           model: 'DopamineReadyWindowEngine',
         );
+        mediaSlots.add(_ReadyWindowMediaSlot(slot: slot, lesson: lesson));
         _markFirstLessonIfNeeded(lessonLocalId, slot);
         _event(lessonLocalId, 'DOPAMINE_SLOT_READY', {
           'source': source,
@@ -247,6 +256,7 @@ class DopamineReadyWindowEngine {
       'ready': results.where((ready) => ready).length,
       'requested': selected.length,
     });
+    _queueSecondaryMedia(lessonLocalId, source, mediaSlots);
     return results;
   }
 
@@ -424,98 +434,103 @@ class DopamineReadyWindowEngine {
     });
   }
 
-  void _refreshTextOnlySlotInBackground({
+  CompleteLesson? _prepareMediaFromPreparedMaterial({
     required String lessonLocalId,
     required String source,
     required DopamineReadySlot slot,
     required JsonMap material,
-    required String model,
   }) {
-    if ((material['imagem'] as String?)?.trim().isNotEmpty == true) return;
+    late final LessonContent content;
+    try {
+      content = validatedLessonContentFromJson(JsonMap.from(material));
+    } on LessonContentValidationException catch (error) {
+      _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_FAILED', {
+        'source': source,
+        'slot': slot.slot,
+        'storage': 'student_state',
+        'error': error.message,
+      });
+      return null;
+    }
     _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_REQUESTED', {
       'source': source,
       'slot': slot.slot,
       'storage': 'student_state',
     });
-    unawaited(
-      orchestrator
-          .prefetchCompleteLesson(
-            slot.params,
-            priority: 'background',
-            forceRefresh: true,
-          )
-          .then((lesson) {
-            if (lesson.imagem == null || lesson.imagem!.trim().isEmpty) {
-              return;
-            }
-            _mirrorPreparedLesson(
-              lessonLocalId: lessonLocalId,
-              slot: slot,
-              lesson: lesson,
-              model: model,
-            );
-            _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_READY', {
-              'source': source,
-              'slot': slot.slot,
-              'storage': 'student_state',
-            });
-          })
-          .catchError((Object error) {
-            _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_FAILED', {
-              'source': source,
-              'slot': slot.slot,
-              'storage': 'student_state',
-              'error': error.toString(),
-            });
-          }),
+    return orchestrator.ensureVisualForReadyLesson(
+      slot.params,
+      content,
+      priority: 'background',
+      initialImage: material['imagem'] as String?,
+      deferMedia: true,
     );
   }
 
-  void _refreshCachedTextOnlySlotInBackground({
+  CompleteLesson _prepareMediaFromCachedLesson({
     required String lessonLocalId,
     required String source,
     required DopamineReadySlot slot,
     required CompleteLesson lesson,
-    required String model,
   }) {
-    if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty) return;
     _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_REQUESTED', {
       'source': source,
       'slot': slot.slot,
       'storage': 'cache',
     });
-    unawaited(
-      orchestrator
-          .prefetchCompleteLesson(
-            slot.params,
-            priority: 'background',
-            forceRefresh: true,
-          )
-          .then((refreshed) {
-            if (refreshed.imagem == null || refreshed.imagem!.trim().isEmpty) {
-              return;
-            }
-            _mirrorPreparedLesson(
-              lessonLocalId: lessonLocalId,
-              slot: slot,
-              lesson: refreshed,
-              model: model,
-            );
-            _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_READY', {
-              'source': source,
-              'slot': slot.slot,
-              'storage': 'cache',
-            });
-          })
-          .catchError((Object error) {
-            _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_FAILED', {
-              'source': source,
-              'slot': slot.slot,
-              'storage': 'cache',
-              'error': error.toString(),
-            });
-          }),
+    return orchestrator.ensureVisualForReadyLesson(
+      slot.params,
+      lesson.conteudo,
+      priority: 'background',
+      initialImage: lesson.imagem,
+      deferMedia: true,
     );
+  }
+
+  void _queueSecondaryMedia(
+    String lessonLocalId,
+    String source,
+    List<_ReadyWindowMediaSlot> mediaSlots,
+  ) {
+    if (mediaSlots.isEmpty) return;
+    final current = mediaSlots
+        .where((entry) => entry.slot.slot == 'A')
+        .toList(growable: false);
+    final next = mediaSlots
+        .where((entry) => entry.slot.slot != 'A')
+        .toList(growable: false);
+
+    for (final entry in current) {
+      orchestrator.queueAudioForReadyLesson(entry.slot.params, entry.lesson);
+      _event(lessonLocalId, 'DOPAMINE_SLOT_AUDIO_QUEUED', {
+        'source': source,
+        'slot': entry.slot.slot,
+        'priority': 'current',
+      });
+    }
+    for (final entry in current) {
+      orchestrator.queueImageForReadyLesson(entry.slot.params, entry.lesson);
+      _event(lessonLocalId, 'DOPAMINE_SLOT_IMAGE_QUEUED', {
+        'source': source,
+        'slot': entry.slot.slot,
+        'priority': 'current',
+      });
+    }
+    for (final entry in next) {
+      orchestrator.queueAudioForReadyLesson(entry.slot.params, entry.lesson);
+      _event(lessonLocalId, 'DOPAMINE_SLOT_AUDIO_QUEUED', {
+        'source': source,
+        'slot': entry.slot.slot,
+        'priority': 'next',
+      });
+    }
+    for (final entry in next) {
+      orchestrator.queueImageForReadyLesson(entry.slot.params, entry.lesson);
+      _event(lessonLocalId, 'DOPAMINE_SLOT_IMAGE_QUEUED', {
+        'source': source,
+        'slot': entry.slot.slot,
+        'priority': 'next',
+      });
+    }
   }
 
   void _markFirstLessonIfNeeded(String lessonLocalId, DopamineReadySlot slot) {
@@ -546,6 +561,13 @@ class DopamineReadyWindowEngine {
       ),
     );
   }
+}
+
+class _ReadyWindowMediaSlot {
+  const _ReadyWindowMediaSlot({required this.slot, required this.lesson});
+
+  final DopamineReadySlot slot;
+  final CompleteLesson lesson;
 }
 
 String _pickProfileString(JsonMap profile, List<String> keys) {
@@ -595,6 +617,7 @@ List<JsonMap> _curriculumSnapshot(StudentCurriculum? curriculum) {
   return [
     for (var index = 0; index < items.length; index += 1)
       {
+        ...items[index].extra,
         'order': index + 1,
         'marker': items[index].marker,
         if ((items[index].unit ?? '').trim().isNotEmpty)

@@ -385,7 +385,11 @@ void main() {
       expect(states['l1']!.audio.error, 'audio_playback_unavailable');
       expect(
         states['l1']!.events.map((event) => event.type),
-        containsAll(['AUDIO_STARTED', 'AUDIO_FAILED']),
+        contains('AUDIO_FAILED'),
+      );
+      expect(
+        states['l1']!.events.map((event) => event.type),
+        isNot(contains('AUDIO_STARTED')),
       );
     },
   );
