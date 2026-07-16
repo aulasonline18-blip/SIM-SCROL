@@ -699,6 +699,74 @@ void main() {
     },
   );
 
+  test('M7 avanca cinco posicoes usando cache local sem novo T02', () async {
+    final service = StudentLearningStateService(
+      seed: {'cyber-class': _classroomState()},
+    );
+    final t02 = FakeClassroomT02();
+    final runtime = _runtime(service, t02);
+    await runtime.open(lessonLocalId: 'cyber-class');
+    expect(t02.calls, 1);
+
+    CompleteLesson material(String marker, LessonLayer layer) => CompleteLesson(
+      conteudo: LessonContent(
+        explanation: 'Texto preparado $marker L${layer.value}.',
+        question: 'Pergunta preparada $marker L${layer.value}?',
+        options: const {
+          AnswerLetter.A: 'A',
+          AnswerLetter.B: 'B',
+          AnswerLetter.C: 'C',
+        },
+        correctAnswer: AnswerLetter.A,
+      ),
+      imagem: null,
+      audioText: 'Texto preparado $marker L${layer.value}.',
+    );
+
+    service.mutate('cyber-class', (state) {
+      final prepared = <String, JsonMap>{};
+      for (final entry in const [
+        (idx: 0, marker: 'M1', layer: LessonLayer.l2),
+        (idx: 0, marker: 'M1', layer: LessonLayer.l3),
+        (idx: 1, marker: 'M2', layer: LessonLayer.l1),
+        (idx: 1, marker: 'M2', layer: LessonLayer.l2),
+        (idx: 1, marker: 'M2', layer: LessonLayer.l3),
+      ]) {
+        prepared[preparedLessonMaterialKey(
+          entry.idx,
+          entry.marker,
+          entry.layer,
+        )] = preparedMaterialFromLesson(
+          lesson: material(entry.marker, entry.layer),
+          itemIdx: entry.idx,
+          marker: entry.marker,
+          layer: entry.layer,
+        );
+      }
+      return state.copyWith(readyLessonMaterials: prepared);
+    });
+
+    for (var step = 0; step < 5; step++) {
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.two);
+      await runtime.advance();
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.lendo);
+      expect(t02.calls, 1, reason: 'step $step');
+    }
+
+    final snapshot = runtime.snapshot();
+    expect(snapshot.itemMarker, 'M2');
+    expect(service.read('cyber-class')?.current?.layer, LessonLayer.l3);
+    expect(snapshot.conteudo?.question, 'Pergunta preparada M2 L3?');
+    expect(
+      service
+          .read('cyber-class')!
+          .events
+          .where((event) => event.type == 'INSTANT_EXPERIENCE_MEASURED'),
+      hasLength(greaterThanOrEqualTo(5)),
+    );
+  });
+
   test(
     'M-EXP4 avanço com servidor pendente usa experiência preparada sem T02',
     () async {

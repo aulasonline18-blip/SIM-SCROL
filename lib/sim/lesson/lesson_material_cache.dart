@@ -10,13 +10,18 @@ import 'lesson_models.dart';
 
 const String _kCacheKey = 'sim-lesson-text-cache-v1';
 const int _kMaxWarmLessons = 15;
-const int _kLessonTtlMs = 86400000; // 24h
+const int _kLessonTtlMs = 604800000; // 7 dias
 
 class _CacheEntry {
-  const _CacheEntry({required this.lesson, required this.savedAt});
+  const _CacheEntry({
+    required this.lesson,
+    required this.savedAt,
+    required this.lastAccessedAt,
+  });
 
   final CompleteLesson lesson;
   final int savedAt;
+  final int lastAccessedAt;
 }
 
 class LessonColdCacheEntry {
@@ -204,15 +209,21 @@ class LessonMaterialCache {
       final value = entry.value;
       if (value is! Map) continue;
       final savedAt = (value['savedAt'] as num?)?.toInt() ?? 0;
+      final lastAccessedAt =
+          (value['lastAccessedAt'] as num?)?.toInt() ?? savedAt;
       final lessonRaw = value['lesson'];
-      if (now - savedAt > ttlMs) {
+      if (now - lastAccessedAt > ttlMs) {
         _rememberColdFromJson(key, value, savedAt);
         continue;
       }
       if (lessonRaw is! Map) continue;
       final lesson = _lessonFromJson(Map<String, dynamic>.from(lessonRaw));
       if (lesson == null) continue;
-      _memory[key] = _CacheEntry(lesson: lesson, savedAt: savedAt);
+      _memory[key] = _CacheEntry(
+        lesson: lesson,
+        savedAt: savedAt,
+        lastAccessedAt: lastAccessedAt,
+      );
       _rememberColdFromJson(key, value, savedAt);
     }
     _enforceWarmLimit(persist: false);
@@ -236,11 +247,26 @@ class LessonMaterialCache {
     final entry = _memory.remove(key);
     if (entry == null) return null;
     if (_isExpired(entry)) return null;
-    _memory[key] = entry;
+    _memory[key] = _CacheEntry(
+      lesson: entry.lesson,
+      savedAt: entry.savedAt,
+      lastAccessedAt: DateTime.now().millisecondsSinceEpoch,
+    );
     return entry.lesson;
   }
 
   Future<CompleteLesson?> getCachedLesson(String key) async => get(key);
+
+  void touch(String key) {
+    final entry = _memory[key];
+    if (entry == null || _isExpired(entry)) return;
+    _memory[key] = _CacheEntry(
+      lesson: entry.lesson,
+      savedAt: entry.savedAt,
+      lastAccessedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    _persist();
+  }
 
   void put(String key, CompleteLesson lesson) {
     _put(key, lesson);
@@ -264,9 +290,11 @@ class LessonMaterialCache {
   void _put(String key, CompleteLesson lesson, {int? savedAt}) {
     _memory.removeWhere((_, entry) => _isExpired(entry));
     _memory.remove(key);
+    final timestamp = savedAt ?? DateTime.now().millisecondsSinceEpoch;
     _memory[key] = _CacheEntry(
       lesson: lesson,
-      savedAt: savedAt ?? DateTime.now().millisecondsSinceEpoch,
+      savedAt: timestamp,
+      lastAccessedAt: timestamp,
     );
     _enforceWarmLimit();
   }
@@ -309,6 +337,7 @@ class LessonMaterialCache {
         _memory[key] = _CacheEntry(
           lesson: entry.lesson.copyWith(imagem: null),
           savedAt: entry.savedAt,
+          lastAccessedAt: entry.lastAccessedAt,
         );
       }
     }
@@ -337,6 +366,7 @@ class LessonMaterialCache {
           for (final entry in _memory.entries) {
             warm[entry.key] = {
               'savedAt': entry.value.savedAt,
+              'lastAccessedAt': entry.value.lastAccessedAt,
               'lesson': _lessonToJsonForCache(entry.value.lesson),
               if (_cold[entry.key] != null) 'cold': _cold[entry.key]!.toJson(),
             };
@@ -356,7 +386,7 @@ class LessonMaterialCache {
   }
 
   bool _isExpired(_CacheEntry entry) {
-    return DateTime.now().millisecondsSinceEpoch - entry.savedAt > ttlMs;
+    return DateTime.now().millisecondsSinceEpoch - entry.lastAccessedAt > ttlMs;
   }
 
   static Map<String, dynamic> _lessonToJsonForCache(CompleteLesson lesson) {

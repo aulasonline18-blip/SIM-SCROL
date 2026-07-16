@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +17,7 @@ import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
+import 'package:sim_mobile/sim/lesson/ready_window_worker.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
@@ -93,6 +95,49 @@ class FailingT02Client implements T02LessonClient {
   Future<T02LessonMaterial> completeLesson(T02LessonRequest request) {
     calls += 1;
     throw StateError(error);
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
+}
+
+class BlockingT02Client implements T02LessonClient {
+  BlockingT02Client();
+
+  final firstCallStarted = Completer<void>();
+  final release = Completer<void>();
+  int calls = 0;
+  final requests = <T02LessonRequest>[];
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) async {
+    calls += 1;
+    requests.add(request);
+    if (!firstCallStarted.isCompleted) firstCallStarted.complete();
+    await release.future;
+    return T02LessonMaterial(
+      explanation: 'Explicacao bloqueada de ${request.item}',
+      question: 'Pergunta bloqueada?',
+      options: const {
+        AnswerLetter.A: 'A certa',
+        AnswerLetter.B: 'B errada',
+        AnswerLetter.C: 'C errada',
+      },
+      correctAnswer: AnswerLetter.A,
+      whyCorrect: 'Porque sim.',
+      whyWrong: null,
+      generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
+      source: 'blocking-t02',
+    );
   }
 
   @override
@@ -436,7 +481,63 @@ StudentLearningState _stateWithCurriculum() {
   );
 }
 
+StudentLearningState _stateWithFiveItems() {
+  final items = List<CurriculumItem>.generate(
+    5,
+    (index) =>
+        CurriculumItem(marker: 'M${index + 1}', text: 'Item ${index + 1}'),
+  );
+  return StudentLearningState.empty(
+    lessonLocalId: 'cyber-offline-warm',
+  ).copyWith(
+    profile: const StudentProfile(
+      objetivo: 'Objetivo offline',
+      stableLang: 'pt',
+      academicLevel: 'fundamental',
+    ),
+    curriculum: StudentCurriculum(
+      topic: 'Objetivo offline',
+      totalItems: 5,
+      generatedAt: null,
+      provisional: false,
+      items: items,
+    ),
+    current: const LessonCurrent(
+      itemIdx: 0,
+      marker: 'M1',
+      layer: LessonLayer.l1,
+      amparoLvl: 0,
+    ),
+    progress: const LessonProgress(
+      itemIdx: 0,
+      layer: LessonLayer.l1,
+      erros: 0,
+      amparoLvl: 0,
+      historia: [],
+      mainAdvances: 0,
+      concluidos: [],
+      pendentesMarkers: [],
+      totalItems: 5,
+      pctAvanco: 0,
+    ),
+  );
+}
+
 void main() {
+  test('M7 app code does not call legacy server-classroom slot route', () {
+    final offenders = <String>[];
+    for (final entity in Directory('lib').listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+      final source = entity.readAsStringSync();
+      if (source.contains('/api/server-classroom/slot') ||
+          source.contains('server-classroom/slot')) {
+        offenders.add(entity.path);
+      }
+    }
+
+    expect(offenders, isEmpty);
+  });
+
   test('LessonMaterialCache keeps only three living lessons', () {
     final cache = LessonMaterialCache(maxLessons: 3);
     for (var i = 0; i < 4; i++) {
@@ -508,6 +609,299 @@ void main() {
       );
     },
   );
+
+  test(
+    'M7 warm offline cache keeps 15 experiences without reducing hot window',
+    () {
+      final cache = LessonMaterialCache();
+      final hotKeys = <String>{'k0', 'k1', 'k2', 'k3'};
+      for (var i = 0; i < 15; i++) {
+        cache.put(
+          'k$i',
+          CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Exp $i',
+              question: 'Pergunta $i?',
+              options: const {
+                AnswerLetter.A: 'A',
+                AnswerLetter.B: 'B',
+                AnswerLetter.C: 'C',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: null,
+            audioText: 'Exp $i. Pergunta $i?',
+          ),
+        );
+      }
+      cache.protectWarmKeys(hotKeys);
+
+      expect(cache.warmEntryCount, 15);
+      for (final key in hotKeys) {
+        expect(cache.peek(key), isNotNull, reason: key);
+      }
+    },
+  );
+
+  test(
+    'M7 background ready window fills warm cache without expanding hot state window',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-offline-warm': _stateWithFiveItems()},
+      );
+      final t02 = FakeT02Client();
+      final cache = LessonMaterialCache();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: cache,
+        bus: LessonEventBus(),
+      );
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      );
+
+      final result = await engine.runDopamineReadyWindowFromStudentState(
+        lessonLocalId: 'cyber-offline-warm',
+        source: 'm7-offline-warm-test',
+        maxSlots: 15,
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        marker: 'M1',
+        topic: 'Objetivo offline',
+      );
+
+      expect(result, hasLength(15));
+      expect(result.every((ready) => ready), isTrue);
+      expect(cache.warmEntryCount, 15);
+      expect(
+        service.read('cyber-offline-warm')?.readyLessonMaterials,
+        hasLength(4),
+      );
+      expect(t02.calls, 15);
+    },
+  );
+
+  test('M7 slow warm fill does not block hot four-slot window', () async {
+    final service = StudentLearningStateService(
+      seed: {'cyber-offline-warm': _stateWithFiveItems()},
+    );
+    final cache = LessonMaterialCache();
+    final seedT02 = FakeT02Client();
+    final seedOrchestrator = LessonOrchestrator(
+      t02Client: seedT02,
+      cache: cache,
+      bus: LessonEventBus(),
+    );
+    final seedEngine = DopamineReadyWindowEngine(
+      service: service,
+      orchestrator: seedOrchestrator,
+    );
+    final seedHot = await seedEngine.runDopamineReadyWindowFromStudentState(
+      lessonLocalId: 'cyber-offline-warm',
+      source: 'm7-hot-seed',
+      maxSlots: 4,
+      itemIdx: 0,
+      layer: LessonLayer.l1,
+      marker: 'M1',
+      topic: 'Objetivo offline',
+    );
+    expect(seedHot, hasLength(4));
+    expect(seedHot.every((ready) => ready), isTrue);
+    expect(seedT02.calls, 4);
+    expect(cache.warmEntryCount, 4);
+    expect(
+      service.read('cyber-offline-warm')?.readyLessonMaterials,
+      hasLength(4),
+    );
+
+    final t02 = BlockingT02Client();
+    final orchestrator = LessonOrchestrator(
+      t02Client: t02,
+      cache: cache,
+      bus: LessonEventBus(),
+    );
+    final engine = DopamineReadyWindowEngine(
+      service: service,
+      orchestrator: orchestrator,
+    );
+
+    final warm = engine.runDopamineReadyWindowFromStudentState(
+      lessonLocalId: 'cyber-offline-warm',
+      source: 'm7-warm-slow',
+      maxSlots: 15,
+      itemIdx: 0,
+      layer: LessonLayer.l1,
+      marker: 'M1',
+      topic: 'Objetivo offline',
+    );
+    await t02.firstCallStarted.future;
+
+    final hot = await engine
+        .runDopamineReadyWindowFromStudentState(
+          lessonLocalId: 'cyber-offline-warm',
+          source: 'm7-hot-after-warm',
+          maxSlots: 4,
+          itemIdx: 0,
+          layer: LessonLayer.l1,
+          marker: 'M1',
+          topic: 'Objetivo offline',
+        )
+        .timeout(const Duration(milliseconds: 200));
+
+    expect(hot, hasLength(4));
+    expect(hot.every((ready) => ready), isTrue);
+    expect(
+      service.read('cyber-offline-warm')?.readyLessonMaterials,
+      hasLength(4),
+    );
+    expect(t02.calls, 1);
+
+    t02.release.complete();
+    final warmResult = await warm;
+    expect(warmResult, hasLength(15));
+    expect(cache.warmEntryCount, 15);
+  });
+
+  test('M7 worker active hot job does not wait for running warm job', () async {
+    final service = StudentLearningStateService(
+      seed: {
+        'cyber-worker':
+            StudentLearningState.empty(lessonLocalId: 'cyber-worker').copyWith(
+              queuedActions: [
+                {
+                  'job_id': 'warm-job',
+                  'type': 'PREPARE_READY_WINDOW',
+                  'status': 'queued',
+                  'idempotency_key': 'warm',
+                  'priority': 'background',
+                  'source': 'warm-offline-cache',
+                  'payload': {
+                    'maxSlots': 15,
+                    'itemIdx': 0,
+                    'layer': LessonLayer.l1.value,
+                    'marker': 'M1',
+                  },
+                  'created_at': 1,
+                  'started_at': null,
+                  'finished_at': null,
+                  'error': null,
+                  'attempts': 0,
+                  'max_attempts': 3,
+                  'next_retry_at': null,
+                },
+              ],
+            ),
+      },
+    );
+    final warmStarted = Completer<void>();
+    final releaseWarm = Completer<void>();
+    final processed = <String>[];
+    final worker = ReadyWindowWorker(
+      service: service,
+      processor:
+          ({
+            required lessonLocalId,
+            required source,
+            maxSlots,
+            returnMode = false,
+            itemIdx,
+            layer,
+            marker,
+            topic,
+          }) async {
+            processed.add('$source:$maxSlots');
+            if (source.contains('warm-offline-cache')) {
+              if (!warmStarted.isCompleted) warmStarted.complete();
+              await releaseWarm.future;
+            }
+            return List<bool>.filled(maxSlots ?? 4, true);
+          },
+    );
+
+    final warm = worker.drainReadyWindowJobs('cyber-worker');
+    await warmStarted.future;
+
+    service.mutate('cyber-worker', (state) {
+      return state.copyWith(
+        queuedActions: [
+          ...state.queuedActions,
+          {
+            'job_id': 'hot-job',
+            'type': 'PREPARE_READY_WINDOW',
+            'status': 'queued',
+            'idempotency_key': 'hot',
+            'priority': 'active',
+            'source': 'hot-visible-window',
+            'payload': {
+              'maxSlots': 4,
+              'itemIdx': 0,
+              'layer': LessonLayer.l1.value,
+              'marker': 'M1',
+            },
+            'created_at': 2,
+            'started_at': null,
+            'finished_at': null,
+            'error': null,
+            'attempts': 0,
+            'max_attempts': 3,
+            'next_retry_at': null,
+          },
+        ],
+      );
+    });
+
+    final hot = await worker
+        .drainReadyWindowJobs('cyber-worker')
+        .timeout(const Duration(milliseconds: 200));
+
+    expect(hot, hasLength(4));
+    expect(processed, contains('job:warm-offline-cache:15'));
+    expect(processed, contains('job:hot-visible-window:4'));
+    expect(
+      service
+          .read('cyber-worker')!
+          .queuedActions
+          .firstWhere((job) => job['job_id'] == 'hot-job')['status'],
+      'done',
+    );
+
+    releaseWarm.complete();
+    await warm;
+  });
+
+  test('M7 warm cache expires by lastAccessedAt after seven days', () async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final eightDaysAgo = now - const Duration(days: 8).inMilliseconds;
+    final sixDaysAgo = now - const Duration(days: 6).inMilliseconds;
+    Map<String, Object?> lessonJson(String text) => {
+      'savedAt': eightDaysAgo,
+      'lastAccessedAt': text == 'fresh' ? sixDaysAgo : eightDaysAgo,
+      'lesson': {
+        'conteudo': {
+          'explanation': 'Exp $text',
+          'question': 'Pergunta $text?',
+          'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+          'correct_answer': 'A',
+        },
+        'audioText': 'Exp $text. Pergunta $text?',
+      },
+    };
+    SharedPreferences.setMockInitialValues({
+      'sim-lesson-text-cache-v1': jsonEncode({
+        'version': 2,
+        'warm': {'fresh': lessonJson('fresh'), 'expired': lessonJson('old')},
+        'cold': const {},
+      }),
+    });
+
+    final cache = LessonMaterialCache();
+    await cache.hydrate();
+
+    expect(cache.peek('fresh')?.conteudo.question, 'Pergunta fresh?');
+    expect(cache.peek('expired'), isNull);
+    expect(cache.coldEntry('expired'), isNotNull);
+  });
 
   test(
     'M-EXP3-B: expired warm experience demotes to cold index without heavy media',
@@ -1820,7 +2214,11 @@ void main() {
     final event = state?.events.singleWhere(
       (event) => event.type == 'CACHE_WINDOW_UPDATED',
     );
-    expect(state?.queuedActions, hasLength(1));
+    expect(state?.queuedActions, hasLength(2));
+    expect(
+      state?.queuedActions.map((job) => job['payload']?['maxSlots']),
+      containsAll([4, 15]),
+    );
     expect(event?.payload['currentItemIdx'], 0);
     expect(event?.payload['currentLayer'], 1);
     expect(event?.payload['windowSize'], 4);
@@ -1946,10 +2344,22 @@ void main() {
     }
 
     final state = service.read('cyber-window-dedupe');
-    expect(state?.queuedActions, hasLength(1));
+    expect(state?.queuedActions, hasLength(2));
     expect(
-      state?.queuedActions.single['idempotency_key'],
+      state?.queuedActions.firstWhere(
+        (job) =>
+            job['idempotency_key'] ==
+            'ready-window:cyber-window-dedupe:0:M1:L1',
+      )['idempotency_key'],
       'ready-window:cyber-window-dedupe:0:M1:L1',
+    );
+    expect(
+      state?.queuedActions.firstWhere(
+        (job) =>
+            job['idempotency_key'] ==
+            'warm-ready-window:cyber-window-dedupe:0:M1:L1:slots-15',
+      )['payload']?['maxSlots'],
+      15,
     );
     expect(
       state?.events.where((event) => event.type == 'CACHE_WINDOW_UPDATED'),
@@ -2010,9 +2420,16 @@ void main() {
 
       final state = service.read('cyber-loaded-window');
       expect(position.teoriaPronta, isTrue);
-      expect(state?.queuedActions, hasLength(1));
-      expect(state?.queuedActions.single['type'], 'PREPARE_READY_WINDOW');
-      expect(state?.queuedActions.single['source'], 'cyber.aula.loaded-window');
+      expect(state?.queuedActions, hasLength(2));
+      final hotJob = state?.queuedActions.firstWhere(
+        (job) => job['source'] == 'cyber.aula.loaded-window',
+      );
+      final warmJob = state?.queuedActions.firstWhere(
+        (job) => job['source'] == 'cyber.aula.loaded-window.warm-offline-cache',
+      );
+      expect(hotJob?['type'], 'PREPARE_READY_WINDOW');
+      expect(hotJob?['payload']?['maxSlots'], 4);
+      expect(warmJob?['payload']?['maxSlots'], 15);
       final event = state?.events.lastWhere(
         (event) => event.type == 'CACHE_WINDOW_UPDATED',
       );

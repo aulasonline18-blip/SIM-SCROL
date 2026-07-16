@@ -255,7 +255,7 @@ class StudentLessonMaterialService {
           'itemIdx': itemIdx,
           'marker': marker,
           'layer': layer.value,
-          'maxSlots': localLessonTraySize,
+          'maxSlots': offlineWarmCacheSize,
         },
       ),
     );
@@ -264,7 +264,7 @@ class StudentLessonMaterialService {
           .runDopamineReadyWindowFromStudentState(
             lessonLocalId: lessonLocalId,
             source: source,
-            maxSlots: localLessonTraySize,
+            maxSlots: offlineWarmCacheSize,
             itemIdx: itemIdx,
             layer: layer,
             marker: marker,
@@ -336,6 +336,45 @@ class StudentLessonMaterialService {
           'payload': {
             'maxSlots': localLessonTraySize,
             'reason': reason ?? 'lesson_window_visible',
+            'itemIdx': itemIdx,
+            'layer': layer.value,
+            'marker': marker,
+            'topic': topic,
+          },
+          'created_at': now,
+          'started_at': null,
+          'finished_at': null,
+          'error': null,
+          'attempts': 0,
+          'max_attempts': 3,
+          'next_retry_at': null,
+        });
+      }
+      final warmIdempotencyKey = [
+        'warm-ready-window',
+        lessonLocalId,
+        itemIdx,
+        marker ?? '',
+        'L${layer.value}',
+        'slots-$offlineWarmCacheSize',
+      ].join(':');
+      final hasWarmDuplicate = jobs.any(
+        (job) =>
+            job['type'] == 'PREPARE_READY_WINDOW' &&
+            job['idempotency_key'] == warmIdempotencyKey &&
+            (job['status'] == 'queued' || job['status'] == 'running'),
+      );
+      if (!hasWarmDuplicate) {
+        jobs.add({
+          'job_id': 'PREPARE_READY_WINDOW:$warmIdempotencyKey:$now',
+          'type': 'PREPARE_READY_WINDOW',
+          'status': 'queued',
+          'idempotency_key': warmIdempotencyKey,
+          'priority': 'background',
+          'source': '$source.warm-offline-cache',
+          'payload': {
+            'maxSlots': offlineWarmCacheSize,
+            'reason': 'warm_offline_cache_fill',
             'itemIdx': itemIdx,
             'layer': layer.value,
             'marker': marker,

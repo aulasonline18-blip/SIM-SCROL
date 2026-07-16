@@ -9,6 +9,7 @@ import 'lesson_models.dart';
 import 'lesson_orchestrator.dart';
 
 const int localLessonTraySize = 4;
+const int offlineWarmCacheSize = 15;
 
 class DopamineWindowItem {
   const DopamineWindowItem({
@@ -63,6 +64,7 @@ class DopamineReadyWindowEngine {
       LessonLayer layer,
     )
     buildParams,
+    int maxSlots = localLessonTraySize,
   }) {
     final slots = <DopamineReadySlot>[];
     ({int itemIdx, LessonLayer layer})? cursor = (
@@ -72,14 +74,14 @@ class DopamineReadyWindowEngine {
           : currentLayer,
     );
 
-    for (final slotName in const ['A', 'B', 'C', 'D']) {
+    for (var slotIndex = 0; slotIndex < maxSlots; slotIndex++) {
       if (cursor == null) break;
       if (cursor.itemIdx >= items.length) break;
       final item = items[cursor.itemIdx];
       final params = buildParams(item, cursor.layer);
       slots.add(
         DopamineReadySlot(
-          slot: slotName,
+          slot: _slotName(slotIndex),
           itemIdx: cursor.itemIdx,
           marker: item.marker,
           layer: cursor.layer,
@@ -274,7 +276,16 @@ class DopamineReadyWindowEngine {
     String? marker,
     String? topic,
   }) {
-    final existing = _inflight[lessonLocalId];
+    final inflightKey = _inflightKey(
+      lessonLocalId: lessonLocalId,
+      source: source,
+      maxSlots: maxSlots,
+      returnMode: returnMode,
+      itemIdx: itemIdx,
+      layer: layer,
+      marker: marker,
+    );
+    final existing = _inflight[inflightKey];
     if (existing != null) return existing;
     final promise = () async {
       try {
@@ -289,10 +300,10 @@ class DopamineReadyWindowEngine {
           topic: topic,
         );
       } finally {
-        _inflight.remove(lessonLocalId);
+        _inflight.remove(inflightKey);
       }
     }();
-    _inflight[lessonLocalId] = promise;
+    _inflight[inflightKey] = promise;
     return promise;
   }
 
@@ -363,6 +374,7 @@ class DopamineReadyWindowEngine {
         itemIdx: items.indexOf(item),
         pedagogicalEnvelope: _pedagogicalEnvelope(profile),
       ),
+      maxSlots: maxSlots ?? (returnMode ? 2 : localLessonTraySize),
     );
 
     return maintainDopamineReadyWindow(
@@ -373,6 +385,39 @@ class DopamineReadyWindowEngine {
       returnMode: returnMode,
       maxSlots: maxSlots,
     );
+  }
+
+  String _slotName(int index) {
+    const hot = ['A', 'B', 'C', 'D'];
+    if (index >= 0 && index < hot.length) return hot[index];
+    return 'W${index + 1}';
+  }
+
+  String _inflightKey({
+    required String lessonLocalId,
+    required String source,
+    required int? maxSlots,
+    required bool returnMode,
+    required int? itemIdx,
+    required LessonLayer? layer,
+    required String? marker,
+  }) {
+    return [
+      lessonLocalId,
+      'slots-${maxSlots ?? (returnMode ? 2 : localLessonTraySize)}',
+      'item-${itemIdx ?? 'state'}',
+      'layer-${layer?.value ?? 'state'}',
+      'marker-${marker ?? 'state'}',
+      'return-$returnMode',
+      'source-$source',
+    ].join('|');
+  }
+
+  bool _isHotSlot(DopamineReadySlot slot) {
+    return slot.slot == 'A' ||
+        slot.slot == 'B' ||
+        slot.slot == 'C' ||
+        slot.slot == 'D';
   }
 
   ({int itemIdx, LessonLayer layer})? _nextSlot(
@@ -415,6 +460,7 @@ class DopamineReadyWindowEngine {
     required CompleteLesson lesson,
     required String model,
   }) {
+    if (!_isHotSlot(slot)) return;
     final key = preparedLessonMaterialKey(
       slot.itemIdx,
       slot.marker,

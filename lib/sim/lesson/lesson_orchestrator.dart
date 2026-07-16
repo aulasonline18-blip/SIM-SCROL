@@ -46,7 +46,11 @@ class LessonOrchestrator {
 
   int get coldCacheEntryCount => cache.coldEntryCount;
 
-  CompleteLesson? peekCachedLesson(String key) => cache.peek(key);
+  CompleteLesson? peekCachedLesson(String key) {
+    final lesson = cache.peek(key);
+    if (lesson != null) cache.touch(key);
+    return lesson;
+  }
 
   void protectWarmCachedLessons(Iterable<String> keys) {
     cache.protectWarmKeys(keys);
@@ -62,6 +66,7 @@ class LessonOrchestrator {
     final key = lessonKeyFor(params);
     final cached = cache.peek(key);
     if (cached != null) {
+      cache.touch(key);
       if (!deferMedia) {
         queueAudioForReadyLesson(params, cached);
         queueImageForReadyLesson(params, cached);

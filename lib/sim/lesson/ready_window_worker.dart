@@ -94,6 +94,9 @@ class ReadyWindowWorker {
   Future<List<bool>> drainReadyWindowJobs(String lessonLocalId) {
     final existing = _inflight[lessonLocalId];
     if (existing != null) {
+      if (_hasQueuedActiveReadyWindow(lessonLocalId)) {
+        return _dodrainReadyWindowJobs(lessonLocalId);
+      }
       _pendingDrain.add(lessonLocalId);
       return existing;
     }
@@ -106,6 +109,19 @@ class ReadyWindowWorker {
         drainReadyWindowJobs(lessonLocalId);
       }
     });
+  }
+
+  bool _hasQueuedActiveReadyWindow(String lessonLocalId) {
+    final state = service.read(lessonLocalId);
+    if (state == null) return false;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return state.queuedActions.any(
+      (job) =>
+          job['type'] == 'PREPARE_READY_WINDOW' &&
+          job['status'] == 'queued' &&
+          job['priority'] == 'active' &&
+          ((job['next_retry_at'] as num?)?.toInt() ?? 0) <= now,
+    );
   }
 
   Future<List<bool>> _dodrainReadyWindowJobs(String lessonLocalId) async {
