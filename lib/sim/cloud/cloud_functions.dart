@@ -8,6 +8,7 @@ class PersistStudentStateInput {
     required this.clientUpdatedAt,
     required this.clientScore,
     this.schemaVersion = 1,
+    this.stateJson,
   });
 
   final String lessonLocalId;
@@ -15,11 +16,12 @@ class PersistStudentStateInput {
   final int clientUpdatedAt;
   final int clientScore;
   final int schemaVersion;
+  final JsonMap? stateJson;
 
   JsonMap toJson() => {
     'lessonLocalId': lessonLocalId,
     'source': 'software',
-    'state': state.toJson(),
+    'state': stateJson ?? state.toJson(),
     'clientUpdatedAt': clientUpdatedAt,
     'clientScore': clientScore,
     'schemaVersion': schemaVersion,

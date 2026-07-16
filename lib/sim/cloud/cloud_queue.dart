@@ -154,7 +154,8 @@ class CloudQueue with WidgetsBindingObserver {
         _remove(lessonLocalId);
         return;
       }
-      final contentHash = stableHash(snap);
+      final remoteSnap = snap.toRemoteVaultState();
+      final contentHash = stableHash(remoteSnap);
       if (storage.readLastHashes()[lessonLocalId] == contentHash) {
         _remove(lessonLocalId);
         return;
@@ -162,10 +163,11 @@ class CloudQueue with WidgetsBindingObserver {
       final result = await cloudFunctions.persistStudentState(
         PersistStudentStateInput(
           lessonLocalId: lessonLocalId,
-          state: snap,
+          state: remoteSnap,
           clientUpdatedAt: snap.updatedAt,
-          clientScore: scoreOfStudentLearningState(snap),
-          schemaVersion: snap.stateVersion,
+          clientScore: scoreOfStudentLearningState(remoteSnap),
+          schemaVersion: remoteSnap.stateVersion,
+          stateJson: snap.toRemoteVaultJson(),
         ),
         session,
       );

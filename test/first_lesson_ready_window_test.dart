@@ -1183,40 +1183,43 @@ void main() {
     },
   );
 
-  test('DopamineReadyWindowEngine prepares A/B/C/D slots from state', () async {
-    final service = StudentLearningStateService(
-      seed: {'cyber-ready': _stateWithCurriculum()},
-    );
-    final t02 = FakeT02Client();
-    final orchestrator = LessonOrchestrator(
-      t02Client: t02,
-      cache: LessonMaterialCache(),
-      bus: LessonEventBus(),
-    );
-    final engine = DopamineReadyWindowEngine(
-      service: service,
-      orchestrator: orchestrator,
-    );
+  test(
+    'DopamineReadyWindowEngine prepares A/B/C/D live window from state',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-ready': _stateWithCurriculum()},
+      );
+      final t02 = FakeT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      );
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      );
 
-    final result = await engine.runDopamineReadyWindowFromStudentState(
-      lessonLocalId: 'cyber-ready',
-      source: 'test',
-      maxSlots: 4,
-    );
+      final result = await engine.runDopamineReadyWindowFromStudentState(
+        lessonLocalId: 'cyber-ready',
+        source: 'test',
+        maxSlots: 4,
+      );
 
-    expect(result, [true, true, true, true]);
-    expect(t02.calls, 4);
-    expect(service.read('cyber-ready')?.readyLessonMaterials.length, 4);
-    final prepared = service.read('cyber-ready')!.readyLessonMaterials;
-    for (final material in prepared.values) {
-      expect(material['explanation'], isNotEmpty);
-      expect(material['question'], isNotEmpty);
-      expect(material['options'], isA<Map>());
-      expect(material['correct_answer'], 'A');
-      expect(material['for_itemIdx'], isA<int>());
-      expect(material['for_layer'], isA<String>());
-    }
-  });
+      expect(result, [true, true, true, true]);
+      expect(t02.calls, 4);
+      expect(service.read('cyber-ready')?.readyLessonMaterials.length, 4);
+      final prepared = service.read('cyber-ready')!.readyLessonMaterials;
+      for (final material in prepared.values) {
+        expect(material['explanation'], isNotEmpty);
+        expect(material['question'], isNotEmpty);
+        expect(material['options'], isA<Map>());
+        expect(material['correct_answer'], 'A');
+        expect(material['for_itemIdx'], isA<int>());
+        expect(material['for_layer'], isA<String>());
+      }
+    },
+  );
 
   test(
     'M-EXP1: slow image refresh for current slot does not block text slots B/C/D',
@@ -1830,50 +1833,86 @@ void main() {
     ]);
   });
 
-  test(
-    'ready window from L3 keeps next item L1/L2/L3 possible experiences',
-    () {
-      final service = StudentLearningStateService();
-      service.ensure(lessonLocalId: 'cyber-window-l3');
-      final orchestrator = LessonOrchestrator(
-        t02Client: FakeT02Client(),
-        cache: LessonMaterialCache(),
-        bus: LessonEventBus(),
-      );
-      final materialService = StudentLessonMaterialService(
-        stateService: service,
+  test('ready window from L3 keeps current plus next three positions', () {
+    final service = StudentLearningStateService();
+    service.ensure(lessonLocalId: 'cyber-window-l3');
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
         orchestrator: orchestrator,
-        readyWindowEngine: DopamineReadyWindowEngine(
-          service: service,
-          orchestrator: orchestrator,
-        ),
-      );
+      ),
+    );
 
-      materialService.maintainLessonReadyWindow(
-        lessonLocalId: 'cyber-window-l3',
-        topic: 'Funções',
-        itemIdx: 0,
-        layer: LessonLayer.l3,
-        source: 'test-window-l3',
-        items: const [
-          DopamineWindowItem(text: 'Item 1', marker: 'M1'),
-          DopamineWindowItem(text: 'Item 2', marker: 'M2'),
-        ],
-      );
+    materialService.maintainLessonReadyWindow(
+      lessonLocalId: 'cyber-window-l3',
+      topic: 'Funções',
+      itemIdx: 0,
+      layer: LessonLayer.l3,
+      source: 'test-window-l3',
+      items: const [
+        DopamineWindowItem(text: 'Item 1', marker: 'M1'),
+        DopamineWindowItem(text: 'Item 2', marker: 'M2'),
+      ],
+    );
 
-      final event = service
-          .read('cyber-window-l3')
-          ?.events
-          .singleWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
-      expect(event?.payload['windowSize'], 4);
-      expect(event?.payload['windowMarkers'], [
-        {'marker': 'M1', 'layer': 3, 'offset': 0},
-        {'marker': 'M2', 'layer': 1, 'offset': 1},
-        {'marker': 'M2', 'layer': 2, 'offset': 2},
-        {'marker': 'M2', 'layer': 3, 'offset': 3},
-      ]);
-    },
-  );
+    final event = service
+        .read('cyber-window-l3')
+        ?.events
+        .singleWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
+    expect(event?.payload['windowSize'], 4);
+    expect(event?.payload['windowMarkers'], [
+      {'marker': 'M1', 'layer': 3, 'offset': 0},
+      {'marker': 'M2', 'layer': 1, 'offset': 1},
+      {'marker': 'M2', 'layer': 2, 'offset': 2},
+      {'marker': 'M2', 'layer': 3, 'offset': 3},
+    ]);
+  });
+
+  test('ready window accepts fewer than four only at real curriculum end', () {
+    final service = StudentLearningStateService();
+    service.ensure(lessonLocalId: 'cyber-window-end');
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      ),
+    );
+
+    materialService.maintainLessonReadyWindow(
+      lessonLocalId: 'cyber-window-end',
+      topic: 'Funções',
+      itemIdx: 1,
+      layer: LessonLayer.l3,
+      source: 'test-window-end',
+      items: const [
+        DopamineWindowItem(text: 'Item 1', marker: 'M1'),
+        DopamineWindowItem(text: 'Item 2', marker: 'M2'),
+      ],
+    );
+
+    final event = service
+        .read('cyber-window-end')
+        ?.events
+        .singleWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
+    expect(event?.payload['windowSize'], 1);
+    expect(event?.payload['windowMarkers'], [
+      {'marker': 'M2', 'layer': 3, 'offset': 0},
+    ]);
+  });
 
   test('maintainLessonReadyWindow does not duplicate active jobs', () {
     final service = StudentLearningStateService();
@@ -1919,7 +1958,7 @@ void main() {
   });
 
   test(
-    'loaded active lesson keeps current plus three next slots queued',
+    'loaded active lesson keeps current plus next three slots queued',
     () async {
       final service = StudentLearningStateService();
       service.ensure(lessonLocalId: 'cyber-loaded-window');

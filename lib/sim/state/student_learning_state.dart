@@ -841,6 +841,137 @@ class StudentAudioState {
       error: error ?? this.error,
     );
   }
+
+  StudentAudioState copyForRemoteVault() {
+    return StudentAudioState(
+      status: status,
+      enabled: enabled,
+      playing: false,
+      updatedAt: updatedAt,
+      lessonKey: lessonKey,
+      language: language,
+      voice: voice,
+      cacheKey: cacheKey,
+      audioUrlHead: null,
+      error: error,
+    );
+  }
+}
+
+const Set<String> _remoteVaultLessonContentKeys = {
+  'explanation',
+  'explicacao',
+  'conteudo',
+  'question',
+  'pergunta',
+  'options',
+  'alternatives',
+  'alternativas',
+  'answer',
+  'correctAnswer',
+  'correct_answer',
+  'feedback',
+  'whyCorrect',
+  'whyWrong',
+  'image',
+  'imagem',
+  'imageData',
+  'dataUrl',
+  'audio',
+  'audioData',
+  'audioText',
+  'audioUrl',
+  'speakableText',
+};
+
+StudentLearningEvent _sanitizeRemoteVaultEvent(StudentLearningEvent event) {
+  final lessonPayload = _remoteVaultEventMayCarryLessonContent(event.type);
+  return StudentLearningEvent(
+    type: event.type,
+    ts: event.ts,
+    payload: _sanitizeRemoteVaultMap(
+      event.payload,
+      removeTextContentKey: lessonPayload,
+    ),
+  );
+}
+
+bool _remoteVaultEventMayCarryLessonContent(String type) {
+  final normalized = type.toUpperCase();
+  return normalized.contains('LESSON') ||
+      normalized.contains('MATERIAL') ||
+      normalized.contains('IMAGE') ||
+      normalized.contains('AUDIO') ||
+      normalized.contains('VISUAL') ||
+      normalized.contains('T02');
+}
+
+JsonMap _sanitizeRemoteVaultMap(
+  JsonMap input, {
+  bool removeTextContentKey = false,
+}) {
+  final output = <String, dynamic>{};
+  for (final entry in input.entries) {
+    if (_remoteVaultLessonContentKeys.contains(entry.key)) continue;
+    if (removeTextContentKey && entry.key == 'text') continue;
+    output[entry.key] = _sanitizeRemoteVaultValue(
+      entry.value,
+      removeTextContentKey: removeTextContentKey,
+    );
+  }
+  return output;
+}
+
+Object? _sanitizeRemoteVaultValue(
+  Object? value, {
+  bool removeTextContentKey = false,
+}) {
+  if (value is Map) {
+    return _sanitizeRemoteVaultMap(
+      JsonMap.from(value),
+      removeTextContentKey: removeTextContentKey,
+    );
+  }
+  if (value is List) {
+    return value
+        .map(
+          (item) => _sanitizeRemoteVaultValue(
+            item,
+            removeTextContentKey: removeTextContentKey,
+          ),
+        )
+        .toList(growable: false);
+  }
+  return value;
+}
+
+JsonMap? _lightweightLessonMaterialReference(JsonMap? material) {
+  if (material == null) return null;
+  final light = <String, dynamic>{};
+  for (final key in const [
+    'lessonLocalId',
+    'lessonKey',
+    'materialKey',
+    'status',
+    'text_status',
+    'for_itemIdx',
+    'for_marker',
+    'for_layer',
+    'rootLessonLocalId',
+    'partLessonLocalId',
+    'partNumber',
+    'globalItemNumber',
+    'localItemIndex',
+    'itemIdx',
+    'marker',
+    'layer',
+    'model',
+  ]) {
+    final value = material[key];
+    if (value != null) light[key] = value;
+  }
+  light['contentStripped'] = true;
+  return light;
 }
 
 class StudentSyncStatus {
@@ -1074,6 +1205,50 @@ class StudentLearningState {
     'audio_typed': audio.toJson(),
     'sync_status_typed': syncStatus?.toJson(),
   };
+
+  StudentLearningState toRemoteVaultState() {
+    final lightMaterial = _lightweightLessonMaterialReference(
+      currentLessonMaterial,
+    );
+    return StudentLearningState(
+      stateVersion: stateVersion,
+      lessonLocalId: lessonLocalId,
+      lessonCloudId: lessonCloudId,
+      userId: userId,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      profile: profile,
+      curriculum: curriculum,
+      curriculumStatus: curriculumStatus,
+      current: current,
+      progress: progress,
+      attempts: attempts,
+      events: events.map(_sanitizeRemoteVaultEvent).toList(growable: false),
+      entry: entry,
+      placement: placement == null ? null : _sanitizeRemoteVaultMap(placement!),
+      auxRooms: auxRooms == null ? null : _sanitizeRemoteVaultMap(auxRooms!),
+      currentLessonMaterial: lightMaterial,
+      readyLessonMaterials: const {},
+      queuedActions: queuedActions
+          .map(_sanitizeRemoteVaultMap)
+          .toList(growable: false),
+      inflightJobs: inflightJobs
+          .map(_sanitizeRemoteVaultMap)
+          .toList(growable: false),
+      truth: truth,
+      audio: audio.copyForRemoteVault(),
+      syncStatus: syncStatus,
+      extra: _sanitizeRemoteVaultMap(extra),
+    );
+  }
+
+  JsonMap toRemoteVaultJson() {
+    final json = toRemoteVaultState().toJson()
+      ..remove('audio_typed')
+      ..remove('current_lesson_material')
+      ..remove('ready_lesson_materials');
+    return _sanitizeRemoteVaultMap(json);
+  }
 
   factory StudentLearningState.fromJson(JsonMap json) {
     final extra = JsonMap.of(json)

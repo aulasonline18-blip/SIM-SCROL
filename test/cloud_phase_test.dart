@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/cloud/cloud_functions.dart';
 import 'package:sim_mobile/sim/cloud/cloud_queue.dart';
@@ -87,7 +89,9 @@ class FakeCloudFunctions implements StudentStateCloudFunctions {
     final next = nextPersist;
     nextPersist = null;
     if (next != null) return next;
-    states[input.lessonLocalId] = input.state;
+    states[input.lessonLocalId] = StudentLearningState.fromJson(
+      input.stateJson ?? input.state.toJson(),
+    );
     return PersistStudentStateResult.accepted(
       lessonLocalId: input.lessonLocalId,
       highWaterMark: input.clientScore,
@@ -188,6 +192,183 @@ void main() {
     expect(restored.progress?.layer, LessonLayer.l2);
     expect(restored.auxRooms?['pendingMap'], isA<List>());
   });
+
+  test('remote vault snapshot strips lesson content before sync', () async {
+    final rich =
+        stateWithProgress(
+          id: 'l1',
+          itemIdx: 1,
+          layer: LessonLayer.l2,
+          mainAdvances: 1,
+        ).copyWith(
+          attempts: const [
+            LessonAttempt(
+              marker: 'M1',
+              layer: LessonLayer.l2,
+              letra: AnswerLetter.A,
+              sinal: DecisionSignal.one,
+              correct: true,
+              ts: 7,
+            ),
+          ],
+          currentLessonMaterial: {
+            'explanation': 'Explicacao integral da aula',
+            'question': 'Pergunta integral?',
+            'options': {'A': 'A atual', 'B': 'B atual', 'C': 'C atual'},
+            'correct_answer': 'A',
+            'feedback': 'Feedback integral',
+            'imagem': 'data:image/png;base64,AAA',
+            'audio': {'data': 'audio pesado'},
+            'for_itemIdx': 1,
+            'for_marker': 'M1',
+            'for_layer': 'l2',
+            'text_status': 'ready',
+          },
+          readyLessonMaterials: {
+            '1:M1:l2': {
+              'explanation': 'Preparada',
+              'question': 'Preparada?',
+              'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+              'answer': 'A',
+              'imageData': 'data:image/png;base64,BBB',
+              'audioData': 'base64-audio',
+            },
+          },
+          events: const [
+            StudentLearningEvent(
+              type: 'LESSON_TEXT_READY',
+              ts: 1,
+              payload: {
+                'question': 'Pergunta vazada?',
+                'options': {'A': 'A'},
+                'imageData': 'data:image/png;base64,CCC',
+                'marker': 'M1',
+              },
+            ),
+          ],
+        );
+    final states = StudentLearningStateService(seed: {'l1': rich});
+    final cloud = FakeCloudFunctions();
+    final queue = CloudQueue(
+      storage: MemoryCloudQueueStorage(),
+      stateService: states,
+      sessionProvider: FakeSessionProvider(),
+      cloudFunctions: cloud,
+      now: () => 1000,
+    );
+
+    queue.enqueueStudentStateSync(lessonLocalId: 'l1');
+    await queue.drainQueue();
+
+    final sent = cloud.lastPersistInput!.toJson()['state'] as JsonMap;
+    final encoded = jsonEncode(sent);
+    final curriculum = sent['curriculum'] as JsonMap;
+    final items = curriculum['items'] as List;
+    expect(sent['profile']['objetivo'], 'Matematica');
+    expect(curriculum['topic'], 'Matematica');
+    expect(items[0]['marker'], 'M1');
+    expect(items[0]['text'], 'Item 1');
+    expect(items[1]['marker'], 'M2');
+    expect(items[1]['text'], 'Item 2');
+    expect(sent['progress']['itemIdx'], 1);
+    expect(sent['current']['itemIdx'], 1);
+    expect(sent['attempts'], hasLength(1));
+    expect(sent['readyLessonMaterials'], isEmpty);
+    expect(sent['currentLessonMaterial']['contentStripped'], isTrue);
+    for (final forbidden in const [
+      'explanation',
+      'question',
+      'options',
+      'answer',
+      'feedback',
+      'image',
+      'imagem',
+      'imageData',
+      'audio',
+      'audioData',
+      'Explicacao integral da aula',
+      'Pergunta integral?',
+      'Preparada?',
+    ]) {
+      expect(encoded.contains(forbidden), isFalse, reason: forbidden);
+    }
+    expect(encoded.contains('M1'), isTrue);
+    expect(encoded.contains('progress'), isTrue);
+  });
+
+  test(
+    'cloud queue sends complete curriculum but no prepared lesson content',
+    () async {
+      final rich =
+          stateWithProgress(
+            id: 'l1',
+            itemIdx: 1,
+            layer: LessonLayer.l2,
+            mainAdvances: 1,
+          ).copyWith(
+            currentLessonMaterial: {
+              'lessonKey': 'l1:M2:L2',
+              'text': 'Texto integral de aula nao remoto',
+              'explanation': 'Explicacao remota proibida',
+              'question': 'Pergunta remota proibida?',
+              'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+              'for_itemIdx': 1,
+              'for_marker': 'M2',
+              'for_layer': 'l2',
+            },
+            readyLessonMaterials: {
+              'l1:M2:L2': {
+                'text': 'Texto preparado proibido',
+                'explanation': 'Preparada proibida',
+                'question': 'Preparada proibida?',
+                'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+                'imageData': 'data:image/png;base64,REMOTO',
+              },
+            },
+          );
+      final states = StudentLearningStateService(seed: {'l1': rich});
+      final storage = MemoryCloudQueueStorage();
+      final cloud = FakeCloudFunctions();
+      final queue = CloudQueue(
+        storage: storage,
+        stateService: states,
+        sessionProvider: FakeSessionProvider(),
+        cloudFunctions: cloud,
+        now: () => 1000,
+      );
+
+      queue.enqueueStudentStateSync(lessonLocalId: 'l1');
+      expect(queue.getQueueSnapshot(), contains('l1'));
+      await queue.drainQueue();
+
+      final input = cloud.lastPersistInput!;
+      final sent = input.toJson()['state'] as JsonMap;
+      final curriculum = sent['curriculum'] as JsonMap;
+      final encoded = jsonEncode(sent);
+      expect(input.stateJson, isNotNull);
+      expect(input.clientScore, scoreOfStudentLearningState(input.state));
+      expect(curriculum['items'][0]['text'], 'Item 1');
+      expect(curriculum['items'][1]['text'], 'Item 2');
+      expect(sent['readyLessonMaterials'], isEmpty);
+      expect(sent['currentLessonMaterial']['contentStripped'], isTrue);
+      expect(queue.getQueueSnapshot(), isEmpty);
+      for (final forbidden in const [
+        'Texto integral de aula nao remoto',
+        'Explicacao remota proibida',
+        'Pergunta remota proibida?',
+        'Texto preparado proibido',
+        'Preparada proibida',
+        'data:image/png;base64,REMOTO',
+      ]) {
+        expect(encoded.contains(forbidden), isFalse, reason: forbidden);
+      }
+
+      cloud.nextError = StateError('offline');
+      queue.enqueueStudentStateSync(lessonLocalId: 'l1');
+      await queue.drainQueue();
+      expect(queue.getQueueSnapshot(), contains('l1'));
+    },
+  );
 
   test(
     'cloud queue persists patch and removes it after successful drain',

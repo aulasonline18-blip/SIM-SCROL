@@ -846,7 +846,7 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // T23 – readyWindow com 3 itens → prepara 4 slots
+  // T23 – readyWindow com currículo suficiente → prepara atual + próximas 3
   // -------------------------------------------------------------------------
   test(
     'T23: readyWindow (idx=0,L1) com 3 items → 4 slots preparados',
@@ -863,12 +863,12 @@ void main() {
       final result = await rwe.runDopamineReadyWindowFromStudentState(
         lessonLocalId: 'L1',
         source: 'test-T23',
-        maxSlots: 4,
+        maxSlots: localLessonTraySize,
       );
 
-      expect(result, hasLength(4));
+      expect(result, hasLength(localLessonTraySize));
       expect(result.every((ok) => ok), isTrue);
-      expect(svc.read('L1')?.readyLessonMaterials.length, 4);
+      expect(svc.read('L1')?.readyLessonMaterials.length, localLessonTraySize);
     },
   );
 

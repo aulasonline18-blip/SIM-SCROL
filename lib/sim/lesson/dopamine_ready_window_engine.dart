@@ -8,6 +8,8 @@ import 'lesson_content_validator.dart';
 import 'lesson_models.dart';
 import 'lesson_orchestrator.dart';
 
+const int localLessonTraySize = 4;
+
 class DopamineWindowItem {
   const DopamineWindowItem({
     required this.text,
@@ -98,7 +100,9 @@ class DopamineReadyWindowEngine {
     bool returnMode = false,
     int? maxSlots,
   }) async {
-    final selected = slots.take(maxSlots ?? (returnMode ? 2 : 4)).toList();
+    final selected = slots
+        .take(maxSlots ?? (returnMode ? 2 : localLessonTraySize))
+        .toList();
     orchestrator.protectWarmCachedLessons(
       selected.map((slot) => lessonKeyFor(slot.params)),
     );

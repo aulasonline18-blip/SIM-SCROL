@@ -1099,43 +1099,40 @@ void main() {
     expect(t02.calls, 1);
   });
 
-  test(
-    'M-EXP4 avanco dispara nova janela viva atual mais proximas tres',
-    () async {
-      final service = StudentLearningStateService(
-        seed: {'cyber-class': _classroomState()},
-      );
-      final t02 = FakeClassroomT02();
-      final gate = FakeServerAdvanceGateClient(
-        const ServerAdvanceGateDecision(
-          accepted: true,
-          decision: 'next_layer',
-          reason: 'server_to_l2',
-          nextItemIdx: 0,
-          nextLayer: LessonLayer.l2,
-          highWaterMark: 2,
-          events: [
-            {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
-          ],
-        ),
-      );
-      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
-      await runtime.open(lessonLocalId: 'cyber-class');
+  test('M-EXP4 avanco dispara janela viva atual mais proximas tres', () async {
+    final service = StudentLearningStateService(
+      seed: {'cyber-class': _classroomState()},
+    );
+    final t02 = FakeClassroomT02();
+    final gate = FakeServerAdvanceGateClient(
+      const ServerAdvanceGateDecision(
+        accepted: true,
+        decision: 'next_layer',
+        reason: 'server_to_l2',
+        nextItemIdx: 0,
+        nextLayer: LessonLayer.l2,
+        highWaterMark: 2,
+        events: [
+          {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
+        ],
+      ),
+    );
+    final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+    await runtime.open(lessonLocalId: 'cyber-class');
 
-      runtime.select(AnswerLetter.A);
-      await runtime.signal(DecisionSignal.two);
-      await Future<void>.delayed(Duration.zero);
-      await runtime.advance();
+    runtime.select(AnswerLetter.A);
+    await runtime.signal(DecisionSignal.two);
+    await Future<void>.delayed(Duration.zero);
+    await runtime.advance();
 
-      final event = service
-          .read('cyber-class')!
-          .events
-          .lastWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
-      expect(event.payload['currentItemIdx'], 0);
-      expect(event.payload['currentLayer'], LessonLayer.l2.value);
-      expect(event.payload['windowSize'], 4);
-    },
-  );
+    final event = service
+        .read('cyber-class')!
+        .events
+        .lastWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
+    expect(event.payload['currentItemIdx'], 0);
+    expect(event.payload['currentLayer'], LessonLayer.l2.value);
+    expect(event.payload['windowSize'], 4);
+  });
 
   test('M-EXP5 mede tempo ate primeiro texto em caminho preparado', () async {
     final prepared = _classroomState().copyWith(
