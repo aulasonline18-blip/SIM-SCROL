@@ -214,7 +214,7 @@ class LessonOrchestrator {
           ? null
           : LessonImageGenerationMetadata(
               requestId: material.imageId,
-              provider: 'server-classroom',
+              provider: 'complete-lesson',
               model: material.source,
               mimeType: null,
               charged: false,

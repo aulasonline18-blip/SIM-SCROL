@@ -43,11 +43,8 @@ void main() {
     expect(state.progress?.layer.value, current['layer']);
 
     expect(state.curriculum?.items, isNotEmpty);
-    expect(state.currentLessonMaterial?['slotKey'], isNotNull);
-    expect(
-      state.readyLessonMaterials.keys,
-      contains(state.currentLessonMaterial?['slotKey']),
-    );
+    expect(state.currentLessonMaterial, isNull);
+    expect(state.readyLessonMaterials, isEmpty);
     expect(
       state.syncStatus?.highWaterMark,
       json['restorable']['highWaterMark'],
@@ -103,8 +100,6 @@ void _expectMinimumLessonSessionContract(Map<String, dynamic> json) {
       'attempts',
       'events',
       'pending',
-      'currentLessonMaterial',
-      'readyLessonMaterials',
     ]),
   );
 }

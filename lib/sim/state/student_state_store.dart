@@ -115,6 +115,20 @@ abstract interface class StudentStateCloudStorage {
   Future<StudentLearningState?> loadCloud(String lessonLocalId);
 }
 
+abstract interface class StudentStateRepository {
+  StudentLearningState readState(String lessonLocalId);
+  StudentLearningState writeState(
+    StudentLearningState state, {
+    bool acceptServerAuthority,
+  });
+  StudentLearningState patchState(
+    String lessonLocalId,
+    StudentLearningState Function(StudentLearningState state) patch,
+  );
+  List<StudentLearningState> listLocalStates({bool includeDeleted});
+  Future<StudentLearningState> hydrateFromCloud(String lessonLocalId);
+}
+
 class MemoryStudentStateCloudStorage implements StudentStateCloudStorage {
   final Map<String, StudentLearningState> states = {};
 
@@ -124,7 +138,7 @@ class MemoryStudentStateCloudStorage implements StudentStateCloudStorage {
   }
 }
 
-class StudentStateStore {
+class StudentStateStore implements StudentStateRepository {
   StudentStateStore({
     required this.local,
     this.cloud,
@@ -140,6 +154,7 @@ class StudentStateStore {
   final Map<String, StudentLearningState> _memory = {};
   final Map<String, List<CanonicalLearningEvent>> _eventLog = {};
 
+  @override
   StudentLearningState readState(String lessonLocalId) {
     final cached = _memory[lessonLocalId];
     if (cached != null) return cached;
@@ -166,6 +181,7 @@ class StudentStateStore {
     return state;
   }
 
+  @override
   StudentLearningState writeState(
     StudentLearningState state, {
     bool acceptServerAuthority = false,
@@ -187,6 +203,7 @@ class StudentStateStore {
     return next;
   }
 
+  @override
   StudentLearningState patchState(
     String lessonLocalId,
     StudentLearningState Function(StudentLearningState state) patch,
@@ -258,6 +275,7 @@ class StudentStateStore {
     );
   }
 
+  @override
   List<StudentLearningState> listLocalStates({bool includeDeleted = false}) {
     final ids = {...local.listStateIds(), ..._memory.keys};
     final states = ids.map(readState).where((state) {
@@ -322,6 +340,7 @@ class StudentStateStore {
     );
   }
 
+  @override
   Future<StudentLearningState> hydrateFromCloud(String lessonLocalId) async {
     final localState = readState(lessonLocalId);
     final remote = await cloud?.loadCloud(lessonLocalId);

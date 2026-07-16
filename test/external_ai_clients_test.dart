@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
@@ -80,6 +81,15 @@ class RecordingTransport implements SimHttpTransport {
 }
 
 void main() {
+  test('cliente de IA nao referencia deposito server-classroom removido', () {
+    final source = File(
+      'lib/sim/external_ai/sim_server_ai_clients.dart',
+    ).readAsStringSync();
+    expect(source, isNot(contains('/api/server-classroom')));
+    expect(source, isNot(contains('server-classroom')));
+    expect(source, isNot(contains('ServerClassroom')));
+  });
+
   SimAiServerConfig config() => SimAiServerConfig(
     baseUrl: 'https://gemini-aid-pal.lovable.app',
     accessTokenProvider: () async => 'user-token',
@@ -295,10 +305,10 @@ void main() {
     },
   );
 
-  test('T02 principal usa slot pronto do server-classroom', () async {
+  test('T02 principal usa geracao direta sem server-classroom', () async {
     final transport = RecordingTransport()
       ..jsonBody =
-          '{"slot":{"material":{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}},"imageId":"img-1","image":{"imageId":"img-1","dataUrl":"data:image/png;base64,abc","mimeType":"image/png"}}}';
+          '{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}}';
     final client = SimServerT02Client(
       config: SimAiServerConfig(
         baseUrl: 'https://gemini-aid-pal.lovable.app',
@@ -326,155 +336,135 @@ void main() {
 
     expect(
       transport.lastUri.toString(),
-      'https://gemini-aid-pal.lovable.app/api/server-classroom/slot',
+      'https://gemini-aid-pal.lovable.app/api/sim/t02',
     );
     expect((transport.lastBody as Map)['lessonLocalId'], 'lesson-1');
+    expect((transport.lastBody as Map)['mode'], 'lesson');
     expect((transport.lastBody as Map)['interfaceLocale'], 'en');
     expect((transport.lastBody as Map)['learningLocale'], 'es');
     expect((transport.lastBody as Map)['explanationLanguage'], 'Spanish');
+    expect((transport.lastBody as Map).containsKey('adopt'), isFalse);
     expect(material.question, 'Pergunta?');
-    expect(material.imageDataUrl, 'data:image/png;base64,abc');
-    expect(material.imageId, 'img-1');
+    expect(material.source, 'sim-server-t02');
+    expect(material.imageDataUrl, isNull);
   });
 
-  test(
-    'T02 envia curriculo antigo para server-classroom adotar sessao',
-    () async {
-      final transport = RecordingTransport()
-        ..jsonBody =
-            '{"slot":{"material":{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}}}}';
-      final client = SimServerT02Client(
-        config: SimAiServerConfig(
-          baseUrl: 'https://gemini-aid-pal.lovable.app',
-          t02Path: '/api/sim/t02',
-          accessTokenProvider: () async => 'user-token',
-        ),
-        transport: transport,
-      );
+  test('T02 envia curriculo para geracao direta sem adotar sessao', () async {
+    final transport = RecordingTransport()
+      ..jsonBody =
+          '{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}}';
+    final client = SimServerT02Client(
+      config: SimAiServerConfig(
+        baseUrl: 'https://gemini-aid-pal.lovable.app',
+        t02Path: '/api/sim/t02',
+        accessTokenProvider: () async => 'user-token',
+      ),
+      transport: transport,
+    );
 
-      await client.completeLesson(
-        const T02LessonRequest(
-          lessonLocalId: 'old-lesson-1',
-          item: 'Movimento uniforme',
-          lang: 'pt-BR',
-          academic: 'ano 9',
-          layer: LessonLayer.l1,
-          mode: 'session',
-          errCount: 0,
-          history: [],
-          marker: 'M2',
-          topic: 'Fisica',
-          itemIdx: 1,
-          profile: {'target_topic': 'Fisica'},
-          interfaceLocale: 'en',
-          learningLocale: 'pt-BR',
-          explanationLanguage: 'Portuguese',
-          curriculumItems: [
-            {
-              'order': 1,
-              'marker': 'M1',
-              'title': 'Velocidade',
-              'text': 'Velocidade media',
-            },
-            {
-              'order': 2,
-              'marker': 'M2',
-              'title': 'Movimento uniforme',
-              'text': 'Movimento uniforme',
-            },
-          ],
-        ),
-      );
-
-      final body = transport.lastBody as Map;
-      expect(body['lessonLocalId'], 'old-lesson-1');
-      expect(body['topic'], 'Fisica');
-      expect(body['itemIdx'], 1);
-      expect(body['marker'], 'M2');
-      expect(body['interfaceLocale'], 'en');
-      expect(body['learningLocale'], 'pt-BR');
-      expect(body['explanationLanguage'], 'Portuguese');
-      expect((body['adopt'] as Map)['topic'], 'Fisica');
-      expect((body['adopt'] as Map)['profile'], {
-        'target_topic': 'Fisica',
-        'interfaceLocale': 'en',
-        'learningLocale': 'pt-BR',
-        'explanationLanguage': 'Portuguese',
-      });
-      expect((body['adopt'] as Map)['curriculumItems'], hasLength(2));
-    },
-  );
-
-  test(
-    'T02 envia plano global do curriculo para server-classroom adotar CG-1',
-    () async {
-      final transport = RecordingTransport()
-        ..jsonBody =
-            '{"slot":{"material":{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}}}}';
-      final client = SimServerT02Client(
-        config: SimAiServerConfig(
-          baseUrl: 'https://gemini-aid-pal.lovable.app',
-          t02Path: '/api/sim/t02',
-          accessTokenProvider: () async => 'user-token',
-        ),
-        transport: transport,
-      );
-
-      const globalPlan = {
-        'globalTotalItems': 360,
-        'batchStartItem': 1,
-        'batchEndItem': 80,
-        'partNumber': 1,
-        'nextGlobalItemToRequest': 81,
-        'continuationNeeded': true,
-      };
-
-      await client.completeLesson(
-        const T02LessonRequest(
-          lessonLocalId: 'cg-lesson-1',
-          item: 'Item 80',
-          lang: 'pt-BR',
-          academic: 'ano 9',
-          layer: LessonLayer.l2,
-          mode: 'session',
-          errCount: 0,
-          history: [],
-          marker: 'M80',
-          topic: 'Matematica',
-          itemIdx: 79,
-          profile: {
-            'target_topic': 'Matematica',
-            'curriculum_global_plan': globalPlan,
+    await client.completeLesson(
+      const T02LessonRequest(
+        lessonLocalId: 'old-lesson-1',
+        item: 'Movimento uniforme',
+        lang: 'pt-BR',
+        academic: 'ano 9',
+        layer: LessonLayer.l1,
+        mode: 'session',
+        errCount: 0,
+        history: [],
+        marker: 'M2',
+        topic: 'Fisica',
+        itemIdx: 1,
+        profile: {'target_topic': 'Fisica'},
+        interfaceLocale: 'en',
+        learningLocale: 'pt-BR',
+        explanationLanguage: 'Portuguese',
+        curriculumItems: [
+          {
+            'order': 1,
+            'marker': 'M1',
+            'title': 'Velocidade',
+            'text': 'Velocidade media',
           },
-          curriculumItems: [
-            {
-              'order': 1,
-              'marker': 'M1',
-              'title': 'Item 1',
-              'text': 'Item 1',
-            },
-            {
-              'order': 80,
-              'marker': 'M80',
-              'title': 'Item 80',
-              'text': 'Item 80',
-            },
-          ],
-        ),
-      );
+          {
+            'order': 2,
+            'marker': 'M2',
+            'title': 'Movimento uniforme',
+            'text': 'Movimento uniforme',
+          },
+        ],
+      ),
+    );
 
-      final body = transport.lastBody as Map;
-      final adopt = body['adopt'] as Map;
-      expect(adopt['curriculumItems'], hasLength(2));
-      expect(adopt['curriculumPlan'], globalPlan);
-      expect((adopt['profile'] as Map)['curriculum_global_plan'], globalPlan);
-    },
-  );
+    final body = transport.lastBody as Map;
+    expect(body['lessonLocalId'], 'old-lesson-1');
+    expect(body['topic'], 'Fisica');
+    expect(body['itemIdx'], 1);
+    expect(body['marker'], 'M2');
+    expect(body['interfaceLocale'], 'en');
+    expect(body['learningLocale'], 'pt-BR');
+    expect(body['explanationLanguage'], 'Portuguese');
+    expect(body.containsKey('adopt'), isFalse);
+    expect(body['curriculumItems'], hasLength(2));
+    expect(body['target_topic'], 'Fisica');
+  });
+
+  test('T02 envia plano global do curriculo para geracao direta CG-1', () async {
+    final transport = RecordingTransport()
+      ..jsonBody =
+          '{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}}';
+    final client = SimServerT02Client(
+      config: SimAiServerConfig(
+        baseUrl: 'https://gemini-aid-pal.lovable.app',
+        t02Path: '/api/sim/t02',
+        accessTokenProvider: () async => 'user-token',
+      ),
+      transport: transport,
+    );
+
+    const globalPlan = {
+      'globalTotalItems': 360,
+      'batchStartItem': 1,
+      'batchEndItem': 80,
+      'partNumber': 1,
+      'nextGlobalItemToRequest': 81,
+      'continuationNeeded': true,
+    };
+
+    await client.completeLesson(
+      const T02LessonRequest(
+        lessonLocalId: 'cg-lesson-1',
+        item: 'Item 80',
+        lang: 'pt-BR',
+        academic: 'ano 9',
+        layer: LessonLayer.l2,
+        mode: 'session',
+        errCount: 0,
+        history: [],
+        marker: 'M80',
+        topic: 'Matematica',
+        itemIdx: 79,
+        profile: {
+          'target_topic': 'Matematica',
+          'curriculum_global_plan': globalPlan,
+        },
+        curriculumItems: [
+          {'order': 1, 'marker': 'M1', 'title': 'Item 1', 'text': 'Item 1'},
+          {'order': 80, 'marker': 'M80', 'title': 'Item 80', 'text': 'Item 80'},
+        ],
+      ),
+    );
+
+    final body = transport.lastBody as Map;
+    expect(body.containsKey('adopt'), isFalse);
+    expect(body['curriculumItems'], hasLength(2));
+    expect(body['curriculum_global_plan'], globalPlan);
+  });
 
   test('T02 invalido nao vira aula falsa nem default A', () async {
     final transport = RecordingTransport()
       ..jsonBody =
-          '{"slot":{"material":{"conteudo":{"explanation":"Exp","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"D"}}}}';
+          '{"conteudo":{"explanation":"Exp","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"D"}}';
     final client = SimServerT02Client(
       config: SimAiServerConfig(
         baseUrl: 'https://gemini-aid-pal.lovable.app',

@@ -500,7 +500,7 @@ void main() {
       ChatLessonTimelineInput(
         snapshot: _snapshot(
           phase: const ClassroomPhase.engineError(
-            'HTTP 500: {"error":"server-classroom failed"}',
+            'HTTP 500: {"error":"complete-lesson failed"}',
           ),
         ),
       ),

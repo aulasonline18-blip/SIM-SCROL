@@ -23,6 +23,7 @@ import 'sim/config/sim_environment.dart';
 import 'sim/config/sim_scroll_flags.dart';
 import 'sim/external_ai/sim_ai_server_config.dart';
 import 'sim/localization/sim_locale_contract.dart';
+import 'sim/state/drift_student_state_storage.dart';
 import 'sim/state/shared_prefs_state_storage.dart';
 import 'sim/state/student_state_store.dart';
 import 'sim/ui/sim_i18n.dart';
@@ -63,8 +64,12 @@ Future<void> main() async {
       ),
       sessionProvider: sessionProvider,
     );
+    final driftStateStorage = await DriftStudentStateLocalStorage.open(
+      'sim_student_state',
+      legacy: stateStorage,
+    );
     final canonicalStore = StudentStateStore(
-      local: stateStorage,
+      local: driftStateStorage,
       cloud: cloudStorage,
     );
     runApp(SimApp(canonicalStore: canonicalStore, prefs: prefs));

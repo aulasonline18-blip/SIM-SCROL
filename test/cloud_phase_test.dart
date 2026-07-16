@@ -100,6 +100,49 @@ class FakeCloudFunctions implements StudentStateCloudFunctions {
   }
 }
 
+String? findForbiddenLessonPayload(Object? value, [String path = r'$']) {
+  const forbiddenKeys = {
+    'explanation',
+    'question',
+    'options',
+    'answer',
+    'feedback',
+    'image',
+    'imagem',
+    'imageData',
+    'audio',
+    'audioData',
+    'audioText',
+    'currentLessonMaterial',
+    'readyLessonMaterials',
+  };
+  const forbiddenValues = {
+    'Texto integral de aula nao remoto',
+    'Explicacao remota proibida',
+    'Pergunta remota proibida?',
+    'Texto preparado proibido',
+    'Preparada proibida',
+    'data:image/png;base64,REMOTO',
+  };
+  if (value is Map) {
+    for (final entry in value.entries) {
+      final childPath = '$path.${entry.key}';
+      if (forbiddenKeys.contains(entry.key.toString())) return childPath;
+      final found = findForbiddenLessonPayload(entry.value, childPath);
+      if (found != null) return found;
+    }
+    return null;
+  }
+  if (value is List) {
+    for (var i = 0; i < value.length; i += 1) {
+      final found = findForbiddenLessonPayload(value[i], '$path[$i]');
+      if (found != null) return found;
+    }
+    return null;
+  }
+  return forbiddenValues.contains(value) ? path : null;
+}
+
 StudentLearningState stateWithProgress({
   required String id,
   required int itemIdx,
@@ -273,8 +316,9 @@ void main() {
     expect(sent['progress']['itemIdx'], 1);
     expect(sent['current']['itemIdx'], 1);
     expect(sent['attempts'], hasLength(1));
-    expect(sent['readyLessonMaterials'], isEmpty);
-    expect(sent['currentLessonMaterial']['contentStripped'], isTrue);
+    expect(sent.containsKey('readyLessonMaterials'), isFalse);
+    expect(sent.containsKey('currentLessonMaterial'), isFalse);
+    expect(sent['remote_state_contract'], 'StudentLearningStateV1');
     for (final forbidden in const [
       'explanation',
       'question',
@@ -286,6 +330,7 @@ void main() {
       'imageData',
       'audio',
       'audioData',
+      'contentStripped',
       'Explicacao integral da aula',
       'Pergunta integral?',
       'Preparada?',
@@ -349,8 +394,9 @@ void main() {
       expect(input.clientScore, scoreOfStudentLearningState(input.state));
       expect(curriculum['items'][0]['text'], 'Item 1');
       expect(curriculum['items'][1]['text'], 'Item 2');
-      expect(sent['readyLessonMaterials'], isEmpty);
-      expect(sent['currentLessonMaterial']['contentStripped'], isTrue);
+      expect(sent.containsKey('readyLessonMaterials'), isFalse);
+      expect(sent.containsKey('currentLessonMaterial'), isFalse);
+      expect(sent['remote_state_contract'], 'StudentLearningStateV1');
       expect(queue.getQueueSnapshot(), isEmpty);
       for (final forbidden in const [
         'Texto integral de aula nao remoto',
@@ -367,6 +413,78 @@ void main() {
       queue.enqueueStudentStateSync(lessonLocalId: 'l1');
       await queue.drainQueue();
       expect(queue.getQueueSnapshot(), contains('l1'));
+    },
+  );
+
+  test(
+    'StudentLearningStateV1 remote payload preserves curriculum and strips lesson content recursively',
+    () async {
+      final state =
+          stateWithProgress(
+            id: 'l1',
+            itemIdx: 1,
+            layer: LessonLayer.l2,
+            mainAdvances: 1,
+          ).copyWith(
+            currentLessonMaterial: {
+              'text': 'Texto integral de aula nao remoto',
+              'explanation': 'Explicacao remota proibida',
+              'question': 'Pergunta remota proibida?',
+              'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+              'imagem': 'data:image/png;base64,REMOTO',
+            },
+            readyLessonMaterials: {
+              'l1:M2:L2': {
+                'text': 'Texto preparado proibido',
+                'explanation': 'Preparada proibida',
+                'question': 'Preparada proibida?',
+                'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+                'imageData': 'data:image/png;base64,REMOTO',
+              },
+            },
+            queuedActions: const [
+              {
+                'type': 'ADVANCE_GATE_PENDING',
+                'payload': {
+                  'currentState': {
+                    'currentLessonMaterial': {
+                      'question': 'Pergunta remota proibida?',
+                    },
+                  },
+                },
+              },
+            ],
+            events: const [
+              StudentLearningEvent(
+                type: 'LESSON_MATERIAL_READY',
+                ts: 10,
+                payload: {
+                  'text': 'Texto integral de aula nao remoto',
+                  'question': 'Pergunta remota proibida?',
+                  'marker': 'M2',
+                },
+              ),
+            ],
+          );
+      final states = StudentLearningStateService(seed: {'l1': state});
+      final cloud = FakeCloudFunctions();
+      final queue = CloudQueue(
+        storage: MemoryCloudQueueStorage(),
+        stateService: states,
+        sessionProvider: FakeSessionProvider(),
+        cloudFunctions: cloud,
+        now: () => 1000,
+      );
+
+      queue.enqueueStudentStateSync(lessonLocalId: 'l1');
+      await queue.drainQueue();
+
+      final sent = cloud.lastPersistInput!.toJson()['state'] as JsonMap;
+      expect(sent['remote_state_contract'], 'StudentLearningStateV1');
+      expect(sent['curriculum']['items'][0]['text'], 'Item 1');
+      expect(sent['curriculum']['items'][1]['text'], 'Item 2');
+      expect(sent['progress']['itemIdx'], 1);
+      expect(findForbiddenLessonPayload(sent), isNull);
     },
   );
 

@@ -2194,7 +2194,7 @@ void main() {
     );
   });
 
-  test('server-classroom pending image stays text-only in the app', () async {
+  test('complete-lesson pending image stays text-only in the app', () async {
     const params = CompleteLessonParams(
       lessonLocalId: 'cyber-server-visual',
       item: 'Imagem governada pelo servidor',
@@ -2211,7 +2211,7 @@ void main() {
     final bus = LessonEventBus();
     final orchestrator = LessonOrchestrator(
       t02Client: FakeT02Client(
-        source: 'server-classroom',
+        source: 'complete-lesson',
         imageStatus: 'processing',
         explanation: 'Texto da aula chega antes da imagem.',
         question: 'O que o App deve fazer?',
@@ -2255,7 +2255,7 @@ void main() {
   });
 
   test(
-    'server-classroom pending image is refreshed into the live lesson cache',
+    'complete-lesson pending image is refreshed into the live lesson cache',
     () async {
       const params = CompleteLessonParams(
         lessonLocalId: 'cyber-server-visual-refresh',
@@ -2279,7 +2279,7 @@ void main() {
           whyCorrect: 'A midia completa a aula em segundo plano.',
           whyWrong: null,
           generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
-          source: 'server-classroom',
+          source: 'complete-lesson',
           imageStatus: 'processing',
         ),
         T02LessonMaterial(
@@ -2294,7 +2294,7 @@ void main() {
           whyCorrect: 'A midia completa a aula em segundo plano.',
           whyWrong: null,
           generatedAt: DateTime.fromMillisecondsSinceEpoch(2),
-          source: 'server-classroom',
+          source: 'complete-lesson',
           imageDataUrl: _serverRasterDataUrl,
           imageStatus: 'ready',
         ),

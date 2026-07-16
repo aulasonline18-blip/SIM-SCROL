@@ -14,7 +14,6 @@ import 'sim_ai_server_config.dart';
 import 'sim_http_transport.dart';
 
 const String simT00BootstrapPath = '/api/bootstrap-t00';
-const String simServerClassroomSlotPath = '/api/server-classroom/slot';
 const String simWarmupPath = '/api/warmup';
 const String simLessonAudioPath = '/api/generate-lesson-audio';
 const String simDoubtPath = '/api/doubt';
@@ -416,7 +415,7 @@ class SimServerT02Client implements T02LessonClient {
 
   @override
   Future<T02LessonMaterial> completeLesson(T02LessonRequest request) {
-    return _callServerClassroomSlot(request);
+    return _call(request, mode: 'lesson');
   }
 
   @override
@@ -459,6 +458,8 @@ class SimServerT02Client implements T02LessonClient {
         if (request.marker != null) 'marker': request.marker,
         if (request.addendum != null) 'addendum': request.addendum,
         if (request.amparoLvl != null) 'amparo_level': request.amparoLvl,
+        if (request.curriculumItems.isNotEmpty)
+          'curriculumItems': request.curriculumItems,
         ...request.profile,
       },
       timeout: timeout,
@@ -531,68 +532,6 @@ class SimServerT02Client implements T02LessonClient {
     return _parseDoubtResponse(JsonMap.from(decoded));
   }
 
-  Future<T02LessonMaterial> _callServerClassroomSlot(
-    T02LessonRequest request,
-  ) async {
-    final locale = _localeFieldsForT02(request);
-    final curriculumPlan = request.profile['curriculum_global_plan'];
-    final response = await transport.postJson(
-      config.uri(simServerClassroomSlotPath),
-      headers: await config.jsonHeaders(),
-      body: {
-        'lessonLocalId': request.lessonLocalId,
-        'item': request.item,
-        ...locale,
-        'stable_lang': locale['explanationLanguage'] ?? request.lang,
-        'academic_level': request.academic,
-        'layer': request.layer.value,
-        'err_count': request.errCount,
-        'lesson_mode': request.mode,
-        'history': request.history,
-        if (request.topic != null) 'topic': request.topic,
-        if (request.itemIdx != null) 'itemIdx': request.itemIdx,
-        if (request.marker != null) 'marker': request.marker,
-        if (request.amparoLvl != null) 'amparo_level': request.amparoLvl,
-        if (request.curriculumItems.isNotEmpty)
-          'adopt': {
-            'topic': request.topic ?? request.profile['target_topic'],
-            'profile': {...request.profile, ...locale},
-            'curriculumItems': request.curriculumItems,
-            if (curriculumPlan is Map && curriculumPlan.isNotEmpty)
-              'curriculumPlan': curriculumPlan,
-          },
-        ...request.profile,
-      },
-      timeout: timeout,
-    );
-    if (!response.ok) {
-      throw SimExternalAiException(
-        response.body,
-        statusCode: response.statusCode,
-      );
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      throw const SimExternalAiException(
-        'server classroom retornou resposta invalida.',
-      );
-    }
-    final slot = decoded['slot'];
-    if (slot is! Map) {
-      throw const SimExternalAiException(
-        'server classroom retornou slot ausente.',
-      );
-    }
-    try {
-      return _parseServerClassroomSlot(JsonMap.from(slot));
-    } on LessonContentValidationException catch (error) {
-      throw SimExternalAiException(
-        'T02 retornou contrato invalido: ${error.message}',
-        statusCode: 502,
-      );
-    }
-  }
-
   T02LessonMaterial _parseT02Material(JsonMap json) {
     final source = json['conteudo'] is Map
         ? JsonMap.from(json['conteudo'])
@@ -607,46 +546,6 @@ class SimServerT02Client implements T02LessonClient {
       whyWrong: content.whyWrong,
       generatedAt: DateTime.now(),
       source: (source['source'] ?? 'sim-server-t02').toString(),
-    );
-  }
-
-  T02LessonMaterial _parseServerClassroomSlot(JsonMap slot) {
-    final material = slot['material'];
-    if (material is! Map) {
-      throw const SimExternalAiException(
-        'server classroom retornou material ausente.',
-        statusCode: 502,
-      );
-    }
-    final parsed = _parseT02Material(JsonMap.from(material));
-    final image = slot['image'];
-    final imageMap = image is Map ? JsonMap.from(image) : const {};
-    final imageDataUrl = imageMap['dataUrl']?.toString();
-    final imageId =
-        imageMap['imageId']?.toString() ?? slot['imageId']?.toString();
-    final imageStatus = slot['imageStatus']?.toString();
-    final imageError = slot['imageError']?.toString();
-    return T02LessonMaterial(
-      explanation: parsed.explanation,
-      question: parsed.question,
-      options: parsed.options,
-      correctAnswer: parsed.correctAnswer,
-      whyCorrect: parsed.whyCorrect,
-      whyWrong: parsed.whyWrong,
-      generatedAt: parsed.generatedAt,
-      source: 'server-classroom',
-      imageDataUrl: imageDataUrl == null || imageDataUrl.trim().isEmpty
-          ? null
-          : imageDataUrl.trim(),
-      imageId: imageId == null || imageId.trim().isEmpty
-          ? null
-          : imageId.trim(),
-      imageStatus: imageStatus == null || imageStatus.trim().isEmpty
-          ? null
-          : imageStatus.trim(),
-      imageError: imageError == null || imageError.trim().isEmpty
-          ? null
-          : imageError.trim(),
     );
   }
 
