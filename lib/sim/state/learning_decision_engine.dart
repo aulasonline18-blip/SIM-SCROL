@@ -1,11 +1,8 @@
-// LEGACY/SHADOW ONLY.
+// Deterministic app-side advance engine.
 //
-// This engine may compute an audit suggestion for tests, migration diagnostics,
-// or non-mutating comparison. It must not be used as the official judge of
-// advancement, mastery, current item, current layer, review, or recovery in the
-// SIMAPP runtime. Official pedagogical decisions belong to SimServidor.
-//
-// Historical origin only; this is not a live parity rule.
+// The SIM app owns the hot answer/signal/advance path. The server may register
+// the resulting state later through remote vault sync, but it must not decide,
+// confirm, or veto item/layer advancement.
 import 'student_learning_state.dart';
 import 'student_learning_state_service.dart';
 

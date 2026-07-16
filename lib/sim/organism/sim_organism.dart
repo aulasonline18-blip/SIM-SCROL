@@ -16,7 +16,6 @@ import '../classroom/lesson_hydration_engine.dart';
 import '../classroom/lesson_material_controller.dart';
 import '../classroom/lesson_position_engine.dart';
 import '../classroom/lesson_runtime_engine.dart';
-import '../classroom/server_advance_gate.dart';
 import '../classroom/lesson_session_engine.dart';
 import '../cloud/cloud_queue.dart';
 import '../cloud/lesson_cloud_bootstrap.dart';
@@ -254,7 +253,6 @@ class SimOrganism {
         materialController: lessonMaterialController,
         store: activeStore,
         audioCore: audioCore,
-        serverAdvanceGateClient: SimServerAdvanceGateClient(config: aiConfig),
       ),
     );
 

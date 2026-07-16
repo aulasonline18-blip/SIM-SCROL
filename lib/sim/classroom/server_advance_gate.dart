@@ -1,13 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 
 import '../external_ai/sim_ai_server_config.dart';
-import '../external_ai/sim_http_transport.dart';
 import '../lesson/dopamine_ready_window_engine.dart';
 import '../state/student_learning_state.dart';
 import 'classroom_models.dart';
-
-const String simAdvanceGateAnswerPath = '/api/advance-gate/answer';
 
 class ServerAdvanceGateRequest {
   const ServerAdvanceGateRequest({
@@ -190,48 +186,6 @@ class ServerAdvanceGateDecision {
 
 abstract interface class ServerAdvanceGateClient {
   Future<ServerAdvanceGateDecision> decide(ServerAdvanceGateRequest request);
-}
-
-class SimServerAdvanceGateClient implements ServerAdvanceGateClient {
-  SimServerAdvanceGateClient({
-    required this.config,
-    SimHttpTransport? transport,
-    this.timeout = const Duration(seconds: 20),
-  }) : transport = transport ?? DartIoSimHttpTransport();
-
-  final SimAiServerConfig config;
-  final SimHttpTransport transport;
-  final Duration timeout;
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(
-    ServerAdvanceGateRequest request,
-  ) async {
-    final response = await transport.postJson(
-      config.uri(simAdvanceGateAnswerPath),
-      headers: await config.jsonHeaders(),
-      body: request.toJson(),
-      timeout: timeout,
-    );
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      throw const SimExternalAiException(
-        'advance gate retornou resposta invalida.',
-        statusCode: 502,
-      );
-    }
-    final decision = ServerAdvanceGateDecision.fromJson(JsonMap.from(decoded));
-    if (!response.ok || !decision.accepted) {
-      final human = decision.humanError;
-      throw SimExternalAiException(
-        (human?['message'] ?? 'Nao conseguimos decidir o avanco agora.')
-            .toString(),
-        statusCode: response.statusCode,
-        code: (decoded['reason'] ?? human?['technical']?['code'])?.toString(),
-      );
-    }
-    return decision;
-  }
 }
 
 StudentLearningState applyServerAdvanceGateDecision({

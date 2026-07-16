@@ -192,7 +192,6 @@ class VitalHarness {
         stateService: service,
         materialService: materialService,
         materialController: materialController,
-        serverAdvanceGateClient: advanceGate,
       ),
     );
   }
@@ -297,15 +296,17 @@ void main() {
       expect(attempt.correct, isTrue);
 
       final eventTypes = state.events.map((event) => event.type).toList();
-      expect(eventTypes, contains('ADVANCE_GATE_DECIDED'));
-      expect(h.advanceGate.requests, hasLength(1));
-      expect(h.advanceGate.requests.single.marker, 'M1');
+      expect(eventTypes, contains('LOCAL_ADVANCE_DECIDED'));
+      expect(eventTypes, contains('NEXT_ACTION_DECIDED'));
       expect(
-        state.queuedActions.where(
-          (job) => job['type'] == 'PREPARE_READY_WINDOW',
-        ),
+        h.advanceGate.requests,
+        isEmpty,
+        reason: 'o avanço vital deve ser decidido no app, sem gate remoto',
+      );
+      expect(
+        state.readyLessonMaterials,
         isNotEmpty,
-        reason: 'janela A/B/C deve ser solicitada apos tentativa',
+        reason: 'janela viva deve continuar preparada apos tentativa',
       );
     },
   );

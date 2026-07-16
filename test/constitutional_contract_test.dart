@@ -255,7 +255,7 @@ void main() {
   });
 
   test(
-    '7 A1 enviarSinal sem servidor guarda evidencia local e pendencia remota',
+    '7 A1 enviarSinal sem servidor guarda evidencia e decisao local',
     () async {
       final service = StudentLearningStateService(
         seed: {'constitutional': _state()},
@@ -279,41 +279,43 @@ void main() {
       expect(state.attempts.single.letra, AnswerLetter.A);
       expect(state.attempts.single.sinal, DecisionSignal.one);
       expect(state.attempts.single.correct, isTrue);
-      expect(state.queuedActions.single['type'], 'ADVANCE_GATE_PENDING');
+      expect(state.queuedActions, isEmpty);
       expect(state.progress?.itemIdx, 0);
-      expect(state.progress?.layer, LessonLayer.l1);
+      expect(state.progress?.layer, LessonLayer.l3);
       expect(state.progress?.concluidos, isEmpty);
+      expect(
+        state.events.map((event) => event.type),
+        containsAll(['LOCAL_ADVANCE_DECIDED', 'NEXT_ACTION_DECIDED']),
+      );
       expect(position.phase.type, ClassroomPhaseType.concluido);
     },
   );
 
-  test(
-    '8 A1 um acerto isolado não conclui item nem avança progresso',
-    () async {
-      final service = StudentLearningStateService(
-        seed: {'constitutional': _state()},
-      );
-      final position = _position(
-        phase: const ClassroomPhase.expanded(AnswerLetter.A),
-      );
+  test('8 A1 um acerto isolado avanca camada sem concluir item', () async {
+    final service = StudentLearningStateService(
+      seed: {'constitutional': _state()},
+    );
+    final position = _position(
+      phase: const ClassroomPhase.expanded(AnswerLetter.A),
+    );
 
-      await _controller(service).enviarSinal(
-        lessonLocalId: 'constitutional',
-        topic: 'Matematica',
-        position: position,
-        signal: DecisionSignal.one,
-        baseItems: _planned,
-      );
+    await _controller(service).enviarSinal(
+      lessonLocalId: 'constitutional',
+      topic: 'Matematica',
+      position: position,
+      signal: DecisionSignal.one,
+      baseItems: _planned,
+    );
 
-      final progress = service.read('constitutional')!.progress!;
-      expect(progress.itemIdx, 0);
-      expect(progress.concluidos, isEmpty);
-      expect(
-        service.read('constitutional')!.events.map((event) => event.type),
-        contains('ADVANCE_GATE_PENDING'),
-      );
-    },
-  );
+    final progress = service.read('constitutional')!.progress!;
+    expect(progress.itemIdx, 0);
+    expect(progress.layer, LessonLayer.l3);
+    expect(progress.concluidos, isEmpty);
+    expect(
+      service.read('constitutional')!.events.map((event) => event.type),
+      contains('LOCAL_ADVANCE_DECIDED'),
+    );
+  });
 
   test('9 A1 botão real de avançar não move sem evidência gravada', () async {
     final service = StudentLearningStateService(
@@ -673,7 +675,8 @@ void main() {
       expect(
         service.read('constitutional')!.events.map((event) => event.type),
         containsAll([
-          'ADVANCE_GATE_PENDING',
+          'LOCAL_ADVANCE_DECIDED',
+          'NEXT_ACTION_DECIDED',
           'ANSWER_SUBMITTED',
           'SIGNAL_SUBMITTED',
         ]),

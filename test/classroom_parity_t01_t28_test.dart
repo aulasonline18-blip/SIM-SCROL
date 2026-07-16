@@ -286,7 +286,6 @@ LessonAnswerProgressController _controller(
     materialService: mat,
     materialController: ctrl,
     audioCore: audio,
-    serverAdvanceGateClient: serverAdvanceGateClient,
   );
 }
 
@@ -983,9 +982,10 @@ void main() {
     expect(svc.read('L1')?.attempts.single.layer, LessonLayer.l1);
     expect(svc.read('L1')?.attempts.single.letra, AnswerLetter.A);
     expect(svc.read('L1')?.attempts.single.sinal, DecisionSignal.one);
+    expect(svc.read('L1')?.queuedActions, isEmpty);
     expect(
-      svc.read('L1')?.queuedActions.map((action) => action['type']),
-      contains('ADVANCE_GATE_PENDING'),
+      svc.read('L1')?.events.map((event) => event.type),
+      contains('LOCAL_ADVANCE_DECIDED'),
     );
   });
 
@@ -1128,23 +1128,22 @@ void main() {
         baseItems: pos.items,
       );
 
-      expect(gate.requests, hasLength(1));
+      expect(gate.requests, isEmpty);
       expect(pos.phase.type, ClassroomPhaseType.concluido);
       expect(svc.read('L1')?.attempts, hasLength(1));
-      expect(gate.requests.single.attempts, hasLength(1));
-      expect(svc.read('L1')?.current?.layer, LessonLayer.l1);
+      expect(svc.read('L1')?.current?.layer, LessonLayer.l3);
       expect(
         svc
             .read('L1')
             ?.queuedActions
             .where((action) => action['type'] == 'ADVANCE_GATE_PENDING'),
-        hasLength(1),
+        isEmpty,
       );
 
       gate.completer.complete(_serverNextLayer(LessonLayer.l2));
       await Future<void>.delayed(Duration.zero);
 
-      expect(svc.read('L1')?.current?.layer, LessonLayer.l2);
+      expect(svc.read('L1')?.current?.layer, LessonLayer.l3);
       expect(svc.read('L1')?.attempts, hasLength(1));
       expect(
         svc
@@ -1197,7 +1196,7 @@ void main() {
       );
       await Future<void>.delayed(Duration.zero);
 
-      expect(gate.requests, hasLength(1));
+      expect(gate.requests, isEmpty);
       expect(pos.phase.type, ClassroomPhaseType.concluido);
       expect(svc.read('L1')?.attempts, hasLength(1));
       final pendingEvents = svc
@@ -1205,12 +1204,11 @@ void main() {
           .events
           .where((event) => event.type == 'ADVANCE_GATE_PENDING')
           .toList();
-      expect(pendingEvents, hasLength(1));
-      final humanError = pendingEvents.single.payload['humanError'].toString();
-      expect(humanError, isNot(contains('HTTP')));
-      expect(humanError, isNot(contains('stack')));
-      expect(humanError, isNot(contains('payload')));
-      expect(humanError, isNot(contains('{')));
+      expect(pendingEvents, isEmpty);
+      expect(
+        svc.read('L1')!.events.map((event) => event.type),
+        contains('LOCAL_ADVANCE_DECIDED'),
+      );
     },
   );
 
@@ -1265,16 +1263,16 @@ void main() {
           .read('L1')
           ?.queuedActions
           .where((action) => action['type'] == 'ADVANCE_GATE_PENDING'),
-      hasLength(1),
+      isEmpty,
     );
     expect(
       svc
           .read('L1')
           ?.events
           .where((event) => event.type == 'ADVANCE_GATE_PENDING'),
-      hasLength(1),
+      isEmpty,
     );
-    expect(svc.read('L1')?.attempts, hasLength(1));
+    expect(svc.read('L1')?.attempts, hasLength(2));
   });
 
   test(
@@ -1338,7 +1336,7 @@ void main() {
             .where((action) => action['type'] == 'ADVANCE_GATE_PENDING'),
         isEmpty,
       );
-      expect(gate.requests, hasLength(1));
+      expect(gate.requests, isEmpty);
 
       await ctrl.avancar(
         lessonLocalId: 'L1',

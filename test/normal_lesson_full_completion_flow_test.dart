@@ -21,6 +21,7 @@ import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
 import 'package:sim_mobile/sim/lesson/student_lesson_material_service.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
+import 'package:sim_mobile/sim/state/learning_decision_engine.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
 
@@ -250,7 +251,6 @@ class FullFlowHarness {
         stateService: service,
         materialService: materialService,
         materialController: materialController,
-        serverAdvanceGateClient: advanceGate,
       ),
     );
   }
@@ -375,10 +375,13 @@ void main() {
         expect(state.attempts.last.correct, isTrue);
         expect(
           state.events.map((event) => event.type),
-          contains('ADVANCE_GATE_DECIDED'),
+          contains('LOCAL_ADVANCE_DECIDED'),
         );
-        expect(h.advanceGate.requests, isNotEmpty);
-        expect(h.advanceGate.requests.last.marker, step.marker);
+        expect(
+          h.advanceGate.requests,
+          isEmpty,
+          reason: 'o fluxo normal decide avanço no app, sem gate remoto',
+        );
 
         await h.runtime.advance();
 
@@ -414,7 +417,11 @@ void main() {
       expect(finalState.progress?.layer, LessonLayer.l1);
       expect(finalState.progress?.mainAdvances, greaterThanOrEqualTo(3));
       expect(finalState.progress?.pctAvanco, 100);
-      expect(finalState.progress?.concluidos, containsAll(['M1', 'M2', 'M3']));
+      expect(
+        finalState.progress?.itemIdx,
+        3,
+        reason: 'retomada usa posicao forte; dominio fica em mastery/truth',
+      );
       expect(finalState.attempts, hasLength(9));
       expect(
         finalState.events.map((event) => event.type),
@@ -474,17 +481,32 @@ void main() {
       expect(snap.itemMarker, 'M1');
 
       final wrongSteps = [
-        (letter: AnswerLetter.B, signal: DecisionSignal.two),
-        (letter: AnswerLetter.C, signal: DecisionSignal.three),
-        (letter: AnswerLetter.B, signal: DecisionSignal.one),
+        (
+          letter: AnswerLetter.B,
+          signal: DecisionSignal.two,
+          itemIdx: 0,
+          layer: LessonLayer.l2,
+        ),
+        (
+          letter: AnswerLetter.C,
+          signal: DecisionSignal.three,
+          itemIdx: 0,
+          layer: LessonLayer.l3,
+        ),
+        (
+          letter: AnswerLetter.B,
+          signal: DecisionSignal.one,
+          itemIdx: 1,
+          layer: LessonLayer.l1,
+        ),
       ];
       for (var index = 0; index < wrongSteps.length; index++) {
         final step = wrongSteps[index];
         h.runtime.select(step.letter);
         await h.runtime.signal(step.signal);
         state = h.service.read(lessonLocalId)!;
-        expect(state.progress?.itemIdx, 0);
-        expect(state.progress?.layer, LessonLayer.l1);
+        expect(state.progress?.itemIdx, step.itemIdx);
+        expect(state.progress?.layer, step.layer);
         expect(state.progress?.concluidos, isEmpty);
         expect(state.truth.itemConsolidationStatus['M1'], isNot('mastered'));
         expect(state.attempts.last.correct, isFalse);
@@ -498,6 +520,7 @@ void main() {
           state: h.service.read(lessonLocalId)!,
           correct: false,
           ts: 1000,
+          signalThreeCount: 3,
         ),
       );
       expect(state.progress?.amparoLvl, 1);
@@ -525,16 +548,16 @@ void main() {
       h.runtime.select(AnswerLetter.A);
       await h.runtime.signal(DecisionSignal.one);
       state = h.service.read(lessonLocalId)!;
-      expect(server.requests.last.correct, isTrue);
-      expect(state.progress?.itemIdx, 0);
+      expect(server.requests, isEmpty);
+      expect(state.progress?.itemIdx, 1);
       expect(state.progress?.layer, LessonLayer.l3);
       expect(state.progress?.concluidos, isEmpty);
       expect(state.attempts, hasLength(4));
       expect(
         state.events
-            .lastWhere((event) => event.type == 'ADVANCE_GATE_DECIDED')
-            .payload['ruleApplied'],
-        'validated_correct_secure_l1_to_l3',
+            .lastWhere((event) => event.type == 'LOCAL_ADVANCE_DECIDED')
+            .payload['action'],
+        DecisionActionType.advanceLayer.name,
       );
 
       final persisted = StudentLearningState.fromJson(state.toJson());
@@ -560,25 +583,25 @@ void main() {
 
       final reopened = h.service.read(lessonLocalId)!;
       expect(snap.phase.type, ClassroomPhaseType.lendo);
-      expect(reopened.current?.marker, 'M1');
+      expect(reopened.current?.marker, 'M2');
       expect(reopened.progress?.layer, LessonLayer.l3);
       expect(reopened.progress?.amparoLvl, 1);
       expect(reopened.attempts, hasLength(4));
       expect(reopened.currentLessonMaterial?['question'], isNotEmpty);
       expect(
         reopened.events.map((event) => event.type),
-        containsAll(['AMPARO_TRIGGERED', 'ADVANCE_GATE_DECIDED']),
+        containsAll(['AMPARO_TRIGGERED', 'LOCAL_ADVANCE_DECIDED']),
       );
       expect(
         reopened.extra['serverAdvanceGate'],
-        isA<Map>(),
-        reason: 'decisao forte deve ficar rastreavel no estado',
+        isNull,
+        reason: 'o estado nao deve carregar decisao remota de advance gate',
       );
       expect(reopened.truth.itemConsolidationStatus['M1'], isNot('mastered'));
       expect(
         server.requests,
-        hasLength(4),
-        reason: 'toda tentativa A/B/C + sinal deve passar pelo servidor',
+        isEmpty,
+        reason: 'tentativas A/B/C + sinal ficam no app e sincronizam depois',
       );
 
       h.runtime.select(AnswerLetter.A);
@@ -586,31 +609,28 @@ void main() {
       final postReopen = h.service.read(lessonLocalId)!;
       expect(
         server.requests,
-        hasLength(5),
-        reason: 'a acao apos reabertura tambem deve chamar o servidor',
+        isEmpty,
+        reason: 'a acao apos reabertura tambem nao chama advance gate remoto',
       );
-      expect(server.requests.last.marker, 'M1');
-      expect(server.requests.last.layer, LessonLayer.l3);
-      expect(server.requests.last.correct, isTrue);
       expect(postReopen.attempts, hasLength(5));
-      expect(postReopen.attempts.last.marker, 'M1');
+      expect(postReopen.attempts.last.marker, 'M2');
       expect(postReopen.attempts.last.layer, LessonLayer.l3);
-      expect(postReopen.progress?.itemIdx, 1);
+      expect(postReopen.progress?.itemIdx, 2);
       expect(postReopen.progress?.layer, LessonLayer.l1);
-      expect(postReopen.progress?.concluidos, contains('M1'));
-      expect(postReopen.current?.marker, 'M2');
+      expect(postReopen.progress?.concluidos, isNot(contains('M2')));
+      expect(postReopen.current?.marker, 'M3');
       expect(
         postReopen.events
-            .lastWhere((event) => event.type == 'ADVANCE_GATE_DECIDED')
-            .payload['decision'],
-        'next_item',
+            .lastWhere((event) => event.type == 'LOCAL_ADVANCE_DECIDED')
+            .payload['action'],
+        DecisionActionType.advanceItem.name,
       );
       expect(postReopen.truth.itemConsolidationStatus['M1'], isNot('mastered'));
 
       await h.runtime.advance();
       final continued = h.runtime.snapshot();
       expect(continued.phase.type, ClassroomPhaseType.lendo);
-      expect(continued.itemMarker, 'M2');
+      expect(continued.itemMarker, 'M3');
       expect(continued.conteudo?.question, isNotEmpty);
       expect(h.service.read(lessonLocalId)?.progress?.layer, LessonLayer.l1);
       expect(

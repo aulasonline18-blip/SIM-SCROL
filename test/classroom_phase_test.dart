@@ -339,7 +339,6 @@ LessonRuntimeEngine _runtime(
       materialService: materialService,
       materialController: materialController,
       store: store,
-      serverAdvanceGateClient: serverAdvanceGateClient,
     ),
   );
 }
@@ -543,7 +542,7 @@ void main() {
     },
   );
 
-  test('Classroom applies server decision from L1 to L3', () async {
+  test('Classroom applies local app-first decision from L1 to L3', () async {
     final service = StudentLearningStateService(
       seed: {'cyber-class': _classroomState()},
     );
@@ -571,10 +570,11 @@ void main() {
     expect(snap.phase.type, ClassroomPhaseType.concluido);
     expect(snap.history, hasLength(1));
     expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
-    expect(gate.requests, hasLength(1));
-    expect(gate.requests.single.questionText, isNotEmpty);
-    expect(gate.requests.single.correctOption, AnswerLetter.A);
-    expect(gate.requests.single.toJson()['evidence'], isA<Map>());
+    expect(gate.requests, isEmpty);
+    expect(
+      service.read('cyber-class')?.events.map((event) => event.type),
+      contains('LOCAL_ADVANCE_DECIDED'),
+    );
 
     await runtime.advance();
     snap = runtime.snapshot();
@@ -621,11 +621,7 @@ void main() {
       expect(runtime.snapshot().itemMarker, 'M2');
       expect(service.read('cyber-class')?.current?.layer, LessonLayer.l1);
 
-      expect(gate.requests.map((request) => request.layer), [
-        LessonLayer.l1,
-        LessonLayer.l2,
-        LessonLayer.l3,
-      ]);
+      expect(gate.requests, isEmpty);
     },
   );
 
@@ -746,16 +742,15 @@ void main() {
 
       runtime.select(AnswerLetter.A);
       await runtime.signal(DecisionSignal.two);
-      expect(gate.requests, hasLength(1));
+      expect(gate.requests, isEmpty);
       final afterSignal = service.read('cyber-class')!;
-      expect(afterSignal.current?.layer, LessonLayer.l1);
+      expect(afterSignal.current?.layer, LessonLayer.l2);
       expect(afterSignal.attempts, hasLength(1));
       expect(afterSignal.attempts.single.marker, 'M1');
       expect(afterSignal.attempts.single.layer, LessonLayer.l1);
       expect(afterSignal.attempts.single.letra, AnswerLetter.A);
       expect(afterSignal.attempts.single.sinal, DecisionSignal.two);
       expect(afterSignal.attempts.single.correct, isTrue);
-      expect(gate.requests.single.attempts, hasLength(1));
 
       await runtime.advance();
       final snap = runtime.snapshot();
@@ -779,11 +774,11 @@ void main() {
       expect(state.progress?.layer, LessonLayer.l2);
       expect(
         state.queuedActions.map((action) => action['type']),
-        contains('ADVANCE_GATE_PENDING'),
+        isNot(contains('ADVANCE_GATE_PENDING')),
       );
       expect(
         state.events.map((event) => event.type),
-        contains('LOCAL_PENDING_ADVANCE_DISPLAYED'),
+        contains('LOCAL_ADVANCE_DECIDED'),
       );
       expect(state.progress?.concluidos, isNot(contains('M1')));
       expect(
@@ -834,7 +829,7 @@ void main() {
 
     runtime.select(AnswerLetter.A);
     await runtime.signal(DecisionSignal.two);
-    expect(gate.requests, hasLength(1));
+    expect(gate.requests, isEmpty);
     expect(service.read('cyber-class')?.attempts, hasLength(1));
     await runtime.advance();
 
@@ -847,7 +842,7 @@ void main() {
     expect(saved.progress?.layer, LessonLayer.l2);
     expect(
       saved.queuedActions.map((action) => action['type']),
-      contains('ADVANCE_GATE_PENDING'),
+      isNot(contains('ADVANCE_GATE_PENDING')),
     );
 
     final reopened = _runtime(service, t02, serverAdvanceGateClient: gate);
@@ -862,7 +857,7 @@ void main() {
           .read('cyber-class')!
           .queuedActions
           .map((action) => action['type']),
-      contains('ADVANCE_GATE_PENDING'),
+      isNot(contains('ADVANCE_GATE_PENDING')),
     );
   });
 
@@ -1018,7 +1013,7 @@ void main() {
       expect(afterSignal.attempts, hasLength(1));
       expect(
         afterSignal.queuedActions.map((action) => action['type']),
-        contains('ADVANCE_GATE_PENDING'),
+        isNot(contains('ADVANCE_GATE_PENDING')),
       );
 
       await runtime.advance();
@@ -1028,13 +1023,13 @@ void main() {
       expect(snap.phase.type, ClassroomPhaseType.lendo);
       expect(snap.conteudo?.question, 'Servidor offline travou?');
       expect(t02.calls, 1);
-      expect(gate.requests, hasLength(1));
+      expect(gate.requests, isEmpty);
       expect(state.current?.layer, LessonLayer.l2);
       expect(state.progress?.layer, LessonLayer.l2);
       expect(state.attempts, hasLength(1));
       expect(
         state.queuedActions.map((action) => action['type']),
-        contains('ADVANCE_GATE_PENDING'),
+        isNot(contains('ADVANCE_GATE_PENDING')),
       );
     },
   );
@@ -1428,6 +1423,34 @@ void main() {
       );
       final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
       await runtime.open(lessonLocalId: 'lesson-cg-root');
+      service.mutate('lesson-cg-root', (state) {
+        final current = state.curriculum!;
+        return state.copyWith(
+          curriculum: StudentCurriculum(
+            topic: current.topic,
+            totalItems: 180,
+            generatedAt: current.generatedAt,
+            provisional: current.provisional,
+            globalPlan: current.globalPlan,
+            items: [
+              ...current.items,
+              const CurriculumItem(
+                marker: 'M81',
+                text: 'Item 81',
+                title: 'Item 81',
+                extra: {
+                  'itemIdx': 80,
+                  'localItemIdx': 0,
+                  'globalItemNumber': 81,
+                  'partNumber': 2,
+                  'rootLessonLocalId': 'lesson-cg-root',
+                  'partLessonLocalId': 'lesson-cg-root::part-2',
+                },
+              ),
+            ],
+          ),
+        );
+      });
 
       expect(runtime.snapshot().itemMarker, 'M80');
       runtime.select(AnswerLetter.A);
@@ -1455,7 +1478,7 @@ void main() {
         state.curriculum?.items[80].extra['partLessonLocalId'],
         'lesson-cg-root::part-2',
       );
-      expect(gate.requests.single.lessonLocalId, 'lesson-cg-root');
+      expect(gate.requests, isEmpty);
     },
   );
 
@@ -1490,7 +1513,7 @@ void main() {
       expect(state.truth.masteryEvidence, isEmpty);
       expect(
         state.queuedActions.map((action) => action['type']),
-        contains('ADVANCE_GATE_PENDING'),
+        isNot(contains('ADVANCE_GATE_PENDING')),
       );
       final eventTypes = store
           .getEventLog('cyber-class')
@@ -1540,7 +1563,7 @@ void main() {
       expect(state.truth.masteryEvidence, isEmpty);
       expect(
         state.queuedActions.map((action) => action['type']),
-        contains('ADVANCE_GATE_PENDING'),
+        isNot(contains('ADVANCE_GATE_PENDING')),
       );
       final eventTypes = store
           .getEventLog('cyber-class')
@@ -1594,7 +1617,7 @@ void main() {
       expect(afterLocalEvidence.attempts, hasLength(2));
       expect(afterLocalEvidence.attempts.first.ts, 1);
       expect(afterLocalEvidence.attempts.last.ts, isNot(1));
-      expect(gate.requests.single.attempts, hasLength(2));
+      expect(gate.requests, isEmpty);
 
       await Future<void>.delayed(Duration.zero);
 
@@ -1628,13 +1651,13 @@ void main() {
       final snapshot = runtime.snapshot();
       expect(snapshot.phase.type, ClassroomPhaseType.concluido);
       expect(snapshot.phase.signal, DecisionSignal.one);
-      expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l1);
+      expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
       expect(
         service
             .read('cyber-class')
             ?.queuedActions
             .map((action) => action['type']),
-        contains('ADVANCE_GATE_PENDING'),
+        isNot(contains('ADVANCE_GATE_PENDING')),
       );
     },
   );
@@ -1659,14 +1682,10 @@ void main() {
       await runtime.signal(DecisionSignal.one);
       await Future<void>.delayed(Duration.zero);
 
-      expect(gate.requests, hasLength(2));
-      expect(
-        gate.requests.first.idempotencyKey,
-        gate.requests.last.idempotencyKey,
-      );
+      expect(gate.requests, isEmpty);
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
       expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
-      expect(service.read('cyber-class')?.attempts, hasLength(1));
+      expect(service.read('cyber-class')?.attempts, hasLength(2));
       expect(
         service
             .read('cyber-class')

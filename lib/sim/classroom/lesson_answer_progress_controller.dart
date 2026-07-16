@@ -2,13 +2,13 @@ import 'dart:async';
 
 import '../core/signal_tracker.dart';
 import '../constitution/sim_constitutional_contract.dart';
-import '../external_ai/sim_ai_server_config.dart';
 import '../lesson/dopamine_ready_window_engine.dart';
 import '../lesson/lesson_models.dart';
 import '../lesson/student_lesson_material_service.dart';
 import '../media/audio_core.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
+import '../state/learning_decision_engine.dart';
 import '../state/student_lesson_executor.dart';
 import '../state/mastery_truth_engine.dart';
 import '../state/student_state_store.dart';
@@ -16,7 +16,6 @@ import 'classroom_models.dart';
 import 'lesson_answer_feedback.dart';
 import 'lesson_material_controller.dart';
 import 'lesson_position_engine.dart';
-import 'server_advance_gate.dart';
 
 class LessonAnswerProgressController {
   LessonAnswerProgressController({
@@ -28,7 +27,6 @@ class LessonAnswerProgressController {
     SignalTracker? signalTracker,
     MasteryTruthEngine? truthEngine,
     SimConstitutionalContract? constitutionalContract,
-    this.serverAdvanceGateClient,
   }) : signalTracker = signalTracker ?? SignalTracker(stateService),
        constitutionalContract =
            constitutionalContract ?? const SimConstitutionalContract();
@@ -40,7 +38,6 @@ class LessonAnswerProgressController {
   final AudioCore? audioCore;
   final SignalTracker signalTracker;
   final SimConstitutionalContract constitutionalContract;
-  final ServerAdvanceGateClient? serverAdvanceGateClient;
 
   void selecionar(LessonPositionState position, AnswerLetter letter) {
     audioCore?.stop();
@@ -83,14 +80,6 @@ class LessonAnswerProgressController {
       'layer-${position.layer.value}',
       content.question,
     ].join('::');
-    final idempotencyKey = [
-      lessonLocalId,
-      item.marker,
-      position.layer.value,
-      letter.name,
-      signal.value,
-      questionId,
-    ].join(':');
     final answeredAt = DateTime.now().millisecondsSinceEpoch;
     final localAttempt = LessonAttempt(
       marker: item.marker,
@@ -134,38 +123,12 @@ class LessonAnswerProgressController {
     final stateWithLocalEvidence =
         currentState == null || position.isReviewAtivo
         ? currentState
-        : _withLocalAttemptEvidence(currentState, localAttempt, idempotencyKey);
-    final request = stateWithLocalEvidence == null || position.isReviewAtivo
-        ? null
-        : ServerAdvanceGateRequest(
-            lessonLocalId: lessonLocalId,
-            userId: stateWithLocalEvidence.userId,
-            marker: item.marker,
-            itemIdx: position.itemIdx,
-            layer: position.layer,
-            selectedOption: letter,
-            signal: signal,
-            correct: correct,
-            questionId: questionId,
-            questionText: content.question,
-            correctOption: content.correctAnswer,
-            attempts: stateWithLocalEvidence.attempts,
-            history: position.historia,
-            highWaterMark: stateWithLocalEvidence.syncStatus?.highWaterMark,
-            pending: stateWithLocalEvidence.auxRooms ?? const {},
-            currentState: stateWithLocalEvidence,
-            idempotencyKey: idempotencyKey,
-          );
-    if (request != null) {
-      final pending = recordPendingServerAdvanceGate(
-        state: stateWithLocalEvidence!,
-        request: request,
-        error: const SimExternalAiException(
-          'Confirmacao de avanco pendente.',
-          code: 'ADVANCE_GATE_CONFIRMATION_PENDING',
-        ),
+        : _withLocalAttemptEvidence(currentState, localAttempt);
+    if (stateWithLocalEvidence != null && !position.isReviewAtivo) {
+      stateService.write(
+        _withLocalAdvanceDecision(stateWithLocalEvidence, item.marker),
+        scheduleShadow: false,
       );
-      stateService.write(pending, scheduleShadow: false);
     }
 
     final message = buildLessonAnswerFeedback(
@@ -203,85 +166,6 @@ class LessonAnswerProgressController {
         },
       ),
     ]);
-
-    final remoteClient = serverAdvanceGateClient;
-    if (remoteClient != null && request != null) {
-      unawaited(
-        _confirmServerAdvanceGate(
-          remoteClient: remoteClient,
-          request: request,
-          topic: topic,
-          position: position,
-          baseItems: baseItems,
-          letter: letter,
-          signal: signal,
-        ),
-      );
-    }
-  }
-
-  Future<void> _confirmServerAdvanceGate({
-    required ServerAdvanceGateClient remoteClient,
-    required ServerAdvanceGateRequest request,
-    required String? topic,
-    required LessonPositionState position,
-    required List<PlannedItem> baseItems,
-    required AnswerLetter letter,
-    required DecisionSignal signal,
-  }) async {
-    try {
-      final decision = await remoteClient.decide(request);
-      final latestState =
-          stateService.read(request.lessonLocalId) ?? request.currentState;
-      if (latestState == null) return;
-      final nextState = applyServerAdvanceGateDecision(
-        state: latestState,
-        request: request,
-        decision: decision,
-      );
-      final savedState = stateService.write(
-        nextState,
-        acceptServerAuthority: true,
-      );
-      if (hasPendingCgPartTransition(savedState)) {
-        position.phase = const ClassroomPhase.engineError(
-          'aula_next_part_preparing',
-        );
-        return;
-      }
-      final view = activeLessonView(savedState);
-      if (view != null && !view.ended) {
-        materialService.maintainLessonReadyWindow(
-          lessonLocalId: request.lessonLocalId,
-          topic: topic,
-          itemIdx: view.itemIdx,
-          layer: view.layer,
-          items: dopamineItemsFromCurriculum(baseItems),
-          source: 'cyber.aula.server-advance-gate',
-          priority: 'active',
-          reason: 'server_decision_prepares_next_experience',
-        );
-      }
-    } catch (error) {
-      final latestState =
-          stateService.read(request.lessonLocalId) ?? request.currentState;
-      if (latestState == null) return;
-      final pending = recordPendingServerAdvanceGate(
-        state: latestState,
-        request: request,
-        error: error,
-      );
-      stateService.write(pending);
-      if (position.phase.type == ClassroomPhaseType.processando &&
-          position.phase.letter == letter &&
-          position.phase.signal == signal) {
-        position.phase = ClassroomPhase.advancePending(
-          message: 'aula_advance_pending',
-          letter: letter,
-          signal: signal,
-        );
-      }
-    }
   }
 
   Future<void> avancar({
@@ -337,6 +221,7 @@ class LessonAnswerProgressController {
     if (!view.ended &&
         view.itemIdx == position.itemIdx &&
         view.layer == position.layer) {
+      final completedPhase = position.phase;
       final next = nextLessonSlot(position.itemIdx, position.layer, baseItems);
       if (next != null &&
           _hasCorrectEvidenceForCurrentPosition(state, position)) {
@@ -384,16 +269,20 @@ class LessonAnswerProgressController {
       position.historia = view.historia;
       position.mainAdvances = view.mainAdvances;
       position.erros = view.erros;
-      position.phase = const ClassroomPhase.loading();
-      await materialController.carregar(
+      position.phase = ClassroomPhase.advancePending(
+        message: 'aula_advance_preparing',
+        letter: completedPhase.letter ?? AnswerLetter.A,
+        signal: completedPhase.signal ?? DecisionSignal.one,
+      );
+      materialService.maintainLessonReadyWindow(
         lessonLocalId: lessonLocalId,
         topic: topic,
-        position: position,
-        idioma: idioma,
-        academic: academic,
-        mode: _modeForNextMaterial(activeState, position.isReviewAtivo),
-        baseItems: baseItems,
-        forceRefresh: true,
+        itemIdx: position.itemIdx,
+        layer: position.layer,
+        items: _dopamineItemsFromCurriculum(baseItems),
+        source: 'cyber.aula.advance-cache-miss',
+        priority: 'active',
+        reason: 'advance_cache_miss_prepares_without_blocking_touch',
       );
       return;
     }
@@ -490,15 +379,77 @@ class LessonAnswerProgressController {
   StudentLearningState _withLocalAttemptEvidence(
     StudentLearningState state,
     LessonAttempt attempt,
-    String idempotencyKey,
   ) {
-    final alreadyPending = state.queuedActions.any(
-      (action) =>
-          action['type'] == 'ADVANCE_GATE_PENDING' &&
-          action['idempotencyKey'] == idempotencyKey,
-    );
-    if (alreadyPending) return state;
     return state.copyWith(attempts: [...state.attempts, attempt]);
+  }
+
+  StudentLearningState _withLocalAdvanceDecision(
+    StudentLearningState state,
+    String marker,
+  ) {
+    final progress = state.progress;
+    final curriculum = state.curriculum;
+    if (progress == null || curriculum == null) return state;
+    final decision = decideNextActionFromState(state);
+    final lastCurrentAttempt = state.attempts.reversed
+        .cast<LessonAttempt?>()
+        .firstWhere(
+          (attempt) =>
+              attempt?.marker == marker && attempt?.layer == progress.layer,
+          orElse: () => null,
+        );
+    final applied = applyStudentDecision(
+      progress,
+      decision,
+      itemIdx: progress.itemIdx,
+      layer: progress.layer,
+      totalItems: curriculum.items.length,
+      marker: marker,
+      markCurrentComplete: lastCurrentAttempt?.correct == true,
+    );
+    if (!applied.applied) return state;
+    final nextProgress = applied.nextProgress;
+    final nextMarker =
+        nextProgress.itemIdx >= 0 &&
+            nextProgress.itemIdx < curriculum.items.length
+        ? curriculum.items[nextProgress.itemIdx].marker
+        : null;
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    return state.copyWith(
+      updatedAt: ts,
+      current: LessonCurrent(
+        itemIdx: nextProgress.itemIdx,
+        marker: nextMarker,
+        layer: nextProgress.layer,
+        amparoLvl: nextProgress.amparoLvl,
+      ),
+      progress: nextProgress,
+      events: [
+        ...state.events,
+        StudentLearningEvent(
+          type: 'LOCAL_ADVANCE_DECIDED',
+          ts: ts,
+          payload: {
+            'action': decision.actionType.name,
+            'reason': decision.reason,
+            'fromMarker': marker,
+            'toMarker': nextMarker,
+            'toItemIdx': nextProgress.itemIdx,
+            'toLayer': nextProgress.layer.value,
+            'source': 'sim_app_local_advance_engine',
+          },
+        ),
+        StudentLearningEvent(
+          type: 'NEXT_ACTION_DECIDED',
+          ts: ts,
+          payload: {
+            'action': decision.actionType.name,
+            'reason': decision.reason,
+            'source': 'sim_app_local_advance_engine',
+          },
+        ),
+      ],
+    );
   }
 
   void _recordLocalPendingAdvanceDisplayed({
@@ -513,31 +464,26 @@ class LessonAnswerProgressController {
     final progress = latest?.progress;
     if (latest == null || progress == null) return;
     final ts = DateTime.now().millisecondsSinceEpoch;
-    final pendingKey = _latestAdvanceGatePendingKey(latest);
     final eventPayload = <String, dynamic>{
       'lessonLocalId': lessonLocalId,
       'fromItemIdx': fromItemIdx,
       'fromLayer': fromLayer.value,
       'toItemIdx': toItemIdx,
       'toLayer': toLayer.value,
-      'reason': 'prepared_experience_displayed_before_remote_confirmation',
-      'remoteConfirmation': 'pending',
+      'reason': 'prepared_experience_displayed_from_local_state',
+      'remoteConfirmation': 'not_required',
     };
     final localPendingAdvance = <String, dynamic>{
       'fromItemIdx': fromItemIdx,
       'fromLayer': fromLayer.value,
       'toItemIdx': toItemIdx,
       'toLayer': toLayer.value,
-      'remoteConfirmation': 'pending',
+      'remoteConfirmation': 'not_required',
       'updatedAt': ts,
     };
     if (marker != null) {
       eventPayload['marker'] = marker;
       localPendingAdvance['marker'] = marker;
-    }
-    if (pendingKey != null) {
-      eventPayload['idempotencyKey'] = pendingKey;
-      localPendingAdvance['idempotencyKey'] = pendingKey;
     }
     stateService.write(
       latest.copyWith(
@@ -565,13 +511,10 @@ class LessonAnswerProgressController {
       ),
     );
   }
+}
 
-  String? _latestAdvanceGatePendingKey(StudentLearningState state) {
-    for (final action in state.queuedActions.reversed) {
-      if (action['type'] == 'ADVANCE_GATE_PENDING') {
-        return action['idempotencyKey']?.toString();
-      }
-    }
-    return null;
-  }
+List<DopamineWindowItem> _dopamineItemsFromCurriculum(List<PlannedItem> items) {
+  return items
+      .map((item) => DopamineWindowItem(text: item.text, marker: item.marker))
+      .toList(growable: false);
 }

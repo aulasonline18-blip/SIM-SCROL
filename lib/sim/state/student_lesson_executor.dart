@@ -1,11 +1,9 @@
 // LEGACY/SHADOW ONLY.
 //
-// This file remains as a deterministic audit mirror for old parity tests and
-// migration diagnostics. It is not an authority for official SIMAPP progress.
-// Runtime answer flow must call SimServidor through ServerAdvanceGateClient and
-// apply only the server decision. Do not wire processAnswerWithEngine or
-// applyStudentDecision into classroom runtime, controllers, widgets, sync, or
-// restore paths.
+// This file remains as the deterministic app-side advance mirror. Classroom
+// runtime may use it to decide the next local item/layer. The server must only
+// receive state later through the remote vault sync path; it must not be a gate,
+// confirmation, or veto in the hot answer/signal/advance path.
 //
 // Historical origin only; this is not a live parity rule.
 import 'learning_decision_engine.dart';
@@ -80,10 +78,14 @@ ApplyDecisionResult applyStudentDecision(
   required LessonLayer layer,
   required int totalItems,
   String? marker,
+  bool markCurrentComplete = true,
 }) {
   final concluidos = inputProgress.concluidos;
   final completedWithCurrent =
-      marker != null && marker.isNotEmpty && !concluidos.contains(marker)
+      markCurrentComplete &&
+          marker != null &&
+          marker.isNotEmpty &&
+          !concluidos.contains(marker)
       ? [...concluidos, marker]
       : concluidos;
 
@@ -242,6 +244,7 @@ StudentLearningState processAnswerWithEngine(
       layer: progress.layer,
       totalItems: curriculum.items.length,
       marker: item.marker,
+      markCurrentComplete: attempt.correct,
     );
   } catch (e) {
     return state.copyWith(

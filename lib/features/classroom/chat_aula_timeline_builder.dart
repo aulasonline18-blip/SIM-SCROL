@@ -260,7 +260,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     } else if (phase?.type == ClassroomPhaseType.avancoPendente) {
       messages.add(
         ChatLessonMessage(
-          id: 'advance-gate-pending-$activeId',
+          id: 'local-advance-preparing-$activeId',
           role: ChatLessonMessageRole.system,
           kind: ChatLessonMessageKind.error,
           text: t(phase?.message ?? 'aula_advance_pending'),
