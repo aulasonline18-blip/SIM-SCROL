@@ -54,8 +54,7 @@ class LessonAnswerProgressController {
     final phase = position.phase;
     final content = position.conteudo;
     final item = position.itemAtivo;
-    if ((phase.type != ClassroomPhaseType.expandida &&
-            phase.type != ClassroomPhaseType.avancoPendente) ||
+    if (phase.type != ClassroomPhaseType.expandida ||
         phase.letter == null ||
         content == null ||
         item == null) {

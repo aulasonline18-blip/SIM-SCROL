@@ -1162,6 +1162,38 @@ void main() {
     expect(session.autoAdvances, 1);
   });
 
+  testWidgets(
+    'chat advance pending is shown as preparation without retry action',
+    (tester) async {
+      final session = LabSession()
+        ..authed = true
+        ..authReady = true
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'Portuguese'
+        ..route = '/cyber/aula'
+        ..lessonLocalId = 'lesson-chat-pending'
+        ..aulaSnapshot = _chatSnapshot(
+          phase: const ClassroomPhase.advancePending(
+            message: 'aula_advance_preparing',
+            letter: AnswerLetter.B,
+            signal: DecisionSignal.two,
+          ),
+        );
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: session)),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+
+      final retry = find.text(t('aula_try_again_2'), skipOffstage: false);
+      expect(retry, findsNothing);
+      expect(
+        find.text(t('aula_advance_preparing'), skipOffstage: false),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('chat timeline opens at end and respects manual scroll up', (
     tester,
   ) async {

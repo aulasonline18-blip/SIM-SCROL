@@ -939,6 +939,56 @@ void main() {
     expect(svc.read('L1')?.attempts, isEmpty);
   });
 
+  test(
+    'T25a: enviarSinal em phase=avancoPendente → controller ignora',
+    () async {
+      final svc = StudentLearningStateService(seed: {'L1': _state0()});
+      final ctrl = _controller(svc);
+      final pos = LessonPositionState(
+        items: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        erros: 0,
+        historia: const [],
+        history: const [],
+        mainAdvances: 0,
+        loadingLayer: LessonLayer.l1,
+        conteudo: const LessonContent(
+          explanation: 'E',
+          question: 'Q',
+          options: {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+        phase: const ClassroomPhase.advancePending(
+          message: 'aula_advance_preparing',
+          letter: AnswerLetter.A,
+          signal: DecisionSignal.two,
+        ),
+        imagem: null,
+        teoriaPronta: true,
+      );
+
+      await ctrl.enviarSinal(
+        lessonLocalId: 'L1',
+        topic: 'Cinemática',
+        position: pos,
+        signal: DecisionSignal.one,
+        baseItems: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
+      );
+
+      expect(pos.phase.type, ClassroomPhaseType.avancoPendente);
+      expect(svc.read('L1')?.attempts, isEmpty);
+      expect(
+        svc.read('L1')?.events.where((event) => event.type == 'ANSWER_SAVED'),
+        isEmpty,
+      );
+    },
+  );
+
   test('T25b: sinal processa sem atraso artificial', () async {
     final svc = StudentLearningStateService(seed: {'L1': _state0()});
     final ctrl = _controller(svc);

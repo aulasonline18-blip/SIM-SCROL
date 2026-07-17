@@ -1187,6 +1187,73 @@ void main() {
   });
 
   test(
+    'resolveLessonMaterialFromStateOrEngine applies waitAfterOrderMs as active wait limit',
+    () async {
+      const params = CompleteLessonParams(
+        lessonLocalId: 'cyber-wait-contract',
+        item: 'Item 1',
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: LessonLayer.l1,
+        mode: LessonMode.session,
+        marker: 'M1',
+      );
+      final service = StudentLearningStateService(
+        seed: {
+          'cyber-wait-contract': _stateWithCurriculum().copyWith(
+            lessonLocalId: 'cyber-wait-contract',
+          ),
+        },
+      );
+      final t02 = BlockingT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      );
+      final materialService = StudentLessonMaterialService(
+        stateService: service,
+        orchestrator: orchestrator,
+        readyWindowEngine: DopamineReadyWindowEngine(
+          service: service,
+          orchestrator: orchestrator,
+        ),
+      );
+
+      final startedAt = DateTime.now();
+      final result = await materialService
+          .resolveLessonMaterialFromStateOrEngine(
+            ResolveLessonMaterialInput(
+              lessonLocalId: 'cyber-wait-contract',
+              topic: 'Objetivo',
+              itemIdx: 0,
+              marker: 'M1',
+              layer: LessonLayer.l1,
+              params: params,
+              waitBeforeOrderMs: 0,
+              waitAfterOrderMs: 5,
+            ),
+          );
+
+      expect(result, isNull);
+      expect(t02.calls, 1);
+      expect(
+        DateTime.now().difference(startedAt).inMilliseconds,
+        lessThan(500),
+      );
+      final waitEvents = service
+          .read('cyber-wait-contract')!
+          .events
+          .where((event) => event.type == 'LESSON_MATERIAL_WAIT_APPLIED')
+          .toList();
+      expect(waitEvents, hasLength(1));
+      expect(waitEvents.single.payload['stage'], 'after_order_timeout');
+      expect(waitEvents.single.payload['waitAfterOrderMs'], 5);
+      expect(waitEvents.single.payload['resolved'], isFalse);
+    },
+  );
+
+  test(
     'LessonOrchestrator stores image only when T02 returns ready image data',
     () async {
       final cache = LessonMaterialCache();

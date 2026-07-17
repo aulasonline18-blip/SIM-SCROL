@@ -262,15 +262,14 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         ChatLessonMessage(
           id: 'local-advance-preparing-$activeId',
           role: ChatLessonMessageRole.system,
-          kind: ChatLessonMessageKind.error,
+          kind: ChatLessonMessageKind.processing,
           text: t(phase?.message ?? 'aula_advance_pending'),
-          actionKey: 'retry',
           lessonLocalId: input.lessonLocalId,
           marker: marker,
           itemIdx: itemIdx,
           layer: layer,
-          isActionable: true,
-          deliveryStatus: ChatLessonDeliveryStatus.failed,
+          isActionable: false,
+          deliveryStatus: ChatLessonDeliveryStatus.processing,
         ),
       );
     } else if (phase?.type == ClassroomPhaseType.concluido) {

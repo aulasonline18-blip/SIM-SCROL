@@ -149,10 +149,54 @@ class StudentLessonMaterialService {
         : resolveFastLessonMaterialFromStateOrCache(input);
     if (fast != null) return fast;
 
-    final lesson = await orchestrator.prefetchCompleteLesson(
+    if (!input.forceRefresh &&
+        input.waitBeforeOrderMs > 0 &&
+        orchestrator.isLessonBusy) {
+      await Future<void>.delayed(
+        Duration(milliseconds: input.waitBeforeOrderMs),
+      );
+      final afterWait = resolveFastLessonMaterialFromStateOrCache(input);
+      if (afterWait != null) {
+        final waitedMs = DateTime.now().millisecondsSinceEpoch - startedAt;
+        _appendLessonWaitApplied(
+          input,
+          stage: 'before_order',
+          waitedMs: waitedMs,
+          resolved: true,
+        );
+        return afterWait;
+      }
+      _appendLessonWaitApplied(
+        input,
+        stage: 'before_order',
+        waitedMs: DateTime.now().millisecondsSinceEpoch - startedAt,
+        resolved: false,
+      );
+    }
+
+    final lessonFuture = orchestrator.prefetchCompleteLesson(
       input.params,
       priority: 'active',
     );
+    final CompleteLesson lesson;
+    try {
+      lesson = input.waitAfterOrderMs <= 0
+          ? await lessonFuture
+          : await lessonFuture.timeout(
+              Duration(milliseconds: input.waitAfterOrderMs),
+            );
+    } on TimeoutException {
+      final afterTimeout = input.forceRefresh
+          ? null
+          : resolveFastLessonMaterialFromStateOrCache(input);
+      _appendLessonWaitApplied(
+        input,
+        stage: 'after_order_timeout',
+        waitedMs: DateTime.now().millisecondsSinceEpoch - startedAt,
+        resolved: afterTimeout != null,
+      );
+      return afterTimeout;
+    }
     _mirrorPreparedAndCurrentLessonMaterial(input, lesson);
     final waitedMs = DateTime.now().millisecondsSinceEpoch - startedAt;
     _appendLessonTextReady(
@@ -232,6 +276,32 @@ class StudentLessonMaterialService {
           'mediaMeasuredSeparately': true,
           'warmCacheCount': orchestrator.warmCacheEntryCount,
           'coldCacheCount': orchestrator.coldCacheEntryCount,
+        },
+      ),
+    );
+  }
+
+  void _appendLessonWaitApplied(
+    ResolveLessonMaterialInput input, {
+    required String stage,
+    required int waitedMs,
+    required bool resolved,
+  }) {
+    stateService.appendEvent(
+      input.lessonLocalId,
+      StudentLearningEvent(
+        type: 'LESSON_MATERIAL_WAIT_APPLIED',
+        ts: DateTime.now().millisecondsSinceEpoch,
+        payload: {
+          'lessonLocalId': input.lessonLocalId,
+          'itemIdx': input.itemIdx,
+          'marker': input.marker,
+          'layer': input.layer.value,
+          'stage': stage,
+          'waitedMs': waitedMs,
+          'resolved': resolved,
+          'waitBeforeOrderMs': input.waitBeforeOrderMs,
+          'waitAfterOrderMs': input.waitAfterOrderMs,
         },
       ),
     );

@@ -485,6 +485,33 @@ void main() {
     expect(error.last.deliveryStatus, ChatLessonDeliveryStatus.failed);
   });
 
+  test('advance pending is preparation state, not recoverable error', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.advancePending(
+            message: 'aula_advance_preparing',
+            letter: AnswerLetter.A,
+            signal: DecisionSignal.two,
+          ),
+        ),
+      ),
+    );
+
+    final pending = messages.singleWhere(
+      (message) => message.id.startsWith('local-advance-preparing-'),
+    );
+
+    expect(pending.kind, ChatLessonMessageKind.processing);
+    expect(pending.deliveryStatus, ChatLessonDeliveryStatus.processing);
+    expect(pending.actionKey, isNull);
+    expect(pending.isActionable, isFalse);
+    expect(
+      AulaConversationBlock.fromMessage(pending).type,
+      isNot(AulaConversationBlockType.recoverableError),
+    );
+  });
+
   test('technical runtime errors are controlled and do not leak raw keys', () {
     final feedbackKeyError = buildChatLessonMessages(
       ChatLessonTimelineInput(
