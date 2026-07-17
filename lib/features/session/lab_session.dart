@@ -2018,7 +2018,18 @@ class LabSession extends ChangeNotifier {
     );
     final state = row?.state;
     if (state == null || _stateDeleted(state)) return false;
-    canonicalStore?.writeState(state);
+    canonicalStore?.writeState(
+      state.copyWith(
+        extra: {
+          ...state.extra,
+          'remoteHydratedAt': DateTime.now().millisecondsSinceEpoch,
+          'remoteHydratedSource': 'drawer_cloud_lesson',
+          'remoteHydratedWithoutMaterial':
+              state.currentLessonMaterial == null &&
+              state.readyLessonMaterials.isEmpty,
+        },
+      ),
+    );
     _prepareDrawerLessonOpen(state.lessonLocalId);
     unawaited(openAulaRuntime());
     return true;

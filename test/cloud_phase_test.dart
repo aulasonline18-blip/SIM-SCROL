@@ -489,6 +489,83 @@ void main() {
   );
 
   test(
+    'remote vault remains sanitized after local remote lesson rehydration',
+    () async {
+      final state =
+          stateWithProgress(
+            id: 'remote-light',
+            itemIdx: 1,
+            layer: LessonLayer.l1,
+            mainAdvances: 1,
+          ).copyWith(
+            extra: const {'remoteHydratedSource': 'drawer_cloud_lesson'},
+            currentLessonMaterial: {
+              'text_status': 'ready',
+              'explanation': 'Explicacao reidratada local',
+              'question': 'Pergunta reidratada local?',
+              'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+              'correctAnswer': 'A',
+              'feedback': 'Feedback local',
+              'imageData': 'data:image/png;base64,LOCAL',
+              'audioData': 'audio-local',
+              'for_itemIdx': 1,
+              'for_marker': 'M1',
+              'for_layer': 'l1',
+            },
+            readyLessonMaterials: {
+              'I1::M1::L1::l1': {
+                'text_status': 'ready',
+                'question': 'Preparada local?',
+                'options': {'A': 'A'},
+                'correctAnswer': 'A',
+                'feedback': 'Pronto',
+                'imageData': 'data:image/png;base64,READY',
+              },
+            },
+          );
+      final states = StudentLearningStateService(seed: {'remote-light': state});
+      final cloud = FakeCloudFunctions();
+      final queue = CloudQueue(
+        storage: MemoryCloudQueueStorage(),
+        stateService: states,
+        sessionProvider: FakeSessionProvider(),
+        cloudFunctions: cloud,
+        now: () => 1000,
+      );
+
+      queue.enqueueStudentStateSync(lessonLocalId: 'remote-light');
+      await queue.drainQueue();
+
+      final sent = cloud.lastPersistInput!.toJson()['state'] as JsonMap;
+      final encoded = jsonEncode(sent);
+      final curriculum = sent['curriculum'] as JsonMap;
+      final items = curriculum['items'] as List;
+
+      expect(sent['remote_state_contract'], 'StudentLearningStateV1');
+      expect(items[0]['text'], 'Item 1');
+      expect(items[1]['text'], 'Item 2');
+      expect(sent['progress']['itemIdx'], 1);
+      expect(sent['current']['itemIdx'], 1);
+      expect(sent.containsKey('currentLessonMaterial'), isFalse);
+      expect(sent.containsKey('readyLessonMaterials'), isFalse);
+      expect(queue.getQueueSnapshot(), isEmpty);
+      for (final forbidden in const [
+        'Explicacao reidratada local',
+        'Pergunta reidratada local?',
+        'Preparada local?',
+        'options',
+        'correctAnswer',
+        'feedback',
+        'imageData',
+        'audioData',
+        'data:image/png',
+      ]) {
+        expect(encoded.contains(forbidden), isFalse, reason: forbidden);
+      }
+    },
+  );
+
+  test(
     'cloud queue persists patch and removes it after successful drain',
     () async {
       final states = StudentLearningStateService(

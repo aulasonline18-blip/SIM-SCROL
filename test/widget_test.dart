@@ -629,6 +629,56 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets(
+    'drawer remoto lista e importa aulas leves com banco local vazio',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(480, 1200));
+      final cloud = _FakeDrawerCloud()
+        ..put(_drawerState('remote-kiribati', 'Kiribati remoto', 1))
+        ..put(_drawerState('remote-english', 'English remoto', 2));
+      final session =
+          LabSession(
+              drawerCloudFunctions: cloud,
+              drawerSessionProvider: _FakeDrawerSessionProvider(),
+            )
+            ..authed = true
+            ..authReady = true
+            ..credits = 3;
+
+      expect(session.canonicalStore!.listLocalStates(), isEmpty);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showAulaMenu(context, session),
+              child: const Text('open empty cloud drawer'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open empty cloud drawer'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Kiribati remoto'), findsOneWidget);
+      expect(find.text('English remoto'), findsOneWidget);
+
+      await tester.tap(find.text('Kiribati remoto'));
+      await tester.pumpAndSettle();
+
+      final imported = session.canonicalStore!.readState('remote-kiribati');
+      expect(session.lessonLocalId, 'remote-kiribati');
+      expect(imported.curriculum?.items, isNotEmpty);
+      expect(imported.currentLessonMaterial, isNull);
+      expect(imported.readyLessonMaterials, isEmpty);
+      expect(imported.extra['remoteHydratedSource'], 'drawer_cloud_lesson');
+      expect(imported.extra['remoteHydratedWithoutMaterial'], isTrue);
+
+      await tester.binding.setSurfaceSize(null);
+    },
+  );
+
   testWidgets('drawer_new_lesson_and_local_delete_follow_web_contract', (
     WidgetTester tester,
   ) async {

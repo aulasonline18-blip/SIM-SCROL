@@ -478,6 +478,71 @@ void main() {
   );
 
   test(
+    'aula remota leve reidrata material atual via caminho oficial T02',
+    () async {
+      final remoteLight = _classroomState().copyWith(
+        currentLessonMaterial: null,
+        readyLessonMaterials: const {},
+        extra: const {'remoteHydratedSource': 'drawer_cloud_lesson'},
+      );
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': remoteLight},
+      );
+      final t02 = FakeClassroomT02();
+      final runtime = _runtime(service, t02);
+
+      expect(service.read('cyber-class')?.curriculum?.items, isNotEmpty);
+      expect(service.read('cyber-class')?.current, isNotNull);
+      expect(service.read('cyber-class')?.progress, isNotNull);
+      expect(service.read('cyber-class')?.currentLessonMaterial, isNull);
+      expect(service.read('cyber-class')?.readyLessonMaterials, isEmpty);
+
+      final snapshot = await runtime.open(lessonLocalId: 'cyber-class');
+      final local = service.read('cyber-class')!;
+
+      expect(snapshot.hasCurriculum, isTrue);
+      expect(snapshot.phase.type, ClassroomPhaseType.lendo);
+      expect(snapshot.conteudo?.question, 'Pergunta M1?');
+      expect(snapshot.conteudo?.options.keys, containsAll(AnswerLetter.values));
+      expect(t02.calls, 1);
+      expect(t02.requests.single.marker, 'M1');
+      expect(t02.requests.single.layer, LessonLayer.l1);
+      expect(local.currentLessonMaterial?['text_status'], 'ready');
+      expect(local.readyLessonMaterials, isNotEmpty);
+    },
+  );
+
+  test(
+    'aula remota grande preserva CG-1 e reidrata a posicao global atual',
+    () async {
+      final remoteLight = _largeCurriculumBoundaryState().copyWith(
+        currentLessonMaterial: null,
+        readyLessonMaterials: const {},
+      );
+      final service = StudentLearningStateService(
+        seed: {'lesson-cg-root': remoteLight},
+      );
+      final t02 = FakeClassroomT02();
+      final runtime = _runtime(service, t02);
+
+      final snapshot = await runtime.open(lessonLocalId: 'lesson-cg-root');
+      final state = service.read('lesson-cg-root')!;
+
+      expect(snapshot.hasCurriculum, isTrue);
+      expect(snapshot.phase.type, ClassroomPhaseType.lendo);
+      expect(snapshot.itemMarker, 'M80');
+      expect(t02.calls, 1);
+      expect(t02.requests.single.itemIdx, 79);
+      expect(t02.requests.single.marker, 'M80');
+      expect(t02.requests.single.layer, LessonLayer.l3);
+      expect(state.progress?.itemIdx, 79);
+      expect(state.progress?.layer, LessonLayer.l3);
+      expect(state.curriculum?.globalPlan?.globalTotalItems, 180);
+      expect(state.curriculum?.globalPlan?.continuationNeeded, isTrue);
+    },
+  );
+
+  test(
     'M-EXP3-B runtime reopens from hydrated cache without T02 when offline',
     () async {
       SharedPreferences.setMockInitialValues({});
