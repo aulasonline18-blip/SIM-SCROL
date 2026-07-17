@@ -277,6 +277,21 @@ class LessonRuntimeEngine {
     );
   }
 
+  bool reavaliarAvancoPendente() {
+    _refreshSessionFromState();
+    final position = _position;
+    final session = _session;
+    if (position == null || session == null) return false;
+    return answerController.reavaliarAvancoPendente(
+      lessonLocalId: session.lessonLocalId,
+      topic: session.curriculum?.topic ?? session.onboarding.objetivo,
+      position: position,
+      baseItems: session.baseItems,
+      idioma: session.idioma,
+      academic: session.academic,
+    );
+  }
+
   LessonRuntimeSnapshot snapshot() {
     _refreshSessionFromState();
     final position = _position;

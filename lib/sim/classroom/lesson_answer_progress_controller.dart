@@ -269,8 +269,25 @@ class LessonAnswerProgressController {
       position.historia = view.historia;
       position.mainAdvances = view.mainAdvances;
       position.erros = view.erros;
+      final targetItemIdx = next?.idx ?? view.itemIdx;
+      final targetLayer = next?.layer ?? view.layer;
+      final targetMarker =
+          targetItemIdx >= 0 && targetItemIdx < baseItems.length
+          ? baseItems[targetItemIdx].marker
+          : item.marker;
       position.phase = ClassroomPhase.advancePending(
         message: 'aula_advance_preparing',
+        letter: completedPhase.letter ?? AnswerLetter.A,
+        signal: completedPhase.signal ?? DecisionSignal.one,
+      );
+      _recordLocalAdvancePending(
+        lessonLocalId: lessonLocalId,
+        fromItemIdx: position.itemIdx,
+        fromLayer: position.layer,
+        toItemIdx: targetItemIdx,
+        toLayer: targetLayer,
+        fromMarker: item.marker,
+        toMarker: targetMarker,
         letter: completedPhase.letter ?? AnswerLetter.A,
         signal: completedPhase.signal ?? DecisionSignal.one,
       );
@@ -279,6 +296,81 @@ class LessonAnswerProgressController {
         topic: topic,
         itemIdx: position.itemIdx,
         layer: position.layer,
+        items: _dopamineItemsFromCurriculum(baseItems),
+        source: 'cyber.aula.advance-cache-miss',
+        priority: 'active',
+        reason: 'advance_cache_miss_prepares_without_blocking_touch',
+      );
+      return;
+    }
+
+    if (!view.ended &&
+        (view.itemIdx != position.itemIdx || view.layer != position.layer)) {
+      final completedPhase = position.phase;
+      final previousItemIdx = position.itemIdx;
+      final previousLayer = position.layer;
+      final previousLoadingLayer = position.loadingLayer;
+      final previousErros = position.erros;
+      final previousHistoria = position.historia;
+      final previousMainAdvances = position.mainAdvances;
+      final targetMarker = view.itemIdx >= 0 && view.itemIdx < baseItems.length
+          ? baseItems[view.itemIdx].marker
+          : item.marker;
+
+      position.loadingLayer = view.layer;
+      position.itemIdx = view.itemIdx;
+      position.layer = view.layer;
+      position.erros = view.erros;
+      position.historia = view.historia;
+      position.mainAdvances = view.mainAdvances;
+      final loadedPrepared = materialController.carregarRapidoSePronto(
+        lessonLocalId: lessonLocalId,
+        topic: topic,
+        position: position,
+        idioma: idioma,
+        academic: academic,
+        mode: _modeForNextMaterial(activeState, position.isReviewAtivo),
+        baseItems: baseItems,
+      );
+      if (loadedPrepared) {
+        _recordLocalPendingAdvanceDisplayed(
+          lessonLocalId: lessonLocalId,
+          fromItemIdx: previousItemIdx,
+          fromLayer: previousLayer,
+          toItemIdx: view.itemIdx,
+          toLayer: view.layer,
+          marker: targetMarker,
+        );
+        return;
+      }
+
+      position.itemIdx = previousItemIdx;
+      position.layer = previousLayer;
+      position.loadingLayer = previousLoadingLayer;
+      position.erros = previousErros;
+      position.historia = previousHistoria;
+      position.mainAdvances = previousMainAdvances;
+      position.phase = ClassroomPhase.advancePending(
+        message: 'aula_advance_preparing',
+        letter: completedPhase.letter ?? AnswerLetter.A,
+        signal: completedPhase.signal ?? DecisionSignal.one,
+      );
+      _recordLocalAdvancePending(
+        lessonLocalId: lessonLocalId,
+        fromItemIdx: previousItemIdx,
+        fromLayer: previousLayer,
+        toItemIdx: view.itemIdx,
+        toLayer: view.layer,
+        fromMarker: item.marker,
+        toMarker: targetMarker,
+        letter: completedPhase.letter ?? AnswerLetter.A,
+        signal: completedPhase.signal ?? DecisionSignal.one,
+      );
+      materialService.maintainLessonReadyWindow(
+        lessonLocalId: lessonLocalId,
+        topic: topic,
+        itemIdx: view.itemIdx,
+        layer: view.layer,
         items: _dopamineItemsFromCurriculum(baseItems),
         source: 'cyber.aula.advance-cache-miss',
         priority: 'active',
@@ -349,6 +441,99 @@ class LessonAnswerProgressController {
       return LessonMode.reforco;
     }
     return LessonMode.session;
+  }
+
+  bool reavaliarAvancoPendente({
+    required String lessonLocalId,
+    required String? topic,
+    required LessonPositionState position,
+    required List<PlannedItem> baseItems,
+    required String idioma,
+    required String academic,
+  }) {
+    if (position.phase.type != ClassroomPhaseType.avancoPendente) {
+      return false;
+    }
+    final state = stateService.read(lessonLocalId);
+    final pending = state?.extra['advancePending'];
+    if (state == null || pending is! Map) return false;
+    final toItemIdx = (pending['toItemIdx'] as num?)?.toInt();
+    final toLayer = LessonLayerValue.fromValue(pending['toLayer']);
+    final toMarker = (pending['toMarker'] as String?)?.trim();
+    if (toItemIdx == null || toItemIdx < 0 || toItemIdx >= baseItems.length) {
+      return false;
+    }
+    final target = baseItems[toItemIdx];
+    if (toMarker != null && toMarker.isNotEmpty && target.marker != toMarker) {
+      return false;
+    }
+
+    final failed = state.queuedActions.any((job) {
+      if (job['type'] != 'PREPARE_READY_WINDOW' || job['status'] != 'failed') {
+        return false;
+      }
+      final payload = job['payload'];
+      if (payload is! Map) return false;
+      return (payload['itemIdx'] as num?)?.toInt() == toItemIdx &&
+          LessonLayerValue.fromValue(payload['layer']) == toLayer &&
+          (toMarker == null ||
+              toMarker.isEmpty ||
+              (payload['marker'] as String?) == toMarker);
+    });
+    if (failed) {
+      position.phase = ClassroomPhase.engineError('aula_advance_pending');
+      _updateAdvancePendingStatus(
+        lessonLocalId: lessonLocalId,
+        status: 'failed',
+      );
+      return true;
+    }
+
+    final previousItemIdx = position.itemIdx;
+    final previousLayer = position.layer;
+    final previousLoadingLayer = position.loadingLayer;
+    final previousErros = position.erros;
+    final previousHistoria = position.historia;
+    final previousMainAdvances = position.mainAdvances;
+    final previousPhase = position.phase;
+
+    position.itemIdx = toItemIdx;
+    position.layer = toLayer;
+    position.loadingLayer = toLayer;
+    position.erros = 0;
+    position.historia = state.progress?.historia ?? position.historia;
+    position.mainAdvances =
+        state.progress?.mainAdvances ?? position.mainAdvances;
+    final loadedPrepared = materialController.carregarRapidoSePronto(
+      lessonLocalId: lessonLocalId,
+      topic: topic,
+      position: position,
+      idioma: idioma,
+      academic: academic,
+      mode: _modeForNextMaterial(state, target.isReview),
+      baseItems: baseItems,
+    );
+    if (!loadedPrepared) {
+      position.itemIdx = previousItemIdx;
+      position.layer = previousLayer;
+      position.loadingLayer = previousLoadingLayer;
+      position.erros = previousErros;
+      position.historia = previousHistoria;
+      position.mainAdvances = previousMainAdvances;
+      position.phase = previousPhase;
+      return false;
+    }
+    _recordLocalPendingAdvanceDisplayed(
+      lessonLocalId: lessonLocalId,
+      fromItemIdx: (pending['fromItemIdx'] as num?)?.toInt() ?? previousItemIdx,
+      fromLayer: LessonLayerValue.fromValue(
+        pending['fromLayer'] ?? previousLayer.value,
+      ),
+      toItemIdx: toItemIdx,
+      toLayer: toLayer,
+      marker: target.marker,
+    );
+    return true;
   }
 
   bool _hasEvidenceForCurrentPosition(
@@ -507,7 +692,85 @@ class LessonAnswerProgressController {
             payload: eventPayload,
           ),
         ],
-        extra: {...latest.extra, 'localPendingAdvance': localPendingAdvance},
+        extra: {
+          ...latest.extra,
+          'localPendingAdvance': localPendingAdvance,
+          'advancePending': null,
+        },
+      ),
+    );
+  }
+
+  void _recordLocalAdvancePending({
+    required String lessonLocalId,
+    required int fromItemIdx,
+    required LessonLayer fromLayer,
+    required int toItemIdx,
+    required LessonLayer toLayer,
+    required String fromMarker,
+    required String toMarker,
+    required AnswerLetter letter,
+    required DecisionSignal signal,
+  }) {
+    final latest = stateService.read(lessonLocalId);
+    if (latest == null) return;
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    stateService.write(
+      latest.copyWith(
+        updatedAt: ts,
+        extra: {
+          ...latest.extra,
+          'advancePending': {
+            'status': 'preparing',
+            'fromItemIdx': fromItemIdx,
+            'fromLayer': fromLayer.value,
+            'fromMarker': fromMarker,
+            'toItemIdx': toItemIdx,
+            'toLayer': toLayer.value,
+            'toMarker': toMarker,
+            'letter': letter.name,
+            'signal': signal.value,
+            'startedAt': ts,
+            'reason': 'material_missing_after_valid_decision',
+          },
+        },
+        events: [
+          ...latest.events,
+          StudentLearningEvent(
+            type: 'ADVANCE_PENDING_WAITING_FOR_MATERIAL',
+            ts: ts,
+            payload: {
+              'fromItemIdx': fromItemIdx,
+              'fromLayer': fromLayer.value,
+              'fromMarker': fromMarker,
+              'toItemIdx': toItemIdx,
+              'toLayer': toLayer.value,
+              'toMarker': toMarker,
+              'reason': 'material_missing_after_valid_decision',
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _updateAdvancePendingStatus({
+    required String lessonLocalId,
+    required String status,
+  }) {
+    final latest = stateService.read(lessonLocalId);
+    final pending = latest?.extra['advancePending'];
+    if (latest == null || pending is! Map) return;
+    stateService.write(
+      latest.copyWith(
+        extra: {
+          ...latest.extra,
+          'advancePending': {
+            ...Map<String, dynamic>.from(pending),
+            'status': status,
+            'updatedAt': DateTime.now().millisecondsSinceEpoch,
+          },
+        },
       ),
     );
   }

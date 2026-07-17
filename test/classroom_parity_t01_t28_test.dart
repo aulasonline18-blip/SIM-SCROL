@@ -1338,6 +1338,24 @@ void main() {
       );
       expect(gate.requests, isEmpty);
 
+      svc.mutate('L1', (s) {
+        return s.copyWith(
+          readyLessonMaterials: {
+            ...s.readyLessonMaterials,
+            preparedLessonMaterialKey(0, 'M-1', LessonLayer.l2): {
+              'text_status': 'ready',
+              'for_itemIdx': 0,
+              'for_layer': 'l2',
+              'for_marker': 'M-1',
+              'question': 'Q M-1?',
+              'explanation': 'Exp M-1',
+              'options': {'A': 'A', 'B': 'B', 'C': 'C'},
+              'correct_answer': 'A',
+            },
+          },
+        );
+      });
+
       await ctrl.avancar(
         lessonLocalId: 'L1',
         topic: 'Cinematica',

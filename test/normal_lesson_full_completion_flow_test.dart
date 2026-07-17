@@ -267,6 +267,57 @@ class FullFlowHarness {
   late final LessonRuntimeEngine runtime;
 }
 
+Future<void> _prepareCurrentTargetMaterial(
+  FullFlowHarness h,
+  String lessonLocalId,
+) async {
+  final state = h.service.read(lessonLocalId);
+  final current = state?.current;
+  final curriculum = state?.curriculum;
+  if (state == null || current == null || curriculum == null) return;
+  if (current.itemIdx < 0 || current.itemIdx >= curriculum.items.length) return;
+  final item = curriculum.items[current.itemIdx];
+  final profile = state.profile.toJson();
+  final curriculumItems = [
+    for (var index = 0; index < curriculum.items.length; index += 1)
+      {
+        'order': index + 1,
+        'marker': curriculum.items[index].marker,
+        if ((curriculum.items[index].unit ?? '').trim().isNotEmpty)
+          'unit': curriculum.items[index].unit!.trim(),
+        'title': curriculum.items[index].title ?? curriculum.items[index].text,
+        'text': curriculum.items[index].text,
+        'purpose': curriculum.items[index].teacherText,
+        'microitem_for_teacher': curriculum.items[index].teacherText,
+      },
+  ];
+  await h.materialService.resolveLessonMaterialFromStateOrEngine(
+    ResolveLessonMaterialInput(
+      lessonLocalId: lessonLocalId,
+      topic: curriculum.topic,
+      itemIdx: current.itemIdx,
+      marker: item.marker,
+      layer: current.layer,
+      params: CompleteLessonParams(
+        lessonLocalId: lessonLocalId,
+        item: item.teacherText,
+        lang: state.profile.stableLang ?? 'pt-BR',
+        academic: state.profile.nivel ?? 'fundamental',
+        layer: current.layer,
+        mode: LessonMode.session,
+        marker: item.marker,
+        amparoLvl: current.amparoLvl,
+        curriculumItems: curriculumItems,
+        topic: curriculum.topic,
+        itemIdx: current.itemIdx,
+        pedagogicalEnvelope: profile,
+      ),
+      waitBeforeOrderMs: 0,
+      waitAfterOrderMs: 0,
+    ),
+  );
+}
+
 const _curriculumItems = [
   {
     'order': 1,
@@ -383,6 +434,7 @@ void main() {
           reason: 'o fluxo normal decide avanço no app, sem gate remoto',
         );
 
+        await _prepareCurrentTargetMaterial(h, lessonLocalId);
         await h.runtime.advance();
 
         if (index == 3 && !restoredOnce) {
@@ -627,6 +679,7 @@ void main() {
       );
       expect(postReopen.truth.itemConsolidationStatus['M1'], isNot('mastered'));
 
+      await _prepareCurrentTargetMaterial(h, lessonLocalId);
       await h.runtime.advance();
       final continued = h.runtime.snapshot();
       expect(continued.phase.type, ClassroomPhaseType.lendo);

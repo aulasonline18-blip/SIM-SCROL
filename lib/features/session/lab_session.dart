@@ -237,6 +237,10 @@ class LabSession extends ChangeNotifier {
   String? _activeLessonMediaKey;
   SimOrganism? _activeLessonMediaOrganism;
   void Function()? _lessonImageUnsubscribe;
+  void Function()? _aulaStateUnsubscribe;
+  String? _aulaStateSubscriptionLessonId;
+  bool _advancePendingReevaluationScheduled = false;
+  bool _disposed = false;
 
   void _notifyFromChild() => notifyListeners();
 
@@ -2340,7 +2344,9 @@ class LabSession extends ChangeNotifier {
       );
       if (!_isCurrentAulaRuntime(id, runtimeGeneration)) return;
       aulaSnapshot = snapshot;
+      _bindActiveLessonState(organism);
       _bindActiveLessonMedia(organism);
+      _reavaliarAvancoPendenteSePossivel(organism);
       _syncImageStateFromSnapshot();
       if (aulaSnapshot?.hasCurriculum != true) {
         aulaRuntimeError = 'Aula sem curriculo no Estado do aluno.';
@@ -2359,6 +2365,45 @@ class LabSession extends ChangeNotifier {
   bool _isCurrentAulaRuntime(String lessonLocalId, int generation) {
     return this.lessonLocalId == lessonLocalId &&
         _aulaRuntimeGeneration == generation;
+  }
+
+  void _bindActiveLessonState(SimOrganism organism) {
+    if (_aulaStateSubscriptionLessonId == organism.lessonLocalId) return;
+    _aulaStateUnsubscribe?.call();
+    _aulaStateSubscriptionLessonId = organism.lessonLocalId;
+    _aulaStateUnsubscribe = organism.stateService.subscribe((changedLessonId) {
+      if (_disposed || changedLessonId != _aulaStateSubscriptionLessonId) {
+        return;
+      }
+      final active = _activeOrganism;
+      if (active == null || active.lessonLocalId != changedLessonId) return;
+      final state = active.stateService.read(changedLessonId);
+      if (state?.extra['advancePending'] is! Map &&
+          aulaSnapshot?.phase.type != ClassroomPhaseType.avancoPendente) {
+        return;
+      }
+      _scheduleAdvancePendingReevaluation(active);
+    });
+  }
+
+  void _scheduleAdvancePendingReevaluation(SimOrganism organism) {
+    if (_advancePendingReevaluationScheduled) return;
+    _advancePendingReevaluationScheduled = true;
+    scheduleMicrotask(() {
+      _advancePendingReevaluationScheduled = false;
+      if (_disposed || _activeOrganism != organism) return;
+      _reavaliarAvancoPendenteSePossivel(organism);
+    });
+  }
+
+  void _reavaliarAvancoPendenteSePossivel(SimOrganism organism) {
+    if (_disposed || _activeOrganism != organism) return;
+    final changed = organism.lessonRuntimeEngine.reavaliarAvancoPendente();
+    if (!changed) return;
+    aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+    _bindActiveLessonMedia(organism);
+    _syncImageStateFromSnapshot();
+    notifyListeners();
   }
 
   bool _activateReadyNextCurriculumPartIfNeeded(String currentLessonId) {
@@ -2897,10 +2942,12 @@ class LabSession extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     entryForm.removeListener(_notifyFromChild);
     authSession.removeListener(_notifyFromChild);
     navigationState.removeListener(_notifyFromChild);
     lessonUiState.removeListener(_notifyFromChild);
+    _aulaStateUnsubscribe?.call();
     _lessonImageUnsubscribe?.call();
     unawaited(_playBillingFunctions?.dispose());
     authSession.dispose();

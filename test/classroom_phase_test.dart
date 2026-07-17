@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sim_mobile/features/session/lab_session.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_answer_progress_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_hydration_engine.dart';
@@ -343,7 +344,120 @@ LessonRuntimeEngine _runtime(
   );
 }
 
+void _putPreparedMaterial(
+  StudentLearningStateService service,
+  String lessonLocalId, {
+  required int itemIdx,
+  required String marker,
+  required LessonLayer layer,
+  String? question,
+}) {
+  service.mutate(lessonLocalId, (state) {
+    final material = preparedMaterialFromLesson(
+      lesson: CompleteLesson(
+        conteudo: LessonContent(
+          explanation: 'Texto preparado $marker L${layer.value}.',
+          question: question ?? 'Pergunta preparada $marker L${layer.value}?',
+          options: const {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+        imagem: null,
+        audioText: 'Texto preparado $marker L${layer.value}.',
+      ),
+      itemIdx: itemIdx,
+      marker: marker,
+      layer: layer,
+    );
+    return state.copyWith(
+      readyLessonMaterials: {
+        ...state.readyLessonMaterials,
+        preparedLessonMaterialKey(itemIdx, marker, layer): material,
+      },
+    );
+  });
+}
+
+StudentStateStore _storeWithState(StudentLearningState state) {
+  final store = StudentStateStore(local: MemoryStudentStateLocalStorage());
+  store.writeState(state);
+  return store;
+}
+
+StudentLearningState _classroomStateWithPreparedCurrent(String lessonLocalId) {
+  final state = _classroomState().copyWith(lessonLocalId: lessonLocalId);
+  JsonMap material(int itemIdx, String marker, LessonLayer layer) =>
+      preparedMaterialFromLesson(
+        lesson: CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto preparado $marker L${layer.value}.',
+            question: 'Pergunta preparada $marker L${layer.value}?',
+            options: const {
+              AnswerLetter.A: 'A',
+              AnswerLetter.B: 'B',
+              AnswerLetter.C: 'C',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText: 'Texto preparado $marker L${layer.value}.',
+        ),
+        itemIdx: itemIdx,
+        marker: marker,
+        layer: layer,
+      );
+  return state.copyWith(
+    readyLessonMaterials: {
+      preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): material(
+        0,
+        'M1',
+        LessonLayer.l1,
+      ),
+      preparedLessonMaterialKey(0, 'M1', LessonLayer.l3): material(
+        0,
+        'M1',
+        LessonLayer.l3,
+      ),
+      preparedLessonMaterialKey(1, 'M2', LessonLayer.l1): material(
+        1,
+        'M2',
+        LessonLayer.l1,
+      ),
+    },
+  );
+}
+
+StudentLearningState _withAdvancePendingWithoutTarget(
+  StudentLearningState state,
+) {
+  final nextReady = Map<String, JsonMap>.of(state.readyLessonMaterials)
+    ..remove(preparedLessonMaterialKey(0, 'M1', LessonLayer.l2));
+  return state.copyWith(
+    readyLessonMaterials: nextReady,
+    extra: {
+      ...state.extra,
+      'advancePending': {
+        'status': 'preparing',
+        'reason': 'test_pending_target_material',
+        'fromItemIdx': 0,
+        'fromLayer': LessonLayer.l1.value,
+        'fromMarker': 'M1',
+        'toItemIdx': 0,
+        'toLayer': LessonLayer.l2.value,
+        'toMarker': 'M1',
+        'letter': AnswerLetter.A.name,
+        'signal': DecisionSignal.two.value,
+      },
+    },
+  );
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test(
     'LessonRuntimeEngine opens classroom and loads first material',
     () async {
@@ -423,7 +537,16 @@ void main() {
         ),
         isTrue,
       );
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      for (var i = 0; i < 20; i += 1) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        await prefs.reload();
+        if ((prefs.getString('sim-lesson-text-cache-v1') ?? '').contains(
+          'Qual texto abre offline?',
+        )) {
+          break;
+        }
+      }
+      await prefs.reload();
 
       final hydratedCache = LessonMaterialCache();
       hydratedCache.hydrateFromPreferences(prefs);
@@ -562,6 +685,13 @@ void main() {
     );
     final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
     await runtime.open(lessonLocalId: 'cyber-class');
+    _putPreparedMaterial(
+      service,
+      'cyber-class',
+      itemIdx: 0,
+      marker: 'M1',
+      layer: LessonLayer.l3,
+    );
 
     runtime.select(AnswerLetter.A);
     await runtime.signal(DecisionSignal.one);
@@ -594,6 +724,27 @@ void main() {
       final gate = OfficialRouteAdvanceGateClient();
       final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
       await runtime.open(lessonLocalId: 'cyber-class');
+      _putPreparedMaterial(
+        service,
+        'cyber-class',
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l2,
+      );
+      _putPreparedMaterial(
+        service,
+        'cyber-class',
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l3,
+      );
+      _putPreparedMaterial(
+        service,
+        'cyber-class',
+        itemIdx: 1,
+        marker: 'M2',
+        layer: LessonLayer.l1,
+      );
 
       runtime.select(AnswerLetter.B);
       await runtime.signal(DecisionSignal.two);
@@ -696,6 +847,335 @@ void main() {
             .payload['source'],
         LessonMaterialSource.studentState.name,
       );
+    },
+  );
+
+  test(
+    'M7.1 cache miss preserva alvo e reavalia quando material fica pronto',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = FakeClassroomT02();
+      final runtime = _runtime(service, t02);
+      await runtime.open(lessonLocalId: 'cyber-class');
+
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.two);
+      await runtime.advance();
+
+      var snapshot = runtime.snapshot();
+      expect(snapshot.phase.type, ClassroomPhaseType.avancoPendente);
+      expect(snapshot.itemMarker, 'M1');
+      final pending = service.read('cyber-class')?.extra['advancePending'];
+      expect(pending, isA<Map>());
+      expect((pending as Map)['toItemIdx'], 0);
+      expect(pending['toLayer'], LessonLayer.l2.value);
+      expect(pending['toMarker'], 'M1');
+
+      service.mutate('cyber-class', (state) {
+        final material = preparedMaterialFromLesson(
+          lesson: const CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Texto preparado depois do miss.',
+              question: 'Material ficou pronto?',
+              options: {
+                AnswerLetter.A: 'Sim',
+                AnswerLetter.B: 'Nao',
+                AnswerLetter.C: 'Talvez',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: null,
+            audioText: 'Texto preparado depois do miss.',
+          ),
+          itemIdx: 0,
+          marker: 'M1',
+          layer: LessonLayer.l2,
+        );
+        return state.copyWith(
+          readyLessonMaterials: {
+            ...state.readyLessonMaterials,
+            preparedLessonMaterialKey(0, 'M1', LessonLayer.l2): material,
+          },
+        );
+      });
+
+      expect(runtime.reavaliarAvancoPendente(), isTrue);
+      snapshot = runtime.snapshot();
+      expect(snapshot.phase.type, ClassroomPhaseType.lendo);
+      expect(snapshot.itemMarker, 'M1');
+      expect(snapshot.viewModel?.headerLabel, 'aula_item_of:1/2:aula_layer_2');
+      expect(snapshot.conteudo?.question, 'Material ficou pronto?');
+      expect(service.read('cyber-class')?.current?.layer, LessonLayer.l2);
+      expect(service.read('cyber-class')?.extra['advancePending'], isNull);
+      expect(t02.calls, 1);
+    },
+  );
+
+  test(
+    'M7.1 worker falho fecha advancePending com erro humano recuperavel',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = FakeClassroomT02();
+      final runtime = _runtime(service, t02);
+      await runtime.open(lessonLocalId: 'cyber-class');
+
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.two);
+      await runtime.advance();
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.avancoPendente);
+
+      service.mutate('cyber-class', (state) {
+        return state.copyWith(
+          queuedActions: [
+            for (final job in state.queuedActions)
+              if (job['type'] == 'PREPARE_READY_WINDOW' &&
+                  (job['payload'] as Map?)?['itemIdx'] == 0 &&
+                  (job['payload'] as Map?)?['layer'] == LessonLayer.l2.value)
+                {
+                  ...job,
+                  'status': 'failed',
+                  'error': 'T02 retornou material invalido',
+                }
+              else
+                job,
+          ],
+        );
+      });
+
+      expect(runtime.reavaliarAvancoPendente(), isTrue);
+      final snapshot = runtime.snapshot();
+      expect(snapshot.phase.type, ClassroomPhaseType.erroEngine);
+      expect(snapshot.phase.message, 'aula_advance_pending');
+      expect(
+        (service.read('cyber-class')?.extra['advancePending']
+            as Map?)?['status'],
+        'failed',
+      );
+    },
+  );
+
+  test('M7.1 multiplos toques em advancePending nao duplicam avanco', () async {
+    final service = StudentLearningStateService(
+      seed: {'cyber-class': _classroomState()},
+    );
+    final t02 = FakeClassroomT02();
+    final runtime = _runtime(service, t02);
+    await runtime.open(lessonLocalId: 'cyber-class');
+
+    runtime.select(AnswerLetter.A);
+    await runtime.signal(DecisionSignal.two);
+    await runtime.advance();
+    await runtime.advance();
+    await runtime.advance();
+    expect(runtime.snapshot().phase.type, ClassroomPhaseType.avancoPendente);
+
+    service.mutate('cyber-class', (state) {
+      final material = preparedMaterialFromLesson(
+        lesson: const CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto unico.',
+            question: 'Avancou uma vez?',
+            options: {
+              AnswerLetter.A: 'Sim',
+              AnswerLetter.B: 'Nao',
+              AnswerLetter.C: 'Duplicou',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText: 'Texto unico.',
+        ),
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l2,
+      );
+      return state.copyWith(
+        readyLessonMaterials: {
+          ...state.readyLessonMaterials,
+          preparedLessonMaterialKey(0, 'M1', LessonLayer.l2): material,
+        },
+      );
+    });
+
+    expect(runtime.reavaliarAvancoPendente(), isTrue);
+    expect(runtime.reavaliarAvancoPendente(), isFalse);
+    final state = service.read('cyber-class')!;
+    expect(state.current?.itemIdx, 0);
+    expect(state.current?.layer, LessonLayer.l2);
+    expect(
+      state.events.where(
+        (event) => event.type == 'LOCAL_PENDING_ADVANCE_DISPLAYED',
+      ),
+      hasLength(1),
+    );
+  });
+
+  test(
+    'M7.1 LabSession reavalia via subscription quando material fica pronto',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = _storeWithState(
+        _classroomStateWithPreparedCurrent('lesson-session-pending'),
+      );
+      final session = LabSession(canonicalStore: store, prefs: prefs)
+        ..authed = true
+        ..authReady = true
+        ..lessonLocalId = 'lesson-session-pending'
+        ..route = '/cyber/aula';
+      var notifyCount = 0;
+      session.addListener(() => notifyCount += 1);
+
+      await session.openAulaRuntime();
+      expect(session.aulaSnapshot, isNotNull);
+      expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.lendo);
+      expect(
+        session.aulaSnapshot?.conteudo?.question,
+        'Pergunta preparada M1 L1?',
+      );
+      final organism = session.simOrganismProvider.forLesson(
+        'lesson-session-pending',
+      );
+
+      organism.stateService.mutate(
+        'lesson-session-pending',
+        _withAdvancePendingWithoutTarget,
+        scheduleShadow: false,
+      );
+      organism.lessonRuntimeEngine.restoreTransientSnapshot(
+        session.aulaSnapshot!.copyWith(
+          phase: const ClassroomPhase.advancePending(
+            message: 'aula_advance_preparing',
+            letter: AnswerLetter.A,
+            signal: DecisionSignal.two,
+          ),
+        ),
+      );
+      session.aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+
+      expect(
+        session.aulaSnapshot?.phase.type,
+        ClassroomPhaseType.avancoPendente,
+      );
+      expect(session.aulaSnapshot?.itemMarker, 'M1');
+      final pending = store
+          .readState('lesson-session-pending')
+          .extra['advancePending'];
+      expect(pending, isA<Map>());
+      final beforeReadyNotifyCount = notifyCount;
+
+      _putPreparedMaterial(
+        organism.stateService,
+        'lesson-session-pending',
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l2,
+        question: 'Pergunta entregue pela subscription?',
+      );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(notifyCount, greaterThan(beforeReadyNotifyCount));
+      expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.lendo);
+      expect(
+        session.aulaSnapshot?.conteudo?.question,
+        'Pergunta entregue pela subscription?',
+      );
+      expect(
+        session.aulaSnapshot?.viewModel?.headerLabel,
+        'aula_item_of:1/2:aula_layer_2',
+      );
+      expect(
+        store.readState('lesson-session-pending').extra['advancePending'],
+        isNull,
+      );
+    },
+  );
+
+  test(
+    'M7.1 troca de aula ignora resultado atrasado da aula anterior',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = StudentStateStore(local: MemoryStudentStateLocalStorage())
+        ..writeState(_classroomStateWithPreparedCurrent('lesson-session-a'))
+        ..writeState(
+          _classroomStateWithPreparedCurrent('lesson-session-b').copyWith(
+            profile: const StudentProfile(
+              objetivo: 'Aula B',
+              stableLang: 'pt-BR',
+              nivel: 'base',
+            ),
+          ),
+        );
+      final session = LabSession(canonicalStore: store, prefs: prefs)
+        ..authed = true
+        ..authReady = true
+        ..lessonLocalId = 'lesson-session-a'
+        ..route = '/cyber/aula';
+      var notifyCount = 0;
+      session.addListener(() => notifyCount += 1);
+
+      await session.openAulaRuntime();
+      final organismA = session.simOrganismProvider.forLesson(
+        'lesson-session-a',
+      );
+      organismA.stateService.mutate(
+        'lesson-session-a',
+        _withAdvancePendingWithoutTarget,
+        scheduleShadow: false,
+      );
+      organismA.lessonRuntimeEngine.restoreTransientSnapshot(
+        session.aulaSnapshot!.copyWith(
+          phase: const ClassroomPhase.advancePending(
+            message: 'aula_advance_preparing',
+            letter: AnswerLetter.A,
+            signal: DecisionSignal.two,
+          ),
+        ),
+      );
+      session.aulaSnapshot = organismA.lessonRuntimeEngine.snapshot();
+      expect(
+        session.aulaSnapshot?.phase.type,
+        ClassroomPhaseType.avancoPendente,
+      );
+
+      session.lessonLocalId = 'lesson-session-b';
+      await session.openAulaRuntime();
+      expect(session.aulaSnapshot, isNotNull);
+      expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.lendo);
+      final snapshotBQuestion = session.aulaSnapshot?.conteudo?.question;
+      final notifyBeforeLateA = notifyCount;
+
+      _putPreparedMaterial(
+        organismA.stateService,
+        'lesson-session-a',
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l2,
+        question: 'Resultado atrasado da aula A',
+      );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(session.lessonLocalId, 'lesson-session-b');
+      expect(session.aulaSnapshot, isNotNull);
+      expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.lendo);
+      expect(session.aulaSnapshot?.conteudo?.question, snapshotBQuestion);
+      expect(
+        session.aulaSnapshot?.conteudo?.question,
+        isNot('Resultado atrasado da aula A'),
+      );
+      expect(notifyCount, notifyBeforeLateA);
+
+      session.lessonLocalId = 'lesson-session-a';
+      await session.openAulaRuntime();
+      expect(session.aulaSnapshot, isNotNull);
+      expect(session.aulaSnapshot?.itemMarker, 'M1');
     },
   );
 
@@ -1526,6 +2006,13 @@ void main() {
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
       expect(service.read('lesson-cg-root')?.curriculum?.items, hasLength(81));
       expect(service.read('lesson-cg-root')?.current?.marker, 'M81');
+      _putPreparedMaterial(
+        service,
+        'lesson-cg-root',
+        itemIdx: 80,
+        marker: 'M81',
+        layer: LessonLayer.l1,
+      );
 
       await runtime.advance();
       final snapshot = runtime.snapshot();
