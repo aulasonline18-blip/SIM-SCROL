@@ -51,6 +51,25 @@ void main() {
     }
   });
 
+  test('P1 app does not call AI providers or SIM Web directly', () {
+    final files = Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'))
+        .toList();
+    final source = files.map((file) => file.readAsStringSync()).join('\n');
+
+    for (final forbidden in <String>[
+      'api.openai.com',
+      'generativelanguage.googleapis.com',
+      'api.anthropic.com',
+      '/root/sim-work/sim-web',
+      'sim-work/sim-web',
+    ]) {
+      expect(source, isNot(contains(forbidden)));
+    }
+  });
+
   test(
     'M13 billing clients expose human errors without raw JSON or secrets',
     () async {
@@ -152,37 +171,41 @@ void main() {
     },
   );
 
-  test('M13 student-state 409 regression returns remoteState contract', () async {
-    final remote = StudentLearningState.empty(lessonLocalId: 'lesson-409')
-        .copyWith(updatedAt: 10);
-    final transport = _FakeTransport(
-      statusCode: 409,
-      body: jsonEncode({
-        'rejected': true,
-        'reason': 'STATE_EVENTS_REGRESSION',
-        'remoteState': remote.toJson(),
-        'remoteHighWaterMark': 77,
-      }),
-    );
-    final client = SimServerCloudFunctions(
-      config: _config(),
-      transport: transport,
-    );
-
-    final result = await client.persistStudentState(
-      PersistStudentStateInput(
+  test(
+    'M13 student-state 409 regression returns remoteState contract',
+    () async {
+      final remote = StudentLearningState.empty(
         lessonLocalId: 'lesson-409',
-        state: StudentLearningState.empty(lessonLocalId: 'lesson-409'),
-        clientUpdatedAt: 1,
-        clientScore: 1,
-      ),
-      const SupabaseSession(accessToken: 'token', userId: 'u1'),
-    );
+      ).copyWith(updatedAt: 10);
+      final transport = _FakeTransport(
+        statusCode: 409,
+        body: jsonEncode({
+          'rejected': true,
+          'reason': 'STATE_EVENTS_REGRESSION',
+          'remoteState': remote.toJson(),
+          'remoteHighWaterMark': 77,
+        }),
+      );
+      final client = SimServerCloudFunctions(
+        config: _config(),
+        transport: transport,
+      );
 
-    expect(result.rejected, isTrue);
-    expect(result.remoteState?.lessonLocalId, 'lesson-409');
-    expect(result.remoteHighWaterMark, 77);
-  });
+      final result = await client.persistStudentState(
+        PersistStudentStateInput(
+          lessonLocalId: 'lesson-409',
+          state: StudentLearningState.empty(lessonLocalId: 'lesson-409'),
+          clientUpdatedAt: 1,
+          clientScore: 1,
+        ),
+        const SupabaseSession(accessToken: 'token', userId: 'u1'),
+      );
+
+      expect(result.rejected, isTrue);
+      expect(result.remoteState?.lessonLocalId, 'lesson-409');
+      expect(result.remoteHighWaterMark, 77);
+    },
+  );
 }
 
 bool _isTextProjectFile(String path) {

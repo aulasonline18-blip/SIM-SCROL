@@ -1406,9 +1406,9 @@ class LabSession extends ChangeNotifier {
       controller.continueToAula();
     }
     _entryWarmupContinueRequested = true;
-    warmupWaitingForOfficialLesson = !_entryOfficialLessonReady;
+    warmupWaitingForOfficialLesson =
+        !_entryOfficialLessonReady && !_hasLocalOfficialAulaState();
     notifyListeners();
-    if (!_entryOfficialLessonReady) return;
     await _tryOpenOfficialAula(source: 'warmup_continue');
   }
 
@@ -1421,7 +1421,7 @@ class LabSession extends ChangeNotifier {
 
   Future<void> _tryOpenOfficialAula({required String source}) async {
     if (_entryAulaNavigationStarted) return;
-    if (!_entryOfficialLessonReady) return;
+    if (!_entryOfficialLessonReady && !_hasLocalOfficialAulaState()) return;
     if (_entryWarmupExpected &&
         route == '/cyber/warmup' &&
         !_entryWarmupContinueRequested) {
@@ -1445,6 +1445,19 @@ class LabSession extends ChangeNotifier {
     _entryAulaNavigationStarted = true;
     debugPrint('[SIM] ENTRY_NAVIGATE_AULA source=$source placement=true');
     await openAulaAfterPlacementIfReady();
+  }
+
+  bool _hasLocalOfficialAulaState() {
+    final id = lessonLocalId;
+    if (id == null || id.trim().isEmpty || prefs == null) return false;
+    try {
+      final organism = _organismForActiveLesson();
+      final state = organism.stateService.read(id);
+      return state?.curriculum?.items.isNotEmpty == true &&
+          (state?.current != null || state?.progress != null);
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<StudentExperienceResult> _prepareExperienceWithAuthRetry({
@@ -2001,15 +2014,29 @@ class LabSession extends ChangeNotifier {
   }
 
   Future<List<StudentStateSummaryRow>> listDrawerCloudLessons() async {
+    final local = _listDrawerLocalLessonSummaries();
     final session = await _drawerSession();
-    if (session == null) return const [];
+    if (session == null) return local;
     final rows = await _cloudFunctionsForDrawer().listStudentStateSummaries(
       session,
     );
-    return rows.where((row) => !row.deleted).toList(growable: false);
+    final byId = <String, StudentStateSummaryRow>{
+      for (final row in local) row.lessonLocalId: row,
+    };
+    for (final row in rows.where((row) => !row.deleted)) {
+      byId.putIfAbsent(row.lessonLocalId, () => row);
+    }
+    return byId.values.toList(growable: false);
   }
 
   Future<bool> openDrawerCloudLesson(String lessonLocalId) async {
+    final local = _readExistingLocalState(lessonLocalId);
+    if (local != null && !_stateDeleted(local)) {
+      _prepareDrawerLessonOpen(lessonLocalId);
+      unawaited(openAulaRuntime());
+      unawaited(_reconcileDrawerCloudLessonInBackground(lessonLocalId));
+      return true;
+    }
     final session = await _drawerSession();
     if (session == null) return false;
     final row = await _cloudFunctionsForDrawer().getStudentStateByLesson(
@@ -2033,6 +2060,44 @@ class LabSession extends ChangeNotifier {
     _prepareDrawerLessonOpen(state.lessonLocalId);
     unawaited(openAulaRuntime());
     return true;
+  }
+
+  List<StudentStateSummaryRow> _listDrawerLocalLessonSummaries() {
+    final store = canonicalStore;
+    if (store == null) return const [];
+    final rows = <StudentStateSummaryRow>[];
+    for (final state in store.listLocalStates(includeDeleted: false)) {
+      final row = summarizeStudentStateRow(
+        StudentStateRow(
+          lessonLocalId: state.lessonLocalId,
+          state: state,
+          highWaterMark: store.highWaterMark(state),
+          schemaVersion: 1,
+          updatedAt: state.updatedAt > 0
+              ? DateTime.fromMillisecondsSinceEpoch(
+                  state.updatedAt,
+                ).toIso8601String()
+              : null,
+        ),
+      );
+      if (row != null && !row.deleted) rows.add(row);
+    }
+    return rows;
+  }
+
+  Future<void> _reconcileDrawerCloudLessonInBackground(
+    String lessonLocalId,
+  ) async {
+    try {
+      final session = await _drawerSession();
+      if (session == null) return;
+      await _cloudFunctionsForDrawer().getStudentStateByLesson(
+        lessonLocalId,
+        session,
+      );
+    } catch (_) {
+      // Cloud reconciliation is best-effort; local restoration already won.
+    }
   }
 
   Future<bool> renameDrawerCloudLesson(
@@ -2572,17 +2637,19 @@ class LabSession extends ChangeNotifier {
     final controller = activePlacementController;
     if (controller != null) {
       controller.continueToAula();
-      if (_entryOfficialLessonReady) {
+      if (_entryOfficialLessonReady || _hasLocalOfficialAulaState()) {
         _entryWarmupContinueRequested = true;
         unawaited(_tryOpenOfficialAula(source: 'placement_finished'));
       } else {
-        warmupWaitingForOfficialLesson = true;
+        warmupWaitingForOfficialLesson = false;
+        navigationState.openRoute('/cyber/aula');
+        unawaited(openAulaRuntime());
       }
       notifyListeners();
       return;
     }
     lessonUiState.finishPlacement();
-    if (_entryOfficialLessonReady) {
+    if (_entryOfficialLessonReady || _hasLocalOfficialAulaState()) {
       _entryWarmupContinueRequested = true;
       unawaited(_tryOpenOfficialAula(source: 'placement_finished'));
     } else {
@@ -2645,38 +2712,44 @@ class LabSession extends ChangeNotifier {
   }
 
   Future<void> _doSignal(SimOrganism organism, DecisionSignal signal) async {
-    aulaRuntimeLoading = true;
     aulaRuntimeError = null;
     notifyListeners();
     try {
       await organism.lessonRuntimeEngine.signal(signal);
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
-      await _openAuxRoomForLastAdvanceDecision(organism);
+      unawaited(_openAuxRoomForLastAdvanceDecision(organism));
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
     } catch (error) {
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       aulaRuntimeError = error.toString();
     } finally {
-      aulaRuntimeLoading = false;
       notifyListeners();
     }
   }
 
   Future<void> _openAuxRoomForLastAdvanceDecision(SimOrganism organism) async {
     final state = organism.stateService.read(organism.lessonLocalId);
-    final serverAdvanceGate = state?.extra['serverAdvanceGate'];
-    final lastDecision = serverAdvanceGate is Map
-        ? serverAdvanceGate['lastDecision']
-        : null;
-    final decision = lastDecision is Map
-        ? (lastDecision['decision'] ?? '').toString()
-        : '';
-    if (decision == 'recovery') {
+    if (state == null) return;
+    final latestTruth = state.events.reversed.firstWhere(
+      (event) => event.type == 'MASTERY_EVIDENCE_EVALUATED',
+      orElse: () => const StudentLearningEvent(type: '', ts: 0, payload: {}),
+    );
+    final latestLocalDecision = state.events.reversed.firstWhere(
+      (event) => event.type == 'LOCAL_ADVANCE_DECIDED',
+      orElse: () => const StudentLearningEvent(type: '', ts: 0, payload: {}),
+    );
+    final truth = latestTruth.payload;
+    final decision = latestLocalDecision.payload['action']?.toString() ?? '';
+    final needsReinforcement =
+        truth['needs_reinforcement'] == true ||
+        decision == 'needsReinforcement';
+    final needsReview = truth['needs_review'] == true;
+    if (needsReinforcement) {
       await startRecoveryRoom();
       return;
     }
-    if (decision == 'review' || decision == 'support') {
+    if (needsReview) {
       openReviewRoom();
       await startReviewRoom(5);
     }

@@ -8,7 +8,7 @@ import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
-import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
+import 'legacy/server_advance_gate_legacy.dart';
 import 'package:sim_mobile/sim/experience/student_experience_engine.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t00_adapter.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t02_adapter.dart';

@@ -46,7 +46,7 @@ class BackgroundTextSemaphore {
 
 // ── D2.2 ─────────────────────────────────────────────────────────────────────
 
-/// Garante que o material da primeira aula está pronto antes de abrir a sala.
+/// Enfileira o material da primeira aula como abastecimento, sem travar a sala.
 /// Mirror de ensureFirstLessonPrepared (src/cyber/lesson-pipeline-runtime.ts).
 Future<CompleteLesson?> ensureFirstLessonPrepared({
   required LessonOrchestrator orchestrator,
@@ -57,7 +57,10 @@ Future<CompleteLesson?> ensureFirstLessonPrepared({
   final cached = cache.peek(key);
   if (cached != null) return cached;
   try {
-    return await orchestrator.prefetchCompleteLesson(params, priority: 'active');
+    return await orchestrator.prefetchCompleteLesson(
+      params,
+      priority: 'background',
+    );
   } catch (_) {
     return null;
   }

@@ -206,13 +206,13 @@ class DopamineReadyWindowEngine {
         'itemIdx': slot.itemIdx,
         'marker': slot.marker,
         'layer': slot.layer.value,
-        'priority': index == 0 ? 'active' : 'background',
+        'priority': index == 0 ? 'hot-local' : 'background',
       });
 
       try {
         final lesson = await orchestrator.prefetchCompleteLesson(
           slot.params,
-          priority: index == 0 ? 'active' : 'background',
+          priority: index == 0 ? 'hot-local' : 'background',
           deferMedia: true,
         );
         _mirrorPreparedLesson(

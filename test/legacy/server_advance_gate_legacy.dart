@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import '../external_ai/sim_ai_server_config.dart';
-import '../lesson/dopamine_ready_window_engine.dart';
-import '../state/student_learning_state.dart';
-import 'classroom_models.dart';
+import 'package:sim_mobile/sim/classroom/classroom_models.dart';
+import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
+import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
+import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
 class ServerAdvanceGateRequest {
   const ServerAdvanceGateRequest({

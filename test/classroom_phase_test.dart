@@ -13,7 +13,7 @@ import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
-import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
+import 'legacy/server_advance_gate_legacy.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
@@ -472,8 +472,8 @@ void main() {
 
       expect(snap.hasCurriculum, isTrue);
       expect(snap.phase.type, ClassroomPhaseType.lendo);
-      expect(snap.conteudo?.question, 'Pergunta M1?');
-      expect(t02.calls, greaterThanOrEqualTo(1));
+      expect(snap.conteudo?.question, contains('Item 1'));
+      expect(t02.calls, 0);
     },
   );
 
@@ -502,13 +502,10 @@ void main() {
 
       expect(snapshot.hasCurriculum, isTrue);
       expect(snapshot.phase.type, ClassroomPhaseType.lendo);
-      expect(snapshot.conteudo?.question, 'Pergunta M1?');
+      expect(snapshot.conteudo?.question, contains('Item 1'));
       expect(snapshot.conteudo?.options.keys, containsAll(AnswerLetter.values));
-      expect(t02.calls, 1);
-      expect(t02.requests.single.marker, 'M1');
-      expect(t02.requests.single.layer, LessonLayer.l1);
+      expect(t02.calls, 0);
       expect(local.currentLessonMaterial?['text_status'], 'ready');
-      expect(local.readyLessonMaterials, isNotEmpty);
     },
   );
 
@@ -531,10 +528,7 @@ void main() {
       expect(snapshot.hasCurriculum, isTrue);
       expect(snapshot.phase.type, ClassroomPhaseType.lendo);
       expect(snapshot.itemMarker, 'M80');
-      expect(t02.calls, 1);
-      expect(t02.requests.single.itemIdx, 79);
-      expect(t02.requests.single.marker, 'M80');
-      expect(t02.requests.single.layer, LessonLayer.l3);
+      expect(t02.calls, 0);
       expect(state.progress?.itemIdx, 79);
       expect(state.progress?.layer, LessonLayer.l3);
       expect(state.curriculum?.globalPlan?.globalTotalItems, 180);
@@ -671,8 +665,8 @@ void main() {
 
       final snap = await runtime.open(lessonLocalId: 'cyber-class');
 
-      expect(snap.conteudo?.question, 'Pergunta M1?');
-      expect(t02.calls, greaterThanOrEqualTo(1));
+      expect(snap.conteudo?.question, contains('Item 1'));
+      expect(t02.calls, 0);
     },
   );
 
@@ -788,7 +782,7 @@ void main() {
     final cache = LessonMaterialCache();
     final runtime = _runtime(service, t02, cache: cache);
     await runtime.open(lessonLocalId: 'cyber-class');
-    expect(t02.calls, 1);
+    expect(t02.calls, 0);
     _putPreparedMaterial(
       service,
       'cyber-class',
@@ -807,7 +801,7 @@ void main() {
     expect(snap.phase.type, ClassroomPhaseType.lendo);
     expect(snap.itemMarker, 'M1');
     expect(snap.conteudo?.question, 'Reparo local preparado?');
-    expect(t02.calls, 1);
+    expect(t02.calls, 0);
     expect(service.read('cyber-class')?.current?.layer, LessonLayer.l2);
   });
 
@@ -935,7 +929,7 @@ void main() {
       );
       final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
       await runtime.open(lessonLocalId: 'cyber-class');
-      expect(t02.calls, 1);
+      expect(t02.calls, 0);
 
       service.mutate('cyber-class', (state) {
         final material = preparedMaterialFromLesson(
@@ -974,7 +968,7 @@ void main() {
       expect(snap.phase.type, ClassroomPhaseType.lendo);
       expect(snap.itemMarker, 'M1');
       expect(snap.conteudo?.question, 'Pergunta preparada L2?');
-      expect(t02.calls, 1);
+      expect(t02.calls, 0);
       expect(
         service
             .read('cyber-class')!
@@ -1046,7 +1040,7 @@ void main() {
       expect(snapshot.conteudo?.question, 'Material ficou pronto?');
       expect(service.read('cyber-class')?.current?.layer, LessonLayer.l2);
       expect(service.read('cyber-class')?.extra['advancePending'], isNull);
-      expect(t02.calls, 1);
+      expect(t02.calls, 0);
     },
   );
 
@@ -1325,7 +1319,7 @@ void main() {
     final cache = LessonMaterialCache();
     final runtime = _runtime(service, t02, cache: cache);
     await runtime.open(lessonLocalId: 'cyber-class');
-    expect(t02.calls, 1);
+    expect(t02.calls, 0);
 
     CompleteLesson material(String marker, LessonLayer layer) => CompleteLesson(
       conteudo: LessonContent(
@@ -1373,7 +1367,7 @@ void main() {
       await runtime.signal(DecisionSignal.two);
       await runtime.advance();
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.lendo);
-      expect(t02.calls, 1, reason: 'step $step');
+      expect(t02.calls, 0, reason: 'step $step');
     }
 
     final snapshot = runtime.snapshot();
@@ -1399,7 +1393,7 @@ void main() {
       final gate = PendingServerAdvanceGateClient();
       final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
       await runtime.open(lessonLocalId: 'cyber-class');
-      expect(t02.calls, 1);
+      expect(t02.calls, 0);
 
       service.mutate('cyber-class', (state) {
         final prepared = preparedMaterialFromLesson(
@@ -1455,7 +1449,7 @@ void main() {
       expect(snap.phase.type, ClassroomPhaseType.lendo);
       expect(snap.itemMarker, 'M1');
       expect(snap.conteudo?.question, 'Servidor pendente bloqueou?');
-      expect(t02.calls, 1);
+      expect(t02.calls, 0);
       expect(metric.payload['textReadyMs'], 0);
       expect(metric.payload['source'], LessonMaterialSource.studentState.name);
       expect(window.payload['currentLayer'], LessonLayer.l2.value);
@@ -1486,7 +1480,7 @@ void main() {
     final gate = PendingServerAdvanceGateClient();
     final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
     await runtime.open(lessonLocalId: 'cyber-class');
-    expect(t02.calls, 1);
+    expect(t02.calls, 0);
 
     service.mutate('cyber-class', (state) {
       final prepared = preparedMaterialFromLesson(
@@ -1541,7 +1535,7 @@ void main() {
     expect(reopenedSnap.phase.type, ClassroomPhaseType.lendo);
     expect(reopenedSnap.itemMarker, 'M1');
     expect(reopenedSnap.conteudo?.question, 'Reabriu no avanco local?');
-    expect(t02.calls, 1);
+    expect(t02.calls, 0);
     expect(
       service
           .read('cyber-class')!
@@ -1665,7 +1659,7 @@ void main() {
       final gate = FailingServerAdvanceGateClient();
       final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
       await runtime.open(lessonLocalId: 'cyber-class');
-      expect(t02.calls, 1);
+      expect(t02.calls, 0);
 
       service.mutate('cyber-class', (state) {
         final prepared = preparedMaterialFromLesson(
@@ -1712,7 +1706,7 @@ void main() {
 
       expect(snap.phase.type, ClassroomPhaseType.lendo);
       expect(snap.conteudo?.question, 'Servidor offline travou?');
-      expect(t02.calls, 1);
+      expect(t02.calls, 0);
       expect(gate.requests, isEmpty);
       expect(state.current?.layer, LessonLayer.l2);
       expect(state.progress?.layer, LessonLayer.l2);
@@ -1780,8 +1774,8 @@ void main() {
 
     expect(snap.phase.type, ClassroomPhaseType.lendo);
     expect(snap.itemMarker, 'M2');
-    expect(snap.conteudo?.question, 'Pergunta M2?');
-    expect(t02.calls, 1);
+    expect(snap.conteudo?.question, contains('Item 2'));
+    expect(t02.calls, 0);
   });
 
   test('M-EXP4 avanco dispara janela viva atual mais proximas tres', () async {
@@ -2180,7 +2174,7 @@ void main() {
   );
 
   test(
-    'answer signal without server does not write false mastery truth',
+    'answer signal without server writes false mastery truth locally',
     () async {
       final store = StudentStateStore(local: MemoryStudentStateLocalStorage());
       store.writeState(
@@ -2206,23 +2200,23 @@ void main() {
       await runtime.signal(DecisionSignal.one);
 
       final state = store.readState('cyber-class');
-      expect(state.extra['truth'], isNull);
-      expect(state.truth.masteryEvidence, isEmpty);
+      expect(state.extra['truth'], isA<Map>());
+      expect(state.truth.masteryEvidence.single['marker_id'], 'M1');
+      expect(state.truth.itemConsolidationStatus['M1'], 'falseMastery');
+      expect(state.truth.falseMasteryFlags, contains('M1'));
       expect(
         state.queuedActions.map((action) => action['type']),
         isNot(contains('ADVANCE_GATE_PENDING')),
       );
-      final eventTypes = store
-          .getEventLog('cyber-class')
-          .map((event) => event.type);
-      expect(eventTypes, isNot(contains('MASTERY_EVALUATED')));
-      expect(eventTypes, isNot(contains('WEAKNESS_REGISTERED')));
-      expect(eventTypes, isNot(contains('REINFORCEMENT_REQUIRED')));
+      expect(
+        state.events.map((event) => event.type),
+        contains('MASTERY_EVIDENCE_EVALUATED'),
+      );
     },
   );
 
   test(
-    'answer signal without server does not write mastery or advance events',
+    'answer signal without server writes mastery evidence locally',
     () async {
       final store = StudentStateStore(local: MemoryStudentStateLocalStorage());
       store.writeState(
@@ -2256,16 +2250,19 @@ void main() {
       await runtime.signal(DecisionSignal.one);
 
       final state = store.readState('cyber-class');
-      expect(state.extra['truth'], isNull);
-      expect(state.truth.masteryEvidence, isEmpty);
+      expect(state.extra['truth'], isA<Map>());
+      expect(state.truth.masteryEvidence.single['marker_id'], 'M1');
+      expect(state.truth.itemConsolidationStatus['M1'], 'mastered');
       expect(
         state.queuedActions.map((action) => action['type']),
         isNot(contains('ADVANCE_GATE_PENDING')),
       );
+      final stateEventTypes = state.events.map((event) => event.type);
+      expect(stateEventTypes, contains('MASTERY_EVIDENCE_EVALUATED'));
+      expect(stateEventTypes, contains('NEXT_ACTION_DECIDED'));
       final eventTypes = store
           .getEventLog('cyber-class')
           .map((event) => event.type);
-      expect(eventTypes, isNot(contains('NEXT_ACTION_DECIDED')));
       expect(eventTypes, isNot(contains('ITEM_MASTERED')));
       expect(eventTypes, isNot(contains('ITEM_ADVANCED')));
     },

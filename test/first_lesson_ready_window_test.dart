@@ -831,7 +831,7 @@ void main() {
             'type': 'PREPARE_READY_WINDOW',
             'status': 'queued',
             'idempotency_key': 'hot',
-            'priority': 'active',
+            'priority': 'hot-local',
             'source': 'hot-visible-window',
             'payload': {
               'maxSlots': 4,
@@ -1177,6 +1177,7 @@ void main() {
         marker: 'M1',
         layer: LessonLayer.l1,
         params: params,
+        allowRemoteOrder: true,
       ),
     );
 
@@ -1232,6 +1233,7 @@ void main() {
               params: params,
               waitBeforeOrderMs: 0,
               waitAfterOrderMs: 5,
+              allowRemoteOrder: true,
             ),
           );
 
@@ -1279,7 +1281,7 @@ void main() {
 
       final textLesson = await orchestrator.prefetchCompleteLesson(
         params,
-        priority: 'active',
+        priority: 'hot-local',
       );
       await Future<void>.delayed(Duration.zero);
 
@@ -1326,7 +1328,7 @@ void main() {
       final unsubscribeLesson = bus.subscribe(key, updates.add);
       addTearDown(unsubscribeLesson);
 
-      await orchestrator.prefetchCompleteLesson(params, priority: 'active');
+      await orchestrator.prefetchCompleteLesson(params, priority: 'hot-local');
       await Future<void>.delayed(Duration.zero);
 
       final rendered = updates.last.imagem;
@@ -1375,7 +1377,7 @@ void main() {
       final unsubscribeLesson = bus.subscribe(key, updates.add);
       addTearDown(unsubscribeLesson);
 
-      await orchestrator.prefetchCompleteLesson(params, priority: 'active');
+      await orchestrator.prefetchCompleteLesson(params, priority: 'hot-local');
       await Future<void>.delayed(Duration.zero);
 
       final rendered = updates.last.imagem;
@@ -1441,7 +1443,7 @@ void main() {
 
       await orchestrator.prefetchCompleteLesson(
         params,
-        priority: 'active',
+        priority: 'hot-local',
         forceRefresh: true,
       );
       expect(t02.calls, 1);
@@ -1498,7 +1500,7 @@ void main() {
         ),
       );
 
-      await orchestrator.prefetchCompleteLesson(params, priority: 'active');
+      await orchestrator.prefetchCompleteLesson(params, priority: 'hot-local');
       await Future<void>.delayed(Duration.zero);
 
       expect(t02.calls, 0);
@@ -1529,7 +1531,7 @@ void main() {
     final unsubscribe = bus.subscribe(key, updates.add);
     addTearDown(unsubscribe);
 
-    await orchestrator.prefetchCompleteLesson(params, priority: 'active');
+    await orchestrator.prefetchCompleteLesson(params, priority: 'hot-local');
     await Future<void>.delayed(Duration.zero);
 
     expect(updates.single.imagem, isNull);
@@ -1588,7 +1590,7 @@ void main() {
           mode: LessonMode.reforco,
           marker: 'M1',
         ),
-        priority: 'active',
+        priority: 'hot-local',
       );
       final recovery = await orchestrator.prefetchCompleteLesson(
         const CompleteLessonParams(
@@ -1601,7 +1603,7 @@ void main() {
           amparoLvl: 1,
           marker: 'M1',
         ),
-        priority: 'active',
+        priority: 'hot-local',
       );
 
       expect(t02.requests.map((request) => request.mode), [
@@ -2174,6 +2176,7 @@ void main() {
                 mode: LessonMode.session,
                 marker: 'M1',
               ),
+              allowRemoteOrder: true,
             ),
           );
 
@@ -2240,6 +2243,7 @@ void main() {
                 mode: LessonMode.session,
                 marker: 'M1',
               ),
+              allowRemoteOrder: true,
             ),
           );
 
@@ -2439,7 +2443,7 @@ void main() {
       itemIdx: 0,
       layer: LessonLayer.l1,
       source: 'test-window-visible-active',
-      priority: 'active',
+      priority: 'hot-local',
       items: const [
         DopamineWindowItem(text: 'Item 1', marker: 'M1'),
         DopamineWindowItem(text: 'Item 2', marker: 'M2'),
@@ -2452,7 +2456,7 @@ void main() {
           job['idempotency_key'] == 'ready-window:cyber-window-dedupe:0:M1:L1',
     );
     expect(upgraded, hasLength(2));
-    expect(upgradedHot?['priority'], 'active');
+    expect(upgradedHot?['priority'], 'hot-local');
     expect(upgradedHot?['source'], 'test-window-visible-active');
   });
 
@@ -2511,13 +2515,14 @@ void main() {
       expect(position.teoriaPronta, isTrue);
       expect(state?.queuedActions, hasLength(2));
       final hotJob = state?.queuedActions.firstWhere(
-        (job) => job['source'] == 'cyber.aula.loaded-window',
+        (job) => job['source'] == 'cyber.aula.local-preparation',
       );
       final warmJob = state?.queuedActions.firstWhere(
-        (job) => job['source'] == 'cyber.aula.loaded-window.warm-offline-cache',
+        (job) =>
+            job['source'] == 'cyber.aula.local-preparation.warm-offline-cache',
       );
       expect(hotJob?['type'], 'PREPARE_READY_WINDOW');
-      expect(hotJob?['priority'], 'active');
+      expect(hotJob?['priority'], 'background');
       expect(hotJob?['payload']?['maxSlots'], 4);
       expect(warmJob?['payload']?['maxSlots'], 15);
       final event = state?.events.lastWhere(
@@ -2617,7 +2622,7 @@ void main() {
         baseItems: items,
       );
       expect(position.phase.type, ClassroomPhaseType.lendo);
-      expect(t02.calls, 1);
+      expect(t02.calls, 0);
 
       await worker.drainReadyWindowJobs(lessonId);
 
@@ -2698,7 +2703,7 @@ void main() {
         itemIdx: 1,
         layer: LessonLayer.l1,
         source: 'test-refill-after-advance',
-        priority: 'active',
+        priority: 'hot-local',
         items: const [
           DopamineWindowItem(text: 'Item 1', marker: 'M1'),
           DopamineWindowItem(text: 'Item 2', marker: 'M2'),
@@ -2731,7 +2736,7 @@ void main() {
             job['idempotency_key'] ==
             'ready-window:cyber-refill-window:1:M2:L1',
       );
-      expect(hotJob?['priority'], 'active');
+      expect(hotJob?['priority'], 'hot-local');
     },
   );
 
@@ -2814,6 +2819,7 @@ void main() {
         marker: 'M1',
         layer: LessonLayer.l1,
         params: params,
+        allowRemoteOrder: true,
       ),
     );
 
@@ -2880,6 +2886,7 @@ void main() {
         marker: 'M1',
         layer: LessonLayer.l1,
         params: params,
+        allowRemoteOrder: true,
       ),
     );
 
@@ -2951,6 +2958,7 @@ void main() {
         marker: 'M1',
         layer: LessonLayer.l1,
         params: params,
+        allowRemoteOrder: true,
       ),
     );
 
@@ -3021,7 +3029,7 @@ void main() {
 
       final first = await orchestrator.prefetchCompleteLesson(
         params,
-        priority: 'active',
+        priority: 'hot-local',
       );
 
       expect(first.imagem, isNull);

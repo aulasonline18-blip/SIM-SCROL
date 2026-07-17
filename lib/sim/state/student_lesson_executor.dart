@@ -1,11 +1,8 @@
-// LEGACY/SHADOW ONLY.
+// Deterministic app-side lesson executor.
 //
-// This file remains as the deterministic app-side advance mirror. Classroom
-// runtime may use it to decide the next local item/layer. The server must only
-// receive state later through the remote vault sync path; it must not be a gate,
-// confirmation, or veto in the hot answer/signal/advance path.
-//
-// Historical origin only; this is not a live parity rule.
+// Classroom runtime uses these helpers to apply local answer/signal/advance
+// decisions. The server may receive state later through remote vault sync, but
+// it must not be a gate, confirmation, or veto in this hot path.
 import 'learning_decision_engine.dart';
 import 'student_learning_state.dart';
 

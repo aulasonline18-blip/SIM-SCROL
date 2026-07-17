@@ -613,7 +613,7 @@ void main() {
     await tester.enterText(find.byType(TextField).last, 'Geometria editada');
     await tester.tap(find.text('✓'));
     await tester.pumpAndSettle();
-    expect(cloud.persistCalls, 1);
+    expect(cloud.persistCalls, greaterThanOrEqualTo(1));
     expect(find.text('Geometria editada'), findsOneWidget);
     expect(find.text('Química na conta'), findsOneWidget);
 

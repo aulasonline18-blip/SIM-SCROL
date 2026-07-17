@@ -152,7 +152,7 @@ DecisionResult decideNextActionFromState(StudentLearningState? state) {
   }
 }
 
-// F2.1: motor sombra — audita se UI/runtime tomou a decisao certa.
+// F2.1: audit trail for local decisions already applied by the runtime.
 void runShadowDecision(
   String lessonLocalId,
   StudentLearningStateService service,

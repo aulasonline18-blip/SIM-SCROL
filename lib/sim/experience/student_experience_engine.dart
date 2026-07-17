@@ -135,6 +135,7 @@ class StudentExperienceEngine {
                   );
                 }),
           );
+          await Future<void>.delayed(Duration.zero);
         }
         args.onStage?.call(StudentExperienceRouteStage.placement);
         writeStudentExperienceSnapshot(
@@ -178,9 +179,6 @@ class StudentExperienceEngine {
       );
       if (selected.marker != first.marker ||
           selected.itemIndex != first.itemIndex) {
-        if (firstLessonPreparer == null) {
-          throw Exception('T02 obrigatorio para abrir a primeira aula.');
-        }
         publishStudentExperienceEvent(
           service,
           args.lessonLocalId,
@@ -192,41 +190,41 @@ class StudentExperienceEngine {
           },
         );
       }
-      if (firstLessonPreparer == null) {
-        throw Exception('T02 obrigatorio para abrir a primeira aula.');
-      }
 
       _openFirstLessonShell(args, selected);
-      unawaited(
-        firstLessonPreparer
-            .prepareFirstMinimumLesson(
-              args: args,
-              first: selected,
-              shellAlreadyOpen: true,
-            )
-            .catchError((Object error) {
-              final info = classifyStudentExperienceError(error);
-              writeStudentExperienceSnapshot(
-                service,
-                lessonLocalId: args.lessonLocalId,
-                state: info.kind == StudentExperienceErrorKind.timeout
-                    ? StudentExperienceState.erroRecuperavel
-                    : StudentExperienceState.erroBloqueante,
-                destination: '/cyber/aula',
-                startMarker: selected.marker,
-                startItemIndex: selected.itemIndex,
-                error: info,
-              );
-              publishStudentExperienceEvent(
-                service,
-                args.lessonLocalId,
-                info.kind == StudentExperienceErrorKind.timeout
-                    ? StudentExperienceEventType.recoverableError
-                    : StudentExperienceEventType.blockingError,
-                {'error': info.message, 'phase': 'background_first_t02'},
-              );
-            }),
-      );
+      if (firstLessonPreparer != null) {
+        unawaited(
+          firstLessonPreparer
+              .prepareFirstMinimumLesson(
+                args: args,
+                first: selected,
+                shellAlreadyOpen: true,
+              )
+              .catchError((Object error) {
+                final info = classifyStudentExperienceError(error);
+                writeStudentExperienceSnapshot(
+                  service,
+                  lessonLocalId: args.lessonLocalId,
+                  state: info.kind == StudentExperienceErrorKind.timeout
+                      ? StudentExperienceState.erroRecuperavel
+                      : StudentExperienceState.erroBloqueante,
+                  destination: '/cyber/aula',
+                  startMarker: selected.marker,
+                  startItemIndex: selected.itemIndex,
+                  error: info,
+                );
+                publishStudentExperienceEvent(
+                  service,
+                  args.lessonLocalId,
+                  info.kind == StudentExperienceErrorKind.timeout
+                      ? StudentExperienceEventType.recoverableError
+                      : StudentExperienceEventType.blockingError,
+                  {'error': info.message, 'phase': 'background_first_t02'},
+                );
+                }),
+        );
+        await Future<void>.delayed(Duration.zero);
+      }
       return StudentExperienceResult(
         destination: '/cyber/aula',
         curriculum: selected.curriculum,

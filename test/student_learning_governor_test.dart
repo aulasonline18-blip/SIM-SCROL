@@ -38,32 +38,44 @@ StudentLearningState _seedState() {
 }
 
 void main() {
-  test('StudentLearningGovernor legado nao decide resposta localmente', () {
-    final store = StudentStateStore(local: MemoryStudentStateLocalStorage());
-    store.writeState(_seedState());
-    final governor = StudentLearningGovernor(store: store);
+  test(
+    'StudentLearningGovernor decide A/B/C+sinal localmente sem servidor',
+    () {
+      final store = StudentStateStore(local: MemoryStudentStateLocalStorage());
+      store.writeState(_seedState());
+      final governor = StudentLearningGovernor(store: store);
 
-    expect(
-      () => governor.submitAnswer(
+      final result = governor.submitAnswer(
         lessonLocalId: 'lesson-1',
         selected: AnswerLetter.A,
         correctAnswer: AnswerLetter.A,
         signal: DecisionSignal.one,
-      ),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('SimServidor'),
-        ),
-      ),
-    );
+      );
 
-    final state = store.readState('lesson-1');
-    expect(state.attempts, isEmpty);
-    expect(state.progress?.itemIdx, 0);
-    expect(state.progress?.layer, LessonLayer.l1);
-    expect(state.events, isEmpty);
-    expect(store.getEventLog('lesson-1'), isEmpty);
-  });
+      final state = store.readState('lesson-1');
+      expect(result.state.lessonLocalId, 'lesson-1');
+      expect(result.answerEvent.source, 'student-learning-governor');
+      expect(result.masteryEvent.type, 'MASTERY_EVIDENCE_EVALUATED');
+      expect(result.decisionEvent.type, 'LOCAL_ADVANCE_DECIDED');
+      expect(result.nextAction.reason, isNot(contains('servidor')));
+      expect(state.attempts, hasLength(1));
+      expect(state.attempts.single.marker, 'M1');
+      expect(state.attempts.single.correct, isTrue);
+      expect(state.truth.masteryEvidence.single['marker_id'], 'M1');
+      expect(
+        state.truth.itemConsolidationStatus['M1'],
+        result.mastery.status.name,
+      );
+      expect(state.progress?.itemIdx, 0);
+      expect(state.progress?.layer, LessonLayer.l3);
+      expect(
+        store.getEventLog('lesson-1').map((event) => event.type),
+        containsAll([
+          'ANSWER_SUBMITTED',
+          'MASTERY_EVIDENCE_EVALUATED',
+          'LOCAL_ADVANCE_DECIDED',
+        ]),
+      );
+    },
+  );
 }

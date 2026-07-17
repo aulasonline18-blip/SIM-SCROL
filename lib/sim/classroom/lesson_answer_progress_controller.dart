@@ -28,6 +28,7 @@ class LessonAnswerProgressController {
     MasteryTruthEngine? truthEngine,
     SimConstitutionalContract? constitutionalContract,
   }) : signalTracker = signalTracker ?? SignalTracker(stateService),
+       truthEngine = truthEngine ?? const MasteryTruthEngine(),
        constitutionalContract =
            constitutionalContract ?? const SimConstitutionalContract();
 
@@ -37,6 +38,7 @@ class LessonAnswerProgressController {
   final StudentStateStore? store;
   final AudioCore? audioCore;
   final SignalTracker signalTracker;
+  final MasteryTruthEngine truthEngine;
   final SimConstitutionalContract constitutionalContract;
 
   void selecionar(LessonPositionState position, AnswerLetter letter) {
@@ -124,8 +126,12 @@ class LessonAnswerProgressController {
         ? currentState
         : _withLocalAttemptEvidence(currentState, localAttempt);
     if (stateWithLocalEvidence != null && !position.isReviewAtivo) {
+      final stateWithTruth = _withLocalMasteryEvidence(
+        stateWithLocalEvidence,
+        item.marker,
+      );
       stateService.write(
-        _withLocalAdvanceDecision(stateWithLocalEvidence, item.marker),
+        _withLocalAdvanceDecision(stateWithTruth, item.marker),
         scheduleShadow: false,
       );
     }
@@ -297,7 +303,7 @@ class LessonAnswerProgressController {
         layer: position.layer,
         items: _dopamineItemsFromCurriculum(baseItems),
         source: 'cyber.aula.advance-cache-miss',
-        priority: 'active',
+        priority: 'background',
         reason: 'advance_cache_miss_prepares_without_blocking_touch',
       );
       return;
@@ -372,7 +378,7 @@ class LessonAnswerProgressController {
         layer: view.layer,
         items: _dopamineItemsFromCurriculum(baseItems),
         source: 'cyber.aula.advance-cache-miss',
-        priority: 'active',
+        priority: 'background',
         reason: 'advance_cache_miss_prepares_without_blocking_touch',
       );
       return;
@@ -427,7 +433,7 @@ class LessonAnswerProgressController {
       layer: view.layer,
       items: _dopamineItemsFromCurriculum(baseItems),
       source: 'cyber.aula.advance-cache-miss',
-      priority: 'active',
+      priority: 'background',
       reason: 'advance_cache_miss_prepares_without_blocking_touch',
     );
   }
@@ -569,6 +575,29 @@ class LessonAnswerProgressController {
     LessonAttempt attempt,
   ) {
     return state.copyWith(attempts: [...state.attempts, attempt]);
+  }
+
+  StudentLearningState _withLocalMasteryEvidence(
+    StudentLearningState state,
+    String marker,
+  ) {
+    final evidence = truthEngine.evaluateMarker(state, marker);
+    final withTruth = truthEngine.writeTruthToState(state, evidence);
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    return withTruth.copyWith(
+      events: [
+        ...withTruth.events,
+        StudentLearningEvent(
+          type: 'MASTERY_EVIDENCE_EVALUATED',
+          ts: ts,
+          payload: {
+            ...evidence.toJson(),
+            'source': 'sim_app_local_truth_engine',
+            'remoteConfirmation': 'not_required',
+          },
+        ),
+      ],
+    );
   }
 
   StudentLearningState _withLocalAdvanceDecision(

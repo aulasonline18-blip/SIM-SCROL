@@ -52,11 +52,11 @@ class ReadyWindowWorker {
     final now = DateTime.now().millisecondsSinceEpoch;
     final jobs = List<JsonMap>.from(state.queuedActions);
 
-    final hasActiveReady = jobs.any(
+    final hasHotLocalReady = jobs.any(
       (job) =>
           job['type'] == 'PREPARE_READY_WINDOW' &&
           job['status'] == 'queued' &&
-          job['priority'] == 'active' &&
+          job['priority'] == 'hot-local' &&
           ((job['next_retry_at'] as num?)?.toInt() ?? 0) <= now,
     );
 
@@ -68,7 +68,7 @@ class ReadyWindowWorker {
           ((job['next_retry_at'] as num?)?.toInt() ?? 0) <= now,
     );
 
-    if (hasActiveReady || (hasBackgroundReady && id == _activeLessonLocalId)) {
+    if (hasHotLocalReady || (hasBackgroundReady && id == _activeLessonLocalId)) {
       drainReadyWindowJobs(id);
     } else {
       final nextJob = jobs
@@ -94,7 +94,7 @@ class ReadyWindowWorker {
   Future<List<bool>> drainReadyWindowJobs(String lessonLocalId) {
     final existing = _inflight[lessonLocalId];
     if (existing != null) {
-      if (_hasQueuedActiveReadyWindow(lessonLocalId)) {
+      if (_hasQueuedHotLocalReadyWindow(lessonLocalId)) {
         return _dodrainReadyWindowJobs(lessonLocalId);
       }
       _pendingDrain.add(lessonLocalId);
@@ -111,7 +111,7 @@ class ReadyWindowWorker {
     });
   }
 
-  bool _hasQueuedActiveReadyWindow(String lessonLocalId) {
+  bool _hasQueuedHotLocalReadyWindow(String lessonLocalId) {
     final state = service.read(lessonLocalId);
     if (state == null) return false;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -119,7 +119,7 @@ class ReadyWindowWorker {
       (job) =>
           job['type'] == 'PREPARE_READY_WINDOW' &&
           job['status'] == 'queued' &&
-          job['priority'] == 'active' &&
+          job['priority'] == 'hot-local' &&
           ((job['next_retry_at'] as num?)?.toInt() ?? 0) <= now,
     );
   }
@@ -257,8 +257,8 @@ class ReadyWindowWorker {
         )
         .toList();
     queued.sort((a, b) {
-      final ap = a['priority'] == 'active' ? 0 : 1;
-      final bp = b['priority'] == 'active' ? 0 : 1;
+      final ap = a['priority'] == 'hot-local' ? 0 : 1;
+      final bp = b['priority'] == 'hot-local' ? 0 : 1;
       if (ap != bp) return ap.compareTo(bp);
       return ((a['created_at'] as num?)?.toInt() ?? 0).compareTo(
         (b['created_at'] as num?)?.toInt() ?? 0,

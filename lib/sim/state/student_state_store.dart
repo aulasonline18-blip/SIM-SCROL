@@ -779,7 +779,8 @@ class StudentStateStore implements StudentStateRepository {
         );
       }
     }
-    if (event.type == 'MASTERY_EVALUATED') {
+    if (event.type == 'MASTERY_EVALUATED' ||
+        event.type == 'MASTERY_EVIDENCE_EVALUATED') {
       final marker = event.payload['marker_id']?.toString();
       final status = event.payload['status']?.toString();
       if (marker == null || marker.isEmpty || status == null) return state;
@@ -792,10 +793,23 @@ class StudentStateStore implements StudentStateRepository {
             : const {},
       );
       consolidation[marker] = status;
+      final evidence = event.payload.containsKey('marker_id')
+          ? [JsonMap.from(event.payload)]
+          : state.truth.masteryEvidence;
       return state.copyWith(
+        truth: state.truth.copyWith(
+          masteryEvidence: evidence,
+          itemConsolidationStatus: consolidation.map(
+            (key, value) => MapEntry(key.toString(), value.toString()),
+          ),
+        ),
         extra: {
           ...state.extra,
-          'truth': {...truth, 'item_consolidation_status': consolidation},
+          'truth': {
+            ...truth,
+            'mastery_evidence': evidence,
+            'item_consolidation_status': consolidation,
+          },
         },
       );
     }

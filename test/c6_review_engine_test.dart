@@ -452,7 +452,11 @@ void main() {
       expect(saved.truth.itemConsolidationStatus['M1'], isNot('mastered'));
       expect(saved.events.last.payload['authoritative'], isFalse);
       expect(saved.events.last.payload['writesTruth'], isFalse);
-      expect(saved.events.last.payload['requiresServerDecision'], isTrue);
+      expect(saved.events.last.payload['requiresServerDecision'], isFalse);
+      expect(
+        saved.events.last.payload['decisionSource'],
+        'sim_app_local_aux_evidence',
+      );
 
       final wrongAttempt = _attempt(
         marker: 'M2',

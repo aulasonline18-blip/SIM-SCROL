@@ -8,8 +8,6 @@ import '../auxiliary/aux_room_t02_caller.dart';
 import '../auxiliary/aux_rooms_controller.dart';
 import '../auxiliary/recovery_room_service.dart';
 import '../auxiliary/review_room_service.dart';
-import '../auxiliary/server_recovery_contract.dart';
-import '../auxiliary/server_review_contract.dart';
 import '../auxiliary/student_aux_room_service.dart';
 import '../classroom/lesson_answer_progress_controller.dart';
 import '../classroom/lesson_hydration_engine.dart';
@@ -40,7 +38,6 @@ import '../placement/placement_store.dart';
 import '../placement/placement_t02_caller.dart';
 import '../placement/student_placement_service.dart';
 import '../state/student_learning_state.dart';
-import '../state/learning_decision_engine.dart';
 import '../state/student_learning_state_service.dart';
 import '../state/student_state_store.dart';
 import '../state/student_state_store_adapter.dart';
@@ -230,15 +227,9 @@ class SimOrganism {
     final auxRoomsController = AuxRoomsController(
       reviewRoomService: ReviewRoomService(
         auxRoomService,
-        serverReviewClient: ServerReviewClient(
-          SimServerReviewTransport(config: aiConfig),
-        ),
       ),
       recoveryRoomService: RecoveryRoomService(
         auxRoomService,
-        serverRecoveryClient: ServerRecoveryClient(
-          SimServerRecoveryTransport(config: aiConfig),
-        ),
       ),
     );
     final lessonRuntimeEngine = LessonRuntimeEngine(
@@ -257,9 +248,6 @@ class SimOrganism {
     );
 
     final cloudQueue = remoteVaultQueue;
-    stateService.setShadowDecisionRunner(
-      (id) => runShadowDecision(id, stateService),
-    );
     stateAdapter.onWrite = (id) =>
         cloudQueue.enqueueStudentStateSync(lessonLocalId: id);
     readyWindowWorker.startReadyWindowWorker(

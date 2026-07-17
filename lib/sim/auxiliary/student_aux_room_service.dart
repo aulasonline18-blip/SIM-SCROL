@@ -1,3 +1,4 @@
+import '../lesson/lesson_models.dart';
 import '../state/student_learning_state.dart';
 import 'aux_room_models.dart';
 import 'aux_room_t02_caller.dart';
@@ -196,21 +197,29 @@ class StudentAuxRoomService {
     if (picked == null) {
       return const PreparedAuxRoomQuestion.failed('no item for marker');
     }
-    final result = await t02Caller.call(
-      lessonLocalId: lessonLocalId,
+    LessonContent? content;
+    try {
+      final result = await t02Caller.call(
+        lessonLocalId: lessonLocalId,
+        mode: mode,
+        profile: profile,
+        marker: picked.marker!,
+        item: picked.text!,
+        signal: signal,
+        confirmEnabled: true,
+      );
+      if (!result.aborted) {
+        content = result.conteudo;
+      }
+    } catch (_) {
+      content = null;
+    }
+    content ??= _localAuxRoomFallbackContent(
       mode: mode,
-      profile: profile,
-      marker: picked.marker!,
       item: picked.text!,
       signal: signal,
-      confirmEnabled: true,
     );
-    if (result.aborted) {
-      return PreparedAuxRoomQuestion.failed(result.reason ?? 'aborted');
-    }
-    final content = result.conteudo;
-    if (content == null ||
-        content.options[AnswerLetter.A]?.isEmpty != false ||
+    if (content.options[AnswerLetter.A]?.isEmpty != false ||
         content.options[AnswerLetter.B]?.isEmpty != false ||
         content.options[AnswerLetter.C]?.isEmpty != false) {
       return const PreparedAuxRoomQuestion.failed('invalid aux room material');
@@ -278,12 +287,40 @@ class StudentAuxRoomService {
             'authoritative': false,
             'strongEffect': false,
             'writesTruth': false,
-            'requiresServerDecision': true,
+            'requiresServerDecision': false,
+            'decisionSource': 'sim_app_local_aux_evidence',
           },
         ),
       ],
     );
     writeState(nextState);
+  }
+
+  LessonContent _localAuxRoomFallbackContent({
+    required AuxRoomMode mode,
+    required String item,
+    required DecisionSignal signal,
+  }) {
+    final room = mode == AuxRoomMode.recovery ? 'recuperacao' : 'revisao';
+    final prompt = mode == AuxRoomMode.recovery
+        ? 'Qual alternativa reconstrói melhor a ideia central de "$item"?'
+        : 'Qual alternativa revisa corretamente "$item"?';
+    return LessonContent(
+      explanation:
+          'Esta $room usa a evidencia local da aula enquanto novo conteudo pode ser preparado.',
+      question: prompt,
+      options: const {
+        AnswerLetter.A: 'Retomar a ideia principal com calma.',
+        AnswerLetter.B: 'Pular sem verificar a compreensao.',
+        AnswerLetter.C: 'Trocar de assunto agora.',
+      },
+      correctAnswer: AnswerLetter.A,
+      whyCorrect: 'Mantem continuidade e reforca a evidencia local.',
+      whyWrong: const {
+        'B': 'Pular nao confirma dominio.',
+        'C': 'Trocar de assunto nao repara a duvida atual.',
+      },
+    );
   }
 
   void completeReviewSession(String lessonLocalId) {

@@ -92,11 +92,22 @@ class StudentExperienceT02Adapter {
             layer: LessonLayer.l1,
             params: params,
             waitBeforeOrderMs: 0,
-            waitAfterOrderMs: 45000,
+            waitAfterOrderMs: 1,
+            allowRemoteOrder: true,
           ),
         );
     if (material == null) {
-      throw Exception('T02 nao devolveu a aula minima da primeira experiencia');
+      publishStudentExperienceEvent(
+        service,
+        args.lessonLocalId,
+        StudentExperienceEventType.recoverableError,
+        {
+          'phase': 'background_first_t02',
+          'message':
+              'Primeira aula ainda em preparacao local; T02 segue como abastecimento.',
+        },
+      );
+      return;
     }
 
     service.mutate(args.lessonLocalId, (state) {

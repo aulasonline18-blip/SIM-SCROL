@@ -9,7 +9,7 @@ import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_answer_progress_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
-import 'package:sim_mobile/sim/classroom/server_advance_gate.dart';
+import 'legacy/server_advance_gate_legacy.dart';
 import 'package:sim_mobile/sim/cloud/cloud_queue.dart';
 import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';

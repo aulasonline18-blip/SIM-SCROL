@@ -59,7 +59,7 @@ class LessonOrchestrator {
   CompleteLesson ensureVisualForReadyLesson(
     CompleteLessonParams params,
     LessonContent conteudo, {
-    String priority = 'active',
+    String priority = 'hot-local',
     String? initialImage,
     bool deferMedia = false,
   }) {
@@ -128,13 +128,11 @@ class LessonOrchestrator {
     if (existing != null && !forceRefresh) return existing;
 
     Future<CompleteLesson> fetchFn() => _fetchText(params);
-    final queued = priority == 'active'
-        ? fetchFn()
-        : _bgText.run(() async {
-            final gate = _lastLessonFullyComplete;
-            await gate;
-            return fetchFn();
-          });
+    final queued = _bgText.run(() async {
+      final gate = _lastLessonFullyComplete;
+      await gate;
+      return fetchFn();
+    });
 
     final future = queued
         .then((lesson) {

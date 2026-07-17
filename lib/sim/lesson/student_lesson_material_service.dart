@@ -14,6 +14,7 @@ enum LessonMaterialSource {
   studentState,
   studentStateAfterWait,
   memoryCacheFromMotor,
+  localFallback,
 }
 
 class ResolveLessonMaterialInput {
@@ -27,6 +28,7 @@ class ResolveLessonMaterialInput {
     this.forceRefresh = false,
     this.waitBeforeOrderMs = 2000,
     this.waitAfterOrderMs = 12000,
+    this.allowRemoteOrder = false,
   });
 
   final String lessonLocalId;
@@ -38,6 +40,7 @@ class ResolveLessonMaterialInput {
   final bool forceRefresh;
   final int waitBeforeOrderMs;
   final int waitAfterOrderMs;
+  final bool allowRemoteOrder;
 }
 
 class ResolveLessonMaterialResult {
@@ -86,7 +89,7 @@ class StudentLessonMaterialService {
       final visualReady = orchestrator.ensureVisualForReadyLesson(
         input.params,
         fromState.conteudo,
-        priority: 'active',
+        priority: 'hot-local',
         initialImage: fromState.imagem,
       );
       _prepareLessonAudio(input, visualReady.conteudo);
@@ -115,7 +118,7 @@ class StudentLessonMaterialService {
     final visualReady = orchestrator.ensureVisualForReadyLesson(
       input.params,
       cached.conteudo,
-      priority: 'active',
+      priority: 'hot-local',
     );
     _prepareLessonAudio(input, visualReady.conteudo);
     _mirrorCurrentLessonMaterial(input, visualReady);
@@ -174,17 +177,39 @@ class StudentLessonMaterialService {
       );
     }
 
+    if (!input.allowRemoteOrder) return null;
+
     final lessonFuture = orchestrator.prefetchCompleteLesson(
       input.params,
-      priority: 'active',
+      priority: 'background',
     );
+    if (input.waitAfterOrderMs <= 0) {
+      unawaited(
+        lessonFuture
+            .then((lesson) {
+              _mirrorPreparedAndCurrentLessonMaterial(input, lesson);
+              _appendLessonTextReady(
+                input,
+                lesson.conteudo,
+                LessonMaterialSource.studentStateAfterWait,
+                DateTime.now().millisecondsSinceEpoch - startedAt,
+              );
+            })
+            .catchError((_) => null),
+      );
+      _appendLessonWaitApplied(
+        input,
+        stage: 'after_order_background',
+        waitedMs: DateTime.now().millisecondsSinceEpoch - startedAt,
+        resolved: false,
+      );
+      return null;
+    }
     final CompleteLesson lesson;
     try {
-      lesson = input.waitAfterOrderMs <= 0
-          ? await lessonFuture
-          : await lessonFuture.timeout(
-              Duration(milliseconds: input.waitAfterOrderMs),
-            );
+      lesson = await lessonFuture.timeout(
+        Duration(milliseconds: input.waitAfterOrderMs),
+      );
     } on TimeoutException {
       final afterTimeout = input.forceRefresh
           ? null
@@ -419,12 +444,12 @@ class StudentLessonMaterialService {
           'max_attempts': 3,
           'next_retry_at': null,
         });
-      } else if (priority == 'active' &&
-          jobs[duplicateIndex]['priority'] != 'active' &&
+      } else if (priority == 'hot-local' &&
+          jobs[duplicateIndex]['priority'] != 'hot-local' &&
           jobs[duplicateIndex]['status'] == 'queued') {
         jobs[duplicateIndex] = {
           ...jobs[duplicateIndex],
-          'priority': 'active',
+          'priority': 'hot-local',
           'source': source,
           'payload': {
             ...JsonMap.from(
@@ -738,7 +763,7 @@ class StudentLessonMaterialService {
     return orchestrator.ensureVisualForReadyLesson(
       input.params,
       lesson.conteudo,
-      priority: 'active',
+      priority: 'hot-local',
       initialImage: null,
     );
   }
