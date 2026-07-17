@@ -720,7 +720,8 @@ void main() {
       seed: {'cyber-class': _classroomState()},
     );
     final t02 = FakeClassroomT02();
-    final runtime = _runtime(service, t02);
+    final cache = LessonMaterialCache();
+    final runtime = _runtime(service, t02, cache: cache);
     await runtime.open(lessonLocalId: 'cyber-class');
     expect(t02.calls, 1);
     _putPreparedMaterial(
@@ -1034,7 +1035,8 @@ void main() {
       seed: {'cyber-class': _classroomState()},
     );
     final t02 = FakeClassroomT02();
-    final runtime = _runtime(service, t02);
+    final cache = LessonMaterialCache();
+    final runtime = _runtime(service, t02, cache: cache);
     await runtime.open(lessonLocalId: 'cyber-class');
 
     runtime.select(AnswerLetter.A);
@@ -1255,7 +1257,8 @@ void main() {
       seed: {'cyber-class': _classroomState()},
     );
     final t02 = FakeClassroomT02();
-    final runtime = _runtime(service, t02);
+    final cache = LessonMaterialCache();
+    final runtime = _runtime(service, t02, cache: cache);
     await runtime.open(lessonLocalId: 'cyber-class');
     expect(t02.calls, 1);
 
@@ -1274,28 +1277,31 @@ void main() {
       audioText: 'Texto preparado $marker L${layer.value}.',
     );
 
-    service.mutate('cyber-class', (state) {
-      final prepared = <String, JsonMap>{};
-      for (final entry in const [
-        (idx: 0, marker: 'M1', layer: LessonLayer.l2),
-        (idx: 0, marker: 'M1', layer: LessonLayer.l3),
-        (idx: 1, marker: 'M2', layer: LessonLayer.l1),
-        (idx: 1, marker: 'M2', layer: LessonLayer.l2),
-        (idx: 1, marker: 'M2', layer: LessonLayer.l3),
-      ]) {
-        prepared[preparedLessonMaterialKey(
-          entry.idx,
-          entry.marker,
-          entry.layer,
-        )] = preparedMaterialFromLesson(
-          lesson: material(entry.marker, entry.layer),
-          itemIdx: entry.idx,
-          marker: entry.marker,
-          layer: entry.layer,
-        );
-      }
-      return state.copyWith(readyLessonMaterials: prepared);
-    });
+    for (final entry in const [
+      (idx: 0, marker: 'M1', item: 'Item 1', layer: LessonLayer.l2),
+      (idx: 0, marker: 'M1', item: 'Item 1', layer: LessonLayer.l3),
+      (idx: 1, marker: 'M2', item: 'Item 2', layer: LessonLayer.l1),
+      (idx: 1, marker: 'M2', item: 'Item 2', layer: LessonLayer.l2),
+      (idx: 1, marker: 'M2', item: 'Item 2', layer: LessonLayer.l3),
+    ]) {
+      final params = CompleteLessonParams(
+        lessonLocalId: 'cyber-class',
+        item: entry.item,
+        lang: 'pt-BR',
+        academic: nivelToAcademic('base'),
+        layer: entry.layer,
+        mode: LessonMode.session,
+        marker: entry.marker,
+        topic: 'Aprender regra de tres',
+        itemIdx: entry.idx,
+        curriculumItems: const [
+          {'marker': 'M1', 'text': 'Item 1'},
+          {'marker': 'M2', 'text': 'Item 2'},
+        ],
+        pedagogicalEnvelope: const {},
+      );
+      cache.put(lessonKeyFor(params), material(entry.marker, entry.layer));
+    }
 
     for (var step = 0; step < 5; step++) {
       runtime.select(AnswerLetter.A);

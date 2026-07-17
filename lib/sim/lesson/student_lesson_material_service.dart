@@ -319,13 +319,13 @@ class StudentLessonMaterialService {
         'L${layer.value}',
       ].join(':');
       final jobs = [...state.queuedActions];
-      final hasActiveDuplicate = jobs.any(
+      final duplicateIndex = jobs.indexWhere(
         (job) =>
             job['type'] == 'PREPARE_READY_WINDOW' &&
             job['idempotency_key'] == idempotencyKey &&
             (job['status'] == 'queued' || job['status'] == 'running'),
       );
-      if (!hasActiveDuplicate) {
+      if (duplicateIndex < 0) {
         jobs.add({
           'job_id': 'PREPARE_READY_WINDOW:$idempotencyKey:$now',
           'type': 'PREPARE_READY_WINDOW',
@@ -349,6 +349,21 @@ class StudentLessonMaterialService {
           'max_attempts': 3,
           'next_retry_at': null,
         });
+      } else if (priority == 'active' &&
+          jobs[duplicateIndex]['priority'] != 'active' &&
+          jobs[duplicateIndex]['status'] == 'queued') {
+        jobs[duplicateIndex] = {
+          ...jobs[duplicateIndex],
+          'priority': 'active',
+          'source': source,
+          'payload': {
+            ...JsonMap.from(
+              jobs[duplicateIndex]['payload'] as Map? ?? const {},
+            ),
+            'reason': reason ?? 'lesson_window_visible',
+          },
+          'next_retry_at': null,
+        };
       }
       final warmIdempotencyKey = [
         'warm-ready-window',
@@ -389,7 +404,16 @@ class StudentLessonMaterialService {
           'next_retry_at': null,
         });
       }
+      final hotKeys = {
+        for (final slot in window)
+          preparedLessonMaterialKey(slot.idx, slot.item.marker, slot.layer),
+      };
+      final hotReadyMaterials = {
+        for (final entry in state.readyLessonMaterials.entries)
+          if (hotKeys.contains(entry.key)) entry.key: entry.value,
+      };
       return state.copyWith(
+        readyLessonMaterials: hotReadyMaterials,
         queuedActions: jobs,
         events: [
           ...state.events,
@@ -415,10 +439,10 @@ class StudentLessonMaterialService {
           ),
         ],
       );
-    });
+    }, allowLocalHousekeeping: true);
   }
 
-  List<({int offset, DopamineWindowItem item, LessonLayer layer})>
+  List<({int offset, int idx, DopamineWindowItem item, LessonLayer layer})>
   _buildReadyWindow(
     int fromIdx,
     LessonLayer layer,
@@ -429,15 +453,21 @@ class StudentLessonMaterialService {
     final firstLayer = first.isReview
         ? first.reviewLayer ?? LessonLayer.l1
         : layer;
-    final window = <({int offset, DopamineWindowItem item, LessonLayer layer})>[
-      (offset: 0, item: first, layer: firstLayer),
-    ];
+    final window =
+        <({int offset, int idx, DopamineWindowItem item, LessonLayer layer})>[
+          (offset: 0, idx: fromIdx, item: first, layer: firstLayer),
+        ];
     var cursor = (idx: fromIdx, layer: firstLayer);
     while (window.length < localLessonTraySize) {
       final next = _nextReadyWindowSlot(cursor.idx, cursor.layer, items);
       if (next == null || next.idx < 0 || next.idx >= items.length) break;
       final item = items[next.idx];
-      window.add((offset: window.length, item: item, layer: next.layer));
+      window.add((
+        offset: window.length,
+        idx: next.idx,
+        item: item,
+        layer: next.layer,
+      ));
       cursor = next;
     }
     return window;

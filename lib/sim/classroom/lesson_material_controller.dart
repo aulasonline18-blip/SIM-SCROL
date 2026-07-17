@@ -73,7 +73,7 @@ class LessonMaterialController {
           )
           .toList(),
       source: 'cyber.aula.fast-window',
-      priority: 'background',
+      priority: 'active',
       reason: 'fast_prepared_lesson_visible',
     );
     return true;
@@ -141,7 +141,7 @@ class LessonMaterialController {
             )
             .toList(),
         source: 'cyber.aula.cache-window',
-        priority: 'background',
+        priority: 'active',
         reason: 'lesson_window_visible',
       );
       return;
@@ -190,7 +190,7 @@ class LessonMaterialController {
           )
           .toList(),
       source: 'cyber.aula.loaded-window',
-      priority: 'background',
+      priority: 'active',
       reason: 'lesson_loaded_keeps_ready_window_alive',
     );
   }

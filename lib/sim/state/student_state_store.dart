@@ -120,11 +120,13 @@ abstract interface class StudentStateRepository {
   StudentLearningState writeState(
     StudentLearningState state, {
     bool acceptServerAuthority,
+    bool allowLocalHousekeeping,
   });
   StudentLearningState patchState(
     String lessonLocalId,
-    StudentLearningState Function(StudentLearningState state) patch,
-  );
+    StudentLearningState Function(StudentLearningState state) patch, {
+    bool allowLocalHousekeeping,
+  });
   List<StudentLearningState> listLocalStates({bool includeDeleted});
   Future<StudentLearningState> hydrateFromCloud(String lessonLocalId);
 }
@@ -185,11 +187,13 @@ class StudentStateStore implements StudentStateRepository {
   StudentLearningState writeState(
     StudentLearningState state, {
     bool acceptServerAuthority = false,
+    bool allowLocalHousekeeping = false,
   }) {
     final existing =
         _memory[state.lessonLocalId] ?? _readStateIfExists(state.lessonLocalId);
     final protected =
         !acceptServerAuthority &&
+            !allowLocalHousekeeping &&
             existing != null &&
             StudentStateContract().isRegression(
               existing: existing,
@@ -206,9 +210,13 @@ class StudentStateStore implements StudentStateRepository {
   @override
   StudentLearningState patchState(
     String lessonLocalId,
-    StudentLearningState Function(StudentLearningState state) patch,
-  ) {
-    return writeState(patch(readState(lessonLocalId)));
+    StudentLearningState Function(StudentLearningState state) patch, {
+    bool allowLocalHousekeeping = false,
+  }) {
+    return writeState(
+      patch(readState(lessonLocalId)),
+      allowLocalHousekeeping: allowLocalHousekeeping,
+    );
   }
 
   CanonicalLearningEvent mutateWithEvent({

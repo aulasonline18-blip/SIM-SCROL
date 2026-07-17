@@ -168,10 +168,12 @@ class StudentLearningStateService {
     StudentLearningState state, {
     bool scheduleShadow = true,
     bool acceptServerAuthority = false,
+    bool allowLocalHousekeeping = false,
   }) {
     final existing = _states[state.lessonLocalId];
     final protectedState =
         !acceptServerAuthority &&
+            !allowLocalHousekeeping &&
             existing != null &&
             _stateContract.isRegression(existing: existing, incoming: state)
         ? mergeStudentLearningStateFromCloud(existing, state)
@@ -187,9 +189,14 @@ class StudentLearningStateService {
     String lessonLocalId,
     StudentStateMutator mutator, {
     bool scheduleShadow = true,
+    bool allowLocalHousekeeping = false,
   }) {
     final current = ensure(lessonLocalId: lessonLocalId);
-    return write(mutator(current), scheduleShadow: scheduleShadow);
+    return write(
+      mutator(current),
+      scheduleShadow: scheduleShadow,
+      allowLocalHousekeeping: allowLocalHousekeeping,
+    );
   }
 
   StudentLearningState appendEvent(

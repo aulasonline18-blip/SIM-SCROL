@@ -79,11 +79,13 @@ class StudentStateStoreAdapter implements StudentLearningStateService {
     StudentLearningState state, {
     bool scheduleShadow = true,
     bool acceptServerAuthority = false,
+    bool allowLocalHousekeeping = false,
   }) {
     _knownLessonIds.add(state.lessonLocalId);
     final saved = _store.writeState(
       state,
       acceptServerAuthority: acceptServerAuthority,
+      allowLocalHousekeeping: allowLocalHousekeeping,
     );
     onWrite?.call(saved.lessonLocalId);
     _notifyWrite(saved.lessonLocalId, scheduleShadow: scheduleShadow);
@@ -95,9 +97,14 @@ class StudentStateStoreAdapter implements StudentLearningStateService {
     String lessonLocalId,
     StudentStateMutator mutator, {
     bool scheduleShadow = true,
+    bool allowLocalHousekeeping = false,
   }) {
     _knownLessonIds.add(lessonLocalId);
-    final saved = _store.patchState(lessonLocalId, mutator);
+    final saved = _store.patchState(
+      lessonLocalId,
+      mutator,
+      allowLocalHousekeeping: allowLocalHousekeeping,
+    );
     onWrite?.call(saved.lessonLocalId);
     _notifyWrite(lessonLocalId, scheduleShadow: scheduleShadow);
     return saved;
