@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -712,6 +713,76 @@ void main() {
     expect(snap.phase.type, ClassroomPhaseType.lendo);
     expect(snap.itemMarker, 'M1');
     expect(service.read('cyber-class')?.current?.layer, LessonLayer.l3);
+  });
+
+  test('M6.1 erro avanca do cache local sem T02 no toque', () async {
+    final service = StudentLearningStateService(
+      seed: {'cyber-class': _classroomState()},
+    );
+    final t02 = FakeClassroomT02();
+    final runtime = _runtime(service, t02);
+    await runtime.open(lessonLocalId: 'cyber-class');
+    expect(t02.calls, 1);
+    _putPreparedMaterial(
+      service,
+      'cyber-class',
+      itemIdx: 0,
+      marker: 'M1',
+      layer: LessonLayer.l2,
+      question: 'Reparo local preparado?',
+    );
+
+    runtime.select(AnswerLetter.B);
+    await runtime.signal(DecisionSignal.three);
+    expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l2);
+    await runtime.advance();
+    final snap = runtime.snapshot();
+
+    expect(snap.phase.type, ClassroomPhaseType.lendo);
+    expect(snap.itemMarker, 'M1');
+    expect(snap.conteudo?.question, 'Reparo local preparado?');
+    expect(t02.calls, 1);
+    expect(service.read('cyber-class')?.current?.layer, LessonLayer.l2);
+  });
+
+  test(
+    'M6.1 servidor fora e bandeja vazia nao bloqueiam toque de avancar',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = FailingClassroomT02();
+      final runtime = _runtime(service, FakeClassroomT02());
+      await runtime.open(lessonLocalId: 'cyber-class');
+
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.two);
+      await runtime.advance();
+      final snap = runtime.snapshot();
+
+      expect(snap.phase.type, ClassroomPhaseType.avancoPendente);
+      expect(snap.itemMarker, 'M1');
+      expect(
+        (service.read('cyber-class')?.extra['advancePending']
+            as Map?)?['status'],
+        'preparing',
+      );
+      expect(t02.calls, 0);
+    },
+  );
+
+  test('M6.1 avancar nao chama carregar nem forceRefresh no toque', () {
+    final source = File(
+      'lib/sim/classroom/lesson_answer_progress_controller.dart',
+    ).readAsStringSync();
+    final start = source.indexOf('  Future<void> avancar({');
+    final end = source.indexOf('  LessonMode _modeForNextMaterial', start);
+    expect(start, greaterThanOrEqualTo(0));
+    expect(end, greaterThan(start));
+    final body = source.substring(start, end);
+
+    expect(body, isNot(contains('forceRefresh')));
+    expect(body, isNot(contains('materialController.carregar(')));
   });
 
   test(

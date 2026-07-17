@@ -403,29 +403,33 @@ class LessonAnswerProgressController {
       return;
     }
 
+    position.phase = ClassroomPhase.advancePending(
+      message: 'aula_advance_preparing',
+      letter: position.phase.letter ?? AnswerLetter.A,
+      signal: position.phase.signal ?? DecisionSignal.one,
+    );
+    _recordLocalAdvancePending(
+      lessonLocalId: lessonLocalId,
+      fromItemIdx: position.itemIdx,
+      fromLayer: position.layer,
+      toItemIdx: view.itemIdx,
+      toLayer: view.layer,
+      fromMarker: item.marker,
+      toMarker: view.itemIdx >= 0 && view.itemIdx < baseItems.length
+          ? baseItems[view.itemIdx].marker
+          : item.marker,
+      letter: position.phase.letter ?? AnswerLetter.A,
+      signal: position.phase.signal ?? DecisionSignal.one,
+    );
     materialService.maintainLessonReadyWindow(
       lessonLocalId: lessonLocalId,
       topic: topic,
       itemIdx: view.itemIdx,
       layer: view.layer,
-      items: baseItems
-          .map(
-            (item) => DopamineWindowItem(text: item.text, marker: item.marker),
-          )
-          .toList(),
-      source: 'cyber.aula.after-answer',
-      priority: 'background',
-      reason: 'answer_advanced_position',
-    );
-    position.phase = const ClassroomPhase.loading();
-    await materialController.carregar(
-      lessonLocalId: lessonLocalId,
-      topic: topic,
-      position: position,
-      idioma: idioma,
-      academic: academic,
-      mode: _modeForNextMaterial(activeState, position.isReviewAtivo),
-      baseItems: baseItems,
+      items: _dopamineItemsFromCurriculum(baseItems),
+      source: 'cyber.aula.advance-cache-miss',
+      priority: 'active',
+      reason: 'advance_cache_miss_prepares_without_blocking_touch',
     );
   }
 
