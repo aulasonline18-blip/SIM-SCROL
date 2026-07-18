@@ -441,7 +441,7 @@ Formalizar o novo centro de gravidade sem mexer ainda em grandes fluxos.
 Tarefas:
 
 - criar documento de Constituicao do SIM baseado nesta diretriz;
-- atualizar `docs/PLANTA-SIM-FLUTTER-10X-APP-DE-ENSINO.txt` ou criar versao 2;
+- atualizar a Planta-Mae vigente do SIM NV ou criar versao normativa sucessora;
 - adicionar secao de Motor de Travessia em `docs/SIM_FLUTTER_CONTRATO_FIO.md`;
 - revisar textos centrais de T00/T02 para declarar "conducao ate dominio real";
 - mapear strings visiveis que ainda dizem apenas "aula" quando deveriam indicar passo/trilha/progresso.

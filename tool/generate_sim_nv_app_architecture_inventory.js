@@ -351,7 +351,6 @@ const inventory = {
     '/root/sim-work/sim-api/PLANTA-MAE-SERVIDOR.txt',
     '/root/sim-work/sim-api/LEI_CONSTRUTIVA_MIGRACAO_SIM_ATUAL_PARA_SIM_NV_IDEAL.txt',
     '/root/sim-work/sim-api/docs/docs/fase-zero/sim-nv/CONJUNTO_C_ESPECIFICACAO_SIM_NV.md',
-    '/root/SIM-SCROL/docs/PLANTA-SIM-FLUTTER-10X-APP-DE-ENSINO.txt',
     '/root/SIM-SCROL/docs/CONTRATO_SYNC_OFFLINE_CACHE.md',
     '/root/SIM-SCROL/docs/SIM_FLUTTER_CONTRATO_FIO.md',
     '/root/SIM-SCROL/docs/SIM_MOTOR_DE_TRAVESSIA_DIRETRIZ_CONSTRUTIVA.md',
@@ -389,7 +388,7 @@ const rows = files.map((file) =>
 const md = [
   '# Inventario Arquitetural Do App SIM NV',
   '',
-  'Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Planta-Mae e o Conjunto C. Ele e acompanhado pelo arquivo machine-readable `tool/sim_nv_app_architecture_inventory.json` e pelo gate `test/sim_app_architecture_shape_test.dart`.',
+  'Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Planta-Mae e o Conjunto C. Ele e acompanhado pelo arquivo machine-readable `tool/sim_nv_app_architecture_inventory.json`, pelo mapa de conexoes `tool/sim_nv_app_connections.json` e pelos gates `test/sim_app_architecture_shape_test.dart` e `test/sim_app_connections_contract_test.dart`.',
   '',
   '## Resumo',
   '',

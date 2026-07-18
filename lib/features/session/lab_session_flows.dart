@@ -1269,7 +1269,6 @@ extension LabSessionFlowExtensions on LabSession {
       await organism.lessonRuntimeEngine.signal(signal);
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
-      unawaited(_openAuxRoomForLastAdvanceDecision(organism));
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
       _scheduleAutoAdvanceAfterFeedback(organism);
     } catch (error) {
@@ -1298,33 +1297,6 @@ extension LabSessionFlowExtensions on LabSession {
       }
       await advanceAula();
     });
-  }
-
-  Future<void> _openAuxRoomForLastAdvanceDecision(SimOrganism organism) async {
-    final state = organism.stateService.read(organism.lessonLocalId);
-    if (state == null) return;
-    final latestTruth = state.events.reversed.firstWhere(
-      (event) => event.type == 'MASTERY_EVIDENCE_EVALUATED',
-      orElse: () => const StudentLearningEvent(type: '', ts: 0, payload: {}),
-    );
-    final latestLocalDecision = state.events.reversed.firstWhere(
-      (event) => event.type == 'LOCAL_ADVANCE_DECIDED',
-      orElse: () => const StudentLearningEvent(type: '', ts: 0, payload: {}),
-    );
-    final truth = latestTruth.payload;
-    final decision = latestLocalDecision.payload['action']?.toString() ?? '';
-    final needsReinforcement =
-        truth['needs_reinforcement'] == true ||
-        decision == 'needsReinforcement';
-    final needsReview = truth['needs_review'] == true;
-    if (needsReinforcement) {
-      await startRecoveryRoom();
-      return;
-    }
-    if (needsReview) {
-      openReviewRoom();
-      await startReviewRoom(5);
-    }
   }
 
   void setDeleteConfirmation(String value) {

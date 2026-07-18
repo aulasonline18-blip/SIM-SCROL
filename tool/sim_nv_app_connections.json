@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "generatedFor": "SIM NV App Fase 4 - mapa de conexoes oficiais",
+  "allowedServerRoutes": [
+    "/api/bootstrap-t00",
+    "/api/complete-lesson",
+    "/api/visual-route",
+    "/api/generate-lesson-image",
+    "/api/generate-lesson-audio",
+    "/api/process-attachment",
+    "/api/student-state/*",
+    "/api/credits/*",
+    "/api/payments/*",
+    "/api/play-billing/*",
+    "/api/account/*",
+    "/api/health"
+  ],
+  "forbiddenServerRoutes": [
+    "/api/warmup",
+    "/api/doubt",
+    "/api/review",
+    "/api/recovery",
+    "/api/advance-gate",
+    "/api/server-classroom",
+    "/api/public/payments/webhook"
+  ],
+  "authorityRules": [
+    {"id": "ui-thin", "rule": "UI renderiza e encaminha intencao; nao decide pedagogia."},
+    {"id": "local-advance", "rule": "A/B/C e sinal passam por motores locais; servidor nao decide toque simples."},
+    {"id": "cache-not-authority", "rule": "Cache acelera exibicao, mas nao escreve current/progress como autoridade."},
+    {"id": "aux-isolated", "rule": "Review, recovery e doubt sao auxiliares isolados e nao entram na fila principal."},
+    {"id": "media-non-blocking", "rule": "Imagem e audio nao bloqueiam texto, pergunta ou alternativas."}
+  ],
+  "paths": [
+    {"id": "objetivo-t00", "name": "Objetivo ate T00", "contract": "T00/curriculo/mapa", "organs": ["features/onboarding", "features/session", "sim/experience", "sim/external_ai", "sim/state"], "input": "objetivo, idioma, perfil e anexos", "output": "curriculo local", "serverRoutes": ["/api/bootstrap-t00"], "authorityRule": "T00 gera conteudo; app grava estado local.", "proofTests": ["test/student_experience_t00_test.dart", "test/session_regression_test.dart", "test/first_lesson_ready_window_test.dart"]},
+    {"id": "curriculo", "name": "Curriculo", "contract": "T00/curriculo/mapa + CG-1", "organs": ["sim/experience", "sim/state", "sim/lesson"], "input": "itens T00", "output": "curriculo local e ready window", "serverRoutes": ["/api/bootstrap-t00"], "authorityRule": "App normaliza e prepara sem decidir dominio por cache.", "proofTests": ["test/student_experience_t00_test.dart", "test/c2_curriculum_parts_test.dart", "test/first_lesson_ready_window_test.dart"]},
+    {"id": "aula-pergunta", "name": "Aula/pergunta", "contract": "T02/microaula/questao", "organs": ["sim/state", "sim/experience", "sim/lesson", "sim/classroom", "features/classroom"], "input": "item, marcador, camada, historico e idioma", "output": "explicacao, pergunta, A/B/C e resposta correta", "serverRoutes": ["/api/complete-lesson"], "authorityRule": "T02 fornece material; app controla sessao e exibicao.", "proofTests": ["test/first_lesson_ready_window_test.dart", "test/classroom_phase_test.dart", "test/normal_lesson_full_completion_flow_test.dart"]},
+    {"id": "resposta-aluno", "name": "Resposta do aluno", "contract": "avanco/advance-gate local", "organs": ["features/classroom", "sim/classroom", "sim/state"], "input": "A/B/C e sinal 1/2/3", "output": "tentativa, evidencia, feedback e evento", "serverRoutes": [], "authorityRule": "Decisao de toque simples e local; sync posterior.", "proofTests": ["test/classroom_phase_test.dart", "test/classroom_parity_t01_t28_test.dart", "test/m1_answer_signal_contract_test.dart"]},
+    {"id": "proxima-camada-item", "name": "Proxima camada ou item", "contract": "LearningDecisionEngine + ready window", "organs": ["sim/state", "sim/classroom", "sim/lesson"], "input": "estado forte, tentativa e material", "output": "proxima camada/item ou advancePending recuperavel", "serverRoutes": [], "authorityRule": "AdvanceEngine local decide; cache so abastece material.", "proofTests": ["test/classroom_phase_test.dart", "test/first_lesson_ready_window_test.dart", "test/normal_lesson_full_completion_flow_test.dart"]},
+    {"id": "auxiliares", "name": "Revisao/recuperacao/duvida", "contract": "revisao/recuperacao/duvida", "organs": ["features/session", "features/classroom", "sim/auxiliary", "sim/state"], "input": "gatilho local e contexto da aula", "output": "registro auxiliar nao autoritativo", "serverRoutes": ["/api/complete-lesson"], "authorityRule": "Auxiliares leem contexto, mas nao escrevem progresso principal.", "proofTests": ["test/review_does_not_interleave_main_lesson_test.dart", "test/c6_review_engine_test.dart", "test/m1_review_contract_test.dart", "test/m1_recovery_contract_test.dart", "test/m1_doubt_contract_test.dart"]},
+    {"id": "audio", "name": "Audio", "contract": "audio", "organs": ["sim/lesson", "sim/media", "features/classroom"], "input": "audioText, idioma, voz e preferencia", "output": "playback ou erro humano nao bloqueante", "serverRoutes": ["/api/generate-lesson-audio"], "authorityRule": "Audio nao bloqueia texto nem altera progresso.", "proofTests": ["test/media_phase_test.dart", "test/m10_pedagogical_media_contract_test.dart"]},
+    {"id": "imagem", "name": "Imagem/visual", "contract": "visual/imagem", "organs": ["sim/lesson", "sim/media", "features/classroom"], "input": "visual trigger e material", "output": "SVG/dataUrl seguro ou estado controlado", "serverRoutes": ["/api/visual-route", "/api/generate-lesson-image"], "authorityRule": "Imagem e passiva e nao bloqueia texto/pergunta.", "proofTests": ["test/media_phase_test.dart", "test/m10_pedagogical_media_contract_test.dart", "test/first_lesson_ready_window_test.dart"]},
+    {"id": "curriculo-grande", "name": "Curriculo grande", "contract": "CG-1 curriculos grandes", "organs": ["sim/experience", "sim/state", "sim/lesson", "sim/classroom"], "input": "plano global, parte atual e proxima parte", "output": "continuidade local entre batches", "serverRoutes": ["/api/bootstrap-t00", "/api/complete-lesson"], "authorityRule": "App preserva plano global sem rebaixar progresso.", "proofTests": ["test/c2_curriculum_parts_test.dart", "test/p2_curriculum_continuation_test.dart", "test/first_lesson_ready_window_test.dart"]}
+  ],
+  "edges": [
+    {"id": "edge-001", "from": "features/onboarding", "to": "session/entry_form_state", "contract": "entrada/ficha local", "files": ["lib/features/onboarding/onboarding_screens.dart", "lib/session/entry_form_state.dart"], "allowed": true, "reason": "UI coleta objetivo e delega ficha.", "proofTests": ["test/o_conversational_entry_test.dart"]},
+    {"id": "edge-002", "from": "features/session", "to": "sim/experience", "contract": "StudentExperienceArgs", "files": ["lib/features/session/lab_session_entry_flows.dart", "lib/sim/experience/student_experience_engine.dart"], "allowed": true, "reason": "Fachada inicia experiencia.", "proofTests": ["test/session_regression_test.dart"]},
+    {"id": "edge-003", "from": "sim/experience", "to": "sim/external_ai", "contract": "T00Bridge", "files": ["lib/sim/experience/student_experience_t00_adapter.dart", "lib/sim/external_ai/sim_server_ai_clients.dart"], "allowed": true, "reason": "T00 protegido por servidor.", "proofTests": ["test/student_experience_t00_test.dart"]},
+    {"id": "edge-004", "from": "sim/experience", "to": "sim/state", "contract": "curriculo local", "files": ["lib/sim/experience/partial_curriculum_writer.dart", "lib/sim/state/student_learning_state.dart", "lib/sim/state/student_learning_state_service.dart"], "allowed": true, "reason": "Curriculo vira estado local forte.", "proofTests": ["test/student_experience_t00_test.dart"]},
+    {"id": "edge-005", "from": "sim/experience", "to": "sim/lesson", "contract": "T02 material", "files": ["lib/sim/experience/student_experience_t02_adapter.dart", "lib/sim/lesson/student_lesson_material_service.dart"], "allowed": true, "reason": "Primeira aula usa material service.", "proofTests": ["test/first_lesson_ready_window_test.dart"]},
+    {"id": "edge-006", "from": "sim/lesson", "to": "sim/external_ai", "contract": "CompleteLessonParams", "files": ["lib/sim/lesson/lesson_orchestrator.dart", "lib/sim/external_ai/sim_server_ai_clients.dart"], "allowed": true, "reason": "T02 gera conteudo, nao avanco.", "proofTests": ["test/external_ai_clients_test.dart"]},
+    {"id": "edge-007", "from": "sim/lesson", "to": "sim/classroom", "contract": "CompleteLesson material validado", "files": ["lib/sim/lesson/student_lesson_material_service.dart", "lib/sim/classroom/lesson_material_controller.dart", "lib/sim/classroom/lesson_runtime_engine.dart"], "allowed": true, "reason": "Material abastece aula.", "proofTests": ["test/classroom_phase_test.dart"]},
+    {"id": "edge-008", "from": "features/classroom", "to": "sim/classroom", "contract": "intencao de resposta", "files": ["lib/features/classroom/chat_aula_screen.dart", "lib/sim/classroom/lesson_answer_progress_controller.dart"], "allowed": true, "reason": "UI encaminha A/B/C+sinal.", "proofTests": ["test/normal_lesson_full_completion_flow_test.dart"]},
+    {"id": "edge-009", "from": "sim/classroom", "to": "sim/state", "contract": "evidencia e advance local", "files": ["lib/sim/classroom/lesson_answer_progress_controller.dart", "lib/sim/state/learning_decision_engine.dart", "lib/sim/state/mastery_truth_engine.dart"], "allowed": true, "reason": "Tentativa vira evidencia local.", "proofTests": ["test/classroom_phase_test.dart"]},
+    {"id": "edge-010", "from": "sim/state", "to": "sim/lesson", "contract": "ready window", "files": ["lib/sim/state/student_learning_state.dart", "lib/sim/lesson/dopamine_ready_window_engine.dart", "lib/sim/lesson/ready_window_worker.dart"], "allowed": true, "reason": "Ready window prepara sem autoridade.", "proofTests": ["test/first_lesson_ready_window_test.dart"]},
+    {"id": "edge-011", "from": "features/session", "to": "sim/auxiliary", "contract": "sala auxiliar isolada", "files": ["lib/features/session/lab_session_aux_flows.dart", "lib/sim/auxiliary/student_aux_room_service.dart"], "allowed": true, "reason": "Auxiliar separado da aula principal.", "proofTests": ["test/review_does_not_interleave_main_lesson_test.dart"]},
+    {"id": "edge-012", "from": "sim/auxiliary", "to": "sim/external_ai", "contract": "T02 auxiliar minimo", "files": ["lib/sim/auxiliary/aux_room_t02_caller.dart", "lib/sim/auxiliary/doubt_t02_caller.dart", "lib/sim/external_ai/sim_server_ai_clients.dart"], "allowed": true, "reason": "Auxiliar pede conteudo sem patch.", "proofTests": ["test/m1_review_contract_test.dart", "test/m1_recovery_contract_test.dart", "test/m1_doubt_contract_test.dart"]},
+    {"id": "edge-013", "from": "sim/lesson", "to": "sim/media", "contract": "audio/visual passivo", "files": ["lib/sim/lesson/lesson_orchestrator.dart", "lib/sim/media/student_lesson_media_service.dart", "lib/sim/media/lesson_audio_controller.dart"], "allowed": true, "reason": "Midia nao bloqueia texto.", "proofTests": ["test/media_phase_test.dart"]},
+    {"id": "edge-014", "from": "sim/media", "to": "sim/external_ai", "contract": "audio/imagem servidor minimo", "files": ["lib/sim/media/student_lesson_media_service.dart", "lib/sim/external_ai/sim_server_ai_clients.dart"], "allowed": true, "reason": "Servidor protege midia.", "proofTests": ["test/media_phase_test.dart", "test/m10_pedagogical_media_contract_test.dart"]},
+    {"id": "edge-015", "from": "sim/state", "to": "sim/cloud", "contract": "remote vault sync", "files": ["lib/sim/state/student_state_store.dart", "lib/sim/cloud/cloud_queue.dart", "lib/sim/cloud/student_remote_vault_sync_engine.dart"], "allowed": true, "reason": "Sync e cofre remoto sao auxiliares.", "proofTests": ["test/proposicao_b_strong_student_state_test.dart", "test/m12_offline_cache_sync_contract_test.dart"]},
+    {"id": "edge-016", "from": "sim/experience", "to": "sim/lesson", "contract": "CG-1 continuation", "files": ["lib/sim/experience/curriculum_utils.dart", "lib/sim/experience/partial_curriculum_writer.dart", "lib/sim/lesson/dopamine_ready_window_engine.dart"], "allowed": true, "reason": "Plano global abastece proximo lote.", "proofTests": ["test/c2_curriculum_parts_test.dart", "test/p2_curriculum_continuation_test.dart"]}
+  ],
+  "proofTests": [
+    "test/student_experience_t00_test.dart",
+    "test/session_regression_test.dart",
+    "test/first_lesson_ready_window_test.dart",
+    "test/c2_curriculum_parts_test.dart",
+    "test/classroom_phase_test.dart",
+    "test/normal_lesson_full_completion_flow_test.dart",
+    "test/classroom_parity_t01_t28_test.dart",
+    "test/m1_answer_signal_contract_test.dart",
+    "test/review_does_not_interleave_main_lesson_test.dart",
+    "test/c6_review_engine_test.dart",
+    "test/m1_review_contract_test.dart",
+    "test/m1_recovery_contract_test.dart",
+    "test/m1_doubt_contract_test.dart",
+    "test/media_phase_test.dart",
+    "test/m10_pedagogical_media_contract_test.dart",
+    "test/proposicao_b_strong_student_state_test.dart",
+    "test/m12_offline_cache_sync_contract_test.dart",
+    "test/p2_curriculum_continuation_test.dart"
+  ]
+}

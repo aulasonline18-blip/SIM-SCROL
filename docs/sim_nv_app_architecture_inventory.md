@@ -1,6 +1,6 @@
 # Inventario Arquitetural Do App SIM NV
 
-Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Planta-Mae e o Conjunto C. Ele e acompanhado pelo arquivo machine-readable `tool/sim_nv_app_architecture_inventory.json` e pelo gate `test/sim_app_architecture_shape_test.dart`.
+Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Planta-Mae e o Conjunto C. Ele e acompanhado pelo arquivo machine-readable `tool/sim_nv_app_architecture_inventory.json`, pelo mapa de conexoes `tool/sim_nv_app_connections.json` e pelos gates `test/sim_app_architecture_shape_test.dart` e `test/sim_app_connections_contract_test.dart`.
 
 ## Resumo
 

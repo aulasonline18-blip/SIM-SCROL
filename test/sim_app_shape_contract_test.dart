@@ -43,6 +43,8 @@ void main() {
         File('tool/sim_nv_app_architecture_inventory.json').existsSync(),
         isTrue,
       );
+      expect(File('docs/sim_nv_app_connections.md').existsSync(), isTrue);
+      expect(File('tool/sim_nv_app_connections.json').existsSync(), isTrue);
 
       final pubspec = File('pubspec.yaml').readAsStringSync();
       expect(
