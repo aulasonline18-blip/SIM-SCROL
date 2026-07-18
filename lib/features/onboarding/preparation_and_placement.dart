@@ -114,14 +114,7 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
     return Scaffold(
       backgroundColor: SimThemeScope.paletteOf(context).background,
       body: SafeArea(
-        child: (!authReady || !authed)
-            ? const Center(
-                child: Text(
-                  'Carregando...',
-                  style: TextStyle(color: simMuted, fontSize: 14),
-                ),
-              )
-            : isError
+        child: isError && authReady && authed
             ? Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -201,22 +194,20 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                       ),
                     ),
                     Expanded(
-                      child: SingleChildScrollView(
-                        child: OnboardingChatFlow(
-                          semanticLabel: t('onboarding_chat_region'),
-                          children: [
-                            SimChatReveal(
-                              child: SimPreparationExperience(
-                                stage: simStage,
-                                ready: isReady,
-                                onContinue: () {
-                                  _started = false;
-                                  _launch();
-                                },
-                              ),
+                      child: OnboardingChatFlow(
+                        semanticLabel: t('onboarding_chat_region'),
+                        children: [
+                          SimChatReveal(
+                            child: SimPreparationExperience(
+                              stage: simStage,
+                              ready: isReady,
+                              onContinue: () {
+                                _started = false;
+                                _launch();
+                              },
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

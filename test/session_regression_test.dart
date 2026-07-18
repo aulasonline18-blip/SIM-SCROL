@@ -16,6 +16,7 @@ import 'package:sim_mobile/sim/experience/student_experience_types.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
+import 'package:sim_mobile/sim/ui/widgets/sim_preparation_experience.dart';
 
 void main() {
   test('default API URL uses only local development fallback', () {
@@ -446,6 +447,8 @@ void main() {
       MaterialApp(home: PhaseBoundaryScreen(session: session)),
     );
     await tester.pump();
+    expect(find.byType(SimPreparationExperience), findsOneWidget);
+    expect(find.text('Carregando...'), findsNothing);
     expect(called, isFalse);
 
     session

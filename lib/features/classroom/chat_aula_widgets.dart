@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../shared/widgets/shared_widgets.dart';
 import '../../sim/ui/widgets/doubt_progress_bar.dart';
-import '../../sim/ui/widgets/sim_typewriter.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_i18n.dart';
 import '../session/lab_session.dart';
@@ -271,12 +270,7 @@ class _TextBlock extends StatelessWidget {
     final chunks = <Widget>[
       if ((message.title ?? '').isNotEmpty)
         Text(message.title!, style: Theme.of(context).textTheme.titleSmall),
-      if ((message.text ?? '').isNotEmpty)
-        if (message.kind == ChatLessonMessageKind.explanation &&
-            !message.isHistorical)
-          SimTypewriter(text: message.text!, style: style)
-        else
-          Text(message.text!),
+      if ((message.text ?? '').isNotEmpty) Text(message.text!, style: style),
       if (message.selectedAnswer != null)
         Text(message.selectedAnswer!.name, textAlign: TextAlign.right),
       if (message.selectedSignal != null)

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,8 +7,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../shared/widgets/shared_widgets.dart';
 import '../../sim/media/visual_router_n2.dart';
 import '../../sim/ui/sim_i18n.dart';
-import '../../sim/ui/widgets/lesson_audio_controls.dart';
-import '../../sim/ui/widgets/lesson_avatar.dart';
 import '../session/lab_session.dart';
 
 class AulaTopBar extends StatelessWidget {
@@ -49,7 +46,7 @@ class AulaTopBar extends StatelessWidget {
               children: [
                 Text(
                   headerLabel ?? t('lesson'),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
@@ -66,18 +63,6 @@ class AulaTopBar extends StatelessWidget {
               onPressed: onFontScaleTap,
               icon: const Icon(Icons.format_size),
             ),
-          if (session.audioEnabled ||
-              session.audioPlaying ||
-              session.audioLoading) ...[
-            LessonAvatar(speaking: session.audioPlaying),
-            const SizedBox(width: 4),
-            LessonAudioControlButton(
-              enabled: session.audioEnabled,
-              playing: session.audioPlaying,
-              loading: session.audioLoading,
-              onPressed: () => unawaited(session.toggleAudio()),
-            ),
-          ],
           if (showReviewButton)
             IconButton(
               tooltip: t('aula_open_review'),

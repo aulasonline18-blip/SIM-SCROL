@@ -15,7 +15,6 @@ import 'package:sim_mobile/sim/ui/widgets/fixed_bubble.dart';
 import 'package:sim_mobile/sim/ui/widgets/lesson_audio_controls.dart';
 import 'package:sim_mobile/sim/ui/widgets/lesson_avatar.dart';
 import 'package:sim_mobile/sim/ui/widgets/sim_preparation_experience.dart';
-import 'package:sim_mobile/sim/ui/widgets/sim_typewriter.dart';
 
 void main() {
   test('night view is a live persisted product feature', () {
@@ -202,7 +201,7 @@ void main() {
   });
 
   testWidgets(
-    'feedback doubt progress typewriter image and audio widgets stay alive',
+    'feedback doubt progress image and audio widgets stay alive without streaming explanation',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -246,7 +245,17 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(SimTypewriter), findsOneWidget);
+      final aulaTopBar = File(
+        'lib/features/classroom/aula_widgets.dart',
+      ).readAsStringSync();
+      final aulaMessages = File(
+        'lib/features/classroom/chat_aula_widgets.dart',
+      ).readAsStringSync();
+
+      expect(aulaTopBar, isNot(contains('LessonAvatar(')));
+      expect(aulaTopBar, contains('maxLines: 2'));
+      expect(aulaMessages, isNot(contains('SimTypewriter(')));
+      expect(find.text('Explicacao viva'), findsOneWidget);
       expect(find.byType(DoubtProgressBar), findsOneWidget);
       expect(find.text('Feedback local vivo'), findsOneWidget);
       expect(find.byType(FixedBubble), findsOneWidget);
