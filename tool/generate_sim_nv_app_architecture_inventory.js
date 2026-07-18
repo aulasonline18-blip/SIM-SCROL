@@ -346,7 +346,7 @@ const counts = {
 
 const inventory = {
   schemaVersion: 1,
-  generatedFor: 'SIM NV App Fase 1 de enquadramento na Planta-Mae',
+  generatedFor: 'SIM NV App Fase 3 de enquadramento na Planta-Mae',
   sourceOfTruth: [
     '/root/sim-work/sim-api/PLANTA-MAE-SERVIDOR.txt',
     '/root/sim-work/sim-api/LEI_CONSTRUTIVA_MIGRACAO_SIM_ATUAL_PARA_SIM_NV_IDEAL.txt',
@@ -367,7 +367,7 @@ const inventory = {
   forbiddenRuntimeRoutes,
   files,
   counts,
-  phase3Backlog: [
+  phase4Backlog: [
     'Reduzir LabSession/LabSessionFlows para fachada ainda mais fina sem alterar fluxo vivo.',
     'Fundir contratos duplicados entre sim/classroom e sim/lesson onde a fronteira ainda e difusa.',
     'Migrar persistencia sensivel de SharedPreferences para storage local protegido onde aplicavel.',
@@ -418,9 +418,9 @@ const md = [
   '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ...rows,
   '',
-  '## Backlog Fase 3',
+  '## Backlog Fase 4',
   '',
-  ...inventory.phase3Backlog.map((item) => `- ${item}`),
+  ...inventory.phase4Backlog.map((item) => `- ${item}`),
   '',
 ].join('\n');
 

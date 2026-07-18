@@ -5,9 +5,9 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 ## Resumo
 
 - Arquivos Dart classificados: 126
-- Linhas Dart em lib: 32649
-- UI: 23
-- Assistente local: 21
+- Linhas Dart em lib: 32479
+- UI: 24
+- Assistente local: 20
 - Motores pedagogicos: 29
 - Motores de conteudo: 29
 - Persistencia/cache/sync: 11
@@ -47,6 +47,7 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 | `lib/features/onboarding/preparation_and_placement.dart` | UI | ui-entrada | feature-onboarding | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/features/portal/portal_flow.dart` | UI | ui | feature-portal | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/features/session/lab_session.dart` | UI | ui | feature-session | sessao/aula, erro/falha | sessao/aula, falha/retry | objetivo do aluno ate T00, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
+| `lib/features/session/lab_session_aux_flows.dart` | UI | ui | feature-session | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/features/session/lab_session_entry_flows.dart` | UI | ui | feature-session | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/features/session/lab_session_flows.dart` | UI | ui | feature-session | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/main.dart` | Assistente local | app-bootstrap | app-bootstrap | sessao/aula, cache/sync, erro/falha | sessao/aula, falha/retry | objetivo do aluno ate T00 | test/widget_test.dart, test/sim_app_architecture_shape_test.dart | manter |
@@ -119,7 +120,6 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 | `lib/sim/lesson/lesson_orchestrator.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/lesson/ready_window_worker.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/lesson/student_lesson_material_service.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/first_lesson_ready_window_test.dart, test/classroom_phase_test.dart | manter |
-| `lib/sim/lesson/visual_learning_feedback.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/localization/sim_locale_contract.dart` | Assistente local | localization | sim-localization | sessao/aula | sessao/aula | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/media/audio_core.dart` | Motores de conteudo | midia | sim-media | visual/imagem, audio, erro/falha | visual, audio, falha/retry | audio, imagem | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/media/audio_preference.dart` | Motores de conteudo | midia | sim-media | visual/imagem, audio, erro/falha | visual, audio, falha/retry | audio, imagem | test/sim_app_architecture_shape_test.dart | manter |
@@ -159,7 +159,7 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 | `lib/sim/ui/widgets/cyber_step_shell.dart` | UI | ui | sim-ui | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/ui/widgets/sim_preparation_experience.dart` | UI | ui | sim-ui | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 
-## Backlog Fase 3
+## Backlog Fase 4
 
 - Reduzir LabSession/LabSessionFlows para fachada ainda mais fina sem alterar fluxo vivo.
 - Fundir contratos duplicados entre sim/classroom e sim/lesson onde a fronteira ainda e difusa.

@@ -3,50 +3,6 @@ import 'student_learning_state.dart';
 class StudentStateContract {
   const StudentStateContract();
 
-  static const requiredDomains = [
-    'profile',
-    'language',
-    'objective',
-    'curriculum',
-    'current_item',
-    'current_layer',
-    'attempts',
-    'history',
-    'completed',
-    'pending',
-    'reviews',
-    'recoveries',
-    'events',
-    'current_material',
-    'prepared_materials',
-  ];
-
-  static const criticalEvents = [
-    'OBJECTIVE_SUBMITTED',
-    'CURRICULUM_RECEIVED',
-    'FIRST_LESSON_WRITTEN_TO_STATE',
-    'ANSWER_SUBMITTED',
-    'SIGNAL_SUBMITTED',
-    'NEXT_ACTION_DECIDED',
-    'REVIEW_SCHEDULED',
-    'RECOVERY_REQUIRED',
-    'DOUBT_RECORDED',
-    'TECHNICAL_ERROR_RECORDED',
-  ];
-
-  static const restorableFields = [
-    'current.itemIdx',
-    'current.layer',
-    'progress.itemIdx',
-    'progress.layer',
-    'progress.historia',
-    'progress.pendentesMarkers',
-    'attempts',
-    'events',
-    'currentLessonMaterial',
-    'readyLessonMaterials',
-  ];
-
   int richnessScore(StudentLearningState state) {
     final progress = state.progress;
     var score = 0;

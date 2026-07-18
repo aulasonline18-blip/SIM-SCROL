@@ -39,7 +39,6 @@ import '../../session/entry_form_state.dart';
 import '../../session/lesson_ui_state.dart';
 import '../../session/navigation_state.dart';
 import '../../sim/lesson/lesson_models.dart';
-import '../../sim/lesson/visual_learning_feedback.dart';
 import '../../sim/localization/sim_locale_contract.dart';
 import '../../sim/media/audio_core.dart';
 import '../../sim/media/audio_preference.dart';
@@ -60,6 +59,7 @@ import '../../core/utils/sim_constants.dart';
 
 part 'lab_session_flows.dart';
 part 'lab_session_entry_flows.dart';
+part 'lab_session_aux_flows.dart';
 
 class LabSession extends ChangeNotifier {
   LabSession({

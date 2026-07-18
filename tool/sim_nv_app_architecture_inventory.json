@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedFor": "SIM NV App Fase 1 de enquadramento na Planta-Mae",
+  "generatedFor": "SIM NV App Fase 3 de enquadramento na Planta-Mae",
   "sourceOfTruth": [
     "/root/sim-work/sim-api/PLANTA-MAE-SERVIDOR.txt",
     "/root/sim-work/sim-api/LEI_CONSTRUTIVA_MIGRACAO_SIM_ATUAL_PARA_SIM_NV_IDEAL.txt",
@@ -594,6 +594,36 @@
         "objetivo do aluno ate T00",
         "aula/pergunta"
       ]
+    },
+    {
+      "path": "lib/features/session/lab_session_aux_flows.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "feature-session",
+      "logicalOwner": "feature-session",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
     },
     {
       "path": "lib/features/session/lab_session_entry_flows.dart",
@@ -3206,46 +3236,6 @@
       ]
     },
     {
-      "path": "lib/sim/lesson/visual_learning_feedback.dart",
-      "layer": "Assistente local",
-      "category": "orquestracao-aula-cache",
-      "owner": "sim-lesson",
-      "logicalOwner": "sim-lesson",
-      "inputs": [
-        "estado local",
-        "cache",
-        "ponte T02"
-      ],
-      "outputs": [
-        "material pronto",
-        "janela viva"
-      ],
-      "tests": [
-        "test/sim_app_architecture_shape_test.dart"
-      ],
-      "decision": "manter",
-      "engines": [],
-      "contentEngines": [],
-      "contracts": [
-        "T02/microaula/questao",
-        "cache/sync",
-        "visual/imagem",
-        "audio"
-      ],
-      "stateMachines": [
-        "cache/sync",
-        "visual",
-        "audio",
-        "falha/retry"
-      ],
-      "officialPaths": [
-        "aula/pergunta",
-        "audio",
-        "imagem",
-        "curriculo grande"
-      ]
-    },
-    {
       "path": "lib/sim/localization/sim_locale_contract.dart",
       "layer": "Assistente local",
       "category": "localization",
@@ -4590,16 +4580,16 @@
   "counts": {
     "files": 126,
     "layers": {
-      "UI": 23,
-      "Assistente local": 21,
+      "UI": 24,
+      "Assistente local": 20,
       "Motores pedagogicos": 29,
       "Motores de conteudo": 29,
       "Persistencia/cache/sync": 11,
       "Ponte com servidor": 13
     },
-    "dartLines": 32649
+    "dartLines": 32479
   },
-  "phase3Backlog": [
+  "phase4Backlog": [
     "Reduzir LabSession/LabSessionFlows para fachada ainda mais fina sem alterar fluxo vivo.",
     "Fundir contratos duplicados entre sim/classroom e sim/lesson onde a fronteira ainda e difusa.",
     "Migrar persistencia sensivel de SharedPreferences para storage local protegido onde aplicavel.",

@@ -134,13 +134,44 @@ void main() {
     final baseFlowLines = File(
       'lib/features/session/lab_session_flows.dart',
     ).readAsLinesSync().length;
+    final auxFlow = File('lib/features/session/lab_session_aux_flows.dart');
+    expect(auxFlow.existsSync(), isTrue);
+    final auxFlowLines = auxFlow.readAsLinesSync().length;
     final entryFlow = File('lib/features/session/lab_session_entry_flows.dart');
     expect(entryFlow.existsSync(), isTrue);
     final entryFlowLines = entryFlow.readAsLinesSync().length;
 
     expect(labSessionLines, lessThanOrEqualTo(1200));
-    expect(baseFlowLines, lessThanOrEqualTo(1700));
+    expect(baseFlowLines, lessThanOrEqualTo(1450));
+    expect(auxFlowLines, lessThanOrEqualTo(260));
     expect(entryFlowLines, lessThanOrEqualTo(350));
+  });
+
+  test('cache and auxiliary rooms cannot become main lesson authority', () {
+    final materialService = File(
+      'lib/sim/lesson/student_lesson_material_service.dart',
+    ).readAsStringSync();
+    expect(
+      materialService,
+      isNot(contains(RegExp(r'copyWith\([^)]*\bcurrent\s*:'))),
+    );
+    expect(
+      materialService,
+      isNot(contains(RegExp(r'copyWith\([^)]*\bprogress\s*:'))),
+    );
+
+    final auxService = File(
+      'lib/sim/auxiliary/student_aux_room_service.dart',
+    ).readAsStringSync();
+    expect(auxService, contains("'authoritative': false"));
+    expect(auxService, contains("'writesTruth': false"));
+    expect(auxService, isNot(contains("'authoritative': true")));
+    expect(auxService, isNot(contains("'writesTruth': true")));
+
+    final answerController = File(
+      'lib/sim/classroom/lesson_answer_progress_controller.dart',
+    ).readAsStringSync();
+    expect(answerController, contains('!position.isReviewAtivo'));
   });
 
   test('official paths have executable proof references', () {

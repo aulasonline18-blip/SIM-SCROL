@@ -949,79 +949,6 @@ Object? _sanitizeRemoteVaultValue(
   return value;
 }
 
-class StudentLearningStateV1 {
-  const StudentLearningStateV1({
-    required this.stateVersion,
-    required this.lessonLocalId,
-    required this.lessonCloudId,
-    required this.userId,
-    required this.createdAt,
-    required this.updatedAt,
-    required this.profile,
-    required this.curriculum,
-    required this.curriculumStatus,
-    required this.current,
-    required this.progress,
-    required this.attempts,
-    required this.events,
-    required this.entry,
-    required this.placement,
-    required this.auxRooms,
-    required this.queuedActions,
-    required this.inflightJobs,
-    required this.truth,
-    required this.syncStatus,
-    required this.extra,
-  });
-
-  final int stateVersion;
-  final String lessonLocalId;
-  final String? lessonCloudId;
-  final String? userId;
-  final int createdAt;
-  final int updatedAt;
-  final StudentProfile profile;
-  final StudentCurriculum? curriculum;
-  final StudentCurriculumStatus? curriculumStatus;
-  final LessonCurrent? current;
-  final LessonProgress? progress;
-  final List<LessonAttempt> attempts;
-  final List<StudentLearningEvent> events;
-  final LiveEntry? entry;
-  final JsonMap? placement;
-  final JsonMap? auxRooms;
-  final List<JsonMap> queuedActions;
-  final List<JsonMap> inflightJobs;
-  final StudentMasteryTruth truth;
-  final StudentSyncStatus? syncStatus;
-  final JsonMap extra;
-
-  JsonMap toJson() => {
-    ...extra,
-    'stateVersion': stateVersion,
-    'lessonLocalId': lessonLocalId,
-    'lessonCloudId': lessonCloudId,
-    'userId': userId,
-    'createdAt': createdAt,
-    'updatedAt': updatedAt,
-    'profile': profile.toJson(),
-    'curriculum': curriculum?.toJson(),
-    'curriculumStatus': curriculumStatus?.toJson(),
-    'current': current?.toJson(),
-    'progress': progress?.toJson(),
-    'attempts': attempts.map((attempt) => attempt.toJson()).toList(),
-    'events': events.map((event) => event.toJson()).toList(),
-    'entry': entry?.toJson(),
-    'placement': placement,
-    'auxRooms': auxRooms,
-    'queuedActions': queuedActions,
-    'inflightJobs': inflightJobs,
-    'truth_typed': truth.toJson(),
-    'sync_status_typed': syncStatus?.toJson(),
-    'remote_state_contract': 'StudentLearningStateV1',
-  };
-}
-
 class StudentSyncStatus {
   const StudentSyncStatus({
     required this.status,
@@ -1257,68 +1184,25 @@ class StudentLearningState {
     'sync_status_typed': syncStatus?.toJson(),
   };
 
-  StudentLearningState toRemoteVaultState() {
-    return StudentLearningState(
-      stateVersion: stateVersion,
-      lessonLocalId: lessonLocalId,
-      lessonCloudId: lessonCloudId,
-      userId: userId,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-      profile: profile,
-      curriculum: curriculum,
-      curriculumStatus: curriculumStatus,
-      current: current,
-      progress: progress,
-      attempts: attempts,
-      events: events.map(_sanitizeRemoteVaultEvent).toList(growable: false),
-      entry: entry,
-      placement: placement == null ? null : _sanitizeRemoteVaultMap(placement!),
-      auxRooms: auxRooms == null ? null : _sanitizeRemoteVaultMap(auxRooms!),
-      currentLessonMaterial: null,
-      readyLessonMaterials: const {},
-      queuedActions: queuedActions
-          .map(_sanitizeRemoteVaultMap)
-          .toList(growable: false),
-      inflightJobs: inflightJobs
-          .map(_sanitizeRemoteVaultMap)
-          .toList(growable: false),
-      truth: truth,
-      audio: audio.copyForRemoteVault(),
-      syncStatus: syncStatus,
-      extra: _sanitizeRemoteVaultMap(extra),
-    );
-  }
-
-  StudentLearningStateV1 toStudentLearningStateV1() {
-    final remote = toRemoteVaultState();
-    return StudentLearningStateV1(
-      stateVersion: remote.stateVersion,
-      lessonLocalId: remote.lessonLocalId,
-      lessonCloudId: remote.lessonCloudId,
-      userId: remote.userId,
-      createdAt: remote.createdAt,
-      updatedAt: remote.updatedAt,
-      profile: remote.profile,
-      curriculum: remote.curriculum,
-      curriculumStatus: remote.curriculumStatus,
-      current: remote.current,
-      progress: remote.progress,
-      attempts: remote.attempts,
-      events: remote.events,
-      entry: remote.entry,
-      placement: remote.placement,
-      auxRooms: remote.auxRooms,
-      queuedActions: remote.queuedActions,
-      inflightJobs: remote.inflightJobs,
-      truth: remote.truth,
-      syncStatus: remote.syncStatus,
-      extra: remote.extra,
-    );
-  }
+  StudentLearningState toRemoteVaultState() => copyWith(
+    events: events.map(_sanitizeRemoteVaultEvent).toList(growable: false),
+    placement: placement == null ? null : _sanitizeRemoteVaultMap(placement!),
+    auxRooms: auxRooms == null ? null : _sanitizeRemoteVaultMap(auxRooms!),
+    currentLessonMaterial: null,
+    readyLessonMaterials: const {},
+    queuedActions: queuedActions
+        .map(_sanitizeRemoteVaultMap)
+        .toList(growable: false),
+    inflightJobs: inflightJobs
+        .map(_sanitizeRemoteVaultMap)
+        .toList(growable: false),
+    audio: audio.copyForRemoteVault(),
+    extra: _sanitizeRemoteVaultMap(extra),
+  );
 
   JsonMap toRemoteVaultJson() {
-    final json = toStudentLearningStateV1().toJson()
+    final json = toRemoteVaultState().toJson()
+      ..['remote_state_contract'] = 'StudentLearningStateV1'
       ..remove('audio_typed')
       ..remove('currentLessonMaterial')
       ..remove('readyLessonMaterials')

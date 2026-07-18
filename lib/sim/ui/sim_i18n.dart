@@ -15,12 +15,7 @@ Locale get simActiveLocale => switch (_activeLanguageCode) {
 
 String normalizeSimLanguageCode(String? codeOrName) {
   final raw = (codeOrName ?? '').trim().toLowerCase();
-  if (raw.isEmpty) {
-    return 'en';
-  }
-  if (raw == 'pt' || raw == 'pt-br' || raw.contains('portugu')) {
-    return 'pt';
-  }
+  if (raw == 'pt' || raw == 'pt-br' || raw.contains('portugu')) return 'pt';
   if (raw == 'es' || raw.contains('spanish') || raw.contains('españ')) {
     return 'es';
   }
@@ -30,9 +25,7 @@ String normalizeSimLanguageCode(String? codeOrName) {
   if (raw == 'ja' || raw.contains('japanese') || raw.contains('日本')) {
     return 'ja';
   }
-  if (raw == 'ko' || raw.contains('korean') || raw.contains('한국')) {
-    return 'ko';
-  }
+  if (raw == 'ko' || raw.contains('korean') || raw.contains('한국')) return 'ko';
   return 'en';
 }
 
@@ -175,11 +168,6 @@ const _strings = <String, String>{
 Map<String, List<String>> debugSimMissingLocalizationKeys() => const {
   'pt': [],
   'en': [],
-};
-
-Map<String, int> debugSimLocalizationKeyCounts() => {
-  'pt': _strings.length,
-  'en': _strings.length,
 };
 
 String debugSimLocalizedValue(String code, String key) =>

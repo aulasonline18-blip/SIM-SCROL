@@ -30,8 +30,8 @@ void main() {
           .map((dir) => dir.path)
           .toList();
 
-      expect(lineCount, lessThanOrEqualTo(35000));
-      expect(dartFiles.length, lessThanOrEqualTo(130));
+      expect(lineCount, lessThanOrEqualTo(32500));
+      expect(dartFiles.length, lessThanOrEqualTo(126));
       expect(dirCount, lessThanOrEqualTo(32));
       expect(emptyDirs, isEmpty);
 
