@@ -30,11 +30,9 @@ void main() {
           .map((dir) => dir.path)
           .toList();
 
-      // Phase guard: this first cleanup did not safely reach the final target
-      // of 35k lines, but it must not regress above the measured cleaned shape.
-      expect(lineCount, lessThanOrEqualTo(45100));
-      expect(dartFiles.length, lessThanOrEqualTo(153));
-      expect(dirCount, lessThanOrEqualTo(37));
+      expect(lineCount, lessThanOrEqualTo(35000));
+      expect(dartFiles.length, lessThanOrEqualTo(130));
+      expect(dirCount, lessThanOrEqualTo(32));
       expect(emptyDirs, isEmpty);
 
       final pubspec = File('pubspec.yaml').readAsStringSync();

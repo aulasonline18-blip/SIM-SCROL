@@ -1,4 +1,49 @@
+import '../lesson/lesson_models.dart';
 import '../state/student_learning_state.dart';
+
+class SimConstitutionViolation implements Exception {
+  const SimConstitutionViolation(this.message);
+  final String message;
+  @override
+  String toString() => 'SimConstitutionViolation: $message';
+}
+
+class SimAnswerEvidence {
+  const SimAnswerEvidence({
+    required this.marker,
+    required this.layer,
+    required this.selectedAnswer,
+    required this.signal,
+    required this.correct,
+    required this.validatedBySoftware,
+  });
+
+  final String marker;
+  final LessonLayer layer;
+  final AnswerLetter selectedAnswer;
+  final DecisionSignal signal;
+  final bool correct;
+  final bool validatedBySoftware;
+}
+
+class SimConstitutionalContract {
+  const SimConstitutionalContract();
+
+  void assertLessonMaterial(LessonContent content) {
+    if (content.explanation.trim().isEmpty ||
+        content.question.trim().isEmpty ||
+        content.options.length != 3 ||
+        !content.options.containsKey(content.correctAnswer)) {
+      throw const SimConstitutionViolation('lesson_material_invalid');
+    }
+  }
+
+  void validateEvidence(SimAnswerEvidence evidence) {
+    if (evidence.marker.trim().isEmpty || !evidence.validatedBySoftware) {
+      throw const SimConstitutionViolation('answer_evidence_invalid');
+    }
+  }
+}
 
 enum ClassroomPhaseType {
   carregando,

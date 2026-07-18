@@ -1,7 +1,6 @@
 import '../state/student_learning_state.dart';
 import 'aux_room_models.dart';
 import 'doubt_input_sheet.dart';
-import 'doubt_progress_bar.dart';
 import 'doubt_t02_caller.dart';
 
 const String defaultDoubtError =
@@ -13,7 +12,12 @@ class LessonDoubtController {
   final DoubtT02Caller caller;
   DoubtState state;
 
-  String get progressLabel => doubtProgressLabel(state.progress);
+  String get progressLabel {
+    if (state.progress < 30) return 'Enviando sua dúvida...';
+    if (state.progress < 60) return 'Professor esta analisando...';
+    if (state.progress < 90) return 'Preparando explicacao...';
+    return 'Quase pronto...';
+  }
 
   void askDoubt() {
     if (state.status == DoubtStatus.processing) return;

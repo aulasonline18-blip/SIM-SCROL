@@ -45,8 +45,184 @@ import '../external_ai/sim_ai_server_config.dart';
 import '../external_ai/sim_server_ai_clients.dart';
 import '../state/shared_prefs_state_storage.dart';
 import '../media/platform_audio_adapter.dart';
-import 'sim_organism_health.dart';
-import 'sim_organism_router.dart';
+
+enum SimOrganismRouteGuard {
+  open,
+  needsAuth,
+  needsLanguage,
+  needsObjective,
+  serverOnly,
+  unknown,
+}
+
+class SimRouteDecision {
+  const SimRouteDecision({
+    required this.requested,
+    required this.destination,
+    required this.guard,
+  });
+
+  final String requested;
+  final String destination;
+  final SimOrganismRouteGuard guard;
+
+  bool get allowed =>
+      requested == destination && guard == SimOrganismRouteGuard.open;
+}
+
+class SimOrganismRouter {
+  const SimOrganismRouter();
+
+  static const _screenRoutes = {
+    '/',
+    '/login',
+    '/cyber/idioma',
+    '/cyber/objeto',
+    '/cyber/curriculo',
+    '/cyber/placement',
+    '/cyber/aula',
+    '/creditos',
+    '/checkout/return',
+    '/pai',
+    '/privacidade',
+    '/termos',
+    '/conta/deletar',
+  };
+
+  static const _serverRoutes = {
+    '/api/bootstrap-t00',
+    '/api/complete-lesson',
+    '/api/generate-lesson-audio',
+    '/api/public/payments/webhook',
+  };
+
+  SimRouteDecision resolve({
+    required String path,
+    required bool authed,
+    required bool hasLanguage,
+    required bool hasObjective,
+  }) {
+    if (_serverRoutes.contains(path)) {
+      return SimRouteDecision(
+        requested: path,
+        destination: '/',
+        guard: SimOrganismRouteGuard.serverOnly,
+      );
+    }
+    if (!_screenRoutes.contains(path) && !path.startsWith('https://')) {
+      return SimRouteDecision(
+        requested: path,
+        destination: '/',
+        guard: SimOrganismRouteGuard.unknown,
+      );
+    }
+    if (path.startsWith('https://')) {
+      return SimRouteDecision(
+        requested: path,
+        destination: path,
+        guard: SimOrganismRouteGuard.open,
+      );
+    }
+    if (_requiresAuth(path) && !authed) {
+      return SimRouteDecision(
+        requested: path,
+        destination: '/login',
+        guard: SimOrganismRouteGuard.needsAuth,
+      );
+    }
+    if (_requiresLanguage(path) && !hasLanguage) {
+      return SimRouteDecision(
+        requested: path,
+        destination: '/cyber/idioma',
+        guard: SimOrganismRouteGuard.needsLanguage,
+      );
+    }
+    if (_requiresObjective(path) && !hasObjective) {
+      return SimRouteDecision(
+        requested: path,
+        destination: '/cyber/objeto',
+        guard: SimOrganismRouteGuard.needsObjective,
+      );
+    }
+    return SimRouteDecision(
+      requested: path,
+      destination: path,
+      guard: SimOrganismRouteGuard.open,
+    );
+  }
+
+  bool _requiresAuth(String path) => const {
+    '/cyber/idioma',
+    '/cyber/objeto',
+    '/cyber/curriculo',
+    '/cyber/placement',
+    '/cyber/aula',
+    '/creditos',
+    '/checkout/return',
+    '/pai',
+    '/conta/deletar',
+  }.contains(path);
+
+  bool _requiresLanguage(String path) => const {
+    '/cyber/objeto',
+    '/cyber/curriculo',
+    '/cyber/placement',
+    '/cyber/aula',
+  }.contains(path);
+
+  bool _requiresObjective(String path) => const {
+    '/cyber/curriculo',
+    '/cyber/placement',
+    '/cyber/aula',
+  }.contains(path);
+}
+
+class SimOrganismHealthReport {
+  const SimOrganismHealthReport({
+    required this.healthyOrgans,
+    required this.serverOnlyOrgans,
+    required this.unresolvedDoors,
+    required this.promptsStayOnServer,
+    required this.secretsStayOnServer,
+    required this.hasCompleteSchoolMap,
+  });
+
+  final List<String> healthyOrgans;
+  final List<String> serverOnlyOrgans;
+  final List<String> unresolvedDoors;
+  final bool promptsStayOnServer;
+  final bool secretsStayOnServer;
+  final bool hasCompleteSchoolMap;
+
+  bool get alive =>
+      healthyOrgans.isNotEmpty &&
+      unresolvedDoors.isEmpty &&
+      promptsStayOnServer &&
+      secretsStayOnServer &&
+      hasCompleteSchoolMap;
+}
+
+SimOrganismHealthReport buildSimOrganismHealthReport() =>
+    const SimOrganismHealthReport(
+      healthyOrgans: [
+        'portal',
+        'login',
+        'objetivo',
+        'aula',
+        'midia',
+        'sync',
+        'billing',
+      ],
+      serverOnlyOrgans: [
+        '/api/bootstrap-t00',
+        '/api/complete-lesson',
+        '/api/generate-lesson-audio',
+      ],
+      unresolvedDoors: [],
+      promptsStayOnServer: true,
+      secretsStayOnServer: true,
+      hasCompleteSchoolMap: true,
+    );
 
 class SimOrganism {
   SimOrganism._({

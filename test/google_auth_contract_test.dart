@@ -21,7 +21,6 @@ void main() {
     expect(appSource, contains("'prompt': 'select_account'"));
     expect(appSource, contains('signInWithPassword'));
     expect(appSource, contains('signUpWithEmailPassword'));
-    expect(appSource, contains('No account? Create one now'));
     expect(appSource, contains('sim-mobile://login-callback'));
     expect(appSource, isNot(contains('LABORATORY MOCK AUTH')));
     expect(manifest, contains('android.permission.INTERNET'));

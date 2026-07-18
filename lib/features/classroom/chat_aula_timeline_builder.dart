@@ -344,8 +344,6 @@ String? studentFacingRuntimeError(String? raw) {
   final text = raw?.trim();
   if (text == null || text.isEmpty) return null;
   if (text.startsWith('aula_fb_')) return feedbackText(text);
-  final translated = t(text);
-  if (translated != text) return translated;
   final lower = text.toLowerCase();
   if (lower.contains('lessonlocalid ausente')) {
     return t('aula_choose_goal');
@@ -358,6 +356,16 @@ String? studentFacingRuntimeError(String? raw) {
       lower.contains('missing bearer')) {
     return t('aula_session_expired');
   }
+  if (lower.contains('http') ||
+      lower.contains('{') ||
+      lower.contains('}') ||
+      lower.contains('exception') ||
+      lower.contains('stack') ||
+      lower.contains('error')) {
+    return t('aula_gen_fail');
+  }
+  final translated = t(text);
+  if (translated != text) return translated;
   if (lower.contains('socketexception') ||
       lower.contains('failed host lookup') ||
       lower.contains('connection') ||

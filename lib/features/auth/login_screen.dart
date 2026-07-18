@@ -37,9 +37,7 @@ import '../../sim/ui/sim_i18n.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/cyber_step_shell.dart';
 import '../../sim/ui/widgets/sim_preparation_experience.dart';
-import '../../sim/ui/widgets/sim_typewriter.dart';
 import '../../sim/auxiliary/aux_room_models.dart';
-import '../../sim/ui/widgets/doubt_progress_bar.dart';
 
 import '../../core/utils/sim_constants.dart';
 import '../session/lab_session.dart';

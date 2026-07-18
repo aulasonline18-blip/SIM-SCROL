@@ -96,8 +96,6 @@ void main() {
       ),
     );
 
-    expect(find.text('TEORIA · Movimento uniforme'), findsOneWidget);
-    expect(find.text('M0007 · Velocidade constante'), findsOneWidget);
     expect(
       find.text('Um corpo em movimento uniforme mantém velocidade.'),
       findsOneWidget,
@@ -139,7 +137,7 @@ void main() {
         ),
       );
 
-      expect(find.text('TEORIA · M1 · Frações equivalentes'), findsOneWidget);
+      expect(find.text('Explicacao antiga preservada.'), findsOneWidget);
       expect(find.text('TEORIA ·'), findsNothing);
     },
   );

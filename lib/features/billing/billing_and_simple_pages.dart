@@ -35,14 +35,11 @@ import '../../sim/media/student_lesson_media_service.dart';
 import '../../sim/state/shared_prefs_state_storage.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/state/student_state_store.dart';
-import '../../sim/support/legal_pages.dart';
 import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
 import '../../sim/ui/widgets/cyber_step_shell.dart';
 import '../../sim/ui/widgets/sim_preparation_experience.dart';
-import '../../sim/ui/widgets/sim_typewriter.dart';
 import '../../sim/auxiliary/aux_room_models.dart';
-import '../../sim/ui/widgets/doubt_progress_bar.dart';
 
 import '../../core/utils/sim_constants.dart';
 import '../session/lab_session.dart';
@@ -58,6 +55,49 @@ import '../../shared/widgets/shared_widgets.dart';
 bool widgetRouteIsPrivacy(String route) {
   return (Uri.tryParse(route)?.path ?? route) == '/privacidade';
 }
+
+class _LegalSection {
+  const _LegalSection(this.title, this.body);
+  final String title;
+  final String body;
+}
+
+class _LegalContent {
+  const _LegalContent(this.title, this.headerLines, this.sections);
+  final String title;
+  final List<String> headerLines;
+  final List<_LegalSection> sections;
+}
+
+const privacyPageContent = _LegalContent(
+  'Politica de Privacidade',
+  ['App: SIM AI Tutor', 'Contato: smarttutorbr@gmail.com'],
+  [
+    _LegalSection(
+      'Dados e uso',
+      'O SIM usa dados de conta, progresso e aulas para personalizar estudo e sincronizar dispositivos.',
+    ),
+    _LegalSection(
+      'Direitos',
+      'Voce pode solicitar acesso, correcao e exclusao pelo contato oficial.',
+    ),
+  ],
+);
+
+const termsPageContent = _LegalContent(
+  'Termos de Uso',
+  ['App: SIM AI Tutor', 'Foro: Juscimeira, Mato Grosso'],
+  [
+    _LegalSection(
+      'Servico',
+      'O SIM e um servico educacional com aulas guiadas por inteligencia artificial.',
+    ),
+    _LegalSection(
+      'Creditos',
+      'Creditos podem ser consumidos por geracao de aulas, explicacoes e recursos associados.',
+    ),
+  ],
+);
 
 class CreditsLabScreen extends StatefulWidget {
   const CreditsLabScreen({required this.session, super.key});

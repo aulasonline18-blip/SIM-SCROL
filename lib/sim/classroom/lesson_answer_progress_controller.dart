@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import '../core/signal_tracker.dart';
-import '../constitution/sim_constitutional_contract.dart';
 import '../lesson/dopamine_ready_window_engine.dart';
 import '../lesson/lesson_models.dart';
 import '../lesson/student_lesson_material_service.dart';

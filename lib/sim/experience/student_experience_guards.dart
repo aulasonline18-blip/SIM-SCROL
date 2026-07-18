@@ -1,8 +1,24 @@
 import 'dart:async';
 import 'dart:io';
 
-import '../errors/human_error_policy.dart';
 import 'student_experience_types.dart';
+
+String _humanErrorMessage(Object? error) {
+  final raw = error?.toString() ?? '';
+  final lower = raw.toLowerCase();
+  if (lower.contains('timeout')) {
+    return 'A conexao demorou demais. Tente novamente em instantes.';
+  }
+  if (lower.contains('socket') || lower.contains('network')) {
+    return 'A conexao parece instavel. Salvamos seu ponto e vamos tentar novamente.';
+  }
+  if (raw.contains('{') || raw.contains('}') || lower.contains('exception')) {
+    return 'Nao consegui concluir isso agora. Tente novamente em instantes.';
+  }
+  return raw.trim().isEmpty
+      ? 'Nao consegui concluir isso agora. Tente novamente em instantes.'
+      : raw.trim();
+}
 
 StudentExperienceErrorInfo classifyStudentExperienceError(Object error) {
   final message = error.toString();
@@ -54,7 +70,7 @@ StudentExperienceErrorInfo classifyStudentExperienceError(Object error) {
       lower.contains('http 5')) {
     return StudentExperienceErrorInfo(
       kind: StudentExperienceErrorKind.generic,
-      message: humanErrorMessage(error),
+      message: _humanErrorMessage(error),
     );
   }
   return const StudentExperienceErrorInfo(

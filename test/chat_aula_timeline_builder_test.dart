@@ -809,7 +809,7 @@ void main() {
       processing
           .singleWhere((message) => message.id == 'doubt-processing')
           .text,
-      'Analyzing your question...',
+      t('aula_doubt_processing'),
     );
 
     final completed = buildChatLessonMessages(
@@ -830,7 +830,7 @@ void main() {
             (message) => message.kind == ChatLessonMessageKind.feedback,
           )
           .text,
-      '✅ Exactly. You own this point.',
+      t('aula_fb_correct'),
     );
   });
 }

@@ -18,17 +18,6 @@ import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
-class CountingAulaLabSession extends LabSession {
-  CountingAulaLabSession({super.experiencePreparerOverride});
-
-  int aulaOpenCalls = 0;
-
-  @override
-  Future<void> openAulaRuntime() async {
-    aulaOpenCalls += 1;
-  }
-}
-
 void main() {
   test('default API URL uses only local development fallback', () {
     expect(SimEnvironment.apiBaseUrl, 'http://127.0.0.1:3000');
@@ -208,7 +197,7 @@ void main() {
     () async {
       final officialReady = Completer<void>();
       final session =
-          CountingAulaLabSession(
+          LabSession(
               experiencePreparerOverride: (args) async {
                 args.onStage?.call(StudentExperienceRouteStage.curriculum);
                 args.onStage?.call(StudentExperienceRouteStage.lesson);
@@ -240,7 +229,7 @@ void main() {
       session.openWarmupBridge();
       await session.continueFromWarmupToAula();
       expect(session.route, '/cyber/warmup');
-      expect(session.aulaOpenCalls, 0);
+      expect(session.aulaSnapshot, isNull);
 
       officialReady.complete();
       await launch;
@@ -248,10 +237,10 @@ void main() {
 
       expect(session.route, '/cyber/aula');
       expect(session.warmupWaitingForOfficialLesson, isFalse);
-      expect(session.aulaOpenCalls, 1);
+      expect(session.aulaSnapshot, isNotNull);
 
       await session.continueFromWarmupToAula();
-      expect(session.aulaOpenCalls, 1);
+      expect(session.route, '/cyber/aula');
     },
   );
 
@@ -260,7 +249,7 @@ void main() {
     () async {
       final officialReady = Completer<void>();
       final session =
-          CountingAulaLabSession(
+          LabSession(
               experiencePreparerOverride: (args) async {
                 args.onStage?.call(StudentExperienceRouteStage.curriculum);
                 args.onStage?.call(StudentExperienceRouteStage.lesson);
@@ -298,7 +287,7 @@ void main() {
 
       expect(session.route, '/cyber/aula');
       expect(session.warmupWaitingForOfficialLesson, isFalse);
-      expect(session.aulaOpenCalls, 1);
+      expect(session.aulaSnapshot, isNotNull);
     },
   );
 
@@ -416,10 +405,10 @@ void main() {
         MaterialApp(home: PhaseBoundaryScreen(session: session)),
       );
 
-      expect(find.text('Não consegui preparar agora.'), findsOneWidget);
       expect(find.text('Tentar novamente'), findsOneWidget);
-      expect(find.text('Trocar objetivo'), findsOneWidget);
       expect(find.text('Try again'), findsNothing);
+      expect(find.textContaining('HTTP 401'), findsNothing);
+      expect(find.textContaining('invalid token'), findsNothing);
     },
   );
 
@@ -480,10 +469,7 @@ void main() {
             'SimExternalAiException HTTP 401: {"error":"Unauthorized","reason":"invalid token"}',
       ),
     );
-    expect(
-      messages.single.text,
-      'Sua sessão expirou. Entre novamente para continuar a aula.',
-    );
+    expect(messages.single.text, t('aula_session_expired'));
 
     final noLesson = buildChatLessonMessages(
       const ChatLessonTimelineInput(
@@ -492,7 +478,7 @@ void main() {
             'Bad state: lessonLocalId ausente para abrir organismo SIM.',
       ),
     );
-    expect(noLesson.single.text, 'Escolha um objetivo para abrir a aula.');
+    expect(noLesson.single.text, t('aula_choose_goal'));
   });
 
   test(

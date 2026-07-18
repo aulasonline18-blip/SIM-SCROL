@@ -170,9 +170,10 @@ void main() {
   });
 
   test('production/session audio wiring keeps PlatformAudioAdapter live', () {
-    final labSession = File(
-      'lib/features/session/lab_session.dart',
-    ).readAsStringSync();
+    final labSession = [
+      File('lib/features/session/lab_session.dart').readAsStringSync(),
+      File('lib/features/session/lab_session_flows.dart').readAsStringSync(),
+    ].join('\n');
     final organism = File(
       'lib/sim/organism/sim_organism.dart',
     ).readAsStringSync();

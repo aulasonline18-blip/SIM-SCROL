@@ -39,9 +39,7 @@ import '../../sim/ui/sim_i18n.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/cyber_step_shell.dart';
 import '../../sim/ui/widgets/sim_preparation_experience.dart';
-import '../../sim/ui/widgets/sim_typewriter.dart';
 import '../../sim/auxiliary/aux_room_models.dart';
-import '../../sim/ui/widgets/doubt_progress_bar.dart';
 
 import '../../core/utils/sim_constants.dart';
 import '../session/lab_session.dart';
@@ -112,6 +110,9 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
   Widget build(BuildContext context) {
     final status = widget.session.entryStatus;
     final error = widget.session.entryError;
+    final publicError = error == null
+        ? null
+        : humanErrorMessage(error, fallback: t('aula_gen_fail'));
     final authReady = widget.session.authReady;
     final authed = widget.session.authed;
     final isError = status == 'erro';
@@ -151,10 +152,10 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                             color: simDark,
                           ),
                         ),
-                        if (error != null) ...[
+                        if (publicError != null) ...[
                           const SizedBox(height: 12),
                           Text(
-                            error,
+                            publicError,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: simMuted,
