@@ -3422,7 +3422,7 @@ void main() {
   );
 
   test(
-    'onboarding abre sala antes do T02 lento terminar e preenche depois',
+    'onboarding aguarda T02 minimo antes de abrir sala',
     () async {
       final service = StudentLearningStateService();
       final releaseFinal = Completer<void>();
@@ -3451,7 +3451,7 @@ void main() {
         placement: const SettledPlacementReader(settled: true),
       );
 
-      final result = await engine.prepareStudentExperienceEntry(
+      final resultFuture = engine.prepareStudentExperienceEntry(
         const StudentExperienceArgs(
           academic: 'fundamental',
           idioma: 'pt-BR',
@@ -3463,40 +3463,51 @@ void main() {
         ),
       );
 
-      expect(result.destination, '/cyber/aula');
+      await _waitUntil(() => t02.requests.isNotEmpty);
       expect(t02.requests, hasLength(1));
-      final shell = service.read('cyber-rocket');
-      expect(shell?.current?.marker, 'M1');
-      expect(shell?.currentLessonMaterial, isNull);
-      final shellEvents = shell?.events
-          .where((event) => event.type == 'PROGRESS_UPDATED')
-          .map((event) => event.payload['event'])
-          .toList();
-      expect(shellEvents, contains('firstLessonShellOpened'));
-      expect(shellEvents, contains('t02FirstLessonStarted'));
+      var completedBeforeT02 = false;
+      unawaited(resultFuture.then((_) => completedBeforeT02 = true));
+      await Future<void>.delayed(Duration.zero);
+      expect(completedBeforeT02, isFalse);
+
+      final waiting = service.read('cyber-rocket');
+      expect(waiting?.currentLessonMaterial, isNull);
       expect(
         readLiveEntryState(service, 'cyber-rocket').status,
-        LiveEntryStatus.showingFirstLesson,
+        LiveEntryStatus.t02FirstLessonRunning,
       );
 
       t02.firstLesson.complete(t02._material(t02.requests.first));
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
 
+      final result = await resultFuture;
+      expect(result.destination, '/cyber/aula');
+      expect(
+        t02.requests.where((request) => request.layer == LessonLayer.l1),
+        hasLength(1),
+      );
       final ready = service.read('cyber-rocket');
+      expect(ready?.current?.marker, 'M1');
       expect(ready?.currentLessonMaterial?['text_status'], 'ready');
       final readyEvents = ready?.events
           .where((event) => event.type == 'PROGRESS_UPDATED')
           .map((event) => event.payload['event'])
           .toList();
+      expect(readyEvents, contains('firstLessonShellOpened'));
+      expect(readyEvents, contains('t02FirstLessonStarted'));
       expect(readyEvents, contains('t02FirstMinimumLessonReady'));
       expect(readyEvents, contains('timeToFirstQuestion'));
+      expect(
+        readLiveEntryState(service, 'cyber-rocket').status,
+        LiveEntryStatus.showingFirstLesson,
+      );
       releaseFinal.complete();
     },
   );
 
   test(
-    'placement aparece quando necessario enquanto primeiro minimo prepara em background',
+    'placement so aparece depois da primeira aula minima',
     () async {
       final service = StudentLearningStateService();
       final releaseFinal = Completer<void>();
@@ -3525,7 +3536,7 @@ void main() {
         placement: const SettledPlacementReader(settled: false),
       );
 
-      final result = await engine.prepareStudentExperienceEntry(
+      final resultFuture = engine.prepareStudentExperienceEntry(
         const StudentExperienceArgs(
           academic: 'fundamental',
           idioma: 'pt-BR',
@@ -3534,6 +3545,13 @@ void main() {
         ),
       );
 
+      await _waitUntil(() => t02.requests.isNotEmpty);
+      var completedBeforeT02 = false;
+      unawaited(resultFuture.then((_) => completedBeforeT02 = true));
+      await Future<void>.delayed(Duration.zero);
+      expect(completedBeforeT02, isFalse);
+      t02.firstLesson.complete(t02._material(t02.requests.first));
+      final result = await resultFuture;
       expect(result.destination, '/cyber/placement');
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -3546,8 +3564,10 @@ void main() {
       expect(events, contains('placementRequired'));
       expect(events, contains('placementScreenReleasedAfterSlotA'));
       expect(events, isNot(contains('firstLessonShellOpened')));
-      expect(t02.requests, hasLength(1));
-      t02.firstLesson.complete(t02._material(t02.requests.first));
+      expect(
+        t02.requests.where((request) => request.layer == LessonLayer.l1),
+        hasLength(1),
+      );
       releaseFinal.complete();
     },
   );

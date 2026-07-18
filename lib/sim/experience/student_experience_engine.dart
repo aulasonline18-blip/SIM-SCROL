@@ -185,33 +185,15 @@ class StudentExperienceEngine {
       );
 
       final firstLessonPreparer = t02;
+      if (firstLessonPreparer != null) {
+        await firstLessonPreparer.prepareFirstMinimumLesson(
+          args: args,
+          first: first,
+        );
+      }
+
       final placementIsSettled = placement.settled;
       if (!placementIsSettled) {
-        if (firstLessonPreparer != null) {
-          unawaited(
-            firstLessonPreparer
-                .prepareFirstMinimumLesson(
-                  args: args,
-                  first: first,
-                  shellAlreadyOpen: true,
-                )
-                .catchError((Object error) {
-                  final info = classifyStudentExperienceError(error);
-                  publishStudentExperienceEvent(
-                    service,
-                    args.lessonLocalId,
-                    info.kind == StudentExperienceErrorKind.timeout
-                        ? StudentExperienceEventType.recoverableError
-                        : StudentExperienceEventType.blockingError,
-                    {
-                      'error': info.message,
-                      'phase': 'background_first_t02_before_placement',
-                    },
-                  );
-                }),
-          );
-          await Future<void>.delayed(Duration.zero);
-        }
         args.onStage?.call(StudentExperienceRouteStage.placement);
         writeStudentExperienceSnapshot(
           service,
@@ -266,40 +248,15 @@ class StudentExperienceEngine {
         );
       }
 
-      _openFirstLessonShell(args, selected);
-      if (firstLessonPreparer != null) {
-        unawaited(
-          firstLessonPreparer
-              .prepareFirstMinimumLesson(
-                args: args,
-                first: selected,
-                shellAlreadyOpen: true,
-              )
-              .catchError((Object error) {
-                final info = classifyStudentExperienceError(error);
-                writeStudentExperienceSnapshot(
-                  service,
-                  lessonLocalId: args.lessonLocalId,
-                  state: info.kind == StudentExperienceErrorKind.timeout
-                      ? StudentExperienceState.erroRecuperavel
-                      : StudentExperienceState.erroBloqueante,
-                  destination: '/cyber/aula',
-                  startMarker: selected.marker,
-                  startItemIndex: selected.itemIndex,
-                  error: info,
-                );
-                publishStudentExperienceEvent(
-                  service,
-                  args.lessonLocalId,
-                  info.kind == StudentExperienceErrorKind.timeout
-                      ? StudentExperienceEventType.recoverableError
-                      : StudentExperienceEventType.blockingError,
-                  {'error': info.message, 'phase': 'background_first_t02'},
-                );
-              }),
+      if (firstLessonPreparer != null &&
+          (selected.marker != first.marker ||
+              selected.itemIndex != first.itemIndex)) {
+        await firstLessonPreparer.prepareFirstMinimumLesson(
+          args: args,
+          first: selected,
         );
-        await Future<void>.delayed(Duration.zero);
       }
+      _openFirstLessonShell(args, selected);
       return StudentExperienceResult(
         destination: '/cyber/aula',
         curriculum: selected.curriculum,
