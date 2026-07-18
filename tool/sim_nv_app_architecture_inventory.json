@@ -1,0 +1,4768 @@
+{
+  "schemaVersion": 1,
+  "generatedFor": "SIM NV App Fase 1 de enquadramento na Planta-Mae",
+  "sourceOfTruth": [
+    "/root/sim-work/sim-api/PLANTA-MAE-SERVIDOR.txt",
+    "/root/sim-work/sim-api/LEI_CONSTRUTIVA_MIGRACAO_SIM_ATUAL_PARA_SIM_NV_IDEAL.txt",
+    "/root/sim-work/sim-api/docs/docs/fase-zero/sim-nv/CONJUNTO_C_ESPECIFICACAO_SIM_NV.md",
+    "/root/SIM-SCROL/docs/PLANTA-SIM-FLUTTER-10X-APP-DE-ENSINO.txt",
+    "/root/SIM-SCROL/docs/CONTRATO_SYNC_OFFLINE_CACHE.md",
+    "/root/SIM-SCROL/docs/SIM_FLUTTER_CONTRATO_FIO.md",
+    "/root/SIM-SCROL/docs/SIM_MOTOR_DE_TRAVESSIA_DIRETRIZ_CONSTRUTIVA.md"
+  ],
+  "layers": [
+    "UI",
+    "Assistente local",
+    "Motores pedagogicos",
+    "Motores de conteudo",
+    "Persistencia/cache/sync",
+    "Ponte com servidor"
+  ],
+  "pedagogicalEngines": [
+    {
+      "id": "learning-decision-engine",
+      "name": "LearningDecisionEngine"
+    },
+    {
+      "id": "mastery-truth-engine",
+      "name": "MasteryTruthEngine"
+    },
+    {
+      "id": "error-classifier",
+      "name": "ErrorClassifier"
+    },
+    {
+      "id": "advance-engine",
+      "name": "AdvanceEngine"
+    },
+    {
+      "id": "domain-rules",
+      "name": "DomainRules"
+    }
+  ],
+  "contentEngines": [
+    {
+      "id": "t00",
+      "name": "T00"
+    },
+    {
+      "id": "t02",
+      "name": "T02"
+    },
+    {
+      "id": "warmup-amparo",
+      "name": "warmup/amparo"
+    },
+    {
+      "id": "doubt",
+      "name": "doubt"
+    },
+    {
+      "id": "review",
+      "name": "review"
+    },
+    {
+      "id": "recovery",
+      "name": "recovery"
+    }
+  ],
+  "formalContracts": [
+    "T00/curriculo/mapa",
+    "T02/microaula/questao",
+    "estado forte do aluno",
+    "sessao/aula",
+    "item/camada/questao",
+    "avanco/advance-gate",
+    "revisao/recuperacao/duvida",
+    "visual/imagem",
+    "audio",
+    "cache/sync",
+    "erro/falha"
+  ],
+  "contractAreas": [
+    "auth",
+    "billing",
+    "cloud",
+    "config",
+    "content-bridge",
+    "curriculum",
+    "lesson",
+    "media",
+    "onboarding",
+    "placement",
+    "portal",
+    "session",
+    "state",
+    "support-ui",
+    "runtime-shape"
+  ],
+  "stateMachines": [
+    "sessao/aula",
+    "item",
+    "camada",
+    "questao",
+    "visual",
+    "audio",
+    "avanco",
+    "revisao",
+    "recuperacao",
+    "duvida",
+    "curriculo",
+    "cache/sync",
+    "falha/retry"
+  ],
+  "officialPaths": [
+    "objetivo do aluno ate T00",
+    "curriculo",
+    "aula/pergunta",
+    "resposta do aluno",
+    "proxima camada ou proximo item",
+    "revisao/recuperacao/duvida",
+    "audio",
+    "imagem",
+    "curriculo grande"
+  ],
+  "routeWhitelist": [
+    "/api/bootstrap-t00",
+    "/api/complete-lesson",
+    "/api/visual-route",
+    "/api/generate-lesson-image",
+    "/api/generate-lesson-audio",
+    "/api/process-attachment",
+    "/api/student-state/*",
+    "/api/credits/*",
+    "/api/payments/*",
+    "/api/play-billing/*",
+    "/api/account/*",
+    "/api/health"
+  ],
+  "forbiddenRuntimeRoutes": [
+    "/api/warmup",
+    "/api/doubt",
+    "/api/review",
+    "/api/recovery",
+    "/api/advance-gate",
+    "/api/server-classroom"
+  ],
+  "files": [
+    {
+      "path": "lib/core/utils/sim_constants.dart",
+      "layer": "Assistente local",
+      "category": "config-core",
+      "owner": "core",
+      "logicalOwner": "core",
+      "inputs": [
+        "dart-define"
+      ],
+      "outputs": [
+        "configuracao segura"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/auth/login_screen.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "feature-auth",
+      "logicalOwner": "feature-auth",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/billing/billing_and_simple_pages.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "feature-billing",
+      "logicalOwner": "feature-billing",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/classroom/aula_widgets.dart",
+      "layer": "UI",
+      "category": "ui-aula",
+      "owner": "feature-classroom",
+      "logicalOwner": "feature-classroom",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/classroom/aux_room_screens.dart",
+      "layer": "UI",
+      "category": "ui-aula",
+      "owner": "feature-classroom",
+      "logicalOwner": "feature-classroom",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/classroom/chat_aula_messages.dart",
+      "layer": "UI",
+      "category": "ui-aula",
+      "owner": "feature-classroom",
+      "logicalOwner": "feature-classroom",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/classroom/chat_aula_screen.dart",
+      "layer": "UI",
+      "category": "ui-aula",
+      "owner": "feature-classroom",
+      "logicalOwner": "feature-classroom",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/normal_lesson_full_completion_flow_test.dart",
+        "test/classroom_phase_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/classroom/chat_aula_timeline_builder.dart",
+      "layer": "UI",
+      "category": "ui-aula",
+      "owner": "feature-classroom",
+      "logicalOwner": "feature-classroom",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/classroom/chat_aula_widgets.dart",
+      "layer": "UI",
+      "category": "ui-aula",
+      "owner": "feature-classroom",
+      "logicalOwner": "feature-classroom",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/classroom/doubt_input_sheet_widget.dart",
+      "layer": "UI",
+      "category": "ui-aula",
+      "owner": "feature-classroom",
+      "logicalOwner": "feature-classroom",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt"
+      ],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/classroom/lesson_empty_screen.dart",
+      "layer": "UI",
+      "category": "ui-aula",
+      "owner": "feature-classroom",
+      "logicalOwner": "feature-classroom",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/onboarding/onboarding_screens.dart",
+      "layer": "UI",
+      "category": "ui-entrada",
+      "owner": "feature-onboarding",
+      "logicalOwner": "feature-onboarding",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/onboarding/preparation_and_placement.dart",
+      "layer": "UI",
+      "category": "ui-entrada",
+      "owner": "feature-onboarding",
+      "logicalOwner": "feature-onboarding",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/portal/portal_flow.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "feature-portal",
+      "logicalOwner": "feature-portal",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/session/lab_session.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "feature-session",
+      "logicalOwner": "feature-session",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/features/session/lab_session_flows.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "feature-session",
+      "logicalOwner": "feature-session",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/main.dart",
+      "layer": "Assistente local",
+      "category": "app-bootstrap",
+      "owner": "app-bootstrap",
+      "logicalOwner": "app-bootstrap",
+      "inputs": [
+        "configuracao de ambiente",
+        "sessao local"
+      ],
+      "outputs": [
+        "organismo inicializado",
+        "rota inicial"
+      ],
+      "tests": [
+        "test/widget_test.dart",
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "cache/sync",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00"
+      ]
+    },
+    {
+      "path": "lib/session/auth_session.dart",
+      "layer": "Assistente local",
+      "category": "session-state",
+      "owner": "session",
+      "logicalOwner": "session",
+      "inputs": [
+        "UI",
+        "storage local"
+      ],
+      "outputs": [
+        "estado de sessao",
+        "comandos locais"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "estado forte do aluno",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00"
+      ]
+    },
+    {
+      "path": "lib/session/chat_conversation_store.dart",
+      "layer": "Assistente local",
+      "category": "session-state",
+      "owner": "session",
+      "logicalOwner": "session",
+      "inputs": [
+        "UI",
+        "storage local"
+      ],
+      "outputs": [
+        "estado de sessao",
+        "comandos locais"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "estado forte do aluno",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00"
+      ]
+    },
+    {
+      "path": "lib/session/entry_form_state.dart",
+      "layer": "Assistente local",
+      "category": "session-state",
+      "owner": "session",
+      "logicalOwner": "session",
+      "inputs": [
+        "UI",
+        "storage local"
+      ],
+      "outputs": [
+        "estado de sessao",
+        "comandos locais"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "estado forte do aluno",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00"
+      ]
+    },
+    {
+      "path": "lib/session/lesson_ui_state.dart",
+      "layer": "Assistente local",
+      "category": "session-state",
+      "owner": "session",
+      "logicalOwner": "session",
+      "inputs": [
+        "UI",
+        "storage local"
+      ],
+      "outputs": [
+        "estado de sessao",
+        "comandos locais"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "estado forte do aluno",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00"
+      ]
+    },
+    {
+      "path": "lib/session/navigation_state.dart",
+      "layer": "Assistente local",
+      "category": "session-state",
+      "owner": "session",
+      "logicalOwner": "session",
+      "inputs": [
+        "UI",
+        "storage local"
+      ],
+      "outputs": [
+        "estado de sessao",
+        "comandos locais"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "estado forte do aluno",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00"
+      ]
+    },
+    {
+      "path": "lib/shared/widgets/shared_widgets.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "shared-ui",
+      "logicalOwner": "shared-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/auxiliary/aux_room_models.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/auxiliary/aux_room_t02_caller.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/auxiliary/aux_rooms_controller.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/auxiliary/doubt_input_sheet.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/auxiliary/doubt_t02_caller.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/auxiliary/lesson_doubt_controller.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/auxiliary/recovery_room_service.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/auxiliary/review_room_service.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/auxiliary/student_aux_addons.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/auxiliary/student_aux_room_service.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/auxiliary/student_aux_rooms.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
+      "path": "lib/sim/billing/account_deletion.dart",
+      "layer": "Ponte com servidor",
+      "category": "billing",
+      "owner": "sim-billing",
+      "logicalOwner": "sim-billing",
+      "inputs": [
+        "sessao",
+        "pacote de creditos"
+      ],
+      "outputs": [
+        "saldo",
+        "checkout",
+        "deleção de conta"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/billing/checkout_return_controller.dart",
+      "layer": "Ponte com servidor",
+      "category": "billing",
+      "owner": "sim-billing",
+      "logicalOwner": "sim-billing",
+      "inputs": [
+        "sessao",
+        "pacote de creditos"
+      ],
+      "outputs": [
+        "saldo",
+        "checkout",
+        "deleção de conta"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/billing/credits_functions.dart",
+      "layer": "Ponte com servidor",
+      "category": "billing",
+      "owner": "sim-billing",
+      "logicalOwner": "sim-billing",
+      "inputs": [
+        "sessao",
+        "pacote de creditos"
+      ],
+      "outputs": [
+        "saldo",
+        "checkout",
+        "deleção de conta"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/billing/credits_route_controller.dart",
+      "layer": "Ponte com servidor",
+      "category": "billing",
+      "owner": "sim-billing",
+      "logicalOwner": "sim-billing",
+      "inputs": [
+        "sessao",
+        "pacote de creditos"
+      ],
+      "outputs": [
+        "saldo",
+        "checkout",
+        "deleção de conta"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/billing/payment_return_store.dart",
+      "layer": "Ponte com servidor",
+      "category": "billing",
+      "owner": "sim-billing",
+      "logicalOwner": "sim-billing",
+      "inputs": [
+        "sessao",
+        "pacote de creditos"
+      ],
+      "outputs": [
+        "saldo",
+        "checkout",
+        "deleção de conta"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/billing/payments_functions.dart",
+      "layer": "Ponte com servidor",
+      "category": "billing",
+      "owner": "sim-billing",
+      "logicalOwner": "sim-billing",
+      "inputs": [
+        "sessao",
+        "pacote de creditos"
+      ],
+      "outputs": [
+        "saldo",
+        "checkout",
+        "deleção de conta"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/billing/play_billing_functions.dart",
+      "layer": "Ponte com servidor",
+      "category": "billing",
+      "owner": "sim-billing",
+      "logicalOwner": "sim-billing",
+      "inputs": [
+        "sessao",
+        "pacote de creditos"
+      ],
+      "outputs": [
+        "saldo",
+        "checkout",
+        "deleção de conta"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/billing/sim_pricing.dart",
+      "layer": "Ponte com servidor",
+      "category": "billing",
+      "owner": "sim-billing",
+      "logicalOwner": "sim-billing",
+      "inputs": [
+        "sessao",
+        "pacote de creditos"
+      ],
+      "outputs": [
+        "saldo",
+        "checkout",
+        "deleção de conta"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/billing/sim_server_billing_clients.dart",
+      "layer": "Ponte com servidor",
+      "category": "billing",
+      "owner": "sim-billing",
+      "logicalOwner": "sim-billing",
+      "inputs": [
+        "sessao",
+        "pacote de creditos"
+      ],
+      "outputs": [
+        "saldo",
+        "checkout",
+        "deleção de conta"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/classroom/classroom_models.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-aula-local",
+      "owner": "sim-classroom",
+      "logicalOwner": "sim-classroom",
+      "inputs": [
+        "estado local",
+        "material de aula",
+        "A/B/C+sinal"
+      ],
+      "outputs": [
+        "feedback",
+        "proxima acao local",
+        "evento"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "avanco",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/classroom/classroom_text_scale.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-aula-local",
+      "owner": "sim-classroom",
+      "logicalOwner": "sim-classroom",
+      "inputs": [
+        "estado local",
+        "material de aula",
+        "A/B/C+sinal"
+      ],
+      "outputs": [
+        "feedback",
+        "proxima acao local",
+        "evento"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "avanco",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/classroom/lesson_answer_feedback.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-aula-local",
+      "owner": "sim-classroom",
+      "logicalOwner": "sim-classroom",
+      "inputs": [
+        "estado local",
+        "material de aula",
+        "A/B/C+sinal"
+      ],
+      "outputs": [
+        "feedback",
+        "proxima acao local",
+        "evento"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [
+        "error-classifier"
+      ],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "avanco",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/classroom/lesson_answer_progress_controller.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-aula-local",
+      "owner": "sim-classroom",
+      "logicalOwner": "sim-classroom",
+      "inputs": [
+        "estado local",
+        "material de aula",
+        "A/B/C+sinal"
+      ],
+      "outputs": [
+        "feedback",
+        "proxima acao local",
+        "evento"
+      ],
+      "tests": [
+        "test/m1_answer_signal_contract_test.dart",
+        "test/classroom_phase_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [
+        "advance-engine",
+        "mastery-truth-engine",
+        "domain-rules"
+      ],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "avanco",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/classroom/lesson_hydration_engine.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-aula-local",
+      "owner": "sim-classroom",
+      "logicalOwner": "sim-classroom",
+      "inputs": [
+        "estado local",
+        "material de aula",
+        "A/B/C+sinal"
+      ],
+      "outputs": [
+        "feedback",
+        "proxima acao local",
+        "evento"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "avanco",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/classroom/lesson_main_view_model.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-aula-local",
+      "owner": "sim-classroom",
+      "logicalOwner": "sim-classroom",
+      "inputs": [
+        "estado local",
+        "material de aula",
+        "A/B/C+sinal"
+      ],
+      "outputs": [
+        "feedback",
+        "proxima acao local",
+        "evento"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "avanco",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/classroom/lesson_material_controller.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-aula-local",
+      "owner": "sim-classroom",
+      "logicalOwner": "sim-classroom",
+      "inputs": [
+        "estado local",
+        "material de aula",
+        "A/B/C+sinal"
+      ],
+      "outputs": [
+        "feedback",
+        "proxima acao local",
+        "evento"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "avanco",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/classroom/lesson_position_engine.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-aula-local",
+      "owner": "sim-classroom",
+      "logicalOwner": "sim-classroom",
+      "inputs": [
+        "estado local",
+        "material de aula",
+        "A/B/C+sinal"
+      ],
+      "outputs": [
+        "feedback",
+        "proxima acao local",
+        "evento"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "avanco",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/classroom/lesson_runtime_engine.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-aula-local",
+      "owner": "sim-classroom",
+      "logicalOwner": "sim-classroom",
+      "inputs": [
+        "estado local",
+        "material de aula",
+        "A/B/C+sinal"
+      ],
+      "outputs": [
+        "feedback",
+        "proxima acao local",
+        "evento"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "avanco",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/classroom/lesson_session_engine.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-aula-local",
+      "owner": "sim-classroom",
+      "logicalOwner": "sim-classroom",
+      "inputs": [
+        "estado local",
+        "material de aula",
+        "A/B/C+sinal"
+      ],
+      "outputs": [
+        "feedback",
+        "proxima acao local",
+        "evento"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "avanco",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/cloud/cloud_functions.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/cloud/cloud_queue.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/m12_offline_cache_sync_contract_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/cloud/lesson_cloud_bootstrap.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00"
+      ],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/cloud/lesson_curriculum_sync_engine.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/cloud/shared_prefs_cloud_queue_storage.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/cloud/sim_server_cloud_functions.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/cloud/student_learning_sync.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/cloud/student_remote_vault_sync_engine.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/cloud/supabase_client_contract.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/cloud/supabase_flutter_session_provider.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/cloud/supabase_student_state_cloud_storage.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "estado local",
+        "sessao autenticada"
+      ],
+      "outputs": [
+        "fila offline",
+        "cofre remoto"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/config/sim_environment.dart",
+      "layer": "Assistente local",
+      "category": "config-core",
+      "owner": "sim-config",
+      "logicalOwner": "sim-config",
+      "inputs": [
+        "dart-define"
+      ],
+      "outputs": [
+        "configuracao segura"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha"
+      ],
+      "stateMachines": [],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/core/signal_tracker.dart",
+      "layer": "Motores pedagogicos",
+      "category": "regras-de-dominio",
+      "owner": "sim-core",
+      "logicalOwner": "sim-core",
+      "inputs": [
+        "resposta",
+        "sinal"
+      ],
+      "outputs": [
+        "evidencia normalizada"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "avanco",
+        "questao"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/bootstrap_payload.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/curriculum_utils.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/partial_curriculum_writer.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/student_experience_engine.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/student_experience_guards.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/student_experience_placement_adapter.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/student_experience_store.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/student_experience_t00_adapter.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/student_experience_t02_adapter.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/student_experience_types.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/experience/t00_profile_writer.dart",
+      "layer": "Motores de conteudo",
+      "category": "entrada-curriculo",
+      "owner": "sim-experience",
+      "logicalOwner": "sim-experience",
+      "inputs": [
+        "objetivo",
+        "perfil",
+        "anexos processados"
+      ],
+      "outputs": [
+        "perfil",
+        "curriculo",
+        "primeira aula"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t00",
+        "t02"
+      ],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "curriculo",
+        "sessao/aula",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "curriculo grande",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/external_ai/sim_ai_server_config.dart",
+      "layer": "Ponte com servidor",
+      "category": "ponte-servidor",
+      "owner": "sim-external_ai",
+      "logicalOwner": "sim-external_ai",
+      "inputs": [
+        "DTO publico",
+        "sessao/token quando houver"
+      ],
+      "outputs": [
+        "DTO validado do servidor"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao",
+        "audio",
+        "visual/imagem",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "aula/pergunta",
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/external_ai/sim_http_transport.dart",
+      "layer": "Ponte com servidor",
+      "category": "ponte-servidor",
+      "owner": "sim-external_ai",
+      "logicalOwner": "sim-external_ai",
+      "inputs": [
+        "DTO publico",
+        "sessao/token quando houver"
+      ],
+      "outputs": [
+        "DTO validado do servidor"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao",
+        "audio",
+        "visual/imagem",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "aula/pergunta",
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/external_ai/sim_server_ai_clients.dart",
+      "layer": "Ponte com servidor",
+      "category": "ponte-servidor",
+      "owner": "sim-external_ai",
+      "logicalOwner": "sim-external_ai",
+      "inputs": [
+        "DTO publico",
+        "sessao/token quando houver"
+      ],
+      "outputs": [
+        "DTO validado do servidor"
+      ],
+      "tests": [
+        "test/external_ai_clients_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao",
+        "audio",
+        "visual/imagem",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "aula/pergunta",
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/external_ai/sim_server_attachment_client.dart",
+      "layer": "Ponte com servidor",
+      "category": "ponte-servidor",
+      "owner": "sim-external_ai",
+      "logicalOwner": "sim-external_ai",
+      "inputs": [
+        "DTO publico",
+        "sessao/token quando houver"
+      ],
+      "outputs": [
+        "DTO validado do servidor"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao",
+        "audio",
+        "visual/imagem",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "aula/pergunta",
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/lesson/dopamine_ready_window_engine.dart",
+      "layer": "Assistente local",
+      "category": "orquestracao-aula-cache",
+      "owner": "sim-lesson",
+      "logicalOwner": "sim-lesson",
+      "inputs": [
+        "estado local",
+        "cache",
+        "ponte T02"
+      ],
+      "outputs": [
+        "material pronto",
+        "janela viva"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T02/microaula/questao",
+        "cache/sync",
+        "visual/imagem",
+        "audio"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/lesson/lesson_content_validator.dart",
+      "layer": "Assistente local",
+      "category": "orquestracao-aula-cache",
+      "owner": "sim-lesson",
+      "logicalOwner": "sim-lesson",
+      "inputs": [
+        "estado local",
+        "cache",
+        "ponte T02"
+      ],
+      "outputs": [
+        "material pronto",
+        "janela viva"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T02/microaula/questao",
+        "cache/sync",
+        "visual/imagem",
+        "audio"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/lesson/lesson_event_bus.dart",
+      "layer": "Assistente local",
+      "category": "orquestracao-aula-cache",
+      "owner": "sim-lesson",
+      "logicalOwner": "sim-lesson",
+      "inputs": [
+        "estado local",
+        "cache",
+        "ponte T02"
+      ],
+      "outputs": [
+        "material pronto",
+        "janela viva"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T02/microaula/questao",
+        "cache/sync",
+        "visual/imagem",
+        "audio"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/lesson/lesson_material_cache.dart",
+      "layer": "Assistente local",
+      "category": "orquestracao-aula-cache",
+      "owner": "sim-lesson",
+      "logicalOwner": "sim-lesson",
+      "inputs": [
+        "estado local",
+        "cache",
+        "ponte T02"
+      ],
+      "outputs": [
+        "material pronto",
+        "janela viva"
+      ],
+      "tests": [
+        "test/m12_offline_cache_sync_contract_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T02/microaula/questao",
+        "cache/sync",
+        "visual/imagem",
+        "audio"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/lesson/lesson_models.dart",
+      "layer": "Assistente local",
+      "category": "orquestracao-aula-cache",
+      "owner": "sim-lesson",
+      "logicalOwner": "sim-lesson",
+      "inputs": [
+        "estado local",
+        "cache",
+        "ponte T02"
+      ],
+      "outputs": [
+        "material pronto",
+        "janela viva"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T02/microaula/questao",
+        "cache/sync",
+        "visual/imagem",
+        "audio"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/lesson/lesson_orchestrator.dart",
+      "layer": "Assistente local",
+      "category": "orquestracao-aula-cache",
+      "owner": "sim-lesson",
+      "logicalOwner": "sim-lesson",
+      "inputs": [
+        "estado local",
+        "cache",
+        "ponte T02"
+      ],
+      "outputs": [
+        "material pronto",
+        "janela viva"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "t02"
+      ],
+      "contracts": [
+        "T02/microaula/questao",
+        "cache/sync",
+        "visual/imagem",
+        "audio"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/lesson/lesson_pipeline_runtime.dart",
+      "layer": "Assistente local",
+      "category": "orquestracao-aula-cache",
+      "owner": "sim-lesson",
+      "logicalOwner": "sim-lesson",
+      "inputs": [
+        "estado local",
+        "cache",
+        "ponte T02"
+      ],
+      "outputs": [
+        "material pronto",
+        "janela viva"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T02/microaula/questao",
+        "cache/sync",
+        "visual/imagem",
+        "audio"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/lesson/ready_window_worker.dart",
+      "layer": "Assistente local",
+      "category": "orquestracao-aula-cache",
+      "owner": "sim-lesson",
+      "logicalOwner": "sim-lesson",
+      "inputs": [
+        "estado local",
+        "cache",
+        "ponte T02"
+      ],
+      "outputs": [
+        "material pronto",
+        "janela viva"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T02/microaula/questao",
+        "cache/sync",
+        "visual/imagem",
+        "audio"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/lesson/student_lesson_material_service.dart",
+      "layer": "Assistente local",
+      "category": "orquestracao-aula-cache",
+      "owner": "sim-lesson",
+      "logicalOwner": "sim-lesson",
+      "inputs": [
+        "estado local",
+        "cache",
+        "ponte T02"
+      ],
+      "outputs": [
+        "material pronto",
+        "janela viva"
+      ],
+      "tests": [
+        "test/first_lesson_ready_window_test.dart",
+        "test/classroom_phase_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T02/microaula/questao",
+        "cache/sync",
+        "visual/imagem",
+        "audio"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "aula/pergunta",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/localization/sim_locale_contract.dart",
+      "layer": "Assistente local",
+      "category": "localization",
+      "owner": "sim-localization",
+      "logicalOwner": "sim-localization",
+      "inputs": [
+        "idioma"
+      ],
+      "outputs": [
+        "locale normalizado"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula"
+      ],
+      "stateMachines": [
+        "sessao/aula"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/media/audio_core.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/audio_preference.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/doubt_audio.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt"
+      ],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/image_data_url_compression.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/lesson_audio_api_contract.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/lesson_audio_controller.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/lesson_image_api_contract.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/platform_audio_adapter.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/slot_media_contract.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/student_lesson_media_service.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/visual_svg_safety.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/modules/pedagogical_module_contracts.dart",
+      "layer": "Assistente local",
+      "category": "contratos-modulares",
+      "owner": "sim-modules",
+      "logicalOwner": "sim-modules",
+      "inputs": [
+        "contratos de orgaos"
+      ],
+      "outputs": [
+        "interfaces canônicas"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "T00/curriculo/mapa",
+        "T02/microaula/questao",
+        "estado forte do aluno",
+        "sessao/aula",
+        "item/camada/questao",
+        "avanco/advance-gate",
+        "revisao/recuperacao/duvida",
+        "visual/imagem",
+        "audio",
+        "cache/sync",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item",
+        "camada",
+        "questao",
+        "visual",
+        "audio",
+        "avanco",
+        "revisao",
+        "recuperacao",
+        "duvida",
+        "curriculo",
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item",
+        "revisao/recuperacao/duvida",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/organism/sim_organism.dart",
+      "layer": "Assistente local",
+      "category": "organismo",
+      "owner": "sim-organism",
+      "logicalOwner": "sim-organism",
+      "inputs": [
+        "configuracao",
+        "storage",
+        "clientes oficiais"
+      ],
+      "outputs": [
+        "organismo integrado"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "cache/sync",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item",
+        "revisao/recuperacao/duvida",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/organism/sim_organism_provider.dart",
+      "layer": "Assistente local",
+      "category": "organismo",
+      "owner": "sim-organism",
+      "logicalOwner": "sim-organism",
+      "inputs": [
+        "configuracao",
+        "storage",
+        "clientes oficiais"
+      ],
+      "outputs": [
+        "organismo integrado"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "cache/sync",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo",
+        "aula/pergunta",
+        "resposta do aluno",
+        "proxima camada ou proximo item",
+        "revisao/recuperacao/duvida",
+        "audio",
+        "imagem",
+        "curriculo grande"
+      ]
+    },
+    {
+      "path": "lib/sim/placement/placement_blocks.dart",
+      "layer": "Motores pedagogicos",
+      "category": "placement",
+      "owner": "sim-placement",
+      "logicalOwner": "sim-placement",
+      "inputs": [
+        "curriculo",
+        "respostas de diagnostico"
+      ],
+      "outputs": [
+        "posicionamento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "questao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo"
+      ]
+    },
+    {
+      "path": "lib/sim/placement/placement_payload.dart",
+      "layer": "Motores pedagogicos",
+      "category": "placement",
+      "owner": "sim-placement",
+      "logicalOwner": "sim-placement",
+      "inputs": [
+        "curriculo",
+        "respostas de diagnostico"
+      ],
+      "outputs": [
+        "posicionamento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "questao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo"
+      ]
+    },
+    {
+      "path": "lib/sim/placement/placement_route_controller.dart",
+      "layer": "Motores pedagogicos",
+      "category": "placement",
+      "owner": "sim-placement",
+      "logicalOwner": "sim-placement",
+      "inputs": [
+        "curriculo",
+        "respostas de diagnostico"
+      ],
+      "outputs": [
+        "posicionamento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "questao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo"
+      ]
+    },
+    {
+      "path": "lib/sim/placement/placement_screens.dart",
+      "layer": "Motores pedagogicos",
+      "category": "placement",
+      "owner": "sim-placement",
+      "logicalOwner": "sim-placement",
+      "inputs": [
+        "curriculo",
+        "respostas de diagnostico"
+      ],
+      "outputs": [
+        "posicionamento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "questao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo"
+      ]
+    },
+    {
+      "path": "lib/sim/placement/placement_state.dart",
+      "layer": "Motores pedagogicos",
+      "category": "placement",
+      "owner": "sim-placement",
+      "logicalOwner": "sim-placement",
+      "inputs": [
+        "curriculo",
+        "respostas de diagnostico"
+      ],
+      "outputs": [
+        "posicionamento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "questao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo"
+      ]
+    },
+    {
+      "path": "lib/sim/placement/placement_store.dart",
+      "layer": "Motores pedagogicos",
+      "category": "placement",
+      "owner": "sim-placement",
+      "logicalOwner": "sim-placement",
+      "inputs": [
+        "curriculo",
+        "respostas de diagnostico"
+      ],
+      "outputs": [
+        "posicionamento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "questao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo"
+      ]
+    },
+    {
+      "path": "lib/sim/placement/placement_t02_caller.dart",
+      "layer": "Motores pedagogicos",
+      "category": "placement",
+      "owner": "sim-placement",
+      "logicalOwner": "sim-placement",
+      "inputs": [
+        "curriculo",
+        "respostas de diagnostico"
+      ],
+      "outputs": [
+        "posicionamento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "questao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo"
+      ]
+    },
+    {
+      "path": "lib/sim/placement/student_placement_service.dart",
+      "layer": "Motores pedagogicos",
+      "category": "placement",
+      "owner": "sim-placement",
+      "logicalOwner": "sim-placement",
+      "inputs": [
+        "curriculo",
+        "respostas de diagnostico"
+      ],
+      "outputs": [
+        "posicionamento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "questao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "objetivo do aluno ate T00",
+        "curriculo"
+      ]
+    },
+    {
+      "path": "lib/sim/state/drift_student_state_storage.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/learning_decision_engine.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/sim_state_engines_test.dart",
+        "test/classroom_phase_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [
+        "learning-decision-engine",
+        "advance-engine",
+        "domain-rules"
+      ],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/live_entry_state.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/mastery_truth_engine.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/state_store_truth_engine_test.dart",
+        "test/m5_mastery_evidence_contract_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [
+        "mastery-truth-engine"
+      ],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/shared_prefs_state_storage.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/student_learning_state.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [
+        "domain-rules"
+      ],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/student_learning_state_service.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [
+        "domain-rules"
+      ],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/student_lesson_executor.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [
+        "learning-decision-engine"
+      ],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/student_state_contract.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/student_state_store.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/student_state_store_adapter.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "evidencia local",
+        "estado local"
+      ],
+      "outputs": [
+        "estado forte",
+        "eventos canonicos"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "avanco/advance-gate",
+        "item/camada/questao"
+      ],
+      "stateMachines": [
+        "item",
+        "camada",
+        "questao",
+        "avanco"
+      ],
+      "officialPaths": [
+        "resposta do aluno",
+        "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/ui/responsive/sim_responsive.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/ui/sim_design_system.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/ui/sim_i18n.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/ui/sim_theme.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/ui/widgets/cyber_step_shell.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/ui/widgets/sim_preparation_experience.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    }
+  ],
+  "counts": {
+    "files": 130,
+    "layers": {
+      "UI": 22,
+      "Assistente local": 21,
+      "Motores pedagogicos": 30,
+      "Motores de conteudo": 33,
+      "Persistencia/cache/sync": 11,
+      "Ponte com servidor": 13
+    },
+    "dartLines": 32813
+  },
+  "phase2Backlog": [
+    "Reduzir LabSession/LabSessionFlows para fachada ainda mais fina sem alterar fluxo vivo.",
+    "Fundir contratos duplicados entre sim/classroom e sim/lesson onde a fronteira ainda e difusa.",
+    "Migrar persistencia sensivel de SharedPreferences para storage local protegido onde aplicavel.",
+    "Dividir onboarding/preparacao por componentes menores se voltar a crescer."
+  ]
+}

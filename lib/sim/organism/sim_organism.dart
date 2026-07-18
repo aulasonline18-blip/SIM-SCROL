@@ -93,7 +93,6 @@ class SimOrganismRouter {
     '/api/bootstrap-t00',
     '/api/complete-lesson',
     '/api/generate-lesson-audio',
-    '/api/public/payments/webhook',
   };
 
   SimRouteDecision resolve({

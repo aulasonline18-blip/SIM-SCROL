@@ -1,14 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/auxiliary/doubt_input_sheet.dart';
 import '../../sim/classroom/classroom_text_scale.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_theme.dart';
+import '../../session/chat_conversation_store.dart';
 import '../onboarding/preparation_and_placement.dart';
 import '../session/lab_session.dart';
 import 'aula_widgets.dart';
@@ -30,8 +29,8 @@ class ChatAulaScreen extends StatefulWidget {
 
 class _ChatAulaScreenState extends State<ChatAulaScreen>
     with WidgetsBindingObserver {
-  static const _conversationSnapshotPrefix = 'sim.chat_aula.conversation.v1.';
-
+  final ChatConversationStore _conversationStore =
+      const ChatConversationStore();
   final TextEditingController _doubtController = TextEditingController();
   final List<ChatLessonMessage> _conversationMessages = <ChatLessonMessage>[];
   final Set<String> _restoredConversationKeys = <String>{};
@@ -51,21 +50,15 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   }
 
   Future<void> _loadFontScaleLevel() async {
-    final prefs = await SharedPreferences.getInstance();
+    final level = await _conversationStore.loadFontScaleLevel();
     if (!mounted) return;
-    setState(() {
-      _fontScaleLevel = ClassroomTextScale.normalize(
-        prefs.getInt(ClassroomTextScale.prefsKey) ??
-            ClassroomTextScale.defaultLevel,
-      );
-    });
+    setState(() => _fontScaleLevel = level);
   }
 
   Future<void> _cycleFontScaleLevel() async {
     final next = ClassroomTextScale.next(_fontScaleLevel);
     setState(() => _fontScaleLevel = next);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(ClassroomTextScale.prefsKey, next);
+    await _conversationStore.saveFontScaleLevel(next);
   }
 
   void _onSessionChange() {
@@ -89,10 +82,8 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
 
   Future<void> _restoreConversationSnapshot(String lessonKey) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_conversationSnapshotKey(lessonKey));
+      final restored = await _conversationStore.restore(lessonKey);
       if (!mounted) return;
-      final restored = _decodeConversationSnapshot(raw);
       _restoringConversationKeys.remove(lessonKey);
       _restoredConversationKeys.add(lessonKey);
       if (restored == null) {
@@ -115,40 +106,10 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
 
   Future<void> _persistConversationSnapshot(String lessonKey) async {
     if (!_restoredConversationKeys.contains(lessonKey)) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _conversationSnapshotKey(lessonKey),
-      jsonEncode({
-        'version': 1,
-        'lessonKey': lessonKey,
-        'archiveSeq': _conversationArchiveSeq,
-        'messages': _messagesWithDeadPastFeedbackActions()
-            .map((message) => message.toJson(includeInlineImageData: false))
-            .toList(),
-      }),
-    );
-  }
-
-  String _conversationSnapshotKey(String lessonKey) {
-    final encoded = base64Url.encode(utf8.encode(lessonKey));
-    return '$_conversationSnapshotPrefix$encoded';
-  }
-
-  _RestoredConversation? _decodeConversationSnapshot(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return null;
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map) return null;
-    final messagesRaw = decoded['messages'];
-    if (messagesRaw is! List) return null;
-    final messages = messagesRaw
-        .map(ChatLessonMessage.fromJson)
-        .nonNulls
-        .toList(growable: false);
-    if (messages.isEmpty) return null;
-    final archiveSeq = decoded['archiveSeq'];
-    return _RestoredConversation(
-      messages: messages,
-      archiveSeq: archiveSeq is int ? archiveSeq : messages.length,
+    await _conversationStore.persist(
+      lessonKey: lessonKey,
+      archiveSeq: _conversationArchiveSeq,
+      messages: _messagesWithDeadPastFeedbackActions(),
     );
   }
 
@@ -570,14 +531,4 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         '${signal.value}:${signal.labelKey}:${signal.enabled}',
     ].join('|');
   }
-}
-
-class _RestoredConversation {
-  const _RestoredConversation({
-    required this.messages,
-    required this.archiveSeq,
-  });
-
-  final List<ChatLessonMessage> messages;
-  final int archiveSeq;
 }

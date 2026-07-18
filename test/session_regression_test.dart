@@ -13,7 +13,6 @@ import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/auxiliary/doubt_input_sheet.dart';
 import 'package:sim_mobile/sim/config/sim_environment.dart';
 import 'package:sim_mobile/sim/experience/student_experience_types.dart';
-import 'package:sim_mobile/sim/external_ai/sim_server_ai_clients.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';

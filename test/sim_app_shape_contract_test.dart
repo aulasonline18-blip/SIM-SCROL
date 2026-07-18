@@ -35,6 +35,15 @@ void main() {
       expect(dirCount, lessThanOrEqualTo(32));
       expect(emptyDirs, isEmpty);
 
+      expect(
+        File('docs/sim_nv_app_architecture_inventory.md').existsSync(),
+        isTrue,
+      );
+      expect(
+        File('tool/sim_nv_app_architecture_inventory.json').existsSync(),
+        isTrue,
+      );
+
       final pubspec = File('pubspec.yaml').readAsStringSync();
       expect(
         pubspec,

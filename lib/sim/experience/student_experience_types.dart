@@ -1,5 +1,6 @@
 import '../state/student_learning_state.dart';
 import '../localization/sim_locale_contract.dart';
+import '../lesson/lesson_content_validator.dart';
 
 enum StudentExperienceRouteStage {
   profile,
@@ -74,6 +75,92 @@ class StudentExperienceEngineException implements Exception {
 
   @override
   String toString() => error.message;
+}
+
+class SimWarmupLesson {
+  const SimWarmupLesson({
+    required this.explanation,
+    required this.question,
+    required this.options,
+    required this.correctAnswer,
+    this.whyCorrect,
+    this.whyWrong = const {},
+    this.welcomeBridge = true,
+  });
+
+  final String explanation;
+  final String question;
+  final Map<String, String> options;
+  final String correctAnswer;
+  final String? whyCorrect;
+  final Map<String, String> whyWrong;
+  final bool welcomeBridge;
+
+  Map<String, Object?> toJson() => {
+    'explanation': explanation,
+    'question': question,
+    'options': options,
+    'correctAnswer': correctAnswer,
+    'whyCorrect': whyCorrect,
+    'whyWrong': whyWrong,
+    'type': 'warmup',
+    'mode': 'WARMUP_WELCOME_BRIDGE',
+    'welcomeBridge': welcomeBridge,
+    'officialCurriculum': false,
+    'countsForMastery': false,
+  };
+
+  static SimWarmupLesson? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final source = raw['warmup'] is Map ? raw['warmup'] as Map : raw;
+    final optionsRaw = source['options'];
+    if (optionsRaw is! Map) return null;
+    final options = <String, String>{
+      for (final letter in const ['A', 'B', 'C'])
+        letter: normalizeDidacticMathNotation(
+          (optionsRaw[letter] ?? optionsRaw[letter.toLowerCase()] ?? '')
+              .toString(),
+        ),
+    };
+    final explanation = normalizeDidacticMathNotation(
+      (source['explanation'] ?? source['explicacao'] ?? '').toString(),
+    );
+    final question = normalizeDidacticMathNotation(
+      (source['question'] ?? source['pergunta'] ?? '').toString(),
+    );
+    final correct = (source['correct_answer'] ?? source['correctAnswer'] ?? '')
+        .toString()
+        .trim()
+        .toUpperCase();
+    if (explanation.isEmpty ||
+        question.isEmpty ||
+        options.values.any((value) => value.isEmpty) ||
+        !options.containsKey(correct)) {
+      return null;
+    }
+    final whyWrongRaw = source['why_wrong'] ?? source['whyWrong'];
+    final whyWrong = <String, String>{
+      if (whyWrongRaw is Map)
+        for (final letter in const ['A', 'B', 'C'])
+          if ((whyWrongRaw[letter] ?? whyWrongRaw[letter.toLowerCase()]) !=
+              null)
+            letter: normalizeDidacticMathNotation(
+              (whyWrongRaw[letter] ?? whyWrongRaw[letter.toLowerCase()])
+                  .toString(),
+            ),
+    };
+    return SimWarmupLesson(
+      explanation: explanation,
+      question: question,
+      options: options,
+      correctAnswer: correct,
+      whyCorrect: normalizeDidacticMathObject(
+        source['why_correct'] ?? source['whyCorrect'],
+      )?.toString(),
+      whyWrong: whyWrong,
+      welcomeBridge: source['welcomeBridge'] != false,
+    );
+  }
 }
 
 class StudentExperienceSnapshot {
