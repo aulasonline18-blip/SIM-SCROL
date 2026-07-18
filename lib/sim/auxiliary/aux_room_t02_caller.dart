@@ -2,7 +2,6 @@ import '../lesson/lesson_models.dart';
 import '../modules/pedagogical_module_contracts.dart';
 import '../state/student_learning_state.dart';
 import 'aux_room_models.dart';
-import 'student_aux_addons.dart';
 
 class AuxRoomT02Payload {
   const AuxRoomT02Payload({
@@ -31,17 +30,15 @@ class AuxRoomT02Payload {
 }
 
 class AuxRoomCallResult {
-  const AuxRoomCallResult.aborted({
-    required this.reason,
-    required this.payload,
-  })  : aborted = true,
-        conteudo = null;
+  const AuxRoomCallResult.aborted({required this.reason, required this.payload})
+    : aborted = true,
+      conteudo = null;
 
   const AuxRoomCallResult.completed({
     required this.payload,
     required this.conteudo,
-  })  : aborted = false,
-        reason = null;
+  }) : aborted = false,
+       reason = null;
 
   final bool aborted;
   final String? reason;

@@ -3,6 +3,15 @@ import '../state/student_learning_state.dart';
 
 enum AuxRoomMode { review, recovery, doubt }
 
+const Map<AuxRoomMode, String> auxRoomAddonReference = {
+  AuxRoomMode.review: 'SIM_AUX_ADDON_REVIEW_SERVER_SIDE',
+  AuxRoomMode.recovery: 'SIM_AUX_ADDON_RECOVERY_SERVER_SIDE',
+  AuxRoomMode.doubt: 'ADENDO_DOUBT_SERVER_SIDE',
+};
+
+String getAuxRoomAddonReference(AuxRoomMode mode) =>
+    auxRoomAddonReference[mode]!;
+
 enum ReviewRoomStatus {
   choose,
   preparing,

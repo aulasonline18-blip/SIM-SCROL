@@ -367,7 +367,7 @@ const inventory = {
   forbiddenRuntimeRoutes,
   files,
   counts,
-  phase2Backlog: [
+  phase3Backlog: [
     'Reduzir LabSession/LabSessionFlows para fachada ainda mais fina sem alterar fluxo vivo.',
     'Fundir contratos duplicados entre sim/classroom e sim/lesson onde a fronteira ainda e difusa.',
     'Migrar persistencia sensivel de SharedPreferences para storage local protegido onde aplicavel.',
@@ -418,9 +418,9 @@ const md = [
   '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ...rows,
   '',
-  '## Backlog Fase 2',
+  '## Backlog Fase 3',
   '',
-  ...inventory.phase2Backlog.map((item) => `- ${item}`),
+  ...inventory.phase3Backlog.map((item) => `- ${item}`),
   '',
 ].join('\n');
 

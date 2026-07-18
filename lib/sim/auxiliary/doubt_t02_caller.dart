@@ -2,7 +2,6 @@ import '../modules/pedagogical_module_contracts.dart';
 import '../state/student_learning_state.dart';
 import 'aux_room_models.dart';
 import 'doubt_input_sheet.dart';
-import 'student_aux_addons.dart';
 
 class DoubtT02Caller {
   const DoubtT02Caller({required this.client});

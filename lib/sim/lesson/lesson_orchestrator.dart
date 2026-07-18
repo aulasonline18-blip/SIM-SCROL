@@ -6,7 +6,30 @@ import '../state/student_learning_state.dart';
 import 'lesson_event_bus.dart';
 import 'lesson_material_cache.dart';
 import 'lesson_models.dart';
-import 'lesson_pipeline_runtime.dart';
+
+class BackgroundTextSemaphore {
+  static const int _maxConcurrent = 2;
+
+  int _active = 0;
+  final List<Completer<void>> _waiters = [];
+
+  Future<T> run<T>(Future<T> Function() fn) async {
+    if (_active >= _maxConcurrent) {
+      final c = Completer<void>();
+      _waiters.add(c);
+      await c.future;
+    }
+    _active++;
+    try {
+      return await fn();
+    } finally {
+      _active--;
+      if (_waiters.isNotEmpty) {
+        _waiters.removeAt(0).complete();
+      }
+    }
+  }
+}
 
 class LessonOrchestrator {
   LessonOrchestrator({

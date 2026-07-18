@@ -4,12 +4,12 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 
 ## Resumo
 
-- Arquivos Dart classificados: 130
-- Linhas Dart em lib: 32813
-- UI: 22
+- Arquivos Dart classificados: 126
+- Linhas Dart em lib: 32649
+- UI: 23
 - Assistente local: 21
-- Motores pedagogicos: 30
-- Motores de conteudo: 33
+- Motores pedagogicos: 29
+- Motores de conteudo: 29
 - Persistencia/cache/sync: 11
 - Ponte com servidor: 13
 - Motores pedagogicos declarados: 5
@@ -47,6 +47,7 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 | `lib/features/onboarding/preparation_and_placement.dart` | UI | ui-entrada | feature-onboarding | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/features/portal/portal_flow.dart` | UI | ui | feature-portal | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/features/session/lab_session.dart` | UI | ui | feature-session | sessao/aula, erro/falha | sessao/aula, falha/retry | objetivo do aluno ate T00, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
+| `lib/features/session/lab_session_entry_flows.dart` | UI | ui | feature-session | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/features/session/lab_session_flows.dart` | UI | ui | feature-session | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/main.dart` | Assistente local | app-bootstrap | app-bootstrap | sessao/aula, cache/sync, erro/falha | sessao/aula, falha/retry | objetivo do aluno ate T00 | test/widget_test.dart, test/sim_app_architecture_shape_test.dart | manter |
 | `lib/session/auth_session.dart` | Assistente local | session-state | session | sessao/aula, estado forte do aluno, erro/falha | sessao/aula, falha/retry | objetivo do aluno ate T00 | test/sim_app_architecture_shape_test.dart | manter |
@@ -63,7 +64,6 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 | `lib/sim/auxiliary/lesson_doubt_controller.dart` | Motores de conteudo | fluxos-apoio-local | sim-auxiliary | revisao/recuperacao/duvida, T02/microaula/questao | duvida, revisao, recuperacao, falha/retry | revisao/recuperacao/duvida | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/auxiliary/recovery_room_service.dart` | Motores de conteudo | fluxos-apoio-local | sim-auxiliary | revisao/recuperacao/duvida, T02/microaula/questao | duvida, revisao, recuperacao, falha/retry | revisao/recuperacao/duvida | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/auxiliary/review_room_service.dart` | Motores de conteudo | fluxos-apoio-local | sim-auxiliary | revisao/recuperacao/duvida, T02/microaula/questao | duvida, revisao, recuperacao, falha/retry | revisao/recuperacao/duvida | test/sim_app_architecture_shape_test.dart | manter |
-| `lib/sim/auxiliary/student_aux_addons.dart` | Motores de conteudo | fluxos-apoio-local | sim-auxiliary | revisao/recuperacao/duvida, T02/microaula/questao | duvida, revisao, recuperacao, falha/retry | revisao/recuperacao/duvida | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/auxiliary/student_aux_room_service.dart` | Motores de conteudo | fluxos-apoio-local | sim-auxiliary | revisao/recuperacao/duvida, T02/microaula/questao | duvida, revisao, recuperacao, falha/retry | revisao/recuperacao/duvida | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/auxiliary/student_aux_rooms.dart` | Motores de conteudo | fluxos-apoio-local | sim-auxiliary | revisao/recuperacao/duvida, T02/microaula/questao | duvida, revisao, recuperacao, falha/retry | revisao/recuperacao/duvida | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/billing/account_deletion.dart` | Ponte com servidor | billing | sim-billing | erro/falha | falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
@@ -102,13 +102,11 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 | `lib/sim/experience/curriculum_utils.dart` | Motores de conteudo | entrada-curriculo | sim-experience | T00/curriculo/mapa, T02/microaula/questao | curriculo, sessao/aula, cache/sync | objetivo do aluno ate T00, curriculo, curriculo grande, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/experience/partial_curriculum_writer.dart` | Motores de conteudo | entrada-curriculo | sim-experience | T00/curriculo/mapa, T02/microaula/questao | curriculo, sessao/aula, cache/sync | objetivo do aluno ate T00, curriculo, curriculo grande, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/experience/student_experience_engine.dart` | Motores de conteudo | entrada-curriculo | sim-experience | T00/curriculo/mapa, T02/microaula/questao | curriculo, sessao/aula, cache/sync | objetivo do aluno ate T00, curriculo, curriculo grande, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
-| `lib/sim/experience/student_experience_guards.dart` | Motores de conteudo | entrada-curriculo | sim-experience | T00/curriculo/mapa, T02/microaula/questao | curriculo, sessao/aula, cache/sync | objetivo do aluno ate T00, curriculo, curriculo grande, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/experience/student_experience_placement_adapter.dart` | Motores de conteudo | entrada-curriculo | sim-experience | T00/curriculo/mapa, T02/microaula/questao | curriculo, sessao/aula, cache/sync | objetivo do aluno ate T00, curriculo, curriculo grande, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/experience/student_experience_store.dart` | Motores de conteudo | entrada-curriculo | sim-experience | T00/curriculo/mapa, T02/microaula/questao | curriculo, sessao/aula, cache/sync | objetivo do aluno ate T00, curriculo, curriculo grande, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/experience/student_experience_t00_adapter.dart` | Motores de conteudo | entrada-curriculo | sim-experience | T00/curriculo/mapa, T02/microaula/questao | curriculo, sessao/aula, cache/sync | objetivo do aluno ate T00, curriculo, curriculo grande, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/experience/student_experience_t02_adapter.dart` | Motores de conteudo | entrada-curriculo | sim-experience | T00/curriculo/mapa, T02/microaula/questao | curriculo, sessao/aula, cache/sync | objetivo do aluno ate T00, curriculo, curriculo grande, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/experience/student_experience_types.dart` | Motores de conteudo | entrada-curriculo | sim-experience | T00/curriculo/mapa, T02/microaula/questao | curriculo, sessao/aula, cache/sync | objetivo do aluno ate T00, curriculo, curriculo grande, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
-| `lib/sim/experience/t00_profile_writer.dart` | Motores de conteudo | entrada-curriculo | sim-experience | T00/curriculo/mapa, T02/microaula/questao | curriculo, sessao/aula, cache/sync | objetivo do aluno ate T00, curriculo, curriculo grande, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/external_ai/sim_ai_server_config.dart` | Ponte com servidor | ponte-servidor | sim-external_ai | T00/curriculo/mapa, T02/microaula/questao, audio, visual/imagem, erro/falha | falha/retry | objetivo do aluno ate T00, aula/pergunta, audio, imagem | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/external_ai/sim_http_transport.dart` | Ponte com servidor | ponte-servidor | sim-external_ai | T00/curriculo/mapa, T02/microaula/questao, audio, visual/imagem, erro/falha | falha/retry | objetivo do aluno ate T00, aula/pergunta, audio, imagem | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/external_ai/sim_server_ai_clients.dart` | Ponte com servidor | ponte-servidor | sim-external_ai | T00/curriculo/mapa, T02/microaula/questao, audio, visual/imagem, erro/falha | falha/retry | objetivo do aluno ate T00, aula/pergunta, audio, imagem | test/external_ai_clients_test.dart | manter |
@@ -119,9 +117,9 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 | `lib/sim/lesson/lesson_material_cache.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/m12_offline_cache_sync_contract_test.dart | manter |
 | `lib/sim/lesson/lesson_models.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/lesson/lesson_orchestrator.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
-| `lib/sim/lesson/lesson_pipeline_runtime.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/lesson/ready_window_worker.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/lesson/student_lesson_material_service.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/first_lesson_ready_window_test.dart, test/classroom_phase_test.dart | manter |
+| `lib/sim/lesson/visual_learning_feedback.dart` | Assistente local | orquestracao-aula-cache | sim-lesson | T02/microaula/questao, cache/sync, visual/imagem, audio | cache/sync, visual, audio, falha/retry | aula/pergunta, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/localization/sim_locale_contract.dart` | Assistente local | localization | sim-localization | sessao/aula | sessao/aula | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/media/audio_core.dart` | Motores de conteudo | midia | sim-media | visual/imagem, audio, erro/falha | visual, audio, falha/retry | audio, imagem | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/media/audio_preference.dart` | Motores de conteudo | midia | sim-media | visual/imagem, audio, erro/falha | visual, audio, falha/retry | audio, imagem | test/sim_app_architecture_shape_test.dart | manter |
@@ -133,14 +131,12 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 | `lib/sim/media/platform_audio_adapter.dart` | Motores de conteudo | midia | sim-media | visual/imagem, audio, erro/falha | visual, audio, falha/retry | audio, imagem | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/media/slot_media_contract.dart` | Motores de conteudo | midia | sim-media | visual/imagem, audio, erro/falha | visual, audio, falha/retry | audio, imagem | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/media/student_lesson_media_service.dart` | Motores de conteudo | midia | sim-media | visual/imagem, audio, erro/falha | visual, audio, falha/retry | audio, imagem | test/sim_app_architecture_shape_test.dart | manter |
-| `lib/sim/media/visual_svg_safety.dart` | Motores de conteudo | midia | sim-media | visual/imagem, audio, erro/falha | visual, audio, falha/retry | audio, imagem | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/modules/pedagogical_module_contracts.dart` | Assistente local | contratos-modulares | sim-modules | T00/curriculo/mapa, T02/microaula/questao, estado forte do aluno, sessao/aula, item/camada/questao, avanco/advance-gate, revisao/recuperacao/duvida, visual/imagem, audio, cache/sync, erro/falha | sessao/aula, item, camada, questao, visual, audio, avanco, revisao, recuperacao, duvida, curriculo, cache/sync, falha/retry | objetivo do aluno ate T00, curriculo, aula/pergunta, resposta do aluno, proxima camada ou proximo item, revisao/recuperacao/duvida, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/organism/sim_organism.dart` | Assistente local | organismo | sim-organism | sessao/aula, cache/sync, erro/falha | sessao/aula, cache/sync, falha/retry | objetivo do aluno ate T00, curriculo, aula/pergunta, resposta do aluno, proxima camada ou proximo item, revisao/recuperacao/duvida, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/organism/sim_organism_provider.dart` | Assistente local | organismo | sim-organism | sessao/aula, cache/sync, erro/falha | sessao/aula, cache/sync, falha/retry | objetivo do aluno ate T00, curriculo, aula/pergunta, resposta do aluno, proxima camada ou proximo item, revisao/recuperacao/duvida, audio, imagem, curriculo grande | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/placement/placement_blocks.dart` | Motores pedagogicos | placement | sim-placement | estado forte do aluno, item/camada/questao | sessao/aula, questao, falha/retry | objetivo do aluno ate T00, curriculo | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/placement/placement_payload.dart` | Motores pedagogicos | placement | sim-placement | estado forte do aluno, item/camada/questao | sessao/aula, questao, falha/retry | objetivo do aluno ate T00, curriculo | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/placement/placement_route_controller.dart` | Motores pedagogicos | placement | sim-placement | estado forte do aluno, item/camada/questao | sessao/aula, questao, falha/retry | objetivo do aluno ate T00, curriculo | test/sim_app_architecture_shape_test.dart | manter |
-| `lib/sim/placement/placement_screens.dart` | Motores pedagogicos | placement | sim-placement | estado forte do aluno, item/camada/questao | sessao/aula, questao, falha/retry | objetivo do aluno ate T00, curriculo | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/placement/placement_state.dart` | Motores pedagogicos | placement | sim-placement | estado forte do aluno, item/camada/questao | sessao/aula, questao, falha/retry | objetivo do aluno ate T00, curriculo | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/placement/placement_store.dart` | Motores pedagogicos | placement | sim-placement | estado forte do aluno, item/camada/questao | sessao/aula, questao, falha/retry | objetivo do aluno ate T00, curriculo | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/placement/placement_t02_caller.dart` | Motores pedagogicos | placement | sim-placement | estado forte do aluno, item/camada/questao | sessao/aula, questao, falha/retry | objetivo do aluno ate T00, curriculo | test/sim_app_architecture_shape_test.dart | manter |
@@ -163,7 +159,7 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 | `lib/sim/ui/widgets/cyber_step_shell.dart` | UI | ui | sim-ui | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/ui/widgets/sim_preparation_experience.dart` | UI | ui | sim-ui | sessao/aula, erro/falha | sessao/aula, falha/retry | - | test/sim_app_architecture_shape_test.dart | manter |
 
-## Backlog Fase 2
+## Backlog Fase 3
 
 - Reduzir LabSession/LabSessionFlows para fachada ainda mais fina sem alterar fluxo vivo.
 - Fundir contratos duplicados entre sim/classroom e sim/lesson onde a fronteira ainda e difusa.

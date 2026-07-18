@@ -127,6 +127,22 @@ void main() {
     expect(offenders, isEmpty);
   });
 
+  test('session facade stays thin and entry flow stays isolated', () {
+    final labSessionLines = File(
+      'lib/features/session/lab_session.dart',
+    ).readAsLinesSync().length;
+    final baseFlowLines = File(
+      'lib/features/session/lab_session_flows.dart',
+    ).readAsLinesSync().length;
+    final entryFlow = File('lib/features/session/lab_session_entry_flows.dart');
+    expect(entryFlow.existsSync(), isTrue);
+    final entryFlowLines = entryFlow.readAsLinesSync().length;
+
+    expect(labSessionLines, lessThanOrEqualTo(1200));
+    expect(baseFlowLines, lessThanOrEqualTo(1700));
+    expect(entryFlowLines, lessThanOrEqualTo(350));
+  });
+
   test('official paths have executable proof references', () {
     final inventory =
         jsonDecode(
