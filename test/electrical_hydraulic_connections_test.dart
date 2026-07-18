@@ -113,7 +113,7 @@ void main() {
     },
   );
 
-  test('anexo preserva erro HTTP estruturado com requestId', () async {
+  test('anexo usa erro HTTP publico seguro e requestId do header', () async {
     final transport = RecordingTransport()
       ..statusCode = 413
       ..responseHeaders = {'x-request-id': 'rid-attachment'}
@@ -135,8 +135,9 @@ void main() {
       throwsA(
         isA<SimExternalAiException>()
             .having((error) => error.statusCode, 'status', 413)
-            .having((error) => error.requestId, 'requestId', 'rid-body')
-            .having((error) => error.code, 'code', 'FILE_TOO_LARGE')
+            .having((error) => error.requestId, 'requestId', 'rid-attachment')
+            .having((error) => error.code, 'code', 'AI_REQUEST_FAILED')
+            .having((error) => error.message, 'message', 'AI_REQUEST_FAILED')
             .having((error) => error.retryable, 'retryable', false),
       ),
     );

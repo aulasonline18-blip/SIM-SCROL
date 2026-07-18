@@ -114,10 +114,7 @@ class SimServerCloudFunctions implements StudentStateCloudFunctions {
         timeout: timeout,
       );
     } on TimeoutException {
-      throw SimExternalAiException(
-        'Tempo limite da requisição atingido.',
-        statusCode: 408,
-      );
+      throw simSafeTimeoutException(code: 'SYNC_TIMEOUT');
     }
     dynamic decoded;
     try {
@@ -130,10 +127,7 @@ class SimServerCloudFunctions implements StudentStateCloudFunctions {
         decoded is Map &&
         decoded['rejected'] == true;
     if (!response.ok && !rejectedRegression) {
-      throw SimExternalAiException(
-        response.body,
-        statusCode: response.statusCode,
-      );
+      throw simSafeHttpException(response);
     }
     return decoded is Map ? JsonMap.from(decoded) : <String, dynamic>{};
   }

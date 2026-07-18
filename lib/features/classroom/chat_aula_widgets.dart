@@ -12,7 +12,6 @@ import '../../sim/ui/responsive/sim_responsive.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/doubt_progress_bar.dart';
 import '../session/lab_session.dart';
-import '../onboarding/preparation_and_placement.dart';
 import 'aula_widgets.dart';
 import 'chat_aula_messages.dart';
 
@@ -1098,31 +1097,19 @@ class AulaConversationBlockRenderer extends StatelessWidget {
             : _StatusMessage(
                 text: message.text ?? t('preparing_lesson'),
                 loading: true,
-                retryPending: pendingActionKeys.contains('retry'),
-                onRetry: message.isActionable && message.actionKey == 'retry'
-                    ? actions.retry
-                    : null,
               ),
       AulaConversationBlockType.recoverableError => _StatusMessage(
         text: message.text ?? t('aula_gen_fail'),
         loading: false,
         warn: true,
-        retryPending: pendingActionKeys.contains('retry'),
-        onRetry: message.isActionable && message.actionKey == 'retry'
-            ? actions.retry
-            : null,
       ),
       AulaConversationBlockType.feedback => _ChatFeedbackActionReveal(
         messageId: message.id,
-        enabled:
-            (message.actionKey ?? '').isNotEmpty &&
-            message.isActionable &&
-            message.deliveryStatus != ChatLessonDeliveryStatus.read,
+        enabled: false,
         child: _FeedbackMessageActions(
           message: message,
           pendingActionKeys: pendingActionKeys,
           onOpenDoubt: actions.openDoubt,
-          onNext: actions.advance,
         ),
       ),
       AulaConversationBlockType.advanceAction => _ChatActionButton(
@@ -1159,19 +1146,16 @@ class _FeedbackMessageActions extends StatelessWidget {
     required this.message,
     required this.pendingActionKeys,
     required this.onOpenDoubt,
-    required this.onNext,
   });
 
   final ChatLessonMessage message;
   final Set<String> pendingActionKeys;
   final VoidCallback onOpenDoubt;
-  final VoidCallback onNext;
 
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
     final effectiveActionable =
-        message.isActionable &&
         message.deliveryStatus != ChatLessonDeliveryStatus.read;
     final feedbackIcon = message.isCorrect == false
         ? Icons.info_outline
@@ -1198,13 +1182,12 @@ class _FeedbackMessageActions extends StatelessWidget {
             ],
           ),
         ),
-        if ((message.actionKey ?? '').isNotEmpty) ...[
+        if (message.deliveryStatus != ChatLessonDeliveryStatus.read) ...[
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 360;
               final doubtBusy = pendingActionKeys.contains('doubt');
-              final nextBusy = pendingActionKeys.contains('next');
               final doubtButton = _ChatActionButton(
                 key: const Key('chat-feedback-doubt-button'),
                 label: doubtBusy ? t('aula_doubt_processing') : t('aula_doubt'),
@@ -1214,23 +1197,10 @@ class _FeedbackMessageActions extends StatelessWidget {
                 compact: true,
                 onPressed: onOpenDoubt,
               );
-              final nextButton = _ChatActionButton(
-                key: const Key('chat-feedback-next-button'),
-                label: nextBusy
-                    ? t('preparing_next_lesson')
-                    : nextBtnText(message.actionKey ?? 'aula_next'),
-                enabled: effectiveActionable,
-                busy: nextBusy,
-                blockWhileBusy: false,
-                icon: Icons.arrow_forward_rounded,
-                onPressed: onNext,
-              );
               if (compact) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    nextButton,
-                    const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: ConstrainedBox(
@@ -1243,8 +1213,6 @@ class _FeedbackMessageActions extends StatelessWidget {
               }
               return Row(
                 children: [
-                  Expanded(child: nextButton),
-                  const SizedBox(width: 10),
                   SizedBox(width: 148, child: doubtButton),
                 ],
               );
@@ -2087,15 +2055,11 @@ class _StatusMessage extends StatelessWidget {
     required this.text,
     required this.loading,
     this.warn = false,
-    this.retryPending = false,
-    this.onRetry,
   });
 
   final String text;
   final bool loading;
   final bool warn;
-  final bool retryPending;
-  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -2131,15 +2095,6 @@ class _StatusMessage extends StatelessWidget {
             Expanded(child: _TextMessage(text)),
           ],
         ),
-        if (onRetry != null) ...[
-          const SizedBox(height: 12),
-          _ChatActionButton(
-            label: retryPending ? t('aula_retrying') : t('aula_try_again_2'),
-            enabled: !retryPending,
-            busy: retryPending,
-            onPressed: onRetry!,
-          ),
-        ],
       ],
     );
   }
@@ -2151,10 +2106,8 @@ class _ChatActionButton extends StatelessWidget {
     required this.onPressed,
     this.enabled = true,
     this.busy = false,
-    this.blockWhileBusy = true,
     this.primary = true,
     this.compact = false,
-    this.icon,
     super.key,
   });
 
@@ -2162,15 +2115,13 @@ class _ChatActionButton extends StatelessWidget {
   final VoidCallback onPressed;
   final bool enabled;
   final bool busy;
-  final bool blockWhileBusy;
   final bool primary;
   final bool compact;
-  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    final active = enabled && (!busy || !blockWhileBusy);
+    final active = enabled && !busy;
     final background = primary ? palette.surface : palette.surface;
     final foreground = primary ? palette.primary : palette.text;
     final borderColor = primary ? palette.primary : palette.border;
@@ -2228,14 +2179,6 @@ class _ChatActionButton extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                ],
-                if (!busy && icon != null) ...[
-                  Icon(
-                    icon,
-                    size: compact ? 15 : 17,
-                    color: active ? foreground : palette.muted,
-                  ),
-                  const SizedBox(width: 6),
                 ],
                 Flexible(
                   child: Text(

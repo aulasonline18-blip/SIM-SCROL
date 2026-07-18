@@ -11,7 +11,6 @@ import 'core/utils/sim_constants.dart';
 import 'features/auth/login_screen.dart';
 import 'features/billing/billing_and_simple_pages.dart';
 import 'features/classroom/chat_aula_screen.dart';
-import 'features/classroom/aula_screen.dart';
 import 'features/onboarding/onboarding_screens.dart';
 import 'features/onboarding/preparation_and_placement.dart';
 import 'features/portal/portal_flow.dart';
@@ -20,7 +19,6 @@ import 'sim/cloud/sim_server_cloud_functions.dart';
 import 'sim/cloud/supabase_flutter_session_provider.dart';
 import 'sim/cloud/supabase_student_state_cloud_storage.dart';
 import 'sim/config/sim_environment.dart';
-import 'sim/config/sim_scroll_flags.dart';
 import 'sim/external_ai/sim_ai_server_config.dart';
 import 'sim/localization/sim_locale_contract.dart';
 import 'sim/state/drift_student_state_storage.dart';
@@ -285,9 +283,7 @@ class _SimAppState extends State<SimApp> {
       case '/cyber/aula':
         screen = _guardActiveLesson(
           session,
-          child: SimScrollFlags.aulaChat
-              ? ChatAulaScreen(session: session)
-              : AulaLabScreen(session: session),
+          child: ChatAulaScreen(session: session),
         );
       case '/creditos':
         screen = _guardAuthenticated(

@@ -1,7 +1,6 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -491,7 +490,10 @@ class EntryFormState extends ChangeNotifier {
 
   void addLabAttachment(String source) {
     if (attachments.length >= entryFormMaxAttachments) return;
-    unawaited(_processLabAttachmentFile(_fallbackFileForSource(source)));
+    attachmentError = _attachmentErrorMessage(
+      StateError('ATTACHMENT_PICKER_REQUIRED'),
+    );
+    notifyListeners();
   }
 
   void addLabAttachmentFile(SimAttachmentFile file) {
@@ -577,30 +579,6 @@ class EntryFormState extends ChangeNotifier {
       size: file.bytes.length,
       status: 'processing',
     );
-  }
-
-  SimAttachmentFile _fallbackFileForSource(String source) {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final isDocument = source == 'document';
-    final isCamera = source == 'camera';
-    final type = isDocument ? 'application/pdf' : 'image/jpeg';
-    final name = isDocument
-        ? 'arquivo-$now.pdf'
-        : isCamera
-        ? 'foto-$now.jpg'
-        : 'imagem-$now.jpg';
-    final bytes = type == 'application/pdf'
-        ? utf8.encode('%PDF-1.4\nSIM attachment $now\n%%EOF')
-        : <int>[
-            0xFF,
-            0xD8,
-            0xFF,
-            0xE0,
-            ...utf8.encode('SIM attachment $now'),
-            0xFF,
-            0xD9,
-          ];
-    return SimAttachmentFile(name: name, contentType: type, bytes: bytes);
   }
 
   String _displayName(String name, String contentType, int index) {

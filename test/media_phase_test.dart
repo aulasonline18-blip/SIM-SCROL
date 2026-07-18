@@ -26,6 +26,8 @@ import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
 
+import 'support/memory_test_stores.dart';
+
 class FakeGeneratedAudioClient implements GeneratedAudioClient {
   int calls = 0;
   String? lastLang;
@@ -142,7 +144,7 @@ StudentLearningState seedState() {
 
 void main() {
   test('audio preference defaults on and notifies listeners', () {
-    final preference = AudioPreference();
+    final preference = AudioPreference(storage: MemoryAudioPreferenceStorage());
     var notified = false;
     preference.subscribe((enabled) => notified = !enabled);
 
@@ -195,7 +197,7 @@ void main() {
   });
 
   test('audio core maps stable language and caches generated audio', () async {
-    final preference = AudioPreference();
+    final preference = AudioPreference(storage: MemoryAudioPreferenceStorage());
     final playback = NoopAudioPlaybackAdapter();
     final client = FakeGeneratedAudioClient();
     final core = AudioCore(
@@ -215,7 +217,9 @@ void main() {
   });
 
   test('audio core availability follows preference and adapter capability', () {
-    final disabledPreference = AudioPreference()..setAudioEnabled(false);
+    final disabledPreference = AudioPreference(
+      storage: MemoryAudioPreferenceStorage(),
+    )..setAudioEnabled(false);
     expect(
       AudioCore(
         preference: disabledPreference,
@@ -225,14 +229,14 @@ void main() {
     );
     expect(
       AudioCore(
-        preference: AudioPreference(),
+        preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
         playback: NoopAudioPlaybackAdapter(),
       ).available(),
       false,
     );
     expect(
       AudioCore(
-        preference: AudioPreference(),
+        preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
         playback: NoopAudioPlaybackAdapter(),
         availabilityProbe: () => true,
       ).available(),
@@ -241,7 +245,8 @@ void main() {
   });
 
   test('audio disabled skips generated client and local playback', () async {
-    final preference = AudioPreference()..setAudioEnabled(false);
+    final preference = AudioPreference(storage: MemoryAudioPreferenceStorage())
+      ..setAudioEnabled(false);
     final playback = CountingPlaybackAdapter();
     final client = FakeGeneratedAudioClient();
     final core = AudioCore(
@@ -258,7 +263,7 @@ void main() {
   });
 
   test('audio play failure does not call onStart or report playing', () async {
-    final preference = AudioPreference();
+    final preference = AudioPreference(storage: MemoryAudioPreferenceStorage());
     final playback = CountingPlaybackAdapter()
       ..failDataUrl = true
       ..failPlatformTts = true;
@@ -288,7 +293,7 @@ void main() {
 
   test('audio cache key separates lesson language voice and text', () {
     final core = AudioCore(
-      preference: AudioPreference(),
+      preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
       playback: NoopAudioPlaybackAdapter(),
     );
 
@@ -316,7 +321,9 @@ void main() {
   test(
     'remote audio failure falls back to local TTS without blocking lesson',
     () async {
-      final preference = AudioPreference();
+      final preference = AudioPreference(
+        storage: MemoryAudioPreferenceStorage(),
+      );
       final playback = CountingPlaybackAdapter();
       final client = ThrowingGeneratedAudioClient();
       Object? reportedError;
@@ -340,7 +347,7 @@ void main() {
 
   test('lesson audio controller preserves lesson reading sequence', () async {
     final states = {'l1': seedState()};
-    final preference = AudioPreference();
+    final preference = AudioPreference(storage: MemoryAudioPreferenceStorage());
     final media = StudentLessonMediaService(
       audioCore: AudioCore(
         preference: preference,
@@ -383,14 +390,17 @@ void main() {
       final states = {'l1': seedState()};
       final playback = CountingPlaybackAdapter()..failPlatformTts = true;
       final media = StudentLessonMediaService(
-        audioCore: AudioCore(preference: AudioPreference(), playback: playback),
+        audioCore: AudioCore(
+          preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
+          playback: playback,
+        ),
         readState: (id) => states[id]!,
         writeState: (state) => states[state.lessonLocalId] = state,
       );
       final controller = LessonAudioController(
         lessonLocalId: 'l1',
         mediaService: media,
-        preference: AudioPreference(),
+        preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
       );
       final content = LessonContent(
         explanation: 'Explicacao',
@@ -410,7 +420,10 @@ void main() {
       expect(states['l1']!.audio.status, 'failed');
       expect(states['l1']!.audio.playing, false);
       expect(states['l1']!.audio.error, startsWith('SIM_MEDIA_ERROR_'));
-      expect(states['l1']!.audio.error, isNot(contains('audio_playback_unavailable')));
+      expect(
+        states['l1']!.audio.error,
+        isNot(contains('audio_playback_unavailable')),
+      );
       expect(
         states['l1']!.events.map((event) => event.type),
         contains('AUDIO_FAILED'),
@@ -426,7 +439,10 @@ void main() {
     final service = StudentLearningStateService(seed: {'l1': seedState()});
     final playback = CountingPlaybackAdapter();
     final media = StudentLessonMediaService(
-      audioCore: AudioCore(preference: AudioPreference(), playback: playback),
+      audioCore: AudioCore(
+        preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
+        playback: playback,
+      ),
       readState: (id) => service.ensure(lessonLocalId: id),
       writeState: service.write,
     );
@@ -472,7 +488,7 @@ void main() {
   });
 
   test('doubt audio appends doubt suffix and respects preference', () async {
-    final preference = AudioPreference();
+    final preference = AudioPreference(storage: MemoryAudioPreferenceStorage());
     final playback = NoopAudioPlaybackAdapter();
     final audio = DoubtAudio(
       audioCore: AudioCore(preference: preference, playback: playback),
@@ -493,7 +509,10 @@ void main() {
     'audio stop covers answer selection, signal, advance and dispose paths',
     () {
       final playback = CountingPlaybackAdapter();
-      final core = AudioCore(preference: AudioPreference(), playback: playback);
+      final core = AudioCore(
+        preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
+        playback: playback,
+      );
       core.stop();
       core.stop();
       core.stop();
@@ -570,7 +589,7 @@ void main() {
     var state = StudentLearningState.empty(lessonLocalId: 'l1');
     final service = StudentLessonMediaService(
       audioCore: AudioCore(
-        preference: AudioPreference(),
+        preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
         playback: CountingPlaybackAdapter(),
         generatedAudioClient: FakeGeneratedAudioClient(),
       ),
@@ -603,7 +622,10 @@ void main() {
     expect(state.events[1].payload['imageUrlHead'], isNull);
     expect(state.events[1].payload['hasImageUrl'], true);
     expect(state.events[2].payload['errorMessage'], isNull);
-    expect(state.events[2].payload['errorCode'], startsWith('SIM_MEDIA_ERROR_'));
+    expect(
+      state.events[2].payload['errorCode'],
+      startsWith('SIM_MEDIA_ERROR_'),
+    );
   });
 
   test('visual learning feedback tracks answers and doubt after image', () {

@@ -36,7 +36,15 @@ void main() {
     expect(session, contains('_listDrawerLocalLessonSummaries'));
     expect(session, contains('_reconcileDrawerCloudLessonInBackground'));
 
-    expect(materialController, contains('material_missing_after_local_restore'));
+    expect(
+      materialController,
+      contains('material_missing_prepare_without_fallback'),
+    );
+    expect(materialController, isNot(contains('_localFallbackMaterial')));
+    expect(
+      materialController,
+      isNot(contains('LessonMaterialSource.localFallback')),
+    );
     expect(
       materialController,
       isNot(contains('A primeira aula foi liberada, mas a tela nao encontrou')),

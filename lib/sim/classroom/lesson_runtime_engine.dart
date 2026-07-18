@@ -113,6 +113,8 @@ class LessonRuntimeEngine {
 
   LessonPositionState? _position;
   LessonSessionSnapshot? _session;
+  bool _lastAuthReady = true;
+  bool _lastAuthed = true;
 
   CompleteLessonParams? activeLessonParams() {
     _refreshSessionFromState();
@@ -175,26 +177,10 @@ class LessonRuntimeEngine {
     bool authReady = true,
     bool authed = true,
   }) async {
+    _lastAuthReady = authReady;
+    _lastAuthed = authed;
     final session = sessionEngine.read(lessonLocalId);
     _session = session;
-    if (!authReady || !authed) {
-      return LessonRuntimeSnapshot(
-        authReady: authReady,
-        authed: authed,
-        hasCurriculum: false,
-        isDone: false,
-        viewModel: null,
-        phase: const ClassroomPhase.loading(),
-        history: const [],
-        conteudo: null,
-        imagem: null,
-        imageMetadata: null,
-        itemMarker: null,
-        itemText: null,
-        itemUnit: null,
-        itemTitle: null,
-      );
-    }
     if (session.curriculum == null || session.baseItems.isEmpty) {
       return LessonRuntimeSnapshot(
         authReady: authReady,
@@ -297,14 +283,14 @@ class LessonRuntimeEngine {
     final position = _position;
     final session = _session;
     if (position == null || session == null) {
-      return const LessonRuntimeSnapshot(
-        authReady: true,
-        authed: true,
+      return LessonRuntimeSnapshot(
+        authReady: _lastAuthReady,
+        authed: _lastAuthed,
         hasCurriculum: false,
         isDone: false,
         viewModel: null,
-        phase: ClassroomPhase.loading(),
-        history: [],
+        phase: const ClassroomPhase.loading(),
+        history: const [],
         conteudo: null,
         imagem: null,
         imageMetadata: null,
@@ -325,8 +311,8 @@ class LessonRuntimeEngine {
       globalPlan: session.curriculum?.globalPlan,
     );
     return LessonRuntimeSnapshot(
-      authReady: true,
-      authed: true,
+      authReady: _lastAuthReady,
+      authed: _lastAuthed,
       hasCurriculum: session.curriculum != null && session.baseItems.isNotEmpty,
       isDone: position.phase.type == ClassroomPhaseType.fim,
       viewModel: vm,

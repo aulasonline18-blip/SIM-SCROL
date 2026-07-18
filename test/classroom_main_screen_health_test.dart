@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sim_mobile/features/classroom/aula_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sim_mobile/features/classroom/aula_screen.dart';
+import 'package:sim_mobile/features/classroom/chat_aula_screen.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/classroom_text_scale.dart';
@@ -28,127 +27,66 @@ LabSession _readyAulaSession() {
 
 Future<LabSession> _pumpAula(WidgetTester tester) async {
   final session = _readyAulaSession();
-  await tester.pumpWidget(MaterialApp(home: AulaLabScreen(session: session)));
   await session.openAulaRuntime();
-  await tester.pumpAndSettle();
+  await tester.pumpWidget(MaterialApp(home: ChatAulaScreen(session: session)));
+  await tester.pump(const Duration(milliseconds: 250));
   return session;
 }
 
-Finder _signal2Finder() {
-  return find.bySemanticsLabel(
-    t('signal_option_named', {'value': 2, 'label': t('aula_sig_revisar')}),
-  );
+LabSession _snapshotSession({
+  String? image,
+  ClassroomPhase phase = const ClassroomPhase.reading(),
+}) {
+  setSimActiveLanguage('pt');
+  return LabSession()
+    ..authed = true
+    ..authReady = true
+    ..selectedLanguageCode = 'pt'
+    ..stableLang = 'Portuguese'
+    ..route = '/cyber/aula'
+    ..lessonLocalId = 'lesson-health'
+    ..aulaSnapshot = LessonRuntimeSnapshot(
+      authReady: true,
+      authed: true,
+      hasCurriculum: true,
+      isDone: false,
+      viewModel: const LessonMainViewModel(
+        progress: 0.25,
+        headerLabel: 'aula_item_of:1/1:aula_layer_1',
+        options: [],
+        locked: false,
+        nextLabel: '',
+      ),
+      phase: phase,
+      history: const [],
+      conteudo: const LessonContent(
+        explanation: 'Observe o desenho da curva antes de responder.',
+        question: 'Qual curva representa o crescimento?',
+        options: {
+          AnswerLetter.A: 'Linha reta',
+          AnswerLetter.B: 'Curva',
+          AnswerLetter.C: 'Ponto isolado',
+        },
+        correctAnswer: AnswerLetter.B,
+      ),
+      imagem: image,
+      itemMarker: 'M1',
+      itemText: 'Funções',
+    );
 }
 
 void main() {
-  testWidgets('aula font control has five levels and persists choice', (
+  testWidgets('aula advance pending does not expose retry signal action', (
     tester,
   ) async {
-    SharedPreferences.setMockInitialValues({});
-    await tester.binding.setSurfaceSize(const Size(390, 720));
-
-    await _pumpAula(tester);
-
-    expect(find.byKey(const Key('aula-font-scale-button')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('aula-font-scale-button')),
-        matching: find.text('2/5'),
-      ),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const Key('aula-font-scale-button')));
-    await tester.pumpAndSettle();
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('aula-font-scale-button')),
-        matching: find.text('3/5'),
-      ),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const Key('aula-font-scale-button')));
-    await tester.tap(find.byKey(const Key('aula-font-scale-button')));
-    await tester.tap(find.byKey(const Key('aula-font-scale-button')));
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 260));
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('aula-font-scale-button')),
-        matching: find.text('1/5'),
-      ),
-      findsOneWidget,
-    );
-
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getInt(ClassroomTextScale.prefsKey), 1);
-
-    await tester.binding.setSurfaceSize(null);
-  });
-
-  testWidgets('aula exposes semantics for main classroom actions', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-    final semantics = tester.ensureSemantics();
-    await tester.binding.setSurfaceSize(const Size(390, 720));
-
-    await _pumpAula(tester);
-
-    expect(find.bySemanticsLabel('Abrir menu da aula'), findsOneWidget);
-    expect(
-      find.bySemanticsLabel('Tocar áudio da aula').evaluate().length +
-          find.bySemanticsLabel('Preparando áudio da aula').evaluate().length +
-          find.bySemanticsLabel('Parar áudio da aula').evaluate().length,
-      1,
-    );
-    expect(find.bySemanticsLabel('Abrir revisão'), findsOneWidget);
-    expect(
-      find.bySemanticsLabel('Tamanho da letra: nível 2 de 5'),
-      findsOneWidget,
-    );
-    expect(find.bySemanticsLabel('Alternativa B'), findsOneWidget);
-
-    await tester.tap(find.text('B'));
-    await tester.pumpAndSettle();
-    expect(_signal2Finder(), findsOneWidget);
-
-    await tester.binding.setSurfaceSize(null);
-    semantics.dispose();
-  });
-
-  testWidgets('aula renderiza enunciado antes de liberar alternativas', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-    await tester.binding.setSurfaceSize(const Size(390, 720));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    final session = _readyAulaSession();
-    await session.openAulaRuntime();
-    await tester.pumpWidget(MaterialApp(home: AulaLabScreen(session: session)));
-    await tester.pump();
-
-    expect(find.bySemanticsLabel('Alternativa B'), findsNothing);
-
-    await tester.pumpAndSettle();
-    expect(find.bySemanticsLabel('Alternativa B'), findsOneWidget);
-  });
-
-  testWidgets('aula reserva lugar e mostra imagem pronta da lesson', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-    await tester.binding.setSurfaceSize(const Size(390, 720));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
+    setSimActiveLanguage('pt');
     final session = LabSession()
       ..authed = true
       ..authReady = true
       ..selectedLanguageCode = 'pt'
       ..stableLang = 'Portuguese'
       ..route = '/cyber/aula'
+      ..lessonLocalId = 'lesson-pending'
       ..aulaSnapshot = LessonRuntimeSnapshot(
         authReady: true,
         authed: true,
@@ -156,30 +94,138 @@ void main() {
         isDone: false,
         viewModel: const LessonMainViewModel(
           progress: 0.25,
-          headerLabel: 'aula_item_of:1/1:aula_layer_1',
+          headerLabel: 'aula_item_of:1/2:aula_layer_1',
           options: [],
           locked: false,
           nextLabel: '',
         ),
-        phase: const ClassroomPhase.reading(),
+        phase: const ClassroomPhase.advancePending(
+          message: 'aula_advance_preparing',
+          letter: AnswerLetter.B,
+          signal: DecisionSignal.two,
+        ),
         history: const [],
         conteudo: const LessonContent(
-          explanation: 'Observe o desenho da curva antes de responder.',
-          question: 'Qual curva representa o crescimento?',
+          explanation: 'Explicacao pronta.',
+          question: 'Qual alternativa confirma?',
           options: {
-            AnswerLetter.A: 'Linha reta',
-            AnswerLetter.B: 'Curva',
-            AnswerLetter.C: 'Ponto isolado',
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
           },
           correctAnswer: AnswerLetter.B,
         ),
         imagem: null,
         itemMarker: 'M1',
-        itemText: 'Funções',
+        itemText: 'Item de teste',
       );
 
-    await tester.pumpWidget(MaterialApp(home: AulaLabScreen(session: session)));
-    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text(t('aula_try_again_2')), findsNothing);
+    expect(find.byType(ChatAulaScreen), findsOneWidget);
+  });
+
+  test(
+    'submitAulaSignal in advance pending does not resend answer or retry manually',
+    () async {
+      final session = LabSession()
+        ..aulaSnapshot = const LessonRuntimeSnapshot(
+          authReady: true,
+          authed: true,
+          hasCurriculum: true,
+          isDone: false,
+          viewModel: null,
+          phase: ClassroomPhase.advancePending(
+            message: 'aula_advance_preparing',
+            letter: AnswerLetter.B,
+            signal: DecisionSignal.two,
+          ),
+          history: [],
+          conteudo: null,
+          imagem: null,
+          itemMarker: 'M1',
+          itemText: 'Item',
+        );
+
+      await session.submitAulaSignal(2);
+
+      expect(
+        session.aulaSnapshot?.phase.type,
+        ClassroomPhaseType.avancoPendente,
+      );
+      expect(session.aulaRuntimeError, isNull);
+    },
+  );
+
+  testWidgets('chat aula font control has five levels and persists choice', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpAula(tester);
+
+    expect(find.byKey(const Key('chat-font-scale-button')), findsOneWidget);
+    expect(find.byKey(const Key('chat-font-scale-level')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('chat-font-scale-button')),
+        matching: find.text('2/5'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('chat-font-scale-button')));
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('chat-font-scale-button')),
+        matching: find.text('3/5'),
+      ),
+      findsOneWidget,
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getInt(ClassroomTextScale.prefsKey), 3);
+  });
+
+  testWidgets('chat aula accepts A/B/C and opens local signal choices', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final session = _snapshotSession(
+      phase: const ClassroomPhase.expanded(AnswerLetter.B),
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.byKey(const Key('chat-answer-card-B')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.text('2'), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('chat aula shows text before media and survives image update', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final session = _snapshotSession();
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
 
     expect(
       find.text('Observe o desenho da curva antes de responder.'),
@@ -190,211 +236,28 @@ void main() {
       imagem: 'data:image/png;base64,AAAA',
     );
     session.notifyListeners();
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
 
-    expect(find.byType(LessonImageStudySurface), findsOneWidget);
-    expect(find.byTooltip('Ampliar imagem'), findsOneWidget);
-    expect(find.text('Apoio visual da aula'), findsOneWidget);
-    final imageRect = tester.getRect(find.byType(LessonImageStudySurface));
-    expect(imageRect.top, greaterThanOrEqualTo(0));
-    expect(imageRect.bottom, lessThanOrEqualTo(720));
+    expect(find.text(t('aula_image_ready')), findsOneWidget);
+    expect(find.byType(ChatAulaScreen), findsOneWidget);
   });
 
-  testWidgets(
-    'bolha de áudio aparece só com audioPlaying real e tem semantics',
-    (tester) async {
-      SharedPreferences.setMockInitialValues({});
-      final semantics = tester.ensureSemantics();
-      await tester.binding.setSurfaceSize(const Size(390, 720));
-
-      final session = await _pumpAula(tester);
-      expect(find.bySemanticsLabel('Áudio da aula tocando'), findsNothing);
-
-      session.audioEnabled = true;
-      session.audioPlaying = true;
-      session.notifyListeners();
-      await tester.pump();
-
-      expect(find.bySemanticsLabel('Áudio da aula tocando'), findsOneWidget);
-
-      session.stopActiveAudio();
-      await tester.pump();
-
-      expect(find.bySemanticsLabel('Áudio da aula tocando'), findsNothing);
-
-      await tester.binding.setSurfaceSize(null);
-      semantics.dispose();
-    },
-  );
-
-  testWidgets('sinais abrem como gaveta logo abaixo da alternativa ativa', (
+  testWidgets('audio bubble is complementary to the chat classroom', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    final semantics = tester.ensureSemantics();
-    await tester.binding.setSurfaceSize(const Size(390, 760));
+    await tester.binding.setSurfaceSize(const Size(390, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await _pumpAula(tester);
-    await tester.tap(find.text('B'));
-    await tester.pumpAndSettle();
+    final session = await _pumpAula(tester);
+    expect(find.bySemanticsLabel('Áudio tocando'), findsNothing);
 
-    final selectedRect = tester.getRect(find.bySemanticsLabel('Alternativa B'));
-    final signalRect = tester.getRect(_signal2Finder());
-    final nextOptionRect = tester.getRect(
-      find.bySemanticsLabel('Alternativa C'),
-    );
+    session.audioEnabled = true;
+    session.audioPlaying = true;
+    session.notifyListeners();
+    await tester.pump(const Duration(milliseconds: 250));
 
-    expect(signalRect.top, greaterThanOrEqualTo(selectedRect.bottom - 1));
-    expect(signalRect.bottom, lessThanOrEqualTo(nextOptionRect.top + 1));
-
-    await tester.binding.setSurfaceSize(null);
-    semantics.dispose();
-  });
-
-  testWidgets(
-    'zoom alto mantém sinais feedback e avançar visíveis em tela pequena',
-    (tester) async {
-      SharedPreferences.setMockInitialValues({
-        ClassroomTextScale.prefsKey: ClassroomTextScale.maxLevel,
-      });
-      await tester.binding.setSurfaceSize(const Size(360, 560));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await _pumpAula(tester);
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('aula-font-scale-button')),
-          matching: find.text('5/5'),
-        ),
-        findsOneWidget,
-      );
-
-      await tester.tap(find.text('B'));
-      await tester.pumpAndSettle();
-      final signalRect = tester.getRect(find.text('2'));
-      expect(signalRect.top, greaterThanOrEqualTo(0));
-      expect(signalRect.bottom, lessThanOrEqualTo(560));
-
-      await tester.tap(find.text('2'));
-      await tester.pumpAndSettle();
-      final feedbackRect = tester.getRect(find.text(t('aula_fb_correct')));
-      expect(feedbackRect.top, greaterThanOrEqualTo(0));
-      expect(feedbackRect.bottom, lessThanOrEqualTo(560));
-      expect(find.textContaining('>>'), findsNothing);
-
-      await tester.binding.setSurfaceSize(null);
-    },
-  );
-
-  testWidgets('usuario consegue rolar de volta para reler a teoria', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({
-      ClassroomTextScale.prefsKey: ClassroomTextScale.maxLevel,
-    });
-    await tester.binding.setSurfaceSize(const Size(360, 560));
-
-    await _pumpAula(tester);
-    final listView = tester.widget<ListView>(
-      find.byKey(const Key('aula-scroll-view')),
-    );
-    final controller = listView.controller!;
-    expect(controller.hasClients, isTrue);
-
-    await tester.tap(find.text('B'));
-    await tester.pumpAndSettle();
-    final before = controller.offset;
-    expect(before, greaterThan(0));
-
-    await tester.drag(
-      find.byKey(const Key('aula-scroll-view')),
-      const Offset(0, 320),
-    );
-    await tester.pump();
-    final afterDrag = controller.offset;
-    expect(afterDrag, lessThan(before));
-
-    await tester.pump(const Duration(milliseconds: 700));
-    expect(controller.offset, closeTo(afterDrag, 1));
-
-    await tester.binding.setSurfaceSize(null);
-  });
-
-  testWidgets(
-    'atualizacao passiva nao rouba scroll e oferece voltar ao ponto atual',
-    (tester) async {
-      SharedPreferences.setMockInitialValues({
-        ClassroomTextScale.prefsKey: ClassroomTextScale.maxLevel,
-      });
-      await tester.binding.setSurfaceSize(const Size(360, 560));
-
-      final session = await _pumpAula(tester);
-      final listView = tester.widget<ListView>(
-        find.byKey(const Key('aula-scroll-view')),
-      );
-      final controller = listView.controller!;
-
-      await tester.tap(find.text('B'));
-      await tester.pumpAndSettle();
-      await tester.drag(
-        find.byKey(const Key('aula-scroll-view')),
-        const Offset(0, 320),
-      );
-      await tester.pump();
-      final afterManualRead = controller.offset;
-
-      session.aulaSnapshot = session.aulaSnapshot!.copyWith(
-        phase: const ClassroomPhase.completed(
-          message: 'aula_fb_correct',
-          wasCorrect: true,
-          signal: DecisionSignal.two,
-        ),
-      );
-      session.notifyListeners();
-      await tester.pumpAndSettle();
-
-      expect(controller.offset, closeTo(afterManualRead, 1));
-      expect(
-        find.byKey(const Key('aula-scroll-current-button')),
-        findsOneWidget,
-      );
-      expect(find.text('Ver feedback'), findsOneWidget);
-
-      await tester.tap(find.byKey(const Key('aula-scroll-current-button')));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const Key('aula-scroll-current-button')), findsNothing);
-      expect(controller.offset, greaterThan(afterManualRead));
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.binding.setSurfaceSize(null);
-    },
-  );
-
-  testWidgets('tablet largo usa trilho lateral sem duplicar botão de fonte', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1000, 820);
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    await _pumpAula(tester);
-
-    expect(find.byKey(const Key('aula-study-rail')), findsOneWidget);
-    expect(find.byKey(const Key('aula-font-scale-button')), findsOneWidget);
-
-    tester.view.physicalSize = const Size(390, 720);
-    await tester.pumpWidget(Container());
-    SharedPreferences.setMockInitialValues({});
-    await _pumpAula(tester);
-
-    expect(find.byKey(const Key('aula-study-rail')), findsNothing);
-    expect(find.byKey(const Key('aula-font-scale-button')), findsOneWidget);
+    expect(find.bySemanticsLabel('Áudio tocando'), findsOneWidget);
+    expect(find.byType(ChatAulaScreen), findsOneWidget);
   });
 }

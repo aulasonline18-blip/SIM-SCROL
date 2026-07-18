@@ -1,18 +1,16 @@
 // Bateria de paridade T01–T28 (Planta Sala de Aula, seção 18).
 // Cada teste é isolado e roda <50ms.
-import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'support/memory_test_stores.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_answer_progress_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
-import 'legacy/server_advance_gate_legacy.dart';
 import 'package:sim_mobile/sim/cloud/cloud_queue.dart';
 import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
-import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
@@ -206,66 +204,9 @@ class _CountingAudio implements AudioPlaybackAdapter {
   }
 }
 
-class _FakeServerAdvanceGateClient implements ServerAdvanceGateClient {
-  _FakeServerAdvanceGateClient(this._decide);
-
-  final ServerAdvanceGateDecision Function(ServerAdvanceGateRequest request)
-  _decide;
-  final requests = <ServerAdvanceGateRequest>[];
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(
-    ServerAdvanceGateRequest request,
-  ) async {
-    requests.add(request);
-    return _decide(request);
-  }
-}
-
-class _CompleterServerAdvanceGateClient implements ServerAdvanceGateClient {
-  final completer = Completer<ServerAdvanceGateDecision>();
-  final requests = <ServerAdvanceGateRequest>[];
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(ServerAdvanceGateRequest request) {
-    requests.add(request);
-    return completer.future;
-  }
-}
-
-class _FailingServerAdvanceGateClient implements ServerAdvanceGateClient {
-  final requests = <ServerAdvanceGateRequest>[];
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(
-    ServerAdvanceGateRequest request,
-  ) async {
-    requests.add(request);
-    throw const SimExternalAiException(
-      'Falha simulada no Advance Gate.',
-      code: 'ADVANCE_GATE_CLIENT_FAILED',
-    );
-  }
-}
-
-ServerAdvanceGateDecision _serverNextLayer(LessonLayer layer) {
-  return ServerAdvanceGateDecision(
-    accepted: true,
-    decision: 'next_layer',
-    reason: 'test_server_next_layer',
-    nextItemIdx: 0,
-    nextLayer: layer,
-    highWaterMark: 1,
-    events: const [
-      {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
-    ],
-  );
-}
-
 LessonAnswerProgressController _controller(
   StudentLearningStateService svc, {
   AudioCore? audio,
-  ServerAdvanceGateClient? serverAdvanceGateClient,
 }) {
   final t02 = _FakeT02();
   final cache = LessonMaterialCache();
@@ -888,7 +829,7 @@ void main() {
   // -------------------------------------------------------------------------
   test('T24: selecionar chama audioCore.stop() antes de mudar fase', () {
     final counting = _CountingAudio();
-    final pref = AudioPreference();
+    final pref = AudioPreference(storage: MemoryAudioPreferenceStorage());
     final audio = AudioCore(preference: pref, playback: counting);
 
     final svc = StudentLearningStateService(seed: {'L1': _state0()});
@@ -1151,11 +1092,10 @@ void main() {
   });
 
   test(
-    'M6-A: cliente lento nao bloqueia feedback local e grava evidencia local',
+    'M6-A: ausencia de cliente remoto nao bloqueia feedback local e grava evidencia local',
     () async {
       final svc = StudentLearningStateService(seed: {'L1': _state0()});
-      final gate = _CompleterServerAdvanceGateClient();
-      final ctrl = _controller(svc, serverAdvanceGateClient: gate);
+      final ctrl = _controller(svc);
       final pos = LessonPositionState(
         items: _items
             .map((item) => PlannedItem(marker: item.marker, text: item.text))
@@ -1190,7 +1130,6 @@ void main() {
         baseItems: pos.items,
       );
 
-      expect(gate.requests, isEmpty);
       expect(pos.phase.type, ClassroomPhaseType.concluido);
       expect(svc.read('L1')?.attempts, hasLength(1));
       expect(svc.read('L1')?.current?.layer, LessonLayer.l3);
@@ -1201,8 +1140,6 @@ void main() {
             .where((action) => action['type'] == 'ADVANCE_GATE_PENDING'),
         isEmpty,
       );
-
-      gate.completer.complete(_serverNextLayer(LessonLayer.l2));
       await Future<void>.delayed(Duration.zero);
 
       expect(svc.read('L1')?.current?.layer, LessonLayer.l3);
@@ -1218,11 +1155,10 @@ void main() {
   );
 
   test(
-    'M6-A: falha do servidor fica pendente sem erro tecnico na UI',
+    'M6-A: fluxo local nao cria pendencia remota nem erro tecnico na UI',
     () async {
       final svc = StudentLearningStateService(seed: {'L1': _state0()});
-      final gate = _FailingServerAdvanceGateClient();
-      final ctrl = _controller(svc, serverAdvanceGateClient: gate);
+      final ctrl = _controller(svc);
       final pos = LessonPositionState(
         items: _items
             .map((item) => PlannedItem(marker: item.marker, text: item.text))
@@ -1258,7 +1194,6 @@ void main() {
       );
       await Future<void>.delayed(Duration.zero);
 
-      expect(gate.requests, isEmpty);
       expect(pos.phase.type, ClassroomPhaseType.concluido);
       expect(svc.read('L1')?.attempts, hasLength(1));
       final pendingEvents = svc
@@ -1276,8 +1211,7 @@ void main() {
 
   test('M6-A: toque repetido nao duplica pendencia idempotente', () async {
     final svc = StudentLearningStateService(seed: {'L1': _state0()});
-    final gate = _CompleterServerAdvanceGateClient();
-    final ctrl = _controller(svc, serverAdvanceGateClient: gate);
+    final ctrl = _controller(svc);
     final pos = LessonPositionState(
       items: _items
           .map((item) => PlannedItem(marker: item.marker, text: item.text))
@@ -1341,10 +1275,7 @@ void main() {
     'S12: resposta, sinal, feedback, proxima experiencia e restore',
     () async {
       final svc = StudentLearningStateService(seed: {'L1': _state0()});
-      final gate = _FakeServerAdvanceGateClient(
-        (_) => _serverNextLayer(LessonLayer.l2),
-      );
-      final ctrl = _controller(svc, serverAdvanceGateClient: gate);
+      final ctrl = _controller(svc);
       final pos = LessonPositionState(
         items: _items
             .map((item) => PlannedItem(marker: item.marker, text: item.text))
@@ -1398,8 +1329,6 @@ void main() {
             .where((action) => action['type'] == 'ADVANCE_GATE_PENDING'),
         isEmpty,
       );
-      expect(gate.requests, isEmpty);
-
       svc.mutate('L1', (s) {
         return s.copyWith(
           readyLessonMaterials: {

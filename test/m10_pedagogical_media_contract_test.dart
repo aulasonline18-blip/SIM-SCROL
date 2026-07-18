@@ -6,6 +6,8 @@ import 'package:sim_mobile/sim/media/slot_media_contract.dart';
 import 'package:sim_mobile/sim/media/student_lesson_media_service.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
+import 'support/memory_test_stores.dart';
+
 void main() {
   test('M10 aceita imagem e audio somente quando pertencem ao slot', () {
     final imageSlot = SlotMediaContract(
@@ -151,7 +153,7 @@ void main() {
         );
     final service = StudentLessonMediaService(
       audioCore: AudioCore(
-        preference: AudioPreference(),
+        preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
         playback: NoopAudioPlaybackAdapter(),
       ),
       readState: (_) => state,

@@ -11,6 +11,9 @@ import 'package:sim_mobile/sim/cloud/sim_server_cloud_functions.dart';
 import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/external_ai/sim_http_transport.dart';
+import 'package:sim_mobile/sim/external_ai/sim_server_ai_clients.dart';
+import 'package:sim_mobile/sim/external_ai/sim_server_attachment_client.dart';
+import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
 void main() {
@@ -75,7 +78,7 @@ void main() {
     'M13 billing clients expose human errors without raw JSON or secrets',
     () async {
       final transport = _FakeTransport(
-        statusCode: 500,
+        statusCode: 503,
         body: jsonEncode({
           'error': 'provider failed with token secret-token',
           'stack': 'StackTrace(secret-token)',
@@ -305,6 +308,209 @@ void main() {
       expect(result.remoteHighWaterMark, 77);
     },
   );
+
+  test(
+    'P3 T02 bridge hides raw server body and UI instructions from errors',
+    () async {
+      final transport = _FakeTransport(
+        statusCode: 503,
+        body: jsonEncode({
+          'error': {
+            'message':
+                'server says navigate to /cyber/credits and replace local state',
+            'retryable': false,
+          },
+          'requestId': 'req-p3-t02',
+        }),
+      );
+      final client = SimServerT02Client(
+        config: _t02Config(),
+        transport: transport,
+      );
+
+      Object? thrown;
+      try {
+        await client.completeLesson(
+          const T02LessonRequest(
+            lessonLocalId: 'lesson-p3',
+            item: 'Frações',
+            lang: 'pt-BR',
+            academic: 'ano 6',
+            layer: LessonLayer.l1,
+            mode: 'session',
+            errCount: 0,
+            history: [],
+          ),
+        );
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown, isA<SimExternalAiException>());
+      final error = thrown as SimExternalAiException;
+      expect(error.message, 'AI_SERVER_UNAVAILABLE');
+      expect(error.requestId, 'req-p3-t02');
+      expect(error.retryable, isTrue);
+      final text = error.toString();
+      expect(text, isNot(contains('navigate')));
+      expect(text, isNot(contains('/cyber/credits')));
+      expect(text, isNot(contains('replace local state')));
+      expect(text, isNot(contains('"error"')));
+      expect(text, isNot(contains('{')));
+      expect(text, isNot(contains('retryable=false')));
+    },
+  );
+
+  test('P3 doubt bridge does not trust server humanError as UI text', () async {
+    final transport = _FakeTransport(
+      statusCode: 200,
+      body: jsonEncode({
+        'ok': false,
+        'humanError': {
+          'message': 'reload /aula and overwrite local state before retry',
+        },
+      }),
+    );
+    final client = SimServerT02Client(
+      config: _t02Config(),
+      transport: transport,
+    );
+
+    Object? thrown;
+    try {
+      await client.doubt(
+        const T02LessonRequest(
+          lessonLocalId: 'lesson-p3',
+          item: 'Frações',
+          lang: 'pt-BR',
+          academic: 'ano 6',
+          layer: LessonLayer.l1,
+          mode: 'doubt',
+          errCount: 0,
+          history: ['duvida'],
+        ),
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown, isA<SimExternalAiException>());
+    final text = thrown.toString();
+    expect(text, contains('DOUBT_UNAVAILABLE'));
+    expect(text, isNot(contains('reload')));
+    expect(text, isNot(contains('/aula')));
+    expect(text, isNot(contains('overwrite local state')));
+  });
+
+  test(
+    'P3 missing T02 bridge is a public code, not setup instructions',
+    () async {
+      final client = SimServerT02Client(
+        config: _config(),
+        transport: _FakeTransport(statusCode: 200, body: '{}'),
+      );
+
+      Object? thrown;
+      try {
+        await client.completeLesson(
+          const T02LessonRequest(
+            lessonLocalId: 'lesson-p3',
+            item: 'Frações',
+            lang: 'pt-BR',
+            academic: 'ano 6',
+            layer: LessonLayer.l1,
+            mode: 'session',
+            errCount: 0,
+            history: [],
+          ),
+        );
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown, isA<SimExternalAiException>());
+      final text = thrown.toString();
+      expect(text, contains('T02_BRIDGE_UNAVAILABLE'));
+      expect(text, isNot(contains('Configure')));
+      expect(text, isNot(contains('ponte HTTP')));
+      expect(text, isNot(contains('APK')));
+    },
+  );
+
+  test('P3 attachment bridge hides raw provider/server payload', () async {
+    final client = SimServerAttachmentClient(
+      config: _config(),
+      transport: _FakeTransport(
+        statusCode: 503,
+        body: jsonEncode({
+          'error': {
+            'message': 'provider body with routePatch and Bearer secret',
+          },
+          'requestId': 'req-p3-attachment',
+        }),
+      ),
+    );
+
+    Object? thrown;
+    try {
+      await client.processAttachment(
+        const SimAttachmentFile(
+          name: 'a.txt',
+          contentType: 'text/plain',
+          bytes: [65],
+        ),
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown, isA<SimExternalAiException>());
+    final text = thrown.toString();
+    expect(text, contains('AI_SERVER_UNAVAILABLE'));
+    expect(text, contains('requestId=req-p3-attachment'));
+    expect(text, isNot(contains('routePatch')));
+    expect(text, isNot(contains('Bearer secret')));
+    expect(text, isNot(contains('provider body')));
+  });
+
+  test('P3 student-state HTTP errors are public safe codes', () async {
+    final client = SimServerCloudFunctions(
+      config: _config(),
+      transport: _FakeTransport(
+        statusCode: 500,
+        body: jsonEncode({
+          'error': {
+            'message':
+                'server instructs UI reload and overwrite local progress',
+          },
+          'requestId': 'req-p3-sync',
+        }),
+      ),
+    );
+
+    Object? thrown;
+    try {
+      await client.persistStudentState(
+        PersistStudentStateInput(
+          lessonLocalId: 'lesson-sync',
+          state: StudentLearningState.empty(lessonLocalId: 'lesson-sync'),
+          clientUpdatedAt: 1,
+          clientScore: 1,
+        ),
+        const SupabaseSession(accessToken: 'token', userId: 'u1'),
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown, isA<SimExternalAiException>());
+    final text = thrown.toString();
+    expect(text, contains('AI_SERVER_UNAVAILABLE'));
+    expect(text, contains('requestId=req-p3-sync'));
+    expect(text, isNot(contains('instructs UI')));
+    expect(text, isNot(contains('overwrite local progress')));
+    expect(text, isNot(contains('"message"')));
+  });
 }
 
 bool _isTextProjectFile(String path) {
@@ -323,6 +529,12 @@ bool _isTextProjectFile(String path) {
 SimAiServerConfig _config() => SimAiServerConfig(
   baseUrl: 'https://sim.test',
   accessTokenProvider: () async => 'access-token',
+);
+
+SimAiServerConfig _t02Config() => SimAiServerConfig(
+  baseUrl: 'https://sim.test',
+  accessTokenProvider: () async => 'access-token',
+  t02Path: '/api/complete-lesson',
 );
 
 class _FakeTransport implements SimHttpTransport {

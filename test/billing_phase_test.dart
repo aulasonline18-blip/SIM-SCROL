@@ -10,6 +10,8 @@ import 'package:sim_mobile/sim/billing/payments_functions.dart';
 import 'package:sim_mobile/sim/billing/play_billing_functions.dart';
 import 'package:sim_mobile/sim/billing/sim_pricing.dart';
 
+import 'support/memory_test_stores.dart';
+
 class FakeCreditsFunctions implements CreditsFunctions {
   @override
   Future<int> chargeLessonGeneration(ChargeLessonGenerationInput input) async {
@@ -114,7 +116,7 @@ void main() {
   });
 
   test('payment return store accepts only safe internal paths', () {
-    final store = PaymentReturnStore();
+    final store = PaymentReturnStore(storage: MemoryPaymentReturnStorage());
 
     store.saveReturnTo('/cyber/aula');
     expect(store.readReturnTo(), '/cyber/aula');
@@ -132,7 +134,7 @@ void main() {
       final controller = CreditsRouteController(
         creditsFunctions: FakeCreditsFunctions(),
         paymentsFunctions: FakePaymentsFunctions(),
-        returnStore: PaymentReturnStore(),
+        returnStore: PaymentReturnStore(storage: MemoryPaymentReturnStorage()),
       );
 
       controller.preserveReturnTo('/cyber/aula');
@@ -154,7 +156,7 @@ void main() {
     final controller = CreditsRouteController(
       creditsFunctions: FakeCreditsFunctions(),
       paymentsFunctions: FakePaymentsFunctions(),
-      returnStore: PaymentReturnStore(),
+      returnStore: PaymentReturnStore(storage: MemoryPaymentReturnStorage()),
       checkoutMode: CheckoutMode.embedded,
     );
 
@@ -169,7 +171,8 @@ void main() {
   test(
     'checkout return validates session and restores saved return target',
     () async {
-      final store = PaymentReturnStore()..saveReturnTo('/cyber/aula');
+      final store = PaymentReturnStore(storage: MemoryPaymentReturnStorage())
+        ..saveReturnTo('/cyber/aula');
       final controller = CheckoutReturnController(
         paymentsFunctions: FakePaymentsFunctions(),
         returnStore: store,
@@ -184,7 +187,8 @@ void main() {
   );
 
   test('checkout return invalid session uses human message', () async {
-    final store = PaymentReturnStore()..saveReturnTo('/cyber/aula');
+    final store = PaymentReturnStore(storage: MemoryPaymentReturnStorage())
+      ..saveReturnTo('/cyber/aula');
     final controller = CheckoutReturnController(
       paymentsFunctions: FakePaymentsFunctions(),
       returnStore: store,

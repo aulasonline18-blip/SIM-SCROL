@@ -1084,6 +1084,8 @@ class StudentSyncStatus {
 }
 
 class StudentLearningState {
+  static const Object _unset = Object();
+
   const StudentLearningState({
     required this.stateVersion,
     required this.lessonLocalId,
@@ -1160,7 +1162,7 @@ class StudentLearningState {
     LiveEntry? entry,
     JsonMap? placement,
     JsonMap? auxRooms,
-    JsonMap? currentLessonMaterial,
+    Object? currentLessonMaterial = _unset,
     Map<String, JsonMap>? readyLessonMaterials,
     List<JsonMap>? queuedActions,
     List<JsonMap>? inflightJobs,
@@ -1186,8 +1188,9 @@ class StudentLearningState {
       entry: entry ?? this.entry,
       placement: placement ?? this.placement,
       auxRooms: auxRooms ?? this.auxRooms,
-      currentLessonMaterial:
-          currentLessonMaterial ?? this.currentLessonMaterial,
+      currentLessonMaterial: identical(currentLessonMaterial, _unset)
+          ? this.currentLessonMaterial
+          : currentLessonMaterial as JsonMap?,
       readyLessonMaterials: readyLessonMaterials ?? this.readyLessonMaterials,
       queuedActions: queuedActions ?? this.queuedActions,
       inflightJobs: inflightJobs ?? this.inflightJobs,
@@ -1533,10 +1536,10 @@ StudentLearningState mergeStudentLearningStateFromCloud(
   final current = localCurrentRank >= remoteCurrentRank
       ? local.current ?? remote.current
       : remote.current ?? local.current;
-  final readyLessonMaterials = {
-    ...local.readyLessonMaterials,
-    ...remote.readyLessonMaterials,
-  };
+  final materialBase = _progressRank(lp) >= _progressRank(rp) ? local : remote;
+  final readyLessonMaterials = identical(materialBase, local)
+      ? {...remote.readyLessonMaterials, ...local.readyLessonMaterials}
+      : {...local.readyLessonMaterials, ...remote.readyLessonMaterials};
   return base.copyWith(
     curriculum: curriculum,
     current: current,
@@ -1544,9 +1547,9 @@ StudentLearningState mergeStudentLearningStateFromCloud(
     attempts: mergedAttempts,
     events: mergedEvents,
     currentLessonMaterial:
-        remote.currentLessonMaterial ??
-        base.currentLessonMaterial ??
-        local.currentLessonMaterial,
+        materialBase.currentLessonMaterial ??
+        local.currentLessonMaterial ??
+        remote.currentLessonMaterial,
     readyLessonMaterials: readyLessonMaterials,
     auxRooms: base.auxRooms ?? local.auxRooms ?? remote.auxRooms,
     truth: _hasServerMasteryTruth(remote.truth)
@@ -1577,16 +1580,27 @@ StudentLearningState mergeValidatedRemoteState(
   StudentLearningState localCandidate,
   StudentLearningState validatedRemote,
 ) {
+  final materialBase =
+      _progressRank(localCandidate.progress) >=
+          _progressRank(validatedRemote.progress)
+      ? localCandidate
+      : validatedRemote;
   return validatedRemote.copyWith(
     attempts: mergeAttempts(validatedRemote.attempts, localCandidate.attempts),
     events: mergeEvents(validatedRemote.events, localCandidate.events),
-    readyLessonMaterials: {
-      ...localCandidate.readyLessonMaterials,
-      ...validatedRemote.readyLessonMaterials,
-    },
+    readyLessonMaterials: identical(materialBase, localCandidate)
+        ? {
+            ...validatedRemote.readyLessonMaterials,
+            ...localCandidate.readyLessonMaterials,
+          }
+        : {
+            ...localCandidate.readyLessonMaterials,
+            ...validatedRemote.readyLessonMaterials,
+          },
     currentLessonMaterial:
-        validatedRemote.currentLessonMaterial ??
-        localCandidate.currentLessonMaterial,
+        materialBase.currentLessonMaterial ??
+        localCandidate.currentLessonMaterial ??
+        validatedRemote.currentLessonMaterial,
     queuedActions: _mergeJsonListByStableKey(
       validatedRemote.queuedActions,
       localCandidate.queuedActions,

@@ -94,27 +94,6 @@ abstract interface class DurableCloudQueueStorage implements CloudQueueStorage {
   Future<void> verifyHashWrite();
 }
 
-class MemoryCloudQueueStorage implements CloudQueueStorage {
-  Map<String, CloudQueueEntry> queue = {};
-  Map<String, String> hashes = {};
-
-  @override
-  Map<String, CloudQueueEntry> readQueue() => Map.of(queue);
-
-  @override
-  void writeQueue(Map<String, CloudQueueEntry> queue) {
-    this.queue = Map.of(queue);
-  }
-
-  @override
-  Map<String, String> readLastHashes() => Map.of(hashes);
-
-  @override
-  void writeLastHash(String lessonLocalId, String hash) {
-    hashes[lessonLocalId] = hash;
-  }
-}
-
 class CloudQueue with WidgetsBindingObserver {
   CloudQueue({
     required this.storage,

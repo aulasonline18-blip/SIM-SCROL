@@ -288,19 +288,18 @@ class SimOfflineSyncPolicy {
 
   String humanSyncError(Object error) {
     final raw = error.toString();
-    final forbidden = [
-      'JSON',
-      'HTTP',
-      'stack',
-      'Exception',
-      'SocketException',
-      'session_not_found',
-    ];
-    if (forbidden.any(raw.contains)) {
+    final lower = raw.toLowerCase();
+    if (lower.contains('session') ||
+        lower.contains('auth') ||
+        lower.contains('token')) {
+      return 'Sua sessao precisa ser renovada. Entre novamente para sincronizar.';
+    }
+    if (lower.contains('timeout') || lower.contains('tempo')) {
+      return 'A sincronizacao demorou demais. Salvamos sua resposta e vamos tentar novamente.';
+    }
+    if (raw.trim().isNotEmpty) {
       return 'Sua conexao parece instavel. Salvamos sua resposta e vamos tentar enviar novamente.';
     }
-    return raw.trim().isEmpty
-        ? 'Nao foi possivel sincronizar agora. Vamos tentar novamente.'
-        : raw;
+    return 'Nao foi possivel sincronizar agora. Vamos tentar novamente.';
   }
 }

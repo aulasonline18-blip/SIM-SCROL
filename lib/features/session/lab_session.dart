@@ -28,7 +28,6 @@ import '../../sim/cloud/supabase_flutter_session_provider.dart';
 import '../../sim/cloud/supabase_student_state_cloud_storage.dart';
 import '../../sim/config/sim_environment.dart';
 import '../../sim/external_ai/sim_ai_server_config.dart';
-import '../../sim/external_ai/sim_http_transport.dart';
 import '../../sim/external_ai/sim_server_ai_clients.dart';
 import '../../sim/external_ai/sim_server_attachment_client.dart';
 import '../../sim/errors/human_error_policy.dart';
@@ -68,55 +67,14 @@ import '../../sim/auxiliary/lesson_doubt_controller.dart';
 import '../../sim/ui/widgets/doubt_progress_bar.dart';
 
 import '../../core/utils/sim_constants.dart';
-import '../session/lab_session.dart';
 import '../portal/portal_flow.dart';
 import '../auth/login_screen.dart';
 import '../onboarding/onboarding_screens.dart';
 import '../onboarding/preparation_and_placement.dart';
-import '../classroom/aula_screen.dart';
 import '../classroom/aux_room_screens.dart';
 import '../classroom/aula_widgets.dart';
 import '../billing/billing_and_simple_pages.dart';
 import '../../shared/widgets/shared_widgets.dart';
-
-class _NoNetworkAttachmentTransport implements SimHttpTransport {
-  const _NoNetworkAttachmentTransport();
-
-  @override
-  Future<SimHttpResponse> postJson(
-    Uri uri, {
-    required Map<String, String> headers,
-    required Object? body,
-    Duration timeout = const Duration(seconds: 45),
-  }) async {
-    return const SimHttpResponse(statusCode: 200, body: '{}');
-  }
-
-  @override
-  Stream<String> postEventStream(
-    Uri uri, {
-    required Map<String, String> headers,
-    required Object? body,
-    Duration timeout = const Duration(seconds: 140),
-  }) async* {}
-
-  @override
-  Future<SimHttpResponse> postMultipart(
-    Uri uri, {
-    required Map<String, String> headers,
-    required String fieldName,
-    required String filename,
-    required String contentType,
-    required List<int> bytes,
-    Duration timeout = const Duration(seconds: 60),
-  }) async {
-    return const SimHttpResponse(
-      statusCode: 200,
-      body:
-          '{"extractedText":"texto de teste extraido sem rede","method":"test","charsExtracted":32}',
-    );
-  }
-}
 
 class LabSession extends ChangeNotifier {
   LabSession({
@@ -135,7 +93,7 @@ class LabSession extends ChangeNotifier {
     this.prefs,
   }) : canonicalStore =
            canonicalStore ??
-           StudentStateStore(local: MemoryStudentStateLocalStorage()) {
+           StudentStateStore(local: _studentStateStorageForSession(prefs)) {
     _drawerCloudFunctions = drawerCloudFunctions;
     _drawerSessionProvider = drawerSessionProvider;
     _drawerBackupFileTextPicker = drawerBackupFileTextPicker;
@@ -170,17 +128,8 @@ class LabSession extends ChangeNotifier {
         WidgetsBinding.instance.runtimeType.toString().contains('Test');
   }
 
-  SimServerAttachmentClient _testAttachmentClient() {
-    return SimServerAttachmentClient(
-      config: const SimAiServerConfig(baseUrl: 'https://sim.test'),
-      transport: const _NoNetworkAttachmentTransport(),
-    );
-  }
-
   late final EntryFormState entryForm = EntryFormState(
-    attachmentClient:
-        _attachmentClient ??
-        (_runningUnderFlutterTest ? _testAttachmentClient() : null),
+    attachmentClient: _attachmentClient,
     serverConfig: _serverConfig,
   );
   late final NavigationState navigationState = NavigationState();
@@ -197,7 +146,9 @@ class LabSession extends ChangeNotifier {
     cloudFunctions: _cloudFunctionsForDrawer(),
     sessionProvider: _sessionProviderForDrawer(),
   );
-  final PaymentReturnStore _paymentReturnStore = PaymentReturnStore();
+  late final PaymentReturnStore _paymentReturnStore = PaymentReturnStore(
+    storage: _paymentReturnStorageForSession(prefs),
+  );
   SimOrganism? _activeOrganism;
   LessonRuntimeSnapshot? aulaSnapshot;
   bool aulaRuntimeLoading = false;
@@ -225,12 +176,11 @@ class LabSession extends ChangeNotifier {
   int _aulaRuntimeGeneration = 0;
   bool _entryOfficialLessonReady = false;
   bool _entryWarmupExpected = false;
-  bool _entryWarmupContinueRequested = false;
   bool _entryAulaNavigationStarted = false;
   late SimLocaleSettings localeSettings = SimLocaleSettings.load(prefs);
 
   late final AudioPreference _audioPreference = AudioPreference(
-    storage: prefs == null ? null : SharedPrefsAudioPreferenceStorage(prefs!),
+    storage: _audioPreferenceStorageForSession(prefs),
   );
   LessonAudioController? _lessonAudioController;
   DoubtAudio? _doubtAudio;
@@ -240,6 +190,7 @@ class LabSession extends ChangeNotifier {
   void Function()? _aulaStateUnsubscribe;
   String? _aulaStateSubscriptionLessonId;
   bool _advancePendingReevaluationScheduled = false;
+  int _autoAdvanceAulaGeneration = 0;
   bool _disposed = false;
 
   void _notifyFromChild() => notifyListeners();
@@ -1198,7 +1149,7 @@ class LabSession extends ChangeNotifier {
     warmupError = null;
     warmupSelectedAnswer = null;
     warmupWaitingForOfficialLesson = false;
-    _resetEntryCoordinator(warmupExpected: !_runningUnderFlutterTest);
+    _resetEntryCoordinator(warmupExpected: false);
     notifyListeners();
 
     try {
@@ -1216,7 +1167,7 @@ class LabSession extends ChangeNotifier {
           return;
         }
       }
-      debugPrint('[SIM] T00_STARTED lessonLocalId=$id');
+      debugPrint('[SIM] T00_STARTED');
       final ficha = buildPedagogicalFicha();
       final guidedProfile = _guidedProfileFields(freeText.trim(), ficha: ficha);
       final academic = _academicFromOnboarding(guidedProfile);
@@ -1293,13 +1244,13 @@ class LabSession extends ChangeNotifier {
       }
     } on StudentExperienceEngineException catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
-      debugPrint('[SIM] BLOCKED reason=${err.error.message}');
+      debugPrint('[SIM] BLOCKED reason=${err.error.kind.name}');
       entryError = err.error.message;
       entryStatus = 'erro';
       notifyListeners();
     } catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
-      debugPrint('[SIM] BLOCKED reason=${err.toString()}');
+      debugPrint('[SIM] BLOCKED reason=unexpected');
       entryError = humanErrorMessage(
         err,
         fallback:
@@ -1317,49 +1268,12 @@ class LabSession extends ChangeNotifier {
     required String academic,
     required int generation,
   }) async {
-    if (objective.trim().isEmpty) return;
-    if (_runningUnderFlutterTest) return;
-    warmupLoading = true;
+    _entryWarmupExpected = false;
+    warmupLoading = false;
     warmupError = null;
     notifyListeners();
-    try {
-      final lesson = await SimServerWarmupClient(config: _serverConfig())
-          .generate(
-            lessonLocalId: lessonLocalId,
-            objective: objective,
-            ficha: onboarding,
-            locale: localeContract,
-            academic: academic,
-          );
-      if (!_isCurrentExperience(lessonLocalId, generation)) return;
-      warmupLesson = lesson;
-      warmupLoading = false;
-      warmupError = lesson == null ? 'Aquecimento indisponível.' : null;
-      if (lesson == null) _entryWarmupExpected = false;
-      if (lesson != null) {
-        canonicalStore?.patchState(lessonLocalId, (state) {
-          return state.copyWith(
-            extra: {...state.extra, 'warmup': lesson.toJson()},
-          );
-        });
-        if (route == '/cyber/curriculo') {
-          navigationState.openRoute('/cyber/warmup');
-        }
-      }
-      notifyListeners();
-      unawaited(_tryOpenOfficialAula(source: 'warmup_ready'));
-    } catch (error) {
-      if (!_isCurrentExperience(lessonLocalId, generation)) return;
-      debugPrint('[SIM] WARMUP_PREPARE_FAILED error=${error.toString()}');
-      warmupLoading = false;
-      _entryWarmupExpected = false;
-      warmupError = humanErrorMessage(
-        error,
-        fallback:
-            'Nao consegui preparar o aquecimento agora. Continue para a aula principal.',
-      );
-      notifyListeners();
-      unawaited(_tryOpenOfficialAula(source: 'warmup_failed'));
+    if (_isCurrentExperience(lessonLocalId, generation)) {
+      unawaited(_tryOpenOfficialAula(source: 'warmup_removed'));
     }
   }
 
@@ -1384,6 +1298,7 @@ class LabSession extends ChangeNotifier {
       });
     }
     notifyListeners();
+    unawaited(continueFromWarmupToAula());
   }
 
   void openWarmupBridge({bool preparePlacement = false}) {
@@ -1405,9 +1320,7 @@ class LabSession extends ChangeNotifier {
     if (controller != null && controller.destination != '/cyber/aula') {
       controller.continueToAula();
     }
-    _entryWarmupContinueRequested = true;
-    warmupWaitingForOfficialLesson =
-        !_entryOfficialLessonReady && !_hasLocalOfficialAulaState();
+    warmupWaitingForOfficialLesson = false;
     notifyListeners();
     await _tryOpenOfficialAula(source: 'warmup_continue');
   }
@@ -1415,22 +1328,13 @@ class LabSession extends ChangeNotifier {
   void _resetEntryCoordinator({required bool warmupExpected}) {
     _entryOfficialLessonReady = false;
     _entryWarmupExpected = warmupExpected;
-    _entryWarmupContinueRequested = false;
     _entryAulaNavigationStarted = false;
   }
 
   Future<void> _tryOpenOfficialAula({required String source}) async {
     if (_entryAulaNavigationStarted) return;
-    if (!_entryOfficialLessonReady && !_hasLocalOfficialAulaState()) return;
-    if (_entryWarmupExpected &&
-        route == '/cyber/warmup' &&
-        !_entryWarmupContinueRequested) {
-      return;
-    }
-    if (_entryWarmupExpected &&
-        route == '/cyber/curriculo' &&
-        !_entryWarmupContinueRequested) {
-      return;
+    if (!_entryOfficialLessonReady) {
+      if (_entryWarmupExpected || !_hasLocalOfficialAulaState()) return;
     }
     warmupWaitingForOfficialLesson = false;
     final controller = activePlacementController;
@@ -1520,9 +1424,7 @@ class LabSession extends ChangeNotifier {
   }) async {
     final token = await _freshServerAccessToken(forceRefresh: forceRefresh);
     if (token == null || token.trim().isEmpty) {
-      debugPrint(
-        '[SIM] PROTECTED_SESSION_FAILED returnTo=$returnTo forceRefresh=$forceRefresh',
-      );
+      debugPrint('[SIM] PROTECTED_SESSION_FAILED');
       goLogin(target: returnTo);
       return false;
     }
@@ -2130,7 +2032,6 @@ class LabSession extends ChangeNotifier {
     );
     canonicalStore?.writeState(renamed);
     _enqueueLessonForRemoteVaultSync(lessonLocalId, reason: 'drawer_renamed');
-    await _remoteVaultSync()?.drain();
     return true;
   }
 
@@ -2638,7 +2539,6 @@ class LabSession extends ChangeNotifier {
     if (controller != null) {
       controller.continueToAula();
       if (_entryOfficialLessonReady || _hasLocalOfficialAulaState()) {
-        _entryWarmupContinueRequested = true;
         unawaited(_tryOpenOfficialAula(source: 'placement_finished'));
       } else {
         warmupWaitingForOfficialLesson = false;
@@ -2650,7 +2550,6 @@ class LabSession extends ChangeNotifier {
     }
     lessonUiState.finishPlacement();
     if (_entryOfficialLessonReady || _hasLocalOfficialAulaState()) {
-      _entryWarmupContinueRequested = true;
       unawaited(_tryOpenOfficialAula(source: 'placement_finished'));
     } else {
       navigationState.openRoute('/cyber/aula');
@@ -2684,6 +2583,7 @@ class LabSession extends ChangeNotifier {
 
   Future<void> submitAulaSignal(int value) async {
     if (aulaRuntimeLoading) return;
+    if (aulaSnapshot?.phase.type == ClassroomPhaseType.avancoPendente) return;
     stopActiveAudio();
     final signal = switch (value) {
       1 => DecisionSignal.one,
@@ -2720,12 +2620,33 @@ class LabSession extends ChangeNotifier {
       _bindActiveLessonMedia(organism);
       unawaited(_openAuxRoomForLastAdvanceDecision(organism));
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
+      _scheduleAutoAdvanceAfterFeedback(organism);
     } catch (error) {
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       aulaRuntimeError = error.toString();
     } finally {
       notifyListeners();
     }
+  }
+
+  void _scheduleAutoAdvanceAfterFeedback(SimOrganism organism) {
+    final phase = aulaSnapshot?.phase;
+    if (phase?.type != ClassroomPhaseType.concluido ||
+        phase?.wasCorrect != true) {
+      return;
+    }
+    final generation = ++_autoAdvanceAulaGeneration;
+    Future<void>.delayed(const Duration(milliseconds: 900), () async {
+      if (_disposed ||
+          generation != _autoAdvanceAulaGeneration ||
+          _activeOrganism != organism ||
+          aulaRuntimeLoading ||
+          aulaSnapshot?.phase.type != ClassroomPhaseType.concluido ||
+          aulaSnapshot?.phase.wasCorrect != true) {
+        return;
+      }
+      await advanceAula();
+    });
   }
 
   Future<void> _openAuxRoomForLastAdvanceDecision(SimOrganism organism) async {
@@ -2803,6 +2724,7 @@ class LabSession extends ChangeNotifier {
 
   Future<void> advanceAula() async {
     if (aulaRuntimeLoading) return;
+    _autoAdvanceAulaGeneration++;
     final organism = _activeOrganism ?? _organismForActiveLesson();
     stopActiveAudio(notify: false);
     aulaRuntimeLoading = true;
@@ -3038,6 +2960,130 @@ class LabSession extends ChangeNotifier {
     _lessonAudioController?.pararAudio();
     _doubtAudio?.stopDoubtAudio();
     super.dispose();
+  }
+}
+
+bool _isFlutterTestEnvironment() {
+  return Platform.environment['FLUTTER_TEST'] == 'true' ||
+      WidgetsBinding.instance.runtimeType.toString().contains('Test');
+}
+
+StudentStateLocalStorage _studentStateStorageForSession(
+  SharedPreferences? prefs,
+) {
+  if (prefs != null) return SharedPrefsStudentStateLocalStorage(prefs);
+  if (_isFlutterTestEnvironment()) {
+    return _TestOnlyVolatileStudentStateStorage();
+  }
+  return _ExplicitStudentStateStorageRequired();
+}
+
+PaymentReturnStorage _paymentReturnStorageForSession(SharedPreferences? prefs) {
+  if (prefs != null) return SharedPrefsPaymentReturnStorage(prefs);
+  if (_isFlutterTestEnvironment()) {
+    return _TestOnlyVolatilePaymentReturnStorage();
+  }
+  throw StateError('PAYMENT_RETURN_STORAGE_REQUIRED');
+}
+
+AudioPreferenceStorage _audioPreferenceStorageForSession(
+  SharedPreferences? prefs,
+) {
+  if (prefs != null) return SharedPrefsAudioPreferenceStorage(prefs);
+  if (_isFlutterTestEnvironment()) {
+    return _TestOnlyVolatileAudioPreferenceStorage();
+  }
+  throw StateError('AUDIO_PREFERENCE_STORAGE_REQUIRED');
+}
+
+class _ExplicitStudentStateStorageRequired implements StudentStateLocalStorage {
+  Never _fail() => throw const StudentStateStorageException(
+    'STUDENT_STATE_STORAGE_REQUIRED',
+  );
+
+  @override
+  void deleteEvents(String lessonLocalId) => _fail();
+
+  @override
+  void deleteState(String lessonLocalId) => _fail();
+
+  @override
+  List<String> listStateIds() => _fail();
+
+  @override
+  String? readEvents(String lessonLocalId) => _fail();
+
+  @override
+  String? readState(String lessonLocalId) => _fail();
+
+  @override
+  void writeEvents(String lessonLocalId, String encoded) => _fail();
+
+  @override
+  void writeState(String lessonLocalId, String encoded) => _fail();
+}
+
+class _TestOnlyVolatileStudentStateStorage implements StudentStateLocalStorage {
+  final Map<String, String> _states = {};
+  final Map<String, String> _events = {};
+
+  @override
+  void deleteEvents(String lessonLocalId) {
+    _events.remove(lessonLocalId);
+  }
+
+  @override
+  void deleteState(String lessonLocalId) {
+    _states.remove(lessonLocalId);
+  }
+
+  @override
+  List<String> listStateIds() => _states.keys.toList();
+
+  @override
+  String? readEvents(String lessonLocalId) => _events[lessonLocalId];
+
+  @override
+  String? readState(String lessonLocalId) => _states[lessonLocalId];
+
+  @override
+  void writeEvents(String lessonLocalId, String encoded) {
+    _events[lessonLocalId] = encoded;
+  }
+
+  @override
+  void writeState(String lessonLocalId, String encoded) {
+    _states[lessonLocalId] = encoded;
+  }
+}
+
+class _TestOnlyVolatilePaymentReturnStorage implements PaymentReturnStorage {
+  final Map<String, String> _values = {};
+
+  @override
+  String? read(String key) => _values[key];
+
+  @override
+  void remove(String key) {
+    _values.remove(key);
+  }
+
+  @override
+  void write(String key, String value) {
+    _values[key] = value;
+  }
+}
+
+class _TestOnlyVolatileAudioPreferenceStorage
+    implements AudioPreferenceStorage {
+  final Map<String, String> _values = {};
+
+  @override
+  String? read(String key) => _values[key];
+
+  @override
+  void write(String key, String value) {
+    _values[key] = value;
   }
 }
 

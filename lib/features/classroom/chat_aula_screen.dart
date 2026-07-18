@@ -12,13 +12,13 @@ import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/fixed_bubble.dart';
 import '../onboarding/preparation_and_placement.dart';
 import '../session/lab_session.dart';
-import 'aula_screen.dart';
 import 'aula_widgets.dart';
 import 'chat_aula_messages.dart';
 import 'aux_room_screens.dart';
 import 'chat_aula_timeline_builder.dart';
 import 'chat_aula_widgets.dart';
 import 'doubt_input_sheet_widget.dart';
+import 'lesson_empty_screen.dart';
 
 class ChatAulaScreen extends StatefulWidget {
   const ChatAulaScreen({required this.session, super.key});
@@ -179,14 +179,6 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     _runConversationAction('signal', () {
       return widget.session.submitAulaSignal(value);
     });
-  }
-
-  void _retryLessonRuntime() {
-    _runConversationAction('retry', widget.session.openAulaRuntime);
-  }
-
-  void _advanceLesson() {
-    _runConversationAction('next', widget.session.advanceAula);
   }
 
   void _openDoubtFromAction() {
@@ -355,8 +347,8 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
                 initialScrollKey: _conversationKeyFor(session),
                 onChooseAnswer: _chooseAnswer,
                 onSignal: _submitSignal,
-                onRetry: _retryLessonRuntime,
-                onNext: _advanceLesson,
+                onRetry: () {},
+                onNext: () {},
                 onOpenDoubt: _openDoubtFromAction,
               ),
             ),

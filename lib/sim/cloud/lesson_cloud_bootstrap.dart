@@ -30,8 +30,7 @@ class LessonCloudBootstrap {
       return false;
     }
     final lessonLocalId = canonicalLessonLocalId(input.onboarding);
-    sync.enqueuePatch(lessonLocalId);
-    await sync.drain();
+    await sync.enqueuePatch(lessonLocalId);
     return true;
   }
 }

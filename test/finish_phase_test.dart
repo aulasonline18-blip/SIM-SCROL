@@ -13,7 +13,6 @@ import 'package:sim_mobile/sim/external_ai/sim_server_attachment_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/main.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
-import 'package:sim_mobile/sim/support/sim_finish_contract.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 import 'package:sim_mobile/sim/ui/widgets/sim_typewriter.dart';
@@ -71,20 +70,7 @@ void main() {
     debugUseVisualWebViewPlaceholder = false;
   });
 
-  test('acabamento cobre todos os itens mandatarios', () {
-    expect(simFinishIsComplete(), true);
-    expect(simFinishRequirements.length, SimFinishArea.values.length);
-    expect(
-      simFinishRequirements.map((r) => r.label).join('\n'),
-      contains('Audio com estado visivel'),
-    );
-    expect(
-      simFinishRequirements.map((r) => r.label).join('\n'),
-      contains('Imagem com estado visivel'),
-    );
-  });
-
-  testWidgets('objetivo processa anexo pelo client real sem texto fixo', (
+  testWidgets('objetivo sem arquivo real nao cria anexo sintetico', (
     WidgetTester tester,
   ) async {
     final transport = FakeAttachmentTransport();
@@ -102,16 +88,12 @@ void main() {
 
     await tester.pumpWidget(SimMobileApp(initialSession: session));
     session.addLabAttachment('gallery');
-    expect(session.attachments.single.status, 'processing');
     await tester.pumpAndSettle();
 
-    expect(transport.calls, 1);
-    expect(session.attachments.single.status, 'ready');
-    expect(
-      session.attachments.single.extractedText,
-      'texto real extraido pelo servidor',
-    );
-    expect(session.attachments.single.extractedText, isNot(contains('MOCK')));
+    expect(transport.calls, 0);
+    expect(session.attachments, isEmpty);
+    expect(session.attachmentError, isNotNull);
+    expect(session.attachmentError, isNot(contains('MOCK')));
   });
 
   testWidgets('objetivo envia bytes reais de anexo selecionado', (

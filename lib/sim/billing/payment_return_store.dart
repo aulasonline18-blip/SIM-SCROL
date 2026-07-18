@@ -1,29 +1,54 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 abstract interface class PaymentReturnStorage {
   String? read(String key);
   void write(String key, String value);
   void remove(String key);
 }
 
-class MemoryPaymentReturnStorage implements PaymentReturnStorage {
-  final Map<String, String> _values = {};
+class SharedPrefsPaymentReturnStorage implements PaymentReturnStorage {
+  SharedPrefsPaymentReturnStorage(this._prefs);
+
+  final SharedPreferences _prefs;
 
   @override
-  String? read(String key) => _values[key];
+  String? read(String key) => _prefs.getString(key);
 
   @override
   void remove(String key) {
-    _values.remove(key);
+    _prefs.remove(key);
   }
 
   @override
   void write(String key, String value) {
-    _values[key] = value;
+    _prefs.setString(key, value);
+  }
+}
+
+class _ExplicitPaymentReturnStorageRequired implements PaymentReturnStorage {
+  const _ExplicitPaymentReturnStorageRequired();
+
+  Never _missing() {
+    throw StateError('PAYMENT_RETURN_STORAGE_REQUIRED');
+  }
+
+  @override
+  String? read(String key) => _missing();
+
+  @override
+  void remove(String key) {
+    _missing();
+  }
+
+  @override
+  void write(String key, String value) {
+    _missing();
   }
 }
 
 class PaymentReturnStore {
   PaymentReturnStore({PaymentReturnStorage? storage})
-      : storage = storage ?? MemoryPaymentReturnStorage();
+    : storage = storage ?? const _ExplicitPaymentReturnStorageRequired();
 
   static const key = 'sim-payment-returnto-v0';
 

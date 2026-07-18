@@ -2466,6 +2466,33 @@ void main() {
     () async {
       final service = StudentLearningStateService();
       service.ensure(lessonLocalId: 'cyber-loaded-window');
+      final initialMaterial = preparedMaterialFromLesson(
+        lesson: const CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto preparado Item 1 L1.',
+            question: 'Pergunta preparada Item 1 L1?',
+            options: {
+              AnswerLetter.A: 'A certa',
+              AnswerLetter.B: 'B errada',
+              AnswerLetter.C: 'C errada',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText: 'Texto preparado Item 1 L1. Pergunta preparada Item 1 L1?',
+        ),
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l1,
+      );
+      service.mutate('cyber-loaded-window', (state) {
+        return state.copyWith(
+          currentLessonMaterial: initialMaterial,
+          readyLessonMaterials: {
+            preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): initialMaterial,
+          },
+        );
+      });
       final orchestrator = LessonOrchestrator(
         t02Client: FakeT02Client(),
         cache: LessonMaterialCache(),
@@ -2516,14 +2543,13 @@ void main() {
       expect(position.teoriaPronta, isTrue);
       expect(state?.queuedActions, hasLength(2));
       final hotJob = state?.queuedActions.firstWhere(
-        (job) => job['source'] == 'cyber.aula.local-preparation',
+        (job) => job['source'] == 'cyber.aula.cache-window',
       );
       final warmJob = state?.queuedActions.firstWhere(
-        (job) =>
-            job['source'] == 'cyber.aula.local-preparation.warm-offline-cache',
+        (job) => job['source'] == 'cyber.aula.cache-window.warm-offline-cache',
       );
       expect(hotJob?['type'], 'PREPARE_READY_WINDOW');
-      expect(hotJob?['priority'], 'background');
+      expect(hotJob?['priority'], 'hot-local');
       expect(hotJob?['payload']?['maxSlots'], 4);
       expect(warmJob?['payload']?['maxSlots'], 15);
       final event = state?.events.lastWhere(
@@ -2543,9 +2569,35 @@ void main() {
     'visible lesson proactively prepares L2 L3 and next item before answer',
     () async {
       const lessonId = 'cyber-proactive-window';
+      final initialMaterial = preparedMaterialFromLesson(
+        lesson: const CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto preparado Item 1 L1.',
+            question: 'Pergunta preparada Item 1 L1?',
+            options: {
+              AnswerLetter.A: 'A certa',
+              AnswerLetter.B: 'B errada',
+              AnswerLetter.C: 'C errada',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText: 'Texto preparado Item 1 L1. Pergunta preparada Item 1 L1?',
+        ),
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l1,
+      );
       final service = StudentLearningStateService(
         seed: {
-          lessonId: _stateWithFiveItems().copyWith(lessonLocalId: lessonId),
+          lessonId: _stateWithFiveItems().copyWith(
+            lessonLocalId: lessonId,
+            currentLessonMaterial: initialMaterial,
+            readyLessonMaterials: {
+              preparedLessonMaterialKey(0, 'M1', LessonLayer.l1):
+                  initialMaterial,
+            },
+          ),
         },
       );
       final t02 = FakeT02Client();

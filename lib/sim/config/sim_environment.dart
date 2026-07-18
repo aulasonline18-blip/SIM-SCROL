@@ -8,7 +8,7 @@ class SimEnvironment {
 
   static const configuredApiBaseUrl = String.fromEnvironment(
     'SIM_SERVER_URL',
-    defaultValue: 'http://167.179.109.137:3000',
+    defaultValue: '',
   );
 
   static const devApiBaseUrl = String.fromEnvironment(
@@ -21,6 +21,7 @@ class SimEnvironment {
     if (configured.isNotEmpty) return configured;
     final dev = devApiBaseUrl.trim();
     if (!isProduction && dev.isNotEmpty) return dev;
+    if (!isProduction) return 'http://127.0.0.1:3000';
     throw StateError(
       'SIM_SERVER_URL precisa ser definido. Use HTTPS em production; use SIM_DEV_SERVER_URL apenas em desenvolvimento.',
     );
@@ -28,7 +29,7 @@ class SimEnvironment {
 
   static const checkoutReturnOrigin = String.fromEnvironment(
     'SIM_CHECKOUT_RETURN_ORIGIN',
-    defaultValue: 'https://gemini-aid-pal.lovable.app',
+    defaultValue: '',
   );
 
   static const stripeEnvironment = String.fromEnvironment(

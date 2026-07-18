@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+
+import 'sim_http_transport.dart';
 
 typedef SimAccessTokenProvider = Future<String?> Function();
 
@@ -69,4 +73,78 @@ class SimExternalAiException implements Exception {
     final retry = retryable == null ? '' : ' retryable=$retryable';
     return 'SimExternalAiException$status$request$safeCode$retry: $message';
   }
+}
+
+SimExternalAiException simSafeHttpException(
+  SimHttpResponse response, {
+  String? fallbackRequestId,
+}) {
+  final parsed = _parseSafeHttpBody(response.body);
+  final code = _safeCodeForStatus(response.statusCode);
+  return SimExternalAiException(
+    code,
+    statusCode: response.statusCode,
+    requestId:
+        _safeToken(response.headers['x-request-id']) ??
+        _safeToken(parsed.requestId) ??
+        _safeToken(fallbackRequestId),
+    code: code,
+    retryable: _retryableForStatus(response.statusCode),
+  );
+}
+
+SimExternalAiException simSafeTimeoutException({
+  required String code,
+  String? requestId,
+}) {
+  return SimExternalAiException(
+    code,
+    statusCode: 408,
+    requestId: _safeToken(requestId),
+    code: code,
+    retryable: true,
+  );
+}
+
+class _ParsedSafeHttpBody {
+  const _ParsedSafeHttpBody({this.requestId});
+
+  final String? requestId;
+}
+
+_ParsedSafeHttpBody _parseSafeHttpBody(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is! Map) return const _ParsedSafeHttpBody();
+    return _ParsedSafeHttpBody(
+      requestId: (decoded['requestId'] ?? decoded['request_id'])?.toString(),
+    );
+  } catch (_) {
+    return const _ParsedSafeHttpBody();
+  }
+}
+
+String _safeCodeForStatus(int statusCode) {
+  if (statusCode == 401 || statusCode == 403) return 'AUTH_REQUIRED';
+  if (statusCode == 402) return 'CREDIT_REQUIRED';
+  if (statusCode == 408 || statusCode == 504) return 'AI_TIMEOUT';
+  if (statusCode == 409) return 'AI_CONFLICT';
+  if (statusCode == 429) return 'AI_RATE_LIMIT';
+  if (statusCode >= 500) return 'AI_SERVER_UNAVAILABLE';
+  return 'AI_REQUEST_FAILED';
+}
+
+bool _retryableForStatus(int statusCode) {
+  return statusCode == 408 ||
+      statusCode == 429 ||
+      statusCode == 502 ||
+      statusCode == 503 ||
+      statusCode == 504;
+}
+
+String? _safeToken(String? raw) {
+  final value = (raw ?? '').trim();
+  if (value.isEmpty || value.length > 96) return null;
+  final allowed = RegExp(r'^[A-Za-z0-9._:-]+$');
+  return allowed.hasMatch(value) ? value : null;
 }

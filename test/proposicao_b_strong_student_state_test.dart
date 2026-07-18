@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'support/memory_test_stores.dart';
 import 'package:sim_mobile/sim/cloud/cloud_functions.dart';
 import 'package:sim_mobile/sim/cloud/cloud_queue.dart';
 import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
@@ -53,7 +54,7 @@ void main() {
   });
 
   test(
-    'B merge comum preserva riqueza e material remoto vence cache local',
+    'B merge comum preserva riqueza e material local vence cache remoto',
     () {
       final local = _state(itemIdx: 2, layer: LessonLayer.l2, advances: 2)
           .copyWith(
@@ -74,15 +75,18 @@ void main() {
 
       final merged = mergeStudentLearningStateFromCloud(local, remote);
 
-      expect(merged.currentLessonMaterial?['source'], 'server');
-      expect(merged.readyLessonMaterials['slot-shared']?['source'], 'server');
+      expect(merged.currentLessonMaterial?['source'], 'cache-local');
+      expect(
+        merged.readyLessonMaterials['slot-shared']?['source'],
+        'cache-local',
+      );
       expect(merged.readyLessonMaterials, contains('slot-local'));
       expect(merged.readyLessonMaterials, contains('slot-remote'));
     },
   );
 
   test(
-    'B 409 restaura remoteState como base e nao deixa local atrasado mandar',
+    'B 409 restaura remoteState como base sem substituir material local',
     () async {
       const localAttempt = LessonAttempt(
         marker: 'M3',
@@ -123,8 +127,11 @@ void main() {
       final restored = states.read('lesson-b')!;
       expect(restored.progress?.itemIdx, 1);
       expect(restored.progress?.layer, LessonLayer.l3);
-      expect(restored.currentLessonMaterial?['source'], 'server');
-      expect(restored.readyLessonMaterials['slot-shared']?['source'], 'server');
+      expect(restored.currentLessonMaterial?['source'], 'cache-local');
+      expect(
+        restored.readyLessonMaterials['slot-shared']?['source'],
+        'cache-local',
+      );
       expect(
         restored.attempts.map((attempt) => attempt.marker),
         contains('M3'),

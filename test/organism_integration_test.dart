@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'support/memory_test_stores.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/sim/classroom/lesson_answer_progress_controller.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';

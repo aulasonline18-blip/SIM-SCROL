@@ -240,7 +240,7 @@ void main() {
     expect(view.data, imageData);
   });
 
-  testWidgets('typed feedback action remains tappable with pending visual', (
+  testWidgets('typed feedback does not expose manual advance action', (
     tester,
   ) async {
     var advanced = 0;
@@ -271,8 +271,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
-    expect(advanced, 1);
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
+    expect(find.byKey(const Key('chat-feedback-doubt-button')), findsOneWidget);
+    expect(advanced, 0);
   });
 
   testWidgets('chat timeline preserves app central button phases', (
@@ -436,7 +437,7 @@ void main() {
     expect(find.byKey(const Key('inline-signal-choices')), findsNothing);
     expect(find.text('Feedback depois do sinal 1.'), findsOneWidget);
     expect(find.byKey(const Key('chat-feedback-doubt-button')), findsOneWidget);
-    expect(find.byKey(const Key('chat-feedback-next-button')), findsOneWidget);
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
     expect(find.text(t('aula_doubt')), findsOneWidget);
     expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
     expect(
@@ -449,13 +450,8 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
-    await Scrollable.ensureVisible(
-      tester.element(find.byKey(const Key('chat-feedback-next-button'))),
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
     expect(doubtOpened, 1);
-    expect(advanced, 1);
+    expect(advanced, 0);
   });
 
   testWidgets('dead history actions are rendered inert by message contract', (
@@ -528,8 +524,8 @@ void main() {
 
     await tester.tap(find.text('Alternativa antiga A'));
     await tester.tap(find.text(t('aula_sig_certeza')));
-    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
-    await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
+    expect(find.byKey(const Key('chat-feedback-doubt-button')), findsNothing);
     expect(find.text(t('aula_try_again_2')), findsNothing);
 
     expect(answers, 0);
@@ -635,7 +631,7 @@ void main() {
 
     expect(find.text('Sem animacao obrigatoria.'), findsOneWidget);
     expect(find.text('Feedback sem depender de animacao.'), findsOneWidget);
-    expect(find.byKey(const Key('chat-feedback-next-button')), findsOneWidget);
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
     expect(find.byType(TweenAnimationBuilder<double>), findsNothing);
     expect(find.byKey(const Key('chat-return-current-button')), findsNothing);
   });
@@ -856,9 +852,8 @@ void main() {
     expect(signal, 3);
 
     final retryFinder = find.text(t('aula_try_again_2'));
-    expect(retryFinder, findsOneWidget);
-    await tester.tap(retryFinder);
-    expect(retries, 1);
+    expect(retryFinder, findsNothing);
+    expect(retries, 0);
   });
 
   testWidgets(
@@ -900,7 +895,7 @@ void main() {
     },
   );
 
-  testWidgets('chat timeline renders feedback with doubt and advance actions', (
+  testWidgets('chat timeline renders feedback with doubt and no manual advance', (
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
@@ -931,29 +926,14 @@ void main() {
     );
 
     expect(find.text('✅ Exato. Você domina este ponto.'), findsOneWidget);
-    expect(find.byType(TweenAnimationBuilder<double>), findsOneWidget);
+    expect(find.byType(TweenAnimationBuilder<double>), findsNothing);
     expect(find.text(t('aula_doubt')), findsOneWidget);
-    final nextItem = _textAny([
-      'Próximo item',
-      'Next topic',
-      'Sujet suivant',
-      'Siguiente tema',
-    ]);
-    expect(nextItem, findsOneWidget);
-    final nextSemantics = tester.getSemantics(
-      find.byKey(const Key('chat-feedback-next-button')),
-    );
-    expect(nextSemantics.flagsCollection.isButton, isTrue);
-    expect(
-      nextSemantics.flagsCollection.isEnabled.toString(),
-      contains('isTrue'),
-    );
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
 
     await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
     expect(openedDoubt, isTrue);
 
-    await tester.tap(nextItem);
-    expect(advanced, isTrue);
+    expect(advanced, isFalse);
     semantics.dispose();
   });
 
@@ -987,14 +967,14 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
-    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
+    expect(find.byKey(const Key('chat-feedback-doubt-button')), findsNothing);
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
 
     expect(openedDoubt, isFalse);
     expect(advanced, isFalse);
   });
 
-  testWidgets('chat feedback pending next action remains tappable', (
+  testWidgets('chat feedback pending actions do not expose manual advance', (
     tester,
   ) async {
     var openedDoubt = 0;
@@ -1026,11 +1006,11 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsWidgets);
 
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
     await tester.tap(find.byKey(const Key('chat-feedback-doubt-button')));
-    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
 
     expect(openedDoubt, 0);
-    expect(advanced, 1);
+    expect(advanced, 0);
   });
 
   testWidgets('chat retry pending action is visible and inactive', (
@@ -1061,8 +1041,8 @@ void main() {
       ),
     );
 
-    expect(find.text(t('aula_retrying')), findsOneWidget);
-    await tester.tap(find.text(t('aula_retrying')));
+    expect(find.text(t('aula_retrying')), findsNothing);
+    expect(find.text(t('aula_try_again_2')), findsNothing);
     expect(retries, 0);
   });
 
@@ -1116,7 +1096,7 @@ void main() {
     expect(signal, 1);
   });
 
-  testWidgets('chat aula advances only when next button is tapped', (
+  testWidgets('chat feedback does not expose manual next button', (
     tester,
   ) async {
     final session = _AutoAdvanceSession()
@@ -1143,23 +1123,11 @@ void main() {
       find.text('✅ Exato. Você domina este ponto.', skipOffstage: false),
       findsOneWidget,
     );
-    expect(session.autoAdvances, 0);
-
-    await tester.pump(const Duration(milliseconds: 1379));
-    expect(session.autoAdvances, 0);
-
-    await tester.pump(const Duration(milliseconds: 1));
-    expect(session.autoAdvances, 0);
-
-    await Scrollable.ensureVisible(
-      tester.element(find.byKey(const Key('chat-feedback-next-button'))),
-      duration: Duration.zero,
-      alignment: 0.5,
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-feedback-doubt-button'), skipOffstage: false),
+      findsOneWidget,
     );
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
-    await tester.pump();
-    expect(session.autoAdvances, 1);
   });
 
   testWidgets(
@@ -1385,7 +1353,7 @@ void main() {
     },
   );
 
-  testWidgets('chat timeline auto scrolls to the end after advance', (
+  testWidgets('chat timeline accepts new lesson turn without manual advance', (
     tester,
   ) async {
     final key = GlobalKey<_ChatTimelineHarnessState>();
@@ -1407,21 +1375,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
     expect(controller.position.pixels, greaterThan(0));
 
-    key.currentState!.appendMessage('Feedback para avancar');
+    key.currentState!.appendNewLessonTurn();
     await tester.pump();
-    await tester.ensureVisible(
-      find.byKey(const Key('chat-feedback-next-button')),
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('chat-feedback-next-button')));
     await tester.pumpAndSettle();
 
-    final optionsFinder = find.text('Nova alternativa B');
-    expect(optionsFinder, findsOneWidget);
-    expect(
-      controller.position.pixels,
-      closeTo(controller.position.maxScrollExtent, 1),
-    );
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
 
     final beforeManualDrag = controller.position.pixels;
     await tester.drag(
@@ -2085,14 +2044,9 @@ void main() {
     final doubtRect = tester.getRect(
       find.byKey(const Key('chat-feedback-doubt-button')),
     );
-    final nextRect = tester.getRect(
-      find.byKey(const Key('chat-feedback-next-button')),
-    );
+    expect(find.byKey(const Key('chat-feedback-next-button')), findsNothing);
     expect(doubtRect.width, lessThanOrEqualTo(288));
-    expect(nextRect.width, lessThanOrEqualTo(288));
     expect(doubtRect.height, greaterThanOrEqualTo(48));
-    expect(nextRect.height, greaterThanOrEqualTo(48));
-    expect(doubtRect.top, greaterThan(nextRect.bottom));
   });
 
   testWidgets(
@@ -2861,14 +2815,6 @@ void main() {
       expect(
         messages.map((message) => message.text),
         contains('Pergunta atual restaurada?'),
-      );
-      expect(
-        messages.any(
-          (message) =>
-              message.kind == ChatLessonMessageKind.feedback &&
-              message.deliveryStatus == ChatLessonDeliveryStatus.read,
-        ),
-        isTrue,
       );
     },
   );

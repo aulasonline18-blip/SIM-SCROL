@@ -225,12 +225,8 @@ class SimOrganism {
       t02Caller: AuxRoomT02Caller(client: t02Client),
     );
     final auxRoomsController = AuxRoomsController(
-      reviewRoomService: ReviewRoomService(
-        auxRoomService,
-      ),
-      recoveryRoomService: RecoveryRoomService(
-        auxRoomService,
-      ),
+      reviewRoomService: ReviewRoomService(auxRoomService),
+      recoveryRoomService: RecoveryRoomService(auxRoomService),
     );
     final lessonRuntimeEngine = LessonRuntimeEngine(
       stateService: stateService,
@@ -263,7 +259,9 @@ class SimOrganism {
       mediaService: mediaService,
       preference: audioPreference,
     );
-    final returnStore = PaymentReturnStore();
+    final returnStore = PaymentReturnStore(
+      storage: SharedPrefsPaymentReturnStorage(prefs),
+    );
     final creditsController = CreditsRouteController(
       creditsFunctions: SimServerCreditsClient(config: aiConfig),
       paymentsFunctions: SimServerPaymentsClient(config: aiConfig),

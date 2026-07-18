@@ -130,7 +130,7 @@ class AulaConversationBlock {
       ChatLessonMessageKind.studentSignal =>
         AulaConversationBlockType.studentSignal,
       ChatLessonMessageKind.feedback =>
-        (message.actionKey ?? '').isEmpty
+        (message.actionKey ?? '').isEmpty && !message.id.startsWith('feedback-')
             ? AulaConversationBlockType.doubtAnswer
             : AulaConversationBlockType.feedback,
       ChatLessonMessageKind.doubtAction =>
@@ -157,16 +157,12 @@ class AulaConversationBlock {
         AulaConversationAction.chooseAnswer,
       AulaConversationBlockType.signalOptions =>
         AulaConversationAction.submitSignal,
-      AulaConversationBlockType.feedback =>
-        (message.actionKey ?? '').isEmpty
-            ? null
-            : AulaConversationAction.advance,
+      AulaConversationBlockType.feedback => null,
       AulaConversationBlockType.advanceAction =>
         message.kind == ChatLessonMessageKind.doubtAction
             ? AulaConversationAction.openDoubt
-            : AulaConversationAction.advance,
-      AulaConversationBlockType.recoverableError =>
-        message.actionKey == 'retry' ? AulaConversationAction.retry : null,
+            : null,
+      AulaConversationBlockType.recoverableError => null,
       _ => null,
     };
   }

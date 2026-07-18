@@ -4,9 +4,6 @@ import 'aux_room_models.dart';
 import 'doubt_input_sheet.dart';
 import 'student_aux_addons.dart';
 
-const String defaultDoubtText =
-    'Explique melhor este item. Eu fiquei com duvida nesta parte.';
-
 class DoubtT02Caller {
   const DoubtT02Caller({required this.client});
 
@@ -25,10 +22,10 @@ class DoubtT02Caller {
   }) async {
     final draft = DoubtInputDraft(text: studentDoubt ?? '', image: doubtImage);
     final validation = draft.validate();
-    if (validation != null && validation != emptyDoubtMessage) {
+    if (validation != null) {
       throw ArgumentError(validation);
     }
-    final text = draft.cleanText.isEmpty ? defaultDoubtText : draft.cleanText;
+    final text = draft.cleanText;
     final material = await client.doubt(
       T02LessonRequest(
         lessonLocalId: lessonLocalId,

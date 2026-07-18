@@ -105,40 +105,6 @@ abstract interface class DurableStudentStateLocalStorage
   Future<void> verifyLastDelete();
 }
 
-class MemoryStudentStateLocalStorage implements StudentStateLocalStorage {
-  final Map<String, String> states = {};
-  final Map<String, String> events = {};
-
-  @override
-  String? readEvents(String lessonLocalId) => events[lessonLocalId];
-
-  @override
-  String? readState(String lessonLocalId) => states[lessonLocalId];
-
-  @override
-  List<String> listStateIds() => states.keys.toList(growable: false);
-
-  @override
-  void writeEvents(String lessonLocalId, String encoded) {
-    events[lessonLocalId] = encoded;
-  }
-
-  @override
-  void writeState(String lessonLocalId, String encoded) {
-    states[lessonLocalId] = encoded;
-  }
-
-  @override
-  void deleteEvents(String lessonLocalId) {
-    events.remove(lessonLocalId);
-  }
-
-  @override
-  void deleteState(String lessonLocalId) {
-    states.remove(lessonLocalId);
-  }
-}
-
 abstract interface class StudentStateCloudStorage {
   Future<StudentLearningState?> loadCloud(String lessonLocalId);
 }
@@ -157,15 +123,6 @@ abstract interface class StudentStateRepository {
   });
   List<StudentLearningState> listLocalStates({bool includeDeleted});
   Future<StudentLearningState> hydrateFromCloud(String lessonLocalId);
-}
-
-class MemoryStudentStateCloudStorage implements StudentStateCloudStorage {
-  final Map<String, StudentLearningState> states = {};
-
-  @override
-  Future<StudentLearningState?> loadCloud(String lessonLocalId) async {
-    return states[lessonLocalId];
-  }
 }
 
 class StudentStateStore implements StudentStateRepository {

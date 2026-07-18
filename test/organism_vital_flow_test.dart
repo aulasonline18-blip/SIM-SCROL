@@ -8,7 +8,6 @@ import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
-import 'legacy/server_advance_gate_legacy.dart';
 import 'package:sim_mobile/sim/experience/student_experience_engine.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t00_adapter.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t02_adapter.dart';
@@ -120,41 +119,11 @@ class VitalT02Client implements T02LessonClient {
       completeLesson(request);
 }
 
-class VitalAdvanceGateClient implements ServerAdvanceGateClient {
-  final requests = <ServerAdvanceGateRequest>[];
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(
-    ServerAdvanceGateRequest request,
-  ) async {
-    requests.add(request);
-    return ServerAdvanceGateDecision(
-      accepted: true,
-      decision: 'next_layer',
-      reason: 'test_server_next_layer',
-      nextItemIdx: request.itemIdx,
-      nextLayer: LessonLayer.l3,
-      highWaterMark: requests.length,
-      events: [
-        {
-          'type': 'ADVANCE_GATE_DECIDED',
-          'decision': 'next_layer',
-          'marker': request.marker,
-          'layer': request.layer.value,
-          'letra': request.selectedOption.name,
-          'sinal': request.signal.value,
-        },
-      ],
-    );
-  }
-}
-
 class VitalHarness {
   VitalHarness()
     : service = StudentLearningStateService(),
       t00 = VitalT00Client(),
-      t02 = VitalT02Client(),
-      advanceGate = VitalAdvanceGateClient() {
+      t02 = VitalT02Client() {
     orchestrator = LessonOrchestrator(
       t02Client: t02,
       cache: LessonMaterialCache(maxLessons: 3),
@@ -199,7 +168,6 @@ class VitalHarness {
   final StudentLearningStateService service;
   final VitalT00Client t00;
   final VitalT02Client t02;
-  final VitalAdvanceGateClient advanceGate;
   late final LessonOrchestrator orchestrator;
   late final DopamineReadyWindowEngine readyWindow;
   late final StudentLessonMaterialService materialService;
@@ -298,11 +266,6 @@ void main() {
       final eventTypes = state.events.map((event) => event.type).toList();
       expect(eventTypes, contains('LOCAL_ADVANCE_DECIDED'));
       expect(eventTypes, contains('NEXT_ACTION_DECIDED'));
-      expect(
-        h.advanceGate.requests,
-        isEmpty,
-        reason: 'o avanço vital deve ser decidido no app, sem gate remoto',
-      );
       expect(
         state.readyLessonMaterials,
         isNotEmpty,

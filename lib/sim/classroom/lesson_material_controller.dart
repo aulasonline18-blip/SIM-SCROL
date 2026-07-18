@@ -151,29 +151,24 @@ class LessonMaterialController {
     position.imagem = null;
     position.imageMetadata = null;
     position.teoriaPronta = false;
-    final resolved = await materialService.resolveLessonMaterialFromStateOrEngine(
-      ResolveLessonMaterialInput(
-        lessonLocalId: lessonLocalId,
-        topic: topic,
-        itemIdx: position.itemIdx,
-        marker: item.marker,
-        layer: position.layer,
-        params: params,
-        forceRefresh: forceRefresh,
-        waitBeforeOrderMs: 0,
-        waitAfterOrderMs: 0,
-      ),
-    );
+    final resolved = await materialService
+        .resolveLessonMaterialFromStateOrEngine(
+          ResolveLessonMaterialInput(
+            lessonLocalId: lessonLocalId,
+            topic: topic,
+            itemIdx: position.itemIdx,
+            marker: item.marker,
+            layer: position.layer,
+            params: params,
+            forceRefresh: forceRefresh,
+            waitBeforeOrderMs: 0,
+            waitAfterOrderMs: 0,
+          ),
+        );
     if (resolved == null) {
-      final fallback = _localFallbackMaterial(position, item);
-      _applyMaterial(position, fallback);
-      _mirrorDisplayedPreparedLesson(
-        lessonLocalId: lessonLocalId,
-        position: position,
-        item: item,
-        material: fallback,
+      position.phase = const ClassroomPhase.advancePending(
+        message: 'aula_advance_preparing',
       );
-      _markShowingFirstLessonIfNeeded(lessonLocalId, position, item);
       materialService.maintainLessonReadyWindow(
         lessonLocalId: lessonLocalId,
         topic: topic,
@@ -187,7 +182,7 @@ class LessonMaterialController {
             .toList(),
         source: 'cyber.aula.local-preparation',
         priority: 'background',
-        reason: 'material_missing_after_local_restore',
+        reason: 'material_missing_prepare_without_fallback',
       );
       return;
     }
@@ -257,36 +252,6 @@ class LessonMaterialController {
     position.imageMetadata = material.imageMetadata;
     position.teoriaPronta = true;
     position.phase = const ClassroomPhase.reading();
-  }
-
-  ResolveLessonMaterialResult _localFallbackMaterial(
-    LessonPositionState position,
-    PlannedItem item,
-  ) {
-    final itemText = item.text.trim().isEmpty ? item.marker : item.text.trim();
-    final layerLabel = 'L${position.layer.value}';
-    return ResolveLessonMaterialResult(
-      conteudo: LessonContent(
-        explanation:
-            'Vamos trabalhar $itemText em uma etapa curta. Leia a ideia central e escolha a alternativa que melhor confirma seu entendimento.',
-        question: 'Qual alternativa melhor confirma $itemText nesta etapa $layerLabel?',
-        options: const {
-          AnswerLetter.A: 'Entendi a ideia principal.',
-          AnswerLetter.B: 'Entendi parcialmente.',
-          AnswerLetter.C: 'Ainda preciso de amparo.',
-        },
-        correctAnswer: AnswerLetter.A,
-        whyCorrect: 'A resposta confirma entendimento suficiente para continuar.',
-        whyWrong: const {
-          'B': 'A resposta indica que vale revisar a explicacao antes de avancar.',
-          'C': 'A resposta indica que o app deve oferecer amparo local.',
-        },
-      ),
-      imagem: null,
-      source: LessonMaterialSource.localFallback,
-      waitedMs: 0,
-      imageMetadata: null,
-    );
   }
 
   void _mirrorDisplayedPreparedLesson({

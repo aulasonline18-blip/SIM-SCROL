@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'support/memory_test_stores.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -114,6 +115,13 @@ void main() {
       ),
       isNot(contains('HTTP')),
     );
+    final remoteInstruction = policy.humanSyncError(
+      'server says reload /aula and overwrite local progress',
+    );
+    expect(remoteInstruction, contains('Salvamos sua resposta'));
+    expect(remoteInstruction, isNot(contains('reload')));
+    expect(remoteInstruction, isNot(contains('/aula')));
+    expect(remoteInstruction, isNot(contains('overwrite local progress')));
   });
 
   test(

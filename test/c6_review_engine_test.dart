@@ -5,11 +5,9 @@ import 'package:sim_mobile/sim/auxiliary/review_room_service.dart';
 import 'package:sim_mobile/sim/auxiliary/student_aux_room_service.dart';
 import 'package:sim_mobile/sim/auxiliary/student_aux_rooms.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
-import 'package:sim_mobile/sim/state/internal_organs_governor.dart';
 import 'package:sim_mobile/sim/state/mastery_truth_engine.dart';
 import 'package:sim_mobile/sim/state/student_lesson_executor.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
-import 'package:sim_mobile/sim/state/student_state_store.dart';
 
 class _FakeT02Client implements T02LessonClient {
   int auxCalls = 0;
@@ -174,13 +172,8 @@ void main() {
       final review = ReviewRoomService(service);
       final view = await review.startReviewRoom(_context('c6-lesson'), 5);
 
-      final store = StudentStateStore(local: MemoryStudentStateLocalStorage());
-      store.writeState(_state(lessonLocalId: 'store-lesson'));
-      final governor = AuxiliaryStateGovernor(store: store);
-      final event = governor.scheduleReview(
-        lessonLocalId: 'store-lesson',
-        marker: 'M1',
-        reason: 'needs review',
+      final event = base.events.lastWhere(
+        (event) => event.type == 'REVIEW_SCHEDULED',
       );
 
       expect(pendingMapOf(ensureAuxRooms(base)).single['marker'], 'M1');

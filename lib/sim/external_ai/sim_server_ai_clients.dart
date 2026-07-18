@@ -7,18 +7,12 @@ import '../lesson/lesson_content_validator.dart';
 import '../localization/sim_locale_contract.dart';
 import '../modules/pedagogical_module_contracts.dart';
 import '../experience/bootstrap_payload.dart';
-import '../auxiliary/server_recovery_contract.dart';
-import '../auxiliary/server_review_contract.dart';
 import '../state/student_learning_state.dart';
 import 'sim_ai_server_config.dart';
 import 'sim_http_transport.dart';
 
 const String simT00BootstrapPath = '/api/bootstrap-t00';
-const String simWarmupPath = '/api/warmup';
 const String simLessonAudioPath = '/api/generate-lesson-audio';
-const String simDoubtPath = '/api/doubt';
-const String simReviewPath = '/api/review';
-const String simRecoveryPath = '/api/recovery';
 
 class SimServerT00Client implements T00BootstrapClient {
   SimServerT00Client({
@@ -161,57 +155,6 @@ class SimWarmupLesson {
   }
 }
 
-class SimServerWarmupClient {
-  SimServerWarmupClient({
-    required this.config,
-    SimHttpTransport? transport,
-    this.timeout = const Duration(seconds: 70),
-  }) : transport = transport ?? DartIoSimHttpTransport();
-
-  final SimAiServerConfig config;
-  final SimHttpTransport transport;
-  final Duration timeout;
-
-  Future<SimWarmupLesson?> generate({
-    required String lessonLocalId,
-    required String objective,
-    required Map<String, dynamic> ficha,
-    required SimLocaleContract locale,
-    String? academic,
-  }) async {
-    final response = await transport.postJson(
-      config.uri(simWarmupPath),
-      headers: await config.jsonHeaders(),
-      body: {
-        'lessonLocalId': lessonLocalId,
-        'objective': objective,
-        'mode': 'WARMUP_WELCOME_BRIDGE',
-        'warmupMode': 'WARMUP_WELCOME_BRIDGE',
-        'officialCurriculum': false,
-        'countsForMastery': false,
-        'ficha': {
-          ...ficha,
-          ...locale.toJson(),
-          'lessonLocalId': lessonLocalId,
-          'academic_level': ?academic,
-          'objective': objective,
-          'mode': 'WARMUP_WELCOME_BRIDGE',
-          'warmupMode': 'WARMUP_WELCOME_BRIDGE',
-          'officialCurriculum': false,
-          'countsForMastery': false,
-        },
-        ...locale.toJson(),
-        'academic_level': ?academic,
-      },
-      timeout: timeout,
-    );
-    if (!response.ok) return null;
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) return null;
-    return SimWarmupLesson.fromJson(decoded);
-  }
-}
-
 class SimServerGeneratedAudioClient implements GeneratedAudioClient {
   SimServerGeneratedAudioClient({
     required this.config,
@@ -290,13 +233,7 @@ Future<SimHttpResponse> _postJsonWithTimeout(
       timeout: timeout,
     );
   } on TimeoutException {
-    throw SimExternalAiException(
-      'Tempo esgotado ao preparar mídia.',
-      statusCode: 408,
-      requestId: requestId,
-      code: 'MEDIA_TIMEOUT',
-      retryable: true,
-    );
+    throw simSafeTimeoutException(code: 'MEDIA_TIMEOUT', requestId: requestId);
   }
 }
 
@@ -304,42 +241,7 @@ SimExternalAiException _mediaHttpException(
   SimHttpResponse response, {
   required String fallbackRequestId,
 }) {
-  String message = response.body;
-  String? requestId = response.headers['x-request-id'] ?? fallbackRequestId;
-  String? code;
-  bool? retryable;
-  try {
-    final decoded = jsonDecode(response.body);
-    if (decoded is Map) {
-      final error = decoded['error'];
-      if (error is Map) {
-        message = (error['message'] ?? error['reason'] ?? message).toString();
-        code = (error['code'] ?? error['reason'])?.toString();
-        retryable = error['retryable'] is bool
-            ? error['retryable'] as bool
-            : null;
-      } else if (error != null) {
-        message = error.toString();
-      }
-      requestId = (decoded['requestId'] ?? decoded['request_id'] ?? requestId)
-          ?.toString();
-      code ??= decoded['code']?.toString();
-      retryable ??= decoded['retryable'] is bool
-          ? decoded['retryable'] as bool
-          : null;
-    }
-  } catch (_) {
-    message = response.body.length > 400
-        ? '${response.body.substring(0, 400)}...'
-        : response.body;
-  }
-  return SimExternalAiException(
-    message,
-    statusCode: response.statusCode,
-    requestId: requestId,
-    code: code,
-    retryable: retryable,
-  );
+  return simSafeHttpException(response, fallbackRequestId: fallbackRequestId);
 }
 
 String _mediaRequestId(String prefix, String basis) {
@@ -420,7 +322,7 @@ class SimServerT02Client implements T02LessonClient {
 
   @override
   Future<T02LessonMaterial> doubt(T02LessonRequest request) {
-    return _callDoubt(request);
+    return _call(request, mode: 'doubt');
   }
 
   @override
@@ -434,9 +336,18 @@ class SimServerT02Client implements T02LessonClient {
   }) async {
     final locale = _localeFieldsForT02(request);
     final path = config.t02Path;
+    final unavailableCode = mode == 'doubt'
+        ? 'DOUBT_UNAVAILABLE'
+        : 'T02_BRIDGE_UNAVAILABLE';
+    final invalidCode = mode == 'doubt'
+        ? 'DOUBT_UNAVAILABLE'
+        : 'T02_CONTRACT_INVALID';
     if (path == null || path.trim().isEmpty) {
-      throw const SimExternalAiException(
-        'T02 no SIM atual roda por server function interna. Configure a ponte HTTP do servidor antes de chamar T02 pelo APK.',
+      throw SimExternalAiException(
+        unavailableCode,
+        statusCode: 503,
+        code: unavailableCode,
+        retryable: false,
       );
     }
     final response = await transport.postJson(
@@ -465,71 +376,27 @@ class SimServerT02Client implements T02LessonClient {
       timeout: timeout,
     );
     if (!response.ok) {
-      throw SimExternalAiException(
-        response.body,
-        statusCode: response.statusCode,
-      );
+      throw simSafeHttpException(response);
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) {
-      throw const SimExternalAiException('T02 retornou resposta invalida.');
+      throw SimExternalAiException(
+        invalidCode,
+        statusCode: 502,
+        code: invalidCode,
+        retryable: false,
+      );
     }
     try {
       return _parseT02Material(JsonMap.from(decoded));
-    } on LessonContentValidationException catch (error) {
+    } on LessonContentValidationException {
       throw SimExternalAiException(
-        'T02 retornou contrato invalido: ${error.message}',
+        invalidCode,
         statusCode: 502,
+        code: invalidCode,
+        retryable: false,
       );
     }
-  }
-
-  Future<T02LessonMaterial> _callDoubt(T02LessonRequest request) async {
-    final locale = _localeFieldsForT02(request);
-    final response = await transport.postJson(
-      config.uri(simDoubtPath),
-      headers: await config.jsonHeaders(),
-      body: {
-        'lessonLocalId': request.lessonLocalId,
-        'marker': request.marker,
-        'itemIdx': request.itemIdx ?? 0,
-        'layer': request.layer.value,
-        'currentQuestion': request.item,
-        'currentOptions':
-            request.profile['currentOptions'] ??
-            request.profile['options'] ??
-            {},
-        'selectedOption':
-            request.profile['selectedOption'] ??
-            request.profile['student_answer'],
-        'signal':
-            request.profile['signal'] ?? request.profile['student_signal'],
-        'currentFeedback': request.profile['currentFeedback'] ?? {},
-        'studentQuestion':
-            request.profile['student_doubt'] ??
-            (request.history.isEmpty ? '' : request.history.last),
-        'attachment': request.profile['doubt_image'],
-        ...locale,
-        'language': locale['learningLocale'] ?? request.lang,
-        'idempotencyKey':
-            request.profile['idempotencyKey'] ??
-            'doubt:${request.lessonLocalId}:${request.marker ?? request.item}:${request.layer.value}:${request.history.length}',
-        'currentState': request.profile['currentState'] ?? {},
-        'history': request.history,
-      },
-      timeout: timeout,
-    );
-    if (!response.ok) {
-      throw SimExternalAiException(
-        response.body,
-        statusCode: response.statusCode,
-      );
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      throw const SimExternalAiException('doubt retornou resposta invalida.');
-    }
-    return _parseDoubtResponse(JsonMap.from(decoded));
   }
 
   T02LessonMaterial _parseT02Material(JsonMap json) {
@@ -549,109 +416,4 @@ class SimServerT02Client implements T02LessonClient {
     );
   }
 
-  T02LessonMaterial _parseDoubtResponse(JsonMap json) {
-    final answer = (json['answerText'] ?? json['answer'] ?? '')
-        .toString()
-        .trim();
-    if (json['ok'] != true || answer.isEmpty) {
-      final human = json['humanError'];
-      final message = human is Map
-          ? (human['message'] ?? 'Nao conseguimos responder essa duvida agora.')
-                .toString()
-          : 'Nao conseguimos responder essa duvida agora.';
-      throw SimExternalAiException(message, statusCode: 502);
-    }
-    return T02LessonMaterial(
-      explanation: answer,
-      question: '',
-      options: const {
-        AnswerLetter.A: '',
-        AnswerLetter.B: '',
-        AnswerLetter.C: '',
-      },
-      correctAnswer: AnswerLetter.A,
-      whyCorrect: '',
-      whyWrong: const {},
-      generatedAt: DateTime.now(),
-      source: (json['source'] ?? 'server-doubt-room').toString(),
-    );
-  }
-}
-
-class SimServerReviewTransport implements ServerReviewTransport {
-  SimServerReviewTransport({
-    required this.config,
-    SimHttpTransport? transport,
-    this.timeout = const Duration(seconds: 45),
-  }) : transport = transport ?? DartIoSimHttpTransport();
-
-  final SimAiServerConfig config;
-  final SimHttpTransport transport;
-  final Duration timeout;
-
-  @override
-  Future<JsonMap> postReview(JsonMap body) async {
-    final response = await transport.postJson(
-      config.uri(simReviewPath),
-      headers: await config.jsonHeaders(),
-      body: {
-        ...body,
-        'contractVersion': 'sim.auxiliary.review.v1',
-        'flow': 'review',
-        'source': 'sim_app_flutter_aux_room',
-      },
-      timeout: timeout,
-    );
-    if (!response.ok) {
-      throw SimExternalAiException(
-        response.body,
-        statusCode: response.statusCode,
-      );
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      throw const SimExternalAiException('review retornou resposta invalida.');
-    }
-    return JsonMap.from(decoded);
-  }
-}
-
-class SimServerRecoveryTransport implements ServerRecoveryTransport {
-  SimServerRecoveryTransport({
-    required this.config,
-    SimHttpTransport? transport,
-    this.timeout = const Duration(seconds: 45),
-  }) : transport = transport ?? DartIoSimHttpTransport();
-
-  final SimAiServerConfig config;
-  final SimHttpTransport transport;
-  final Duration timeout;
-
-  @override
-  Future<JsonMap> postRecovery(JsonMap body) async {
-    final response = await transport.postJson(
-      config.uri(simRecoveryPath),
-      headers: await config.jsonHeaders(),
-      body: {
-        ...body,
-        'contractVersion': 'sim.auxiliary.recovery.v1',
-        'flow': 'recovery',
-        'source': 'sim_app_flutter_aux_room',
-      },
-      timeout: timeout,
-    );
-    if (!response.ok) {
-      throw SimExternalAiException(
-        response.body,
-        statusCode: response.statusCode,
-      );
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      throw const SimExternalAiException(
-        'recovery retornou resposta invalida.',
-      );
-    }
-    return JsonMap.from(decoded);
-  }
 }

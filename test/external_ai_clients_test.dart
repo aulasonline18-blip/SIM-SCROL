@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/external_ai/sim_http_transport.dart';
 import 'package:sim_mobile/sim/external_ai/sim_server_ai_clients.dart';
-import 'package:sim_mobile/sim/localization/sim_locale_contract.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
@@ -141,57 +140,13 @@ void main() {
     ]);
   });
 
-  test(
-    'warmup usa /api/warmup como sala paralela sem curriculo oficial',
-    () async {
-      final transport = RecordingTransport()
-        ..jsonBody =
-            '{"ok":true,"warmup":{"type":"warmup","officialCurriculum":false,"countsForMastery":false,"explanation":"Antes da aula oficial, pense no deslocamento como a distância entre começo e fim.","question":"Um ciclista sai do km 0 e chega ao km 10. Qual é o deslocamento?","options":{"A":"10 km","B":"0 km","C":"20 km"},"correct_answer":"A","why_correct":"A posição final está 10 km depois do início.","why_wrong":{"B":"0 km seria voltar ao ponto inicial.","C":"20 km não é a distância entre início e fim."}}}';
-      final client = SimServerWarmupClient(
-        config: config(),
-        transport: transport,
-      );
-
-      final lesson = await client.generate(
-        lessonLocalId: 'lesson-warmup-1',
-        objective: 'Aprender deslocamento em Física',
-        ficha: const {'free_text': 'Aprender deslocamento em Física'},
-        locale: const SimLocaleContract(
-          interfaceLocale: 'pt-BR',
-          learningLocale: 'pt-BR',
-          explanationLanguage: 'Portuguese',
-        ),
-        academic: 'ano 8',
-      );
-
-      expect(
-        transport.lastUri.toString(),
-        'https://gemini-aid-pal.lovable.app/api/warmup',
-      );
-      expect(transport.lastHeaders?['authorization'], 'Bearer user-token');
-      final body = transport.lastBody as Map;
-      expect(body['lessonLocalId'], 'lesson-warmup-1');
-      expect(body['objective'], 'Aprender deslocamento em Física');
-      expect(body['mode'], 'WARMUP_WELCOME_BRIDGE');
-      expect(body['officialCurriculum'], false);
-      expect(body['countsForMastery'], false);
-      expect(body['interfaceLocale'], 'pt-BR');
-      expect((body['ficha'] as Map)['learningLocale'], 'pt-BR');
-      expect((body['ficha'] as Map)['academic_level'], 'ano 8');
-      expect((body['ficha'] as Map)['mode'], 'WARMUP_WELCOME_BRIDGE');
-      expect(transport.lastTimeout, const Duration(seconds: 70));
-      expect(
-        (body['ficha'] as Map)['objective'],
-        'Aprender deslocamento em Física',
-      );
-      expect(lesson?.toJson()['officialCurriculum'], isFalse);
-      expect(lesson?.toJson()['countsForMastery'], isFalse);
-      expect(lesson?.toJson()['mode'], 'WARMUP_WELCOME_BRIDGE');
-      expect(lesson?.toJson()['welcomeBridge'], isTrue);
-      expect(lesson?.options.keys, ['A', 'B', 'C']);
-      expect(lesson?.correctAnswer, 'A');
-    },
-  );
+  test('warmup remoto foi removido do cliente canônico do app', () {
+    final source = File(
+      'lib/sim/external_ai/sim_server_ai_clients.dart',
+    ).readAsStringSync();
+    expect(source, isNot(contains('/api/warmup')));
+    expect(source, isNot(contains('SimServerWarmupClient')));
+  });
 
   test('audio usa /api/generate-lesson-audio e devolve dataUrl', () async {
     final transport = RecordingTransport()
@@ -242,7 +197,8 @@ void main() {
         isA<SimExternalAiException>()
             .having((error) => error.statusCode, 'status', 403)
             .having((error) => error.requestId, 'requestId', 'rid-audio')
-            .having((error) => error.code, 'code', 'FORBIDDEN')
+            .having((error) => error.code, 'code', 'AUTH_REQUIRED')
+            .having((error) => error.message, 'message', 'AUTH_REQUIRED')
             .having((error) => error.retryable, 'retryable', false),
       ),
     );
@@ -491,7 +447,7 @@ void main() {
         isA<SimExternalAiException>().having(
           (error) => error.message,
           'message',
-          contains('contrato invalido'),
+          'T02_CONTRACT_INVALID',
         ),
       ),
     );

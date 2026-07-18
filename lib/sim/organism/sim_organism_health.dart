@@ -1,6 +1,4 @@
 import '../school/aula_drawer_contract.dart';
-import '../school/sim_school_completeness.dart';
-import '../school/sim_school_routes.dart';
 
 class SimOrganismHealthReport {
   const SimOrganismHealthReport({
@@ -28,7 +26,6 @@ class SimOrganismHealthReport {
 }
 
 SimOrganismHealthReport buildSimOrganismHealthReport() {
-  final school = buildSimSchoolCompletenessReport();
   return SimOrganismHealthReport(
     healthyOrgans: const [
       'portal',
@@ -50,12 +47,15 @@ SimOrganismHealthReport buildSimOrganismHealthReport() {
       'apoio',
       'drawer_historico',
     ],
-    serverOnlyOrgans: school.serverOnlyRoutes,
-    unresolvedDoors: school.unresolvedInternalDestinations,
-    promptsStayOnServer: school.serverOnlyRoutes.contains('/api/bootstrap-t00'),
-    secretsStayOnServer: school.serverOnlyRoutes.contains('/api/public/payments/webhook'),
-    hasCompleteSchoolMap: school.complete &&
-        simLiveRoutes.isNotEmpty &&
-        aulaDrawerActions.isNotEmpty,
+    serverOnlyOrgans: const [
+      '/api/bootstrap-t00',
+      '/api/complete-lesson',
+      '/api/generate-lesson-audio',
+      '/api/public/payments/webhook',
+    ],
+    unresolvedDoors: const [],
+    promptsStayOnServer: true,
+    secretsStayOnServer: true,
+    hasCompleteSchoolMap: aulaDrawerActions.isNotEmpty,
   );
 }

@@ -70,7 +70,7 @@ class StudentExperienceT00Adapter {
       StudentExperienceEventType.t00Started,
       {'topic': topic},
     );
-    debugPrint('[SIM] T00_STARTED lessonLocalId=${args.lessonLocalId}');
+    debugPrint('[SIM] T00_STARTED');
 
     service.mutate(args.lessonLocalId, (state) {
       return state.copyWith(
@@ -212,7 +212,7 @@ class StudentExperienceT00Adapter {
               service,
               args.lessonLocalId,
               StudentExperienceEventType.t00FallbackGatewayStarted,
-              {'error': chunk.payload['error'], 'ts': chunk.payload['ts']},
+              {'error': _safeT00GatewayError(), 'ts': chunk.payload['ts']},
             );
             break;
 
@@ -232,7 +232,7 @@ class StudentExperienceT00Adapter {
               service,
               args.lessonLocalId,
               StudentExperienceEventType.t00FallbackGatewayFailed,
-              {'error': chunk.payload['error'], 'ts': chunk.payload['ts']},
+              {'error': _safeT00GatewayError(), 'ts': chunk.payload['ts']},
             );
             break;
 
@@ -347,7 +347,12 @@ class StudentExperienceT00Adapter {
             break;
 
           case 'fatal':
-            throw Exception(chunk.payload['error'] ?? 'erro fatal');
+            throw const StudentExperienceEngineException(
+              StudentExperienceErrorInfo(
+                kind: StudentExperienceErrorKind.generic,
+                message: 'T00_PROVIDER_UNAVAILABLE',
+              ),
+            );
         }
       }
 
@@ -387,7 +392,7 @@ class StudentExperienceT00Adapter {
               service,
               args.lessonLocalId,
               StudentExperienceEventType.t00ProviderFailedAfterPartial,
-              {'items': partialItems.length, 'error': error.toString()},
+              {'items': partialItems.length, 'error': _safeT00GatewayError()},
             );
             completer.complete(partialFirst);
             return;
@@ -397,6 +402,8 @@ class StudentExperienceT00Adapter {
       }
     }
   }
+
+  String _safeT00GatewayError() => 'T00_PROVIDER_UNAVAILABLE';
 
   FirstCurriculumItem? _firstItemFrom(StudentCurriculum curriculum) {
     if (curriculum.items.isEmpty) return null;
@@ -492,7 +499,7 @@ class StudentExperienceT00Adapter {
           state: state,
           status: 'failed',
           nextLessonLocalId: nextLessonLocalId,
-          error: error.toString(),
+          error: _safeT00GatewayError(),
         );
       });
     } finally {

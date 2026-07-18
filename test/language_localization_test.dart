@@ -12,7 +12,7 @@ void main() {
     setSimActiveLanguage('pt-BR');
   });
 
-  test('interface localization covers Portuguese English and Spanish', () {
+  test('interface localization covers Portuguese and English', () {
     expect(debugSimLocalizedValue('pt-BR', 'aula_next'), 'Próximo');
     expect(
       debugSimLocalizedValue('pt-BR', 'aula_try_again_2'),
@@ -22,22 +22,15 @@ void main() {
     expect(debugSimLocalizedValue('en', 'aula_next'), 'Next');
     expect(debugSimLocalizedValue('en', 'aula_try_again_2'), 'Try again');
 
-    expect(debugSimLocalizedValue('es', 'aula_next'), 'Siguiente');
-    expect(
-      debugSimLocalizedValue('es', 'aula_try_again_2'),
-      'Intentar de nuevo',
-    );
-
-    expect(debugSimLocalizedValue('es', 'aula_next'), isNot('aula_next'));
+    expect(debugSimLocalizedValue('es', 'aula_next'), 'Next');
+    expect(debugSimLocalizedValue('es', 'aula_try_again_2'), 'Try again');
   });
 
   test('supported interface locales expose complete localization key sets', () {
     final counts = debugSimLocalizationKeyCounts();
     expect(counts['pt'], counts['en']);
-    expect(counts['es'], counts['en']);
     expect(debugSimMissingLocalizationKeys()['pt'], isEmpty);
     expect(debugSimMissingLocalizationKeys()['en'], isEmpty);
-    expect(debugSimMissingLocalizationKeys()['es'], isEmpty);
   });
 
   test('device locale fallback only returns supported interface locales', () {
@@ -205,7 +198,7 @@ void main() {
     );
     expect(
       debugSimLocalizedValue('es', 'aula_image_unavailable'),
-      contains('Imagen'),
+      contains('Image'),
     );
   });
 
@@ -220,7 +213,7 @@ void main() {
     );
     expect(
       debugSimLocalizedValue('es', 'aula_audio_play'),
-      'Reproducir audio de la clase',
+      'Play lesson audio',
     );
     expect(
       debugSimLocalizedValue('en', 'aula_image_expand_lesson'),
@@ -228,7 +221,7 @@ void main() {
     );
     expect(
       debugSimLocalizedValue('es', 'aula_image_expand_lesson'),
-      'Ampliar imagen de la clase',
+      'Expand lesson image',
     );
   });
 

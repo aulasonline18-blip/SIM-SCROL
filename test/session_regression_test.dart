@@ -19,9 +19,7 @@ import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
 class CountingAulaLabSession extends LabSession {
-  CountingAulaLabSession({
-    super.experiencePreparerOverride,
-  });
+  CountingAulaLabSession({super.experiencePreparerOverride});
 
   int aulaOpenCalls = 0;
 
@@ -32,8 +30,8 @@ class CountingAulaLabSession extends LabSession {
 }
 
 void main() {
-  test('default API URL points to the official Scroll API host', () {
-    expect(SimEnvironment.apiBaseUrl, 'http://167.179.109.137:3000');
+  test('default API URL uses only local development fallback', () {
+    expect(SimEnvironment.apiBaseUrl, 'http://127.0.0.1:3000');
     expect(SimEnvironment.assertProductionSafe, returnsNormally);
   });
 
@@ -203,7 +201,6 @@ void main() {
     await session.continueFromWarmupToAula();
 
     expect(session.route, '/cyber/warmup');
-    expect(session.warmupWaitingForOfficialLesson, isTrue);
   });
 
   test(
@@ -233,7 +230,8 @@ void main() {
             )
             ..selectedLanguageCode = 'pt'
             ..stableLang = 'pt-BR'
-            ..freeText = 'Quero aprender deslocamento em física começando do zero.';
+            ..freeText =
+                'Quero aprender deslocamento em física começando do zero.';
 
       expect(session.saveObjectiveEntry(), isTrue);
       final launch = session.launchExperience();
@@ -242,7 +240,6 @@ void main() {
       session.openWarmupBridge();
       await session.continueFromWarmupToAula();
       expect(session.route, '/cyber/warmup');
-      expect(session.warmupWaitingForOfficialLesson, isTrue);
       expect(session.aulaOpenCalls, 0);
 
       officialReady.complete();
@@ -254,6 +251,53 @@ void main() {
       expect(session.aulaOpenCalls, 1);
 
       await session.continueFromWarmupToAula();
+      expect(session.aulaOpenCalls, 1);
+    },
+  );
+
+  test(
+    'warmup abre aula oficial automaticamente quando ela fica pronta',
+    () async {
+      final officialReady = Completer<void>();
+      final session =
+          CountingAulaLabSession(
+              experiencePreparerOverride: (args) async {
+                args.onStage?.call(StudentExperienceRouteStage.curriculum);
+                args.onStage?.call(StudentExperienceRouteStage.lesson);
+                await officialReady.future;
+                args.onStage?.call(StudentExperienceRouteStage.ready);
+                return const StudentExperienceResult(
+                  destination: '/cyber/aula',
+                  curriculum: StudentCurriculum(
+                    topic: 'Fisica',
+                    totalItems: 1,
+                    generatedAt: null,
+                    provisional: false,
+                    items: [CurriculumItem(marker: 'M1', text: 'Força')],
+                  ),
+                  startMarker: 'M1',
+                  startItemIndex: 0,
+                );
+              },
+            )
+            ..selectedLanguageCode = 'pt'
+            ..stableLang = 'pt-BR'
+            ..freeText =
+                'Quero aprender deslocamento em física começando do zero.';
+
+      expect(session.saveObjectiveEntry(), isTrue);
+      final launch = session.launchExperience();
+      await Future<void>.delayed(Duration.zero);
+
+      session.openWarmupBridge();
+      expect(session.route, '/cyber/warmup');
+
+      officialReady.complete();
+      await launch;
+      await Future<void>.delayed(Duration.zero);
+
+      expect(session.route, '/cyber/aula');
+      expect(session.warmupWaitingForOfficialLesson, isFalse);
       expect(session.aulaOpenCalls, 1);
     },
   );
@@ -323,7 +367,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: WarmupBridgeScreen(session: session)),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(
       find.textContaining('Good start. A useful greeting'),
@@ -379,55 +423,54 @@ void main() {
     },
   );
 
-  testWidgets(
-    'curriculo espera authReady/authed antes de chamar T00',
-    (tester) async {
-      var called = false;
-      final session =
-          LabSession(
-              experiencePreparerOverride: (args) async {
-                called = true;
-                args.onStage?.call(StudentExperienceRouteStage.curriculum);
-                args.onStage?.call(StudentExperienceRouteStage.lesson);
-                args.onStage?.call(StudentExperienceRouteStage.ready);
-                return const StudentExperienceResult(
-                  destination: '/cyber/aula',
-                  curriculum: StudentCurriculum(
-                    topic: 'Matematica',
-                    totalItems: 1,
-                    generatedAt: null,
-                    provisional: false,
-                    items: [CurriculumItem(marker: 'M1', text: 'Frações')],
-                  ),
-                  startMarker: 'M1',
-                  startItemIndex: 0,
-                );
-              },
-            )
-            ..selectedLanguageCode = 'pt'
-            ..stableLang = 'pt-BR'
-            ..freeText = 'Quero aprender frações começando do zero.';
+  testWidgets('curriculo espera authReady/authed antes de chamar T00', (
+    tester,
+  ) async {
+    var called = false;
+    final session =
+        LabSession(
+            experiencePreparerOverride: (args) async {
+              called = true;
+              args.onStage?.call(StudentExperienceRouteStage.curriculum);
+              args.onStage?.call(StudentExperienceRouteStage.lesson);
+              args.onStage?.call(StudentExperienceRouteStage.ready);
+              return const StudentExperienceResult(
+                destination: '/cyber/aula',
+                curriculum: StudentCurriculum(
+                  topic: 'Matematica',
+                  totalItems: 1,
+                  generatedAt: null,
+                  provisional: false,
+                  items: [CurriculumItem(marker: 'M1', text: 'Frações')],
+                ),
+                startMarker: 'M1',
+                startItemIndex: 0,
+              );
+            },
+          )
+          ..selectedLanguageCode = 'pt'
+          ..stableLang = 'pt-BR'
+          ..freeText = 'Quero aprender frações começando do zero.';
 
-      expect(session.saveObjectiveEntry(), isTrue);
+    expect(session.saveObjectiveEntry(), isTrue);
 
-      await tester.pumpWidget(
-        MaterialApp(home: PhaseBoundaryScreen(session: session)),
-      );
-      await tester.pump();
-      expect(called, isFalse);
+    await tester.pumpWidget(
+      MaterialApp(home: PhaseBoundaryScreen(session: session)),
+    );
+    await tester.pump();
+    expect(called, isFalse);
 
-      session
-        ..authReady = true
-        ..authed = true;
-      session.setFreeText(session.freeText);
+    session
+      ..authReady = true
+      ..authed = true;
+    session.setFreeText(session.freeText);
 
-      await tester.pump();
-      await tester.pump();
+    await tester.pump();
+    await tester.pump();
 
-      expect(called, isTrue);
-      expect(session.route, '/cyber/aula');
-    },
-  );
+    expect(called, isTrue);
+    expect(session.route, '/cyber/aula');
+  });
 
   test('erros técnicos de auth e aula sem id são saneados no chat', () {
     final messages = buildChatLessonMessages(

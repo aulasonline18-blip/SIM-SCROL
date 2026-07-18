@@ -1,5 +1,5 @@
-import 'dart:async';
 import 'dart:convert';
+import 'support/memory_test_stores.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +13,6 @@ import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
-import 'legacy/server_advance_gate_legacy.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
@@ -86,132 +85,30 @@ class FailingClassroomT02 implements T02LessonClient {
       completeLesson(request);
 }
 
-class FakeServerAdvanceGateClient implements ServerAdvanceGateClient {
-  FakeServerAdvanceGateClient(this.decision);
-
-  final ServerAdvanceGateDecision decision;
-  final requests = <ServerAdvanceGateRequest>[];
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(
-    ServerAdvanceGateRequest request,
-  ) async {
-    requests.add(request);
-    return decision;
-  }
-}
-
-class OfficialRouteAdvanceGateClient implements ServerAdvanceGateClient {
-  final requests = <ServerAdvanceGateRequest>[];
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(
-    ServerAdvanceGateRequest request,
-  ) async {
-    requests.add(request);
-    final isLastLayer = request.layer == LessonLayer.l3;
-    final secureL1 =
-        request.layer == LessonLayer.l1 &&
-        request.correct &&
-        request.signal == DecisionSignal.one;
-    final nextItemIdx = isLastLayer ? request.itemIdx + 1 : request.itemIdx;
-    final nextLayer = isLastLayer
-        ? LessonLayer.l1
-        : secureL1
-        ? LessonLayer.l3
-        : LessonLayerValue.fromValue(request.layer.value + 1);
-    return ServerAdvanceGateDecision(
-      accepted: true,
-      decision: isLastLayer ? 'next_item' : 'next_layer',
-      reason: isLastLayer
-          ? (request.correct
-                ? 'l3_to_next_item'
-                : 'l3_completed_with_repair_due')
-          : secureL1
-          ? 'secure_l1_skip_to_layer_3'
-          : request.layer == LessonLayer.l1
-          ? (request.correct ? 'l1_to_layer_2' : 'l1_error_to_layer_2')
-          : (request.correct ? 'l2_to_layer_3' : 'l2_error_to_layer_3'),
-      nextItemIdx: nextItemIdx,
-      nextLayer: nextLayer,
-      highWaterMark: requests.length,
-      events: [
-        {
-          'type': 'ADVANCE_GATE_DECIDED',
-          'decision': isLastLayer ? 'next_item' : 'next_layer',
-          'marker': request.marker,
-          'layer': request.layer.value,
-          'letra': request.selectedOption.name,
-          'sinal': request.signal.value,
-          'correct': request.correct,
-        },
-      ],
-    );
-  }
-}
-
-class FailingServerAdvanceGateClient implements ServerAdvanceGateClient {
-  final requests = <ServerAdvanceGateRequest>[];
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(
-    ServerAdvanceGateRequest request,
-  ) async {
-    requests.add(request);
-    throw Exception('advance gate unavailable');
-  }
-}
-
-class PendingServerAdvanceGateClient implements ServerAdvanceGateClient {
-  final requests = <ServerAdvanceGateRequest>[];
-  final completer = Completer<ServerAdvanceGateDecision>();
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(ServerAdvanceGateRequest request) {
-    requests.add(request);
-    return completer.future;
-  }
-}
-
-class FlakyServerAdvanceGateClient implements ServerAdvanceGateClient {
-  final requests = <ServerAdvanceGateRequest>[];
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(
-    ServerAdvanceGateRequest request,
-  ) async {
-    requests.add(request);
-    if (requests.length == 1) {
-      throw Exception('advance gate unavailable');
-    }
-    return ServerAdvanceGateDecision(
-      accepted: true,
-      decision: 'next_layer',
-      reason: 'retry_accepted',
-      nextItemIdx: request.itemIdx,
-      nextLayer: LessonLayer.l3,
-      highWaterMark: 2,
-      duplicate: true,
-      events: [
-        {
-          'type': 'ADVANCE_GATE_DECIDED',
-          'decision': 'next_layer',
-          'marker': request.marker,
-          'layer': request.layer.value,
-          'letra': request.selectedOption.name,
-          'sinal': request.signal.value,
-          'correct': request.correct,
-        },
-      ],
-    );
-  }
-}
-
 StudentLearningState _classroomState() {
   const items = [
     CurriculumItem(marker: 'M1', text: 'Item 1'),
     CurriculumItem(marker: 'M2', text: 'Item 2'),
   ];
+  final firstMaterial = preparedMaterialFromLesson(
+    lesson: const CompleteLesson(
+      conteudo: LessonContent(
+        explanation: 'Texto preparado Item 1 L1.',
+        question: 'Pergunta preparada Item 1 L1?',
+        options: {
+          AnswerLetter.A: 'Alternativa A',
+          AnswerLetter.B: 'Alternativa B',
+          AnswerLetter.C: 'Alternativa C',
+        },
+        correctAnswer: AnswerLetter.A,
+      ),
+      imagem: null,
+      audioText: 'Texto preparado Item 1 L1. Pergunta preparada Item 1 L1?',
+    ),
+    itemIdx: 0,
+    marker: 'M1',
+    layer: LessonLayer.l1,
+  );
   return StudentLearningState.empty(lessonLocalId: 'cyber-class').copyWith(
     profile: const StudentProfile(
       objetivo: 'Aprender regra de tres',
@@ -243,6 +140,10 @@ StudentLearningState _classroomState() {
       totalItems: 2,
       pctAvanco: 0,
     ),
+    currentLessonMaterial: firstMaterial,
+    readyLessonMaterials: {
+      preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): firstMaterial,
+    },
   );
 }
 
@@ -254,6 +155,25 @@ StudentLearningState _largeCurriculumBoundaryState() {
       text: 'Item ${index + 1}',
       extra: {'globalItemNumber': index + 1, 'partNumber': 1},
     ),
+  );
+  final currentMaterial = preparedMaterialFromLesson(
+    lesson: const CompleteLesson(
+      conteudo: LessonContent(
+        explanation: 'Texto preparado Item 80 L3.',
+        question: 'Pergunta preparada Item 80 L3?',
+        options: {
+          AnswerLetter.A: 'Alternativa A',
+          AnswerLetter.B: 'Alternativa B',
+          AnswerLetter.C: 'Alternativa C',
+        },
+        correctAnswer: AnswerLetter.A,
+      ),
+      imagem: null,
+      audioText: 'Texto preparado Item 80 L3. Pergunta preparada Item 80 L3?',
+    ),
+    itemIdx: 79,
+    marker: 'M80',
+    layer: LessonLayer.l3,
   );
   return StudentLearningState.empty(
     lessonLocalId: 'lesson-cg-root',
@@ -299,6 +219,10 @@ StudentLearningState _largeCurriculumBoundaryState() {
       totalItems: 180,
       pctAvanco: 43,
     ),
+    currentLessonMaterial: currentMaterial,
+    readyLessonMaterials: {
+      preparedLessonMaterialKey(79, 'M80', LessonLayer.l3): currentMaterial,
+    },
     extra: const {'curriculumPlanRootLessonId': 'lesson-cg-root'},
   );
 }
@@ -307,7 +231,6 @@ LessonRuntimeEngine _runtime(
   StudentLearningStateService stateService,
   T02LessonClient t02, {
   StudentStateStore? store,
-  ServerAdvanceGateClient? serverAdvanceGateClient,
   LessonMaterialCache? cache,
 }) {
   final orchestrator = LessonOrchestrator(
@@ -477,8 +400,29 @@ void main() {
     },
   );
 
+  test('P3 runtime abre aula local preparada sem sessao remota', () async {
+    final service = StudentLearningStateService(
+      seed: {'cyber-class': _classroomState()},
+    );
+    final t02 = FakeClassroomT02();
+    final runtime = _runtime(service, t02);
+
+    final snap = await runtime.open(
+      lessonLocalId: 'cyber-class',
+      authReady: false,
+      authed: false,
+    );
+
+    expect(snap.authReady, isFalse);
+    expect(snap.authed, isFalse);
+    expect(snap.hasCurriculum, isTrue);
+    expect(snap.phase.type, ClassroomPhaseType.lendo);
+    expect(snap.conteudo?.question, contains('Item 1'));
+    expect(t02.calls, 0);
+  });
+
   test(
-    'aula remota leve reidrata material atual via caminho oficial T02',
+    'aula remota leve sem material real entra em preparo sem fallback falso',
     () async {
       final remoteLight = _classroomState().copyWith(
         currentLessonMaterial: null,
@@ -501,11 +445,14 @@ void main() {
       final local = service.read('cyber-class')!;
 
       expect(snapshot.hasCurriculum, isTrue);
-      expect(snapshot.phase.type, ClassroomPhaseType.lendo);
-      expect(snapshot.conteudo?.question, contains('Item 1'));
-      expect(snapshot.conteudo?.options.keys, containsAll(AnswerLetter.values));
+      expect(snapshot.phase.type, ClassroomPhaseType.avancoPendente);
+      expect(snapshot.conteudo, isNull);
       expect(t02.calls, 0);
-      expect(local.currentLessonMaterial?['text_status'], 'ready');
+      expect(local.currentLessonMaterial, isNull);
+      expect(
+        local.queuedActions.map((action) => action['type']),
+        contains('PREPARE_READY_WINDOW'),
+      );
     },
   );
 
@@ -526,13 +473,14 @@ void main() {
       final state = service.read('lesson-cg-root')!;
 
       expect(snapshot.hasCurriculum, isTrue);
-      expect(snapshot.phase.type, ClassroomPhaseType.lendo);
+      expect(snapshot.phase.type, ClassroomPhaseType.avancoPendente);
       expect(snapshot.itemMarker, 'M80');
       expect(t02.calls, 0);
       expect(state.progress?.itemIdx, 79);
       expect(state.progress?.layer, LessonLayer.l3);
       expect(state.curriculum?.globalPlan?.globalTotalItems, 180);
       expect(state.curriculum?.globalPlan?.continuationNeeded, isTrue);
+      expect(state.currentLessonMaterial, isNull);
     },
   );
 
@@ -730,20 +678,7 @@ void main() {
       seed: {'cyber-class': _classroomState()},
     );
     final t02 = FakeClassroomT02();
-    final gate = FakeServerAdvanceGateClient(
-      const ServerAdvanceGateDecision(
-        accepted: true,
-        decision: 'next_layer',
-        reason: 'server_skip_to_l3',
-        nextItemIdx: 0,
-        nextLayer: LessonLayer.l3,
-        highWaterMark: 2,
-        events: [
-          {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
-        ],
-      ),
-    );
-    final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+    final runtime = _runtime(service, t02);
     await runtime.open(lessonLocalId: 'cyber-class');
     _putPreparedMaterial(
       service,
@@ -760,7 +695,6 @@ void main() {
     expect(snap.phase.type, ClassroomPhaseType.concluido);
     expect(snap.history, hasLength(1));
     expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
-    expect(gate.requests, isEmpty);
     expect(
       service.read('cyber-class')?.events.map((event) => event.type),
       contains('LOCAL_ADVANCE_DECIDED'),
@@ -852,8 +786,7 @@ void main() {
         seed: {'cyber-class': _classroomState()},
       );
       final t02 = FakeClassroomT02();
-      final gate = OfficialRouteAdvanceGateClient();
-      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      final runtime = _runtime(service, t02);
       await runtime.open(lessonLocalId: 'cyber-class');
       _putPreparedMaterial(
         service,
@@ -902,8 +835,6 @@ void main() {
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.lendo);
       expect(runtime.snapshot().itemMarker, 'M2');
       expect(service.read('cyber-class')?.current?.layer, LessonLayer.l1);
-
-      expect(gate.requests, isEmpty);
     },
   );
 
@@ -914,20 +845,7 @@ void main() {
         seed: {'cyber-class': _classroomState()},
       );
       final t02 = FakeClassroomT02();
-      final gate = FakeServerAdvanceGateClient(
-        const ServerAdvanceGateDecision(
-          accepted: true,
-          decision: 'next_layer',
-          reason: 'server_to_l2',
-          nextItemIdx: 0,
-          nextLayer: LessonLayer.l2,
-          highWaterMark: 2,
-          events: [
-            {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
-          ],
-        ),
-      );
-      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      final runtime = _runtime(service, t02);
       await runtime.open(lessonLocalId: 'cyber-class');
       expect(t02.calls, 0);
 
@@ -1045,7 +963,7 @@ void main() {
   );
 
   test(
-    'M7.1 worker falho fecha advancePending com erro humano recuperavel',
+    'M7.1 worker falho mantem advancePending e reencaminha preparo interno',
     () async {
       final service = StudentLearningStateService(
         seed: {'cyber-class': _classroomState()},
@@ -1058,33 +976,69 @@ void main() {
       await runtime.signal(DecisionSignal.two);
       await runtime.advance();
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.avancoPendente);
+      final targetPending =
+          service.read('cyber-class')!.extra['advancePending'] as Map;
 
       service.mutate('cyber-class', (state) {
-        return state.copyWith(
-          queuedActions: [
-            for (final job in state.queuedActions)
-              if (job['type'] == 'PREPARE_READY_WINDOW' &&
-                  (job['payload'] as Map?)?['itemIdx'] == 0 &&
-                  (job['payload'] as Map?)?['layer'] == LessonLayer.l2.value)
-                {
-                  ...job,
-                  'status': 'failed',
-                  'error': 'T02 retornou material invalido',
-                }
-              else
-                job,
-          ],
+        var marked = false;
+        final queuedActions = [
+          for (final job in state.queuedActions)
+            if (job['type'] == 'PREPARE_READY_WINDOW' &&
+                (job['payload'] as Map?)?['itemIdx'] ==
+                    targetPending['toItemIdx'] &&
+                (job['payload'] as Map?)?['layer'] == targetPending['toLayer'])
+              {
+                ...job,
+                'status': 'failed',
+                'error': 'T02 retornou material invalido',
+              }
+            else
+              job,
+        ];
+        marked = queuedActions.any(
+          (job) =>
+              job['type'] == 'PREPARE_READY_WINDOW' &&
+              job['status'] == 'failed' &&
+              (job['payload'] as Map?)?['itemIdx'] ==
+                  targetPending['toItemIdx'] &&
+              (job['payload'] as Map?)?['layer'] == targetPending['toLayer'],
         );
+        if (!marked) {
+          queuedActions.add({
+            'type': 'PREPARE_READY_WINDOW',
+            'status': 'failed',
+            'payload': {
+              'itemIdx': targetPending['toItemIdx'],
+              'layer': targetPending['toLayer'],
+              'marker': targetPending['toMarker'],
+            },
+            'error': 'T02 retornou material invalido',
+          });
+        }
+        return state.copyWith(queuedActions: queuedActions);
       });
+
+      final beforeRetryJobs = service
+          .read('cyber-class')!
+          .queuedActions
+          .where((job) => job['type'] == 'PREPARE_READY_WINDOW')
+          .length;
 
       expect(runtime.reavaliarAvancoPendente(), isTrue);
       final snapshot = runtime.snapshot();
-      expect(snapshot.phase.type, ClassroomPhaseType.erroEngine);
-      expect(snapshot.phase.message, 'aula_advance_pending');
+      expect(snapshot.phase.type, ClassroomPhaseType.avancoPendente);
       expect(
         (service.read('cyber-class')?.extra['advancePending']
             as Map?)?['status'],
-        'failed',
+        'preparing',
+      );
+      expect(
+        service
+            .read('cyber-class')!
+            .queuedActions
+            .where((job) => job['type'] == 'PREPARE_READY_WINDOW')
+            .length,
+        greaterThan(beforeRetryJobs),
       );
     },
   );
@@ -1390,8 +1344,7 @@ void main() {
         seed: {'cyber-class': _classroomState()},
       );
       final t02 = FakeClassroomT02();
-      final gate = PendingServerAdvanceGateClient();
-      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      final runtime = _runtime(service, t02);
       await runtime.open(lessonLocalId: 'cyber-class');
       expect(t02.calls, 0);
 
@@ -1426,7 +1379,6 @@ void main() {
 
       runtime.select(AnswerLetter.A);
       await runtime.signal(DecisionSignal.two);
-      expect(gate.requests, isEmpty);
       final afterSignal = service.read('cyber-class')!;
       expect(afterSignal.current?.layer, LessonLayer.l2);
       expect(afterSignal.attempts, hasLength(1));
@@ -1477,8 +1429,7 @@ void main() {
       seed: {'cyber-class': _classroomState()},
     );
     final t02 = FakeClassroomT02();
-    final gate = PendingServerAdvanceGateClient();
-    final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+    final runtime = _runtime(service, t02);
     await runtime.open(lessonLocalId: 'cyber-class');
     expect(t02.calls, 0);
 
@@ -1513,7 +1464,6 @@ void main() {
 
     runtime.select(AnswerLetter.A);
     await runtime.signal(DecisionSignal.two);
-    expect(gate.requests, isEmpty);
     expect(service.read('cyber-class')?.attempts, hasLength(1));
     await runtime.advance();
 
@@ -1529,7 +1479,7 @@ void main() {
       isNot(contains('ADVANCE_GATE_PENDING')),
     );
 
-    final reopened = _runtime(service, t02, serverAdvanceGateClient: gate);
+    final reopened = _runtime(service, t02);
     final reopenedSnap = await reopened.open(lessonLocalId: 'cyber-class');
 
     expect(reopenedSnap.phase.type, ClassroomPhaseType.lendo);
@@ -1656,8 +1606,7 @@ void main() {
         seed: {'cyber-class': _classroomState()},
       );
       final t02 = FakeClassroomT02();
-      final gate = FailingServerAdvanceGateClient();
-      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      final runtime = _runtime(service, t02);
       await runtime.open(lessonLocalId: 'cyber-class');
       expect(t02.calls, 0);
 
@@ -1707,7 +1656,6 @@ void main() {
       expect(snap.phase.type, ClassroomPhaseType.lendo);
       expect(snap.conteudo?.question, 'Servidor offline travou?');
       expect(t02.calls, 0);
-      expect(gate.requests, isEmpty);
       expect(state.current?.layer, LessonLayer.l2);
       expect(state.progress?.layer, LessonLayer.l2);
       expect(state.attempts, hasLength(1));
@@ -1738,6 +1686,7 @@ void main() {
         totalItems: 2,
         pctAvanco: 50,
       ),
+      currentLessonMaterial: null,
       readyLessonMaterials: {
         preparedLessonMaterialKey(1, 'M2', LessonLayer.l1): {
           ...preparedMaterialFromLesson(
@@ -1772,9 +1721,9 @@ void main() {
 
     final snap = await runtime.open(lessonLocalId: 'cyber-class');
 
-    expect(snap.phase.type, ClassroomPhaseType.lendo);
+    expect(snap.phase.type, ClassroomPhaseType.avancoPendente);
     expect(snap.itemMarker, 'M2');
-    expect(snap.conteudo?.question, contains('Item 2'));
+    expect(snap.conteudo, isNull);
     expect(t02.calls, 0);
   });
 
@@ -1783,20 +1732,7 @@ void main() {
       seed: {'cyber-class': _classroomState()},
     );
     final t02 = FakeClassroomT02();
-    final gate = FakeServerAdvanceGateClient(
-      const ServerAdvanceGateDecision(
-        accepted: true,
-        decision: 'next_layer',
-        reason: 'server_to_l2',
-        nextItemIdx: 0,
-        nextLayer: LessonLayer.l2,
-        highWaterMark: 2,
-        events: [
-          {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
-        ],
-      ),
-    );
-    final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+    final runtime = _runtime(service, t02);
     await runtime.open(lessonLocalId: 'cyber-class');
 
     runtime.select(AnswerLetter.A);
@@ -1917,20 +1853,7 @@ void main() {
       );
     });
     final t02 = FailingClassroomT02();
-    final gate = FakeServerAdvanceGateClient(
-      const ServerAdvanceGateDecision(
-        accepted: true,
-        decision: 'next_layer',
-        reason: 'server_to_l2',
-        nextItemIdx: 0,
-        nextLayer: LessonLayer.l2,
-        highWaterMark: 2,
-        events: [
-          {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
-        ],
-      ),
-    );
-    final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+    final runtime = _runtime(service, t02);
 
     await runtime.open(lessonLocalId: 'cyber-class');
     runtime.select(AnswerLetter.A);
@@ -2052,60 +1975,13 @@ void main() {
   });
 
   test(
-    'CG-1 runtime atravessa Parte 1 para item global 81 servidor-first',
+    'CG-1 runtime atravessa Parte 1 para item global 81 com plano local',
     () async {
       final service = StudentLearningStateService(
         seed: {'lesson-cg-root': _largeCurriculumBoundaryState()},
       );
       final t02 = FakeClassroomT02();
-      final gate = FakeServerAdvanceGateClient(
-        const ServerAdvanceGateDecision(
-          accepted: true,
-          decision: 'next_item',
-          reason: 'l3_to_next_item',
-          nextItemIdx: 80,
-          nextLayer: LessonLayer.l1,
-          nextGlobalItemNumber: 81,
-          nextLocalItemIdx: 0,
-          nextPartNumber: 2,
-          authoritativeRootLessonLocalId: 'lesson-cg-root',
-          authoritativePartLessonLocalId: 'lesson-cg-root::part-2',
-          authoritativeLayer: LessonLayer.l1,
-          partStatus: 'ready',
-          nextPartStatus: 'ready',
-          liveWindow: {
-            'version': 1,
-            'policy': 'current_plus_next_three',
-            'slots': [
-              {
-                'itemIdx': 80,
-                'layer': 1,
-                'rootLessonLocalId': 'lesson-cg-root',
-                'partLessonLocalId': 'lesson-cg-root::part-2',
-                'partNumber': 2,
-                'globalItemNumber': 81,
-                'localItemIdx': 0,
-                'item': {
-                  'itemIdx': 80,
-                  'localItemIdx': 0,
-                  'globalItemNumber': 81,
-                  'partNumber': 2,
-                  'rootLessonLocalId': 'lesson-cg-root',
-                  'partLessonLocalId': 'lesson-cg-root::part-2',
-                  'marker': 'M81',
-                  'title': 'Item 81',
-                  'text': 'Item 81',
-                },
-              },
-            ],
-          },
-          highWaterMark: 80,
-          events: [
-            {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_item'},
-          ],
-        ),
-      );
-      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      final runtime = _runtime(service, t02);
       await runtime.open(lessonLocalId: 'lesson-cg-root');
       service.mutate('lesson-cg-root', (state) {
         final current = state.curriculum!;
@@ -2169,7 +2045,6 @@ void main() {
         state.curriculum?.items[80].extra['partLessonLocalId'],
         'lesson-cg-root::part-2',
       );
-      expect(gate.requests, isEmpty);
     },
   );
 
@@ -2288,20 +2163,7 @@ void main() {
         },
       );
       final t02 = FakeClassroomT02();
-      final gate = FakeServerAdvanceGateClient(
-        const ServerAdvanceGateDecision(
-          accepted: true,
-          decision: 'next_layer',
-          reason: 'accepted_repeated_attempt',
-          nextItemIdx: 0,
-          nextLayer: LessonLayer.l3,
-          highWaterMark: 1,
-          events: [
-            {'type': 'ADVANCE_GATE_DECIDED', 'decision': 'next_layer'},
-          ],
-        ),
-      );
-      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      final runtime = _runtime(service, t02);
       await runtime.open(lessonLocalId: 'cyber-class');
 
       runtime.select(AnswerLetter.A);
@@ -2311,8 +2173,6 @@ void main() {
       expect(afterLocalEvidence.attempts, hasLength(2));
       expect(afterLocalEvidence.attempts.first.ts, 1);
       expect(afterLocalEvidence.attempts.last.ts, isNot(1));
-      expect(gate.requests, isEmpty);
-
       await Future<void>.delayed(Duration.zero);
 
       final afterRemoteDecision = service.read('cyber-class')!;
@@ -2328,14 +2188,13 @@ void main() {
   );
 
   test(
-    'remote advance gate failure keeps explicit retry pending state',
+    'advance decision stays local when remote gate would have failed',
     () async {
       final service = StudentLearningStateService(
         seed: {'cyber-class': _classroomState()},
       );
       final t02 = FakeClassroomT02();
-      final gate = FailingServerAdvanceGateClient();
-      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      final runtime = _runtime(service, t02);
       await runtime.open(lessonLocalId: 'cyber-class');
 
       runtime.select(AnswerLetter.A);
@@ -2357,14 +2216,13 @@ void main() {
   );
 
   test(
-    'remote advance gate retry reuses idempotency key and applies decision',
+    'repeated signal remains local and does not create remote retry',
     () async {
       final service = StudentLearningStateService(
         seed: {'cyber-class': _classroomState()},
       );
       final t02 = FakeClassroomT02();
-      final gate = FlakyServerAdvanceGateClient();
-      final runtime = _runtime(service, t02, serverAdvanceGateClient: gate);
+      final runtime = _runtime(service, t02);
       await runtime.open(lessonLocalId: 'cyber-class');
 
       runtime.select(AnswerLetter.A);
@@ -2375,8 +2233,6 @@ void main() {
       runtime.select(AnswerLetter.A);
       await runtime.signal(DecisionSignal.one);
       await Future<void>.delayed(Duration.zero);
-
-      expect(gate.requests, isEmpty);
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
       expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
       expect(service.read('cyber-class')?.attempts, hasLength(2));

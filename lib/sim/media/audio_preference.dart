@@ -10,18 +10,6 @@ abstract interface class AudioPreferenceStorage {
   void write(String key, String value);
 }
 
-class MemoryAudioPreferenceStorage implements AudioPreferenceStorage {
-  final Map<String, String> _values = {};
-
-  @override
-  String? read(String key) => _values[key];
-
-  @override
-  void write(String key, String value) {
-    _values[key] = value;
-  }
-}
-
 /// SharedPreferences-backed storage — persists across app restarts.
 class SharedPrefsAudioPreferenceStorage implements AudioPreferenceStorage {
   SharedPrefsAudioPreferenceStorage(this._prefs);
@@ -42,9 +30,26 @@ class SharedPrefsAudioPreferenceStorage implements AudioPreferenceStorage {
   }
 }
 
+class _ExplicitAudioPreferenceStorageRequired
+    implements AudioPreferenceStorage {
+  const _ExplicitAudioPreferenceStorageRequired();
+
+  Never _missing() {
+    throw StateError('AUDIO_PREFERENCE_STORAGE_REQUIRED');
+  }
+
+  @override
+  String? read(String key) => _missing();
+
+  @override
+  void write(String key, String value) {
+    _missing();
+  }
+}
+
 class AudioPreference {
   AudioPreference({AudioPreferenceStorage? storage})
-    : storage = storage ?? MemoryAudioPreferenceStorage();
+    : storage = storage ?? const _ExplicitAudioPreferenceStorageRequired();
 
   final AudioPreferenceStorage storage;
   final Set<AudioPreferenceListener> _listeners = {};

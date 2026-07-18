@@ -41,8 +41,8 @@ class ClassroomPhase {
       );
   const ClassroomPhase.advancePending({
     required String message,
-    required AnswerLetter letter,
-    required DecisionSignal signal,
+    AnswerLetter? letter,
+    DecisionSignal? signal,
   }) : this(
          type: ClassroomPhaseType.avancoPendente,
          message: message,

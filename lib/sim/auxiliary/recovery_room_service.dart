@@ -1,13 +1,11 @@
 import '../state/student_learning_state.dart';
 import 'aux_room_models.dart';
-import 'server_recovery_contract.dart';
 import 'student_aux_room_service.dart';
 
 class RecoveryRoomService {
-  const RecoveryRoomService(this.service, {this.serverRecoveryClient});
+  const RecoveryRoomService(this.service);
 
   final StudentAuxRoomService service;
-  final ServerRecoveryClient? serverRecoveryClient;
 
   bool shouldStartRecoveryRoom(String lessonLocalId) {
     return service.shouldLessonBlockFinalCompletion(lessonLocalId);
@@ -16,41 +14,6 @@ class RecoveryRoomService {
   Future<RecoveryRoomView> startRecoveryRoom(
     RecoveryRoomContext context,
   ) async {
-    final server = serverRecoveryClient;
-    if (server != null) {
-      try {
-        final item = await server.next(
-          lessonLocalId: context.lessonLocalId,
-          idempotencyKey: '${context.lessonLocalId}:recovery:open',
-        );
-        if (item == null) {
-          return const RecoveryRoomView(
-            status: RecoveryRoomStatus.done,
-            queue: [],
-            idx: 0,
-          );
-        }
-        return RecoveryRoomView(
-          status: item.ready
-              ? RecoveryRoomStatus.intro
-              : RecoveryRoomStatus.failed,
-          queue: [item.marker],
-          idx: 0,
-          conteudo: _contentFromServer(item),
-          errMsg: item.humanError?['message']?.toString(),
-          serverRecoveryId: item.recoveryId,
-          serverMarker: item.marker,
-        );
-      } catch (_) {
-        return const RecoveryRoomView(
-          status: RecoveryRoomStatus.failed,
-          queue: [],
-          idx: 0,
-          errMsg:
-              'Nao consegui abrir a recuperacao agora. Sua aula foi preservada.',
-        );
-      }
-    }
     final built = service.buildRecoveryQueueForLesson(
       lessonLocalId: context.lessonLocalId,
       topic: context.topic,
@@ -150,59 +113,10 @@ class RecoveryRoomService {
     );
   }
 
-  Future<RecoveryRoomView> answerServerRecoveryRoom(
-    RecoveryRoomContext context,
-    RecoveryRoomView view,
-    DecisionSignal sinal,
-  ) async {
-    final server = serverRecoveryClient;
-    final conteudo = view.conteudo;
-    final letra = view.letra;
-    if (server == null) return answerRecoveryRoom(context, view, sinal);
-    if (conteudo == null || letra == null || view.queue.isEmpty) {
-      return view.copyWith(
-        status: RecoveryRoomStatus.failed,
-        errMsg: 'Resposta de recuperacao incompleta.',
-      );
-    }
-    try {
-      final result = await server.answer(
-        ServerRecoveryAnswerRequest(
-          lessonLocalId: context.lessonLocalId,
-          recoveryId: view.serverRecoveryId ?? view.queue.first,
-          marker: view.serverMarker ?? view.queue.first,
-          selectedOption: letra,
-          signal: sinal,
-          idempotencyKey:
-              '${context.lessonLocalId}:${view.serverRecoveryId ?? view.queue.first}:recovery:${letra.name}:${sinal.value}',
-          timestamp: DateTime.now().toUtc().toIso8601String(),
-        ),
-      );
-      return view.copyWith(
-        status: result.accepted
-            ? RecoveryRoomStatus.result
-            : RecoveryRoomStatus.failed,
-        sinal: sinal,
-        resultCorrect: result.correct,
-        restartRequired: result.blocksConclusion && !result.repaired,
-        errMsg: result.humanError?['message']?.toString(),
-      );
-    } catch (_) {
-      return view.copyWith(
-        status: RecoveryRoomStatus.failed,
-        errMsg:
-            'Nao consegui enviar a recuperacao agora. Sua aula foi preservada.',
-      );
-    }
-  }
-
   Future<RecoveryRoomView> nextRecoveryRoom(
     RecoveryRoomContext context,
     RecoveryRoomView view,
   ) async {
-    if (serverRecoveryClient != null) {
-      return startRecoveryRoom(context);
-    }
     final built = service.buildRecoveryQueueForLesson(
       lessonLocalId: context.lessonLocalId,
       topic: context.topic,
@@ -231,14 +145,5 @@ class RecoveryRoomService {
     }
     service.registerFinalCompletionAllowed(lessonLocalId);
     return view.copyWith(status: RecoveryRoomStatus.done);
-  }
-
-  AuxRoomContent _contentFromServer(ServerRecoveryItem item) {
-    return AuxRoomContent(
-      question: item.question,
-      options: item.options,
-      correctAnswer: item.correctOption,
-      explanation: item.explanation,
-    );
   }
 }

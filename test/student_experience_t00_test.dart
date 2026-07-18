@@ -23,7 +23,10 @@ class FakeT00Client implements T00BootstrapClient {
     );
     yield const T00BootstrapChunk(
       type: 't00_fallback_gateway_started',
-      payload: {'error': 'gateway slow', 'ts': 1},
+      payload: {
+        'error': 'server routePatch /cyber/credits raw provider',
+        'ts': 1,
+      },
     );
     yield const T00BootstrapChunk(
       type: 't00_item_partial',
@@ -256,6 +259,13 @@ void main() {
       expect(progressEvents, contains('placementScreenReleasedAfterSlotA'));
       expect(progressEvents, contains('placementRequired'));
       expect(progressEvents, isNot(contains('firstLessonShellOpened')));
+      final eventText = settledState?.events
+          .map((event) => event.payload.toString())
+          .join('\n');
+      expect(eventText, contains('T00_PROVIDER_UNAVAILABLE'));
+      expect(eventText, isNot(contains('routePatch')));
+      expect(eventText, isNot(contains('/cyber/credits')));
+      expect(eventText, isNot(contains('raw provider')));
       expect(settledState?.curriculum?.items, hasLength(1));
     },
   );

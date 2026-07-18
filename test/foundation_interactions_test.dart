@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'support/memory_test_stores.dart';
 import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
 import 'package:sim_mobile/sim/state/foundation_identity.dart';
 import 'package:sim_mobile/sim/state/foundation_sync.dart';

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'support/memory_test_stores.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/cloud/cloud_functions.dart';

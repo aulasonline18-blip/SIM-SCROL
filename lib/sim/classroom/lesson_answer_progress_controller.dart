@@ -317,8 +317,8 @@ class LessonAnswerProgressController {
       materialService.maintainLessonReadyWindow(
         lessonLocalId: lessonLocalId,
         topic: topic,
-        itemIdx: position.itemIdx,
-        layer: position.layer,
+        itemIdx: targetItemIdx,
+        layer: targetLayer,
         items: _dopamineItemsFromCurriculum(baseItems),
         source: 'cyber.aula.advance-cache-miss',
         priority: 'background',
@@ -495,27 +495,6 @@ class LessonAnswerProgressController {
       return false;
     }
 
-    final failed = state.queuedActions.any((job) {
-      if (job['type'] != 'PREPARE_READY_WINDOW' || job['status'] != 'failed') {
-        return false;
-      }
-      final payload = job['payload'];
-      if (payload is! Map) return false;
-      return (payload['itemIdx'] as num?)?.toInt() == toItemIdx &&
-          LessonLayerValue.fromValue(payload['layer']) == toLayer &&
-          (toMarker == null ||
-              toMarker.isEmpty ||
-              (payload['marker'] as String?) == toMarker);
-    });
-    if (failed) {
-      position.phase = ClassroomPhase.engineError('aula_advance_pending');
-      _updateAdvancePendingStatus(
-        lessonLocalId: lessonLocalId,
-        status: 'failed',
-      );
-      return true;
-    }
-
     final previousItemIdx = position.itemIdx;
     final previousLayer = position.layer;
     final previousLoadingLayer = position.loadingLayer;
@@ -541,6 +520,25 @@ class LessonAnswerProgressController {
       baseItems: baseItems,
     );
     if (!loadedPrepared) {
+      final failed = state.queuedActions.any((job) {
+        if (job['type'] != 'PREPARE_READY_WINDOW' ||
+            job['status'] != 'failed') {
+          return false;
+        }
+        final payload = job['payload'];
+        if (payload is! Map) return false;
+        if ((payload['itemIdx'] as num?) == null || payload['layer'] == null) {
+          return true;
+        }
+        return (payload['itemIdx'] as num?)?.toInt() == toItemIdx &&
+            (LessonLayerValue.fromValue(payload['layer']) == toLayer ||
+                payload['layer'] is num ||
+                payload['layer'] is String) &&
+            (toMarker == null ||
+                toMarker.isEmpty ||
+                (payload['marker'] as String?) == toMarker ||
+                payload['marker'] == null);
+      });
       position.itemIdx = previousItemIdx;
       position.layer = previousLayer;
       position.loadingLayer = previousLoadingLayer;
@@ -548,6 +546,23 @@ class LessonAnswerProgressController {
       position.historia = previousHistoria;
       position.mainAdvances = previousMainAdvances;
       position.phase = previousPhase;
+      if (failed) {
+        _updateAdvancePendingStatus(
+          lessonLocalId: lessonLocalId,
+          status: 'preparing',
+        );
+        materialService.maintainLessonReadyWindow(
+          lessonLocalId: lessonLocalId,
+          topic: topic,
+          itemIdx: toItemIdx,
+          layer: toLayer,
+          items: _dopamineItemsFromCurriculum(baseItems),
+          source: 'cyber.aula.advance-pending-recover',
+          priority: 'background',
+          reason: 'advance_pending_failed_job_recovered_without_manual_retry',
+        );
+        return true;
+      }
       return false;
     }
     _recordLocalPendingAdvanceDisplayed(

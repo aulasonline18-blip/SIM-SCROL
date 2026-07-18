@@ -36,15 +36,7 @@ class AuxRoomsController {
     ReviewRoomContext context,
     DecisionSignal signal,
   ) async {
-    if (reviewRoomService.serverReviewClient == null) {
-      review = reviewRoomService.answerReviewRoom(context, review, signal);
-      return;
-    }
-    review = await reviewRoomService.answerServerReviewRoom(
-      context,
-      review,
-      signal,
-    );
+    review = reviewRoomService.answerReviewRoom(context, review, signal);
   }
 
   Future<void> reviewNext(ReviewRoomContext context) async {
@@ -84,15 +76,7 @@ class AuxRoomsController {
   ) async {
     final current = recovery;
     if (current != null) {
-      if (recoveryRoomService.serverRecoveryClient == null) {
-        recovery = recoveryRoomService.answerRecoveryRoom(
-          context,
-          current,
-          signal,
-        );
-        return;
-      }
-      recovery = await recoveryRoomService.answerServerRecoveryRoom(
+      recovery = recoveryRoomService.answerRecoveryRoom(
         context,
         current,
         signal,

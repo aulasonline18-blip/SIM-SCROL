@@ -52,7 +52,6 @@ import '../portal/portal_flow.dart';
 import '../auth/login_screen.dart';
 import '../onboarding/onboarding_screens.dart';
 import '../onboarding/preparation_and_placement.dart';
-import '../classroom/aula_screen.dart';
 import '../classroom/aux_room_screens.dart';
 import '../classroom/aula_widgets.dart';
 import '../classroom/visual_webview_renderer.dart';

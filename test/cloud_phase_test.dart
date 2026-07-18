@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'support/memory_test_stores.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/cloud/cloud_functions.dart';
@@ -444,7 +445,7 @@ void main() {
             },
             queuedActions: const [
               {
-                'type': 'ADVANCE_GATE_PENDING',
+                'type': 'LOCAL_STATE_SYNC_PENDING',
                 'payload': {
                   'currentState': {
                     'currentLessonMaterial': {
@@ -822,7 +823,7 @@ void main() {
   });
 
   test(
-    'lesson cloud bootstrap enqueues and drains when curriculum is ready',
+    'P3 lesson cloud bootstrap enqueues without blocking on remote drain',
     () async {
       final states = StudentLearningStateService(
         seed: {
@@ -854,7 +855,8 @@ void main() {
       );
 
       expect(ok, true);
-      expect(cloud.persistCalls, 1);
+      expect(cloud.persistCalls, 0);
+      expect(queue.getQueueSnapshot(), contains('local-1'));
     },
   );
 

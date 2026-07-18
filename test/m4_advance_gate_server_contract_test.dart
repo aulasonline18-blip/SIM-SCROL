@@ -3,12 +3,15 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('M4: app nao possui cliente HTTP para advance gate remoto', () {
-    final dartFiles = Directory('lib')
-        .listSync(recursive: true)
-        .whereType<File>()
-        .where((file) => file.path.endsWith('.dart'));
+  Iterable<File> dartFilesUnder(String path) sync* {
+    final root = Directory(path);
+    if (!root.existsSync()) return;
+    for (final entity in root.listSync(recursive: true)) {
+      if (entity is File && entity.path.endsWith('.dart')) yield entity;
+    }
+  }
 
+  test('M4: app nao possui cliente HTTP para advance gate remoto', () {
     final forbidden = <String>[
       '/api/advance-gate/answer',
       'SimServerAdvanceGateClient',
@@ -16,7 +19,7 @@ void main() {
     ];
 
     final violations = <String>[];
-    for (final file in dartFiles) {
+    for (final file in dartFilesUnder('lib')) {
       final content = file.readAsStringSync();
       for (final fragment in forbidden) {
         if (content.contains(fragment)) {
@@ -31,6 +34,41 @@ void main() {
       reason:
           'O caminho quente A/B/C + sinal + avanço e 100% local. '
           'O app nao pode conter cliente HTTP nem endpoint de advance gate.',
+    );
+  });
+
+  test('M4: testes ativos nao recriam advance gate remoto', () {
+    final forbidden = <String>[
+      "import 'legacy/server_advance_gate_legacy.dart'",
+      'import "legacy/server_advance_gate_legacy.dart"',
+      'ServerAdvanceGateClient',
+      'applyServerAdvanceGateDecision',
+      'recordPendingServerAdvanceGate',
+      '/api/advance-gate/answer',
+      'simAdvanceGateAnswerPath',
+      'serverAdvanceGateClient',
+    ];
+    final violations = <String>[];
+    for (final file in dartFilesUnder('test')) {
+      if (file.path == 'test/m4_advance_gate_server_contract_test.dart' ||
+          file.path == 'test/p2_app_first_real_contract_test.dart') {
+        continue;
+      }
+      final content = file.readAsStringSync();
+      for (final fragment in forbidden) {
+        if (content.contains(fragment)) {
+          violations.add('${file.path}: $fragment');
+        }
+      }
+    }
+
+    expect(
+      violations,
+      isEmpty,
+      reason:
+          'O legado de advance gate remoto deve ficar quarantinado; testes '
+          'ativos da aula principal precisam provar motor local sem injetar '
+          'decisor remoto.',
     );
   });
 

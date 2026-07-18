@@ -9,7 +9,6 @@ import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
-import 'legacy/server_advance_gate_legacy.dart';
 import 'package:sim_mobile/sim/experience/student_experience_engine.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t00_adapter.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t02_adapter.dart';
@@ -90,130 +89,11 @@ class FullFlowT02Client implements T02LessonClient {
       completeLesson(request);
 }
 
-class FullFlowAdvanceGateClient implements ServerAdvanceGateClient {
-  final requests = <ServerAdvanceGateRequest>[];
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(
-    ServerAdvanceGateRequest request,
-  ) async {
-    requests.add(request);
-    final isLastLayer = request.layer == LessonLayer.l3;
-    final decision = isLastLayer ? 'next_item' : 'next_layer';
-    final nextItemIdx = isLastLayer ? request.itemIdx + 1 : request.itemIdx;
-    final nextLayer = isLastLayer
-        ? LessonLayer.l1
-        : LessonLayerValue.fromValue(request.layer.value + 1);
-    return ServerAdvanceGateDecision(
-      accepted: true,
-      decision: decision,
-      reason: 'test_server_$decision',
-      nextItemIdx: nextItemIdx,
-      nextLayer: nextLayer,
-      highWaterMark: requests.length,
-      events: [
-        {
-          'type': 'ADVANCE_GATE_DECIDED',
-          'decision': decision,
-          'marker': request.marker,
-          'layer': request.layer.value,
-          'letra': request.selectedOption.name,
-          'sinal': request.signal.value,
-        },
-      ],
-    );
-  }
-}
-
-class PropositionEAdvanceGateClient implements ServerAdvanceGateClient {
-  final requests = <ServerAdvanceGateRequest>[];
-
-  @override
-  Future<ServerAdvanceGateDecision> decide(
-    ServerAdvanceGateRequest request,
-  ) async {
-    requests.add(request);
-    expect(request.lessonLocalId, isNotEmpty);
-    expect(request.marker, isNotEmpty);
-    expect(request.questionId, isNotEmpty);
-    expect(request.questionText, isNotEmpty);
-    expect(request.correctOption, isNotNull);
-    expect(request.currentState?.currentLessonMaterial, isNotNull);
-    expect(request.currentState?.currentLessonMaterial?['correct_answer'], 'A');
-    expect(request.idempotencyKey, contains(request.marker));
-
-    if (!request.correct) {
-      return ServerAdvanceGateDecision(
-        accepted: true,
-        decision: 'continue_same_item',
-        reason: 'incorrect_answer_no_advancement',
-        nextItemIdx: request.itemIdx,
-        nextLayer: request.layer,
-        highWaterMark: requests.length,
-        events: [
-          {
-            'type': 'ADVANCE_GATE_DECIDED',
-            'decision': 'continue_same_item',
-            'reason': 'incorrect_answer_no_advancement',
-            'ruleApplied': 'validated_error_no_advancement',
-            'marker': request.marker,
-            'layer': request.layer.value,
-            'evidence': {
-              'selectedOption': request.selectedOption.name,
-              'correctOption': request.correctOption?.name,
-              'signal': request.signal.value,
-              'validatedCorrect': false,
-            },
-          },
-        ],
-      );
-    }
-
-    final isLayerThree = request.layer == LessonLayer.l3;
-    final decision = isLayerThree ? 'next_item' : 'next_layer';
-    final reason = isLayerThree
-        ? 'validated_l3_to_next_item'
-        : 'validated_correct_secure_l1_to_l3';
-    final nextItemIdx = isLayerThree ? request.itemIdx + 1 : request.itemIdx;
-    final nextLayer = isLayerThree ? LessonLayer.l1 : LessonLayer.l3;
-
-    return ServerAdvanceGateDecision(
-      accepted: true,
-      decision: decision,
-      reason: reason,
-      nextItemIdx: nextItemIdx,
-      nextLayer: nextLayer,
-      highWaterMark: requests.length,
-      events: [
-        {
-          'type': 'ADVANCE_GATE_DECIDED',
-          'decision': decision,
-          'reason': reason,
-          'ruleApplied': reason,
-          'marker': request.marker,
-          'layer': request.layer.value,
-          'before': {'itemIdx': request.itemIdx, 'layer': request.layer.value},
-          'after': {'itemIdx': nextItemIdx, 'layer': nextLayer.value},
-          'evidence': {
-            'selectedOption': request.selectedOption.name,
-            'correctOption': request.correctOption?.name,
-            'signal': request.signal.value,
-            'validatedCorrect': true,
-          },
-        },
-      ],
-    );
-  }
-}
-
 class FullFlowHarness {
-  FullFlowHarness({
-    Map<String, StudentLearningState>? seed,
-    ServerAdvanceGateClient? serverAdvanceGateClient,
-  }) : service = StudentLearningStateService(seed: seed),
-       t00 = FullFlowT00Client(),
-       t02 = FullFlowT02Client(),
-       advanceGate = serverAdvanceGateClient ?? FullFlowAdvanceGateClient() {
+  FullFlowHarness({Map<String, StudentLearningState>? seed})
+    : service = StudentLearningStateService(seed: seed),
+      t00 = FullFlowT00Client(),
+      t02 = FullFlowT02Client() {
     orchestrator = LessonOrchestrator(
       t02Client: t02,
       cache: LessonMaterialCache(maxLessons: 3),
@@ -258,7 +138,6 @@ class FullFlowHarness {
   final StudentLearningStateService service;
   final FullFlowT00Client t00;
   final FullFlowT02Client t02;
-  final dynamic advanceGate;
   late final LessonOrchestrator orchestrator;
   late final DopamineReadyWindowEngine readyWindow;
   late final StudentLessonMaterialService materialService;
@@ -267,59 +146,35 @@ class FullFlowHarness {
   late final LessonRuntimeEngine runtime;
 }
 
-Future<void> _prepareCurrentTargetMaterial(
+Future<void> _drainQueuedReadyWindowJobs(
   FullFlowHarness h,
   String lessonLocalId,
 ) async {
   final state = h.service.read(lessonLocalId);
-  final current = state?.current;
   final curriculum = state?.curriculum;
-  if (state == null || current == null || curriculum == null) return;
-  if (current.itemIdx < 0 || current.itemIdx >= curriculum.items.length) return;
-  final item = curriculum.items[current.itemIdx];
-  final profile = state.profile.toJson();
-  final mode = (state.progress?.amparoLvl ?? 0) > 0
-      ? LessonMode.amparo
-      : LessonMode.session;
-  final curriculumItems = [
-    for (var index = 0; index < curriculum.items.length; index += 1)
-      {
-        'order': index + 1,
-        'marker': curriculum.items[index].marker,
-        if ((curriculum.items[index].unit ?? '').trim().isNotEmpty)
-          'unit': curriculum.items[index].unit!.trim(),
-        'title': curriculum.items[index].title ?? curriculum.items[index].text,
-        'text': curriculum.items[index].text,
-        'purpose': curriculum.items[index].teacherText,
-        'microitem_for_teacher': curriculum.items[index].teacherText,
-      },
-  ];
-  await h.materialService.resolveLessonMaterialFromStateOrEngine(
-    ResolveLessonMaterialInput(
+  if (state == null || curriculum == null) return;
+  final items = curriculum.items
+      .map((item) => DopamineWindowItem(text: item.text, marker: item.marker))
+      .toList(growable: false);
+  final jobs = state.queuedActions
+      .where((job) => job['type'] == 'PREPARE_READY_WINDOW')
+      .toList(growable: false);
+  for (final job in jobs) {
+    final payload = job['payload'];
+    if (payload is! Map) continue;
+    final itemIdx = (payload['itemIdx'] as num?)?.toInt();
+    final layer = LessonLayerValue.fromValue(payload['layer']);
+    if (itemIdx == null || itemIdx < 0 || itemIdx >= items.length) continue;
+    await h.readyWindow.runDopamineReadyWindowFromStudentState(
       lessonLocalId: lessonLocalId,
+      source: 'test.background-ready-window',
+      maxSlots: (payload['maxSlots'] as num?)?.toInt() ?? localLessonTraySize,
+      itemIdx: itemIdx,
+      layer: layer,
+      marker: payload['marker'] as String?,
       topic: curriculum.topic,
-      itemIdx: current.itemIdx,
-      marker: item.marker,
-      layer: current.layer,
-      params: CompleteLessonParams(
-        lessonLocalId: lessonLocalId,
-        item: item.teacherText,
-        lang: state.profile.stableLang ?? 'pt-BR',
-        academic: state.profile.nivel ?? 'fundamental',
-        layer: current.layer,
-        mode: mode,
-        marker: item.marker,
-        amparoLvl: current.amparoLvl,
-        curriculumItems: curriculumItems,
-        topic: curriculum.topic,
-        itemIdx: current.itemIdx,
-        pedagogicalEnvelope: profile,
-      ),
-      waitBeforeOrderMs: 0,
-      waitAfterOrderMs: 50,
-      allowRemoteOrder: true,
-    ),
-  );
+    );
+  }
 }
 
 const _curriculumItems = [
@@ -432,13 +287,7 @@ void main() {
           state.events.map((event) => event.type),
           contains('LOCAL_ADVANCE_DECIDED'),
         );
-        expect(
-          h.advanceGate.requests,
-          isEmpty,
-          reason: 'o fluxo normal decide avanço no app, sem gate remoto',
-        );
-
-        await _prepareCurrentTargetMaterial(h, lessonLocalId);
+        await _drainQueuedReadyWindowJobs(h, lessonLocalId);
         await h.runtime.advance();
 
         if (index == 3 && !restoredOnce) {
@@ -497,11 +346,10 @@ void main() {
   );
 
   test(
-    'proposicao E: jornada real abre, erra, recebe amparo, acerta no servidor, salva, reabre e continua',
+    'proposicao E: jornada real abre, erra, recebe amparo, acerta no app, salva, reabre e continua',
     () async {
       const lessonLocalId = 'proposicao-e-journey';
-      final server = PropositionEAdvanceGateClient();
-      var h = FullFlowHarness(serverAdvanceGateClient: server);
+      var h = FullFlowHarness();
 
       final result = await h.experience.prepareStudentExperienceEntry(
         const StudentExperienceArgs(
@@ -588,7 +436,7 @@ void main() {
       expect(state.truth.masteryEvidence, isNotEmpty);
       expect(state.truth.conquestRecords, isEmpty);
 
-      await _prepareCurrentTargetMaterial(h, lessonLocalId);
+      await _drainQueuedReadyWindowJobs(h, lessonLocalId);
       await h.runtime.advance();
       snap = h.runtime.snapshot();
       expect(snap.phase.type, ClassroomPhaseType.lendo);
@@ -605,7 +453,6 @@ void main() {
       h.runtime.select(AnswerLetter.A);
       await h.runtime.signal(DecisionSignal.one);
       state = h.service.read(lessonLocalId)!;
-      expect(server.requests, isEmpty);
       expect(state.progress?.itemIdx, 0);
       expect(state.progress?.layer, LessonLayer.l3);
       expect(state.progress?.concluidos, isEmpty);
@@ -628,10 +475,7 @@ void main() {
         events: const [],
       );
       expect(staleCache.progress?.layer, LessonLayer.l1);
-      h = FullFlowHarness(
-        seed: {lessonLocalId: persisted},
-        serverAdvanceGateClient: server,
-      );
+      h = FullFlowHarness(seed: {lessonLocalId: persisted});
       snap = await h.runtime.open(
         lessonLocalId: lessonLocalId,
         authReady: true,
@@ -655,20 +499,9 @@ void main() {
         reason: 'o estado nao deve carregar decisao remota de advance gate',
       );
       expect(reopened.truth.itemConsolidationStatus['M1'], isNot('mastered'));
-      expect(
-        server.requests,
-        isEmpty,
-        reason: 'tentativas A/B/C + sinal ficam no app e sincronizam depois',
-      );
-
       h.runtime.select(AnswerLetter.A);
       await h.runtime.signal(DecisionSignal.one);
       final postReopen = h.service.read(lessonLocalId)!;
-      expect(
-        server.requests,
-        isEmpty,
-        reason: 'a acao apos reabertura tambem nao chama advance gate remoto',
-      );
       expect(postReopen.attempts, hasLength(5));
       expect(postReopen.attempts.last.marker, 'M1');
       expect(postReopen.attempts.last.layer, LessonLayer.l3);
@@ -684,7 +517,7 @@ void main() {
       );
       expect(postReopen.truth.itemConsolidationStatus['M1'], isNot('mastered'));
 
-      await _prepareCurrentTargetMaterial(h, lessonLocalId);
+      await _drainQueuedReadyWindowJobs(h, lessonLocalId);
       await h.runtime.advance();
       final continued = h.runtime.snapshot();
       expect(continued.phase.type, ClassroomPhaseType.lendo);

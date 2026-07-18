@@ -14,7 +14,6 @@ enum LessonMaterialSource {
   studentState,
   studentStateAfterWait,
   memoryCacheFromMotor,
-  localFallback,
 }
 
 class ResolveLessonMaterialInput {

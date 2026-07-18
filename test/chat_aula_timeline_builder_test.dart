@@ -158,11 +158,11 @@ void main() {
     final errorBlock = AulaConversationBlock.fromMessage(error);
 
     expect(feedbackBlock.type, AulaConversationBlockType.feedback);
-    expect(feedbackBlock.action, AulaConversationAction.advance);
+    expect(feedbackBlock.action, isNull);
     expect(doubtAnswerBlock.type, AulaConversationBlockType.doubtAnswer);
     expect(doubtAnswerBlock.action, isNull);
     expect(errorBlock.type, AulaConversationBlockType.recoverableError);
-    expect(errorBlock.action, AulaConversationAction.retry);
+    expect(errorBlock.action, isNull);
   });
 
   test('expanded phase opens signal choices under the selected option', () {
@@ -232,7 +232,8 @@ void main() {
       (message) => message.kind == ChatLessonMessageKind.feedback,
     );
     expect(feedback.isCorrect, isTrue);
-    expect(feedback.actionKey, 'aula_next');
+    expect(feedback.actionKey, isNull);
+    expect(feedback.isActionable, isFalse);
   });
 
   test('completed phase shows immediate next-topic loading feedback', () {
@@ -388,8 +389,8 @@ void main() {
     expect(activeOptions.isActionable, isTrue);
     expect(activeOptions.hasInteractiveOptions, isTrue);
     expect(activeFeedback.isHistorical, isFalse);
-    expect(activeFeedback.isActionable, isTrue);
-    expect(activeFeedback.actionKey, 'aula_next');
+    expect(activeFeedback.isActionable, isFalse);
+    expect(activeFeedback.actionKey, isNull);
   });
 
   test('message contract serializes identity actionability and status', () {
@@ -464,26 +465,34 @@ void main() {
     expect(secondQuestion.id, contains('aula-layer-2'));
   });
 
-  test('loading and engine errors stay system messages with retry action', () {
-    final loading = buildChatLessonMessages(
-      const ChatLessonTimelineInput(snapshot: null, runtimeLoading: true),
-    );
-    expect(loading.single.kind, ChatLessonMessageKind.loading);
-    expect(loading.single.actionKey, 'retry');
-    expect(loading.single.deliveryStatus, ChatLessonDeliveryStatus.processing);
+  test(
+    'loading and engine errors stay passive system messages without retry',
+    () {
+      final loading = buildChatLessonMessages(
+        const ChatLessonTimelineInput(snapshot: null, runtimeLoading: true),
+      );
+      expect(loading.single.kind, ChatLessonMessageKind.loading);
+      expect(loading.single.actionKey, isNull);
+      expect(loading.single.isActionable, isFalse);
+      expect(
+        loading.single.deliveryStatus,
+        ChatLessonDeliveryStatus.processing,
+      );
 
-    final error = buildChatLessonMessages(
-      ChatLessonTimelineInput(
-        snapshot: _snapshot(
-          phase: const ClassroomPhase.engineError('T02 indisponivel'),
+      final error = buildChatLessonMessages(
+        ChatLessonTimelineInput(
+          snapshot: _snapshot(
+            phase: const ClassroomPhase.engineError('T02 indisponivel'),
+          ),
         ),
-      ),
-    );
-    expect(error.last.kind, ChatLessonMessageKind.error);
-    expect(error.last.text, t('aula_gen_fail'));
-    expect(error.last.actionKey, 'retry');
-    expect(error.last.deliveryStatus, ChatLessonDeliveryStatus.failed);
-  });
+      );
+      expect(error.last.kind, ChatLessonMessageKind.error);
+      expect(error.last.text, t('aula_gen_fail'));
+      expect(error.last.actionKey, isNull);
+      expect(error.last.isActionable, isFalse);
+      expect(error.last.deliveryStatus, ChatLessonDeliveryStatus.failed);
+    },
+  );
 
   test('advance pending is preparation state, not recoverable error', () {
     final messages = buildChatLessonMessages(
@@ -536,7 +545,8 @@ void main() {
     expect(rawHttpError.last.text, t('aula_gen_fail'));
     expect(rawHttpError.last.text, isNot(contains('HTTP 500')));
     expect(rawHttpError.last.text, isNot(contains('{"error"')));
-    expect(rawHttpError.last.actionKey, 'retry');
+    expect(rawHttpError.last.actionKey, isNull);
+    expect(rawHttpError.last.isActionable, isFalse);
   });
 
   test('chat messages carry universal conversational delivery states', () {
@@ -786,7 +796,7 @@ void main() {
 
   test('system chat messages follow the active app language', () {
     addTearDown(() => setSimActiveLanguage('en'));
-    setSimActiveLanguage('fr');
+    setSimActiveLanguage('en');
 
     final processing = buildChatLessonMessages(
       ChatLessonTimelineInput(
@@ -799,7 +809,7 @@ void main() {
       processing
           .singleWhere((message) => message.id == 'doubt-processing')
           .text,
-      'Analyse de votre question...',
+      'Analyzing your question...',
     );
 
     final completed = buildChatLessonMessages(
@@ -820,7 +830,7 @@ void main() {
             (message) => message.kind == ChatLessonMessageKind.feedback,
           )
           .text,
-      '✅ Exact. Vous maîtrisez ce point.',
+      '✅ Exactly. You own this point.',
     );
   });
 }

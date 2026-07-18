@@ -218,10 +218,6 @@ String normalizeSimTargetLanguage(String? raw) {
 String simUiCodeForLocaleTag(String? raw) {
   return switch (normalizeSimLocaleTag(raw)) {
     'en' => 'en',
-    'es' => 'es',
-    'fr' => 'fr',
-    'de' => 'de',
-    'it' => 'it',
     _ => 'pt',
   };
 }
