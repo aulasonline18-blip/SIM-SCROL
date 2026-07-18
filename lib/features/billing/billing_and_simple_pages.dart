@@ -9,6 +9,7 @@ import '../../core/utils/sim_constants.dart';
 import '../../sim/billing/checkout_return_controller.dart';
 import '../../sim/billing/payments_functions.dart';
 import '../../sim/classroom/classroom_models.dart';
+import '../../sim/config/sim_environment.dart';
 import '../../sim/classroom/lesson_runtime_engine.dart';
 import '../../sim/classroom/lesson_main_view_model.dart';
 import '../../sim/experience/student_experience_types.dart';
@@ -236,6 +237,36 @@ class _CreditsLabScreenState extends State<CreditsLabScreen> {
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: glassDecoration(radius: 16),
+                    child: Row(
+                      children: [
+                        Icon(
+                          SimEnvironment.useGooglePlayBilling
+                              ? Icons.shop_2_outlined
+                              : Icons.credit_card,
+                          color: simDark,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            SimEnvironment.useGooglePlayBilling
+                                ? t('pay_google_play_provider')
+                                : t('pay_checkout_provider'),
+                            style: const TextStyle(
+                              color: simMuted,
+                              fontSize: 13,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],

@@ -166,6 +166,30 @@ void showAulaMenu(
                 },
               ),
               _MenuTile(
+                icon: Icons.privacy_tip_outlined,
+                label: t('privacy'),
+                onTap: () {
+                  Navigator.pop(context);
+                  session.openSupport('/privacidade');
+                },
+              ),
+              _MenuTile(
+                icon: Icons.article_outlined,
+                label: t('terms'),
+                onTap: () {
+                  Navigator.pop(context);
+                  session.openSupport('/termos');
+                },
+              ),
+              _MenuTile(
+                icon: Icons.person_remove_outlined,
+                label: t('delete_account_request'),
+                onTap: () {
+                  Navigator.pop(context);
+                  session.openSupport('/conta/deletar');
+                },
+              ),
+              _MenuTile(
                 icon: Icons.upload_file,
                 label: t('backup_export'),
                 onTap: () async {
@@ -185,28 +209,142 @@ void showAulaMenu(
               ),
               if (lessons.isNotEmpty) const Divider(height: 24),
               for (final lesson in lessons.take(12))
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.school_outlined),
-                  title: Text(
-                    lesson.tema.isEmpty ? t('lesson') : lesson.tema,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    '${lesson.nivel} - ${lesson.concluidos}/${lesson.totalItens}',
-                  ),
-                  onTap: () {
+                _DrawerLessonTile(
+                  lesson: lesson,
+                  onOpen: () {
                     Navigator.pop(context);
                     session.openDrawerLocalLesson(lesson.lessonLocalId);
                   },
+                  onRename: () async {
+                    final name = await _askLessonName(context, lesson);
+                    if (name == null) return;
+                    await session.renameDrawerCloudLesson(
+                      lesson.lessonLocalId,
+                      name,
+                    );
+                  },
+                  onDelete: () async {
+                    final confirmed = await _confirmDeleteLesson(
+                      context,
+                      lesson,
+                    );
+                    if (confirmed != true) return;
+                    await session.deleteDrawerCloudLesson(lesson.lessonLocalId);
+                    if (context.mounted) Navigator.pop(context);
+                  },
                 ),
+              const Divider(height: 24),
+              _MenuTile(
+                icon: Icons.logout,
+                label: t('logout'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await session.signOutReal();
+                },
+              ),
             ],
           );
         },
       ),
     ),
   );
+}
+
+Future<String?> _askLessonName(
+  BuildContext context,
+  dynamic lesson,
+) {
+  final controller = TextEditingController(
+    text: lesson.tema.isEmpty ? t('lesson') : lesson.tema,
+  );
+  return showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(t('rename_lesson')),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        decoration: InputDecoration(labelText: t('lesson_name')),
+        textInputAction: TextInputAction.done,
+        onSubmitted: (value) => Navigator.pop(context, value.trim()),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(t('cancel')),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, controller.text.trim()),
+          child: Text(t('save')),
+        ),
+      ],
+    ),
+  ).whenComplete(controller.dispose);
+}
+
+Future<bool?> _confirmDeleteLesson(
+  BuildContext context,
+  dynamic lesson,
+) {
+  final title = lesson.tema.isEmpty ? t('lesson') : lesson.tema;
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(t('delete_lesson')),
+      content: Text(t('delete_lesson_confirm', {'title': title})),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(t('cancel')),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: Text(t('delete')),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DrawerLessonTile extends StatelessWidget {
+  const _DrawerLessonTile({
+    required this.lesson,
+    required this.onOpen,
+    required this.onRename,
+    required this.onDelete,
+  });
+
+  final dynamic lesson;
+  final VoidCallback onOpen;
+  final VoidCallback onRename;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = lesson.tema.isEmpty ? t('lesson') : lesson.tema;
+    return ListTile(
+      dense: true,
+      leading: const Icon(Icons.school_outlined),
+      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text('${lesson.nivel} - ${lesson.concluidos}/${lesson.totalItens}'),
+      onTap: onOpen,
+      trailing: Wrap(
+        spacing: 4,
+        children: [
+          IconButton(
+            tooltip: t('rename_lesson'),
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: onRename,
+          ),
+          IconButton(
+            tooltip: t('delete_lesson'),
+            icon: const Icon(Icons.delete_outline),
+            onPressed: onDelete,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MenuTile extends StatelessWidget {

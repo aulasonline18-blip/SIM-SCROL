@@ -48,9 +48,16 @@ String stableLangLabelFor(String code, String fallbackName) {
 const _strings = <String, String>{
   'loading': 'Carregando...',
   'continue': 'Continuar',
+  'cancel': 'Cancelar',
+  'save': 'Salvar',
+  'delete': 'Apagar',
   'remove': 'Remover',
   'menu': 'Menu',
   'lesson': 'Aula',
+  'lesson_name': 'Nome da aula',
+  'rename_lesson': 'Renomear aula',
+  'delete_lesson': 'Apagar aula',
+  'delete_lesson_confirm': 'Apagar "{title}"? Essa ação remove a aula do histórico.',
   'new_lesson': 'Nova aula',
   'credits': 'Créditos',
   'credits_unlimited': 'Ilimitado',
@@ -58,6 +65,7 @@ const _strings = <String, String>{
   'backup_import': 'Importar backup',
   'privacy': 'Privacidade',
   'terms': 'Termos',
+  'logout': 'Sair da conta',
   'theme_light': 'Tema claro',
   'theme_dark': 'Tema escuro',
   'portal_tagline': 'Smart Intelligence Mentor',
@@ -169,6 +177,9 @@ const _strings = <String, String>{
   'delete_account_request': 'Excluir conta',
   'delete_account_body': 'Digite DELETAR para solicitar exclusão.',
   'buy_credits_named': 'Comprar {credits} créditos',
+  'pay_google_play_provider':
+      'Compra protegida pelo Google Play no build Android de produção.',
+  'pay_checkout_provider': 'Compra protegida por checkout seguro.',
 };
 
 Map<String, List<String>> debugSimMissingLocalizationKeys() => const {

@@ -392,7 +392,7 @@ class LabSession extends ChangeNotifier {
   void start() {
     if (!authed) {
       debugPrint('[SIM] BLOCKED reason=not_authed');
-      goLogin(target: '/');
+      goLogin(target: '/cyber/idioma');
       return;
     }
     if (_creditsLoaded && credits <= 0) {

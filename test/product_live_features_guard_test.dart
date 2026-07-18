@@ -14,6 +14,7 @@ import 'package:sim_mobile/sim/ui/widgets/doubt_progress_bar.dart';
 import 'package:sim_mobile/sim/ui/widgets/fixed_bubble.dart';
 import 'package:sim_mobile/sim/ui/widgets/lesson_audio_controls.dart';
 import 'package:sim_mobile/sim/ui/widgets/lesson_avatar.dart';
+import 'package:sim_mobile/sim/ui/widgets/sim_preparation_experience.dart';
 import 'package:sim_mobile/sim/ui/widgets/sim_typewriter.dart';
 
 void main() {
@@ -40,6 +41,18 @@ void main() {
       ),
       isTrue,
     );
+  });
+
+  test('portal start keeps onboarding connected through login', () {
+    final session = LabSession()
+      ..authReady = true
+      ..authed = false;
+    addTearDown(session.dispose);
+
+    session.start();
+
+    expect(session.route, '/login');
+    expect(session.returnTo, '/cyber/idioma');
   });
 
   testWidgets('language screen keeps presets and other language path alive', (
@@ -147,6 +160,45 @@ void main() {
     expect(aux, contains('class ReviewRoomScreen'));
     expect(aux, contains('class RecoveryRoomScreen'));
     expect(drawer, contains('void showAulaMenu'));
+    expect(drawer, contains("session.openSupport('/privacidade')"));
+    expect(drawer, contains("session.openSupport('/termos')"));
+    expect(drawer, contains("session.openSupport('/conta/deletar')"));
+    expect(drawer, contains('session.signOutReal()'));
+    expect(drawer, contains('session.renameDrawerCloudLesson'));
+    expect(drawer, contains('session.deleteDrawerCloudLesson'));
+    expect(drawer, contains('Icons.edit_outlined'));
+    expect(drawer, contains('Icons.delete_outline'));
+    expect(billing, contains('SimEnvironment.useGooglePlayBilling'));
+    expect(billing, contains('pay_google_play_provider'));
+  });
+
+  testWidgets('curriculum preparation keeps animated robot screen alive', (
+    tester,
+  ) async {
+    final source = File(
+      'lib/sim/ui/widgets/sim_preparation_experience.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('class _RobotPainter'));
+    expect(source, contains('CustomPaint'));
+    expect(source, contains('prep_msg_'));
+    expect(source, contains('_stageProgress'));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SimPreparationExperience(
+            stage: 'curriculum',
+            ready: false,
+            onContinue: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(SimPreparationExperience), findsOneWidget);
+    expect(find.byType(CustomPaint), findsWidgets);
   });
 
   testWidgets(
