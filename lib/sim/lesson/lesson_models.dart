@@ -87,12 +87,14 @@ class CompleteLesson {
     required this.imagem,
     required this.audioText,
     this.imageMetadata,
+    this.visualTrigger,
   });
 
   final LessonContent conteudo;
   final String? imagem;
   final String audioText;
   final LessonImageGenerationMetadata? imageMetadata;
+  final JsonMap? visualTrigger;
 
   static const Object _unchanged = Object();
 
@@ -100,6 +102,7 @@ class CompleteLesson {
     LessonContent? conteudo,
     Object? imagem = _unchanged,
     Object? imageMetadata = _unchanged,
+    Object? visualTrigger = _unchanged,
   }) {
     final nextConteudo = conteudo ?? this.conteudo;
     final imageChanged = !identical(imagem, _unchanged);
@@ -110,6 +113,9 @@ class CompleteLesson {
       imageMetadata: identical(imageMetadata, _unchanged)
           ? (imageChanged ? null : this.imageMetadata)
           : imageMetadata as LessonImageGenerationMetadata?,
+      visualTrigger: identical(visualTrigger, _unchanged)
+          ? this.visualTrigger
+          : visualTrigger as JsonMap?,
     );
   }
 }

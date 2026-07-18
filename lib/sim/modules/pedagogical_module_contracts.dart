@@ -91,6 +91,11 @@ class T02LessonMaterial {
     this.imageId,
     this.imageStatus,
     this.imageError,
+    this.visualTrigger,
+    this.mimeType,
+    this.rasterized,
+    this.n2Reason,
+    this.n3Reason,
   });
 
   final String explanation;
@@ -105,6 +110,11 @@ class T02LessonMaterial {
   final String? imageId;
   final String? imageStatus;
   final String? imageError;
+  final JsonMap? visualTrigger;
+  final String? mimeType;
+  final bool? rasterized;
+  final String? n2Reason;
+  final String? n3Reason;
 }
 
 abstract interface class T02LessonClient {

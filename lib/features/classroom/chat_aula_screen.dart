@@ -7,6 +7,7 @@ import '../../sim/auxiliary/doubt_input_sheet.dart';
 import '../../sim/classroom/classroom_text_scale.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_theme.dart';
+import '../../sim/ui/widgets/fixed_bubble.dart';
 import '../../session/chat_conversation_store.dart';
 import '../onboarding/preparation_and_placement.dart';
 import '../session/lab_session.dart';
@@ -331,17 +332,11 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
                 ),
               ),
             ),
-            if (session.audioEnabled)
-              Positioned(
-                right: 16,
-                bottom: 16,
-                child: FloatingActionButton.small(
-                  onPressed: session.stopActiveAudio,
-                  child: Icon(
-                    session.audioPlaying ? Icons.volume_up : Icons.volume_off,
-                  ),
-                ),
-              ),
+            FixedBubble(
+              audioEnabled: session.audioEnabled,
+              speaking: session.audioPlaying,
+              onTap: session.stopActiveAudio,
+            ),
           ],
         ),
       ),

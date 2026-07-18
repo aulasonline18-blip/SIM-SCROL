@@ -147,10 +147,36 @@ void main() {
     expect(entryFlowLines, lessThanOrEqualTo(350));
   });
 
+  test('large organs stay within phase 7 ownership budgets', () {
+    final budgets = <String, int>{
+      'lib/features/session/lab_session_flows.dart': 1450,
+      'lib/sim/state/student_learning_state.dart': 1550,
+      'lib/sim/state/student_state_store.dart': 850,
+      'lib/sim/lesson/student_lesson_material_service.dart': 870,
+      'lib/sim/ui/sim_i18n.dart': 220,
+    };
+    final offenders = <String>[];
+    for (final entry in budgets.entries) {
+      final lines = File(entry.key).readAsLinesSync().length;
+      if (lines > entry.value) offenders.add('${entry.key}:$lines');
+    }
+    expect(offenders, isEmpty);
+  });
+
   test('cache and auxiliary rooms cannot become main lesson authority', () {
     final materialService = File(
       'lib/sim/lesson/student_lesson_material_service.dart',
     ).readAsStringSync();
+    expect(
+      materialService,
+      isNot(
+        contains(
+          RegExp(
+            r'LearningDecisionEngine|MasteryTruthEngine|StudentLessonExecutor|DecisionActionType',
+          ),
+        ),
+      ),
+    );
     expect(
       materialService,
       isNot(contains(RegExp(r'copyWith\([^)]*\bcurrent\s*:'))),

@@ -251,12 +251,17 @@ List<String> buildReviewQueue(StudentLearningState state, int requestedCount) {
   final count = requestedCount.clamp(0, 10);
   if (count == 0) return const [];
   final pendingMarkers =
-      pendingMapOf(aux).where((entry) => entry['status'] == 'pending').toList()
-        ..sort(
-          (a, b) => ((a['firstRegisteredAt'] as num?)?.toInt() ?? 0).compareTo(
-            (b['firstRegisteredAt'] as num?)?.toInt() ?? 0,
-          ),
+      pendingMapOf(
+        aux,
+      ).where((entry) => entry['status'] == 'pending').toList()..sort((a, b) {
+        final signalRank = _reviewSignalRank(a).compareTo(_reviewSignalRank(b));
+        if (signalRank != 0) return signalRank;
+        final reasonRank = _reviewReasonRank(a).compareTo(_reviewReasonRank(b));
+        if (reasonRank != 0) return reasonRank;
+        return ((a['firstRegisteredAt'] as num?)?.toInt() ?? 0).compareTo(
+          (b['firstRegisteredAt'] as num?)?.toInt() ?? 0,
         );
+      });
   final queue = <String>[];
   for (final pending in pendingMarkers) {
     final marker = (pending['marker'] ?? '').toString();
@@ -282,6 +287,22 @@ List<String> buildReviewQueue(StudentLearningState state, int requestedCount) {
     ..['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
   aux['review'] = review;
   return queue;
+}
+
+int _reviewSignalRank(Map entry) {
+  if ((entry['reason'] ?? '').toString() == 'wrong') return 2;
+  final signal = DecisionSignalValue.fromValue(entry['signal']);
+  return switch (signal) {
+    DecisionSignal.three => 0,
+    DecisionSignal.two => 1,
+    DecisionSignal.one => 3,
+  };
+}
+
+int _reviewReasonRank(Map entry) {
+  final reason = (entry['reason'] ?? '').toString();
+  if (reason == 'wrong') return 2;
+  return 3;
 }
 
 List<String> buildRecoveryQueue(StudentLearningState state) {

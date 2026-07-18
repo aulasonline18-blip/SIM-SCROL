@@ -474,10 +474,7 @@ extension LabSessionFlowExtensions on LabSession {
     return ids;
   }
 
-  void openSupport(String path) {
-    navigationState.openRoute(path);
-    _notifyFromChild();
-  }
+  void openSupport(String path) { navigationState.openRoute(path); _notifyFromChild(); }
 
   void openExternalDoor(String url) => navigationState.openExternalDoor(url);
 
@@ -648,9 +645,7 @@ extension LabSessionFlowExtensions on LabSession {
         lessonLocalId,
         session,
       );
-    } catch (_) {
-      // Cloud reconciliation is best-effort; local restoration already won.
-    }
+    } catch (_) {}
   }
 
   Future<bool> renameDrawerCloudLesson(
@@ -816,15 +811,17 @@ extension LabSessionFlowExtensions on LabSession {
     final status = metadata?.status?.trim().toLowerCase();
     if (status == null || status.isEmpty) return;
     _syncImageMetadataFromSnapshot();
+    if (status == 'no_image') {
+      imageStatus = 'idle';
+      imageError = null;
+      return;
+    }
     if (_isPendingLessonImageStatus(status)) {
       imageStatus = 'loading';
       imageError = null;
       return;
     }
-    if (status == 'failed' ||
-        status == 'error' ||
-        status == 'paid_offer' ||
-        status == 'no_image') {
+    if (status == 'failed' || status == 'error' || status == 'paid_offer') {
       imageStatus = 'failed';
       imageError = metadata?.n3Reason ?? t('aula_image_unavailable');
     }
@@ -1299,9 +1296,7 @@ extension LabSessionFlowExtensions on LabSession {
     });
   }
 
-  void setDeleteConfirmation(String value) {
-    lessonUiState.setDeleteConfirmation(value);
-  }
+  void setDeleteConfirmation(String value) => lessonUiState.setDeleteConfirmation(value);
 
   void requestAccountDeletion() {
     unawaited(_requestAccountDeletion());
@@ -1353,10 +1348,6 @@ extension LabSessionFlowExtensions on LabSession {
     aulaRuntimeLoading = true;
     aulaRuntimeError = null;
     _notifyFromChild();
-    // CG-1 §13/§14/§18.13: fim de parte NAO e fim de curriculo. Quando o avanco
-    // encerra a parte atual e existe uma proxima parte ja preparada, o app deve
-    // atravessar para ela preservando o progresso global — nunca declarar o
-    // curriculo concluido enquanto houver continuacao.
     var crossedToNextPart = false;
     try {
       await organism.lessonRuntimeEngine.advance();
@@ -1375,18 +1366,9 @@ extension LabSessionFlowExtensions on LabSession {
       aulaRuntimeLoading = false;
       _notifyFromChild();
     }
-    if (crossedToNextPart) {
-      // lessonLocalId ja aponta para a proxima parte (root::part-N); abre a aula
-      // na nova parte, que reinicia no item local 0 = proximo item global.
-      await openAulaRuntime();
-    }
+    if (crossedToNextPart) await openAulaRuntime();
   }
 
-  /// Acao do botao "continuar" da tela de aula concluida. CG-1 §13/§14: se uma
-  /// proxima parte do curriculo global ja estiver preparada, atravessa para ela
-  /// preservando o progresso global; caso contrario (fim real), volta ao
-  /// objetivo. Defesa adicional caso a proxima parte so tenha ficado pronta
-  /// depois que a parte atual foi concluida.
   Future<void> continueAfterLessonDone() async {
     final currentId = lessonLocalId;
     if (currentId != null &&

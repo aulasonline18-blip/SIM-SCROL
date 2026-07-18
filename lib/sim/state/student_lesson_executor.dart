@@ -129,12 +129,6 @@ ApplyDecisionResult applyStudentDecision(
         );
       }
       return ApplyDecisionResult(nextProgress: inputProgress, applied: false);
-    case DecisionActionType.needsReinforcement:
-      // F2.3: zera erros ao refazer (nao duplica concluido)
-      return ApplyDecisionResult(
-        nextProgress: inputProgress.copyWith(erros: 0),
-        applied: true,
-      );
     case DecisionActionType.showCurrentLesson:
     case DecisionActionType.waitForLessonText:
       return ApplyDecisionResult(nextProgress: inputProgress, applied: true);
@@ -268,12 +262,12 @@ StudentLearningState processAnswerWithEngine(
     'advanced':
         decision.actionType == DecisionActionType.advanceItem ||
         decision.actionType == DecisionActionType.showCompletion,
-    'review': true,
-    'recovery': decision.actionType == DecisionActionType.needsReinforcement,
+    'review': false,
+    'recovery': false,
+    'auxiliaryPolicy': 'manual_only',
     'blocked':
         !applied.applied ||
-        decision.actionType == DecisionActionType.noSafeDecision ||
-        decision.actionType == DecisionActionType.needsReinforcement,
+        decision.actionType == DecisionActionType.noSafeDecision,
   };
   final decisionEvent = StudentLearningEvent(
     type: applied.applied

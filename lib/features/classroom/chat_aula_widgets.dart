@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../shared/widgets/shared_widgets.dart';
+import '../../sim/ui/widgets/doubt_progress_bar.dart';
+import '../../sim/ui/widgets/sim_typewriter.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_i18n.dart';
 import '../session/lab_session.dart';
@@ -185,13 +187,25 @@ class AulaConversationBlockRenderer extends StatelessWidget {
       ),
       AulaConversationBlockType.loading => Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox.square(
-            dimension: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           ),
           const SizedBox(width: 8),
-          Flexible(child: Text(message.text ?? t('loading'))),
+          Flexible(
+            child:
+                message.id == 'doubt-processing' && (message.progress ?? 0) > 0
+                ? DoubtProgressBar(
+                    progress: message.progress!,
+                    label: message.text ?? t('aula_doubt_processing'),
+                  )
+                : Text(message.text ?? t('loading')),
+          ),
         ],
       ),
       _ => _TextBlock(message: message),
@@ -253,10 +267,16 @@ class _TextBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = DefaultTextStyle.of(context).style;
     final chunks = <Widget>[
       if ((message.title ?? '').isNotEmpty)
         Text(message.title!, style: Theme.of(context).textTheme.titleSmall),
-      if ((message.text ?? '').isNotEmpty) Text(message.text!),
+      if ((message.text ?? '').isNotEmpty)
+        if (message.kind == ChatLessonMessageKind.explanation &&
+            !message.isHistorical)
+          SimTypewriter(text: message.text!, style: style)
+        else
+          Text(message.text!),
       if (message.selectedAnswer != null)
         Text(message.selectedAnswer!.name, textAlign: TextAlign.right),
       if (message.selectedSignal != null)

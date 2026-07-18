@@ -1337,10 +1337,6 @@ class StudentLearningState {
   }
 }
 
-// ---------------------------------------------------------------------------
-// F1.2 — merge profundo local vs cloud
-// ---------------------------------------------------------------------------
-
 String _attemptMergeKey(LessonAttempt a) =>
     '${a.marker}|${a.layer.value}|${a.letra.name}|${a.sinal.value}|${a.correct}|${a.ts}';
 

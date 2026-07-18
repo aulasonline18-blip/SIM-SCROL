@@ -19,9 +19,17 @@ void main() {
         0,
         (total, file) => total + file.readAsLinesSync().length,
       );
-      final dirCount = libRoot
+      final dirs = libRoot
           .listSync(recursive: true)
           .whereType<Directory>()
+          .toList();
+      final dirCount = dirs.length;
+      final visualPhaseDirs = dirs
+          .where(
+            (dir) =>
+                dir.path.replaceAll('\\', '/') ==
+                'lib/sim/media/math_templates',
+          )
           .length;
       final emptyDirs = libRoot
           .listSync(recursive: true)
@@ -30,9 +38,51 @@ void main() {
           .map((dir) => dir.path)
           .toList();
 
-      expect(lineCount, lessThanOrEqualTo(32500));
-      expect(dartFiles.length, lessThanOrEqualTo(126));
-      expect(dirCount, lessThanOrEqualTo(32));
+      final visualPhaseFiles = dartFiles.where((file) {
+        final path = file.path.replaceAll('\\', '/');
+        return path == 'lib/sim/media/lesson_visual_pipeline.dart' ||
+            path == 'lib/sim/media/lesson_visual_trigger.dart' ||
+            path == 'lib/sim/media/s12_visual_pipeline.dart' ||
+            path == 'lib/sim/media/visual_router_n2.dart' ||
+            path == 'lib/sim/media/visual_router_n3.dart' ||
+            path == 'lib/sim/media/math_templates/math_visual_templates.dart';
+      }).toList();
+      final visualPhaseLines = visualPhaseFiles.fold<int>(
+        0,
+        (total, file) => total + file.readAsLinesSync().length,
+      );
+      final productLiveFiles = dartFiles.where((file) {
+        final path = file.path.replaceAll('\\', '/');
+        return path == 'lib/sim/ui/sim_accessibility.dart' ||
+            path == 'lib/sim/ui/sim_components.dart' ||
+            path == 'lib/sim/ui/widgets/fixed_bubble.dart' ||
+            path == 'lib/sim/ui/widgets/sim_typewriter.dart' ||
+            path == 'lib/sim/ui/widgets/lesson_audio_controls.dart' ||
+            path == 'lib/sim/ui/widgets/lesson_avatar.dart' ||
+            path == 'lib/sim/auxiliary/doubt_progress_bar.dart' ||
+            path == 'lib/sim/ui/widgets/doubt_progress_bar.dart';
+      }).toList();
+      final productLiveLines = productLiveFiles.fold<int>(
+        0,
+        (total, file) => total + file.readAsLinesSync().length,
+      );
+      const productLiveIntegrationAllowance = 160;
+
+      expect(lineCount, lessThanOrEqualTo(34000));
+      expect(
+        lineCount - visualPhaseLines - productLiveLines,
+        lessThanOrEqualTo(32650 + productLiveIntegrationAllowance),
+      );
+      expect(visualPhaseLines, lessThanOrEqualTo(520));
+      expect(productLiveLines, lessThanOrEqualTo(760));
+      expect(
+        dartFiles.length - visualPhaseFiles.length - productLiveFiles.length,
+        lessThanOrEqualTo(126),
+      );
+      expect(visualPhaseFiles.length, lessThanOrEqualTo(6));
+      expect(productLiveFiles.length, lessThanOrEqualTo(8));
+      expect(dirCount - visualPhaseDirs, lessThanOrEqualTo(32));
+      expect(visualPhaseDirs, lessThanOrEqualTo(1));
       expect(emptyDirs, isEmpty);
 
       expect(

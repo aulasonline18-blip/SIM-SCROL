@@ -1074,6 +1074,46 @@
       ]
     },
     {
+      "path": "lib/sim/auxiliary/doubt_progress_bar.dart",
+      "layer": "Motores de conteudo",
+      "category": "fluxos-apoio-local",
+      "owner": "sim-auxiliary",
+      "logicalOwner": "sim-auxiliary",
+      "inputs": [
+        "estado local",
+        "pergunta do aluno",
+        "fila local"
+      ],
+      "outputs": [
+        "resposta auxiliar",
+        "evento local"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt",
+        "review",
+        "recovery",
+        "warmup-amparo"
+      ],
+      "contracts": [
+        "revisao/recuperacao/duvida",
+        "T02/microaula/questao"
+      ],
+      "stateMachines": [
+        "duvida",
+        "revisao",
+        "recuperacao",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "revisao/recuperacao/duvida"
+      ]
+    },
+    {
       "path": "lib/sim/auxiliary/doubt_t02_caller.dart",
       "layer": "Motores de conteudo",
       "category": "fluxos-apoio-local",
@@ -3508,7 +3548,149 @@
       ]
     },
     {
+      "path": "lib/sim/media/lesson_visual_pipeline.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem",
+        "objetivo do aluno ate T00",
+        "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/media/lesson_visual_trigger.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/math_templates/math_visual_templates.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
       "path": "lib/sim/media/platform_audio_adapter.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/s12_visual_pipeline.dart",
       "layer": "Motores de conteudo",
       "category": "midia",
       "owner": "sim-media",
@@ -3579,6 +3761,76 @@
     },
     {
       "path": "lib/sim/media/student_lesson_media_service.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/visual_router_n2.dart",
+      "layer": "Motores de conteudo",
+      "category": "midia",
+      "owner": "sim-media",
+      "logicalOwner": "sim-media",
+      "inputs": [
+        "material de aula",
+        "preferencias"
+      ],
+      "outputs": [
+        "estado visual",
+        "estado de audio"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "visual/imagem",
+        "audio",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "visual",
+        "audio",
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "audio",
+        "imagem"
+      ]
+    },
+    {
+      "path": "lib/sim/media/visual_router_n3.dart",
       "layer": "Motores de conteudo",
       "category": "midia",
       "owner": "sim-media",
@@ -4426,6 +4678,66 @@
       "officialPaths": []
     },
     {
+      "path": "lib/sim/ui/sim_accessibility.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/ui/sim_components.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
       "path": "lib/sim/ui/sim_design_system.dart",
       "layer": "UI",
       "category": "ui",
@@ -4546,7 +4858,159 @@
       "officialPaths": []
     },
     {
+      "path": "lib/sim/ui/widgets/doubt_progress_bar.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [
+        "doubt"
+      ],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/ui/widgets/fixed_bubble.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/ui/widgets/lesson_audio_controls.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/ui/widgets/lesson_avatar.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
       "path": "lib/sim/ui/widgets/sim_preparation_experience.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "view model",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "comandos para facade local",
+        "renderizacao"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/sim/ui/widgets/sim_typewriter.dart",
       "layer": "UI",
       "category": "ui",
       "owner": "sim-ui",
@@ -4577,16 +5041,16 @@
     }
   ],
   "counts": {
-    "files": 126,
+    "files": 140,
     "layers": {
-      "UI": 24,
+      "UI": 31,
       "Assistente local": 20,
       "Motores pedagogicos": 29,
-      "Motores de conteudo": 29,
+      "Motores de conteudo": 36,
       "Persistencia/cache/sync": 11,
       "Ponte com servidor": 13
     },
-    "dartLines": 32479
+    "dartLines": 33904
   },
   "phase4Backlog": [
     "Reduzir LabSession/LabSessionFlows para fachada ainda mais fina sem alterar fluxo vivo.",

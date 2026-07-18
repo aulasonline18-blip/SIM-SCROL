@@ -290,15 +290,16 @@ class StudentStateStore implements StudentStateRepository {
 
   StudentLearningState renameLesson(String lessonLocalId, String name) {
     final clean = name.trim();
-    if (clean.isEmpty) return readState(lessonLocalId);
+    final state = readState(lessonLocalId);
+    if (clean.isEmpty) return state;
     return writeState(
-      readState(lessonLocalId).copyWith(
-        profile: readState(lessonLocalId).profile.copyWith(
+      state.copyWith(
+        profile: state.profile.copyWith(
           objetivo: clean,
           targetTopic: clean,
           sessionGoal: clean,
         ),
-        extra: {...readState(lessonLocalId).extra, 'renamedAt': now()},
+        extra: {...state.extra, 'renamedAt': now()},
       ),
     );
   }

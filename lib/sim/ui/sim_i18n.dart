@@ -84,6 +84,12 @@ const _strings = <String, String>{
   'login_has_account': 'Já tenho conta',
   'login_no_account': 'Criar nova conta',
   'login_back_portal': 'Voltar',
+  'language_title': 'Idioma da experiência',
+  'language_subtitle':
+      'Escolha o idioma da interface e da aula antes do objetivo.',
+  'language_choose_label': 'Idiomas principais',
+  'language_other_label': 'Outro idioma',
+  'language_other_placeholder': 'Digite o idioma',
   'objeto_title': 'O que você quer aprender?',
   'objeto_subtitle': 'Escreva o objetivo e anexe material se precisar.',
   'objeto_card1_title': 'Resumo livre',

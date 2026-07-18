@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sim_mobile/features/classroom/aula_widgets.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
 import 'package:sim_mobile/sim/auxiliary/aux_room_models.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
@@ -20,8 +23,11 @@ import 'package:sim_mobile/sim/media/image_data_url_compression.dart';
 import 'package:sim_mobile/sim/media/lesson_audio_api_contract.dart';
 import 'package:sim_mobile/sim/media/lesson_audio_controller.dart';
 import 'package:sim_mobile/sim/media/lesson_image_api_contract.dart';
+import 'package:sim_mobile/sim/media/lesson_visual_pipeline.dart';
 import 'package:sim_mobile/sim/media/platform_audio_adapter.dart';
 import 'package:sim_mobile/sim/media/student_lesson_media_service.dart';
+import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
+import 'package:sim_mobile/sim/external_ai/sim_http_transport.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
@@ -134,6 +140,74 @@ class FakeAudioT02Client implements T02LessonClient {
   @override
   Future<T02LessonMaterial> placement(T02LessonRequest request) =>
       completeLesson(request);
+}
+
+class VisualT02Client implements T02LessonClient {
+  VisualT02Client(this.material);
+
+  final T02LessonMaterial material;
+  int calls = 0;
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) async {
+    calls += 1;
+    return material;
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
+}
+
+class VisualRecordingTransport implements SimHttpTransport {
+  Uri? lastUri;
+  Object? lastBody;
+  String body =
+      '{"dataUrl":"<svg viewBox=\\"0 0 10 10\\"></svg>","status":"ready","mimeType":"image/svg+xml","rasterized":false,"reason":"N3V_OK"}';
+  int statusCode = 200;
+  bool throwOnPost = false;
+
+  @override
+  Future<SimHttpResponse> postJson(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Object? body,
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    if (throwOnPost) throw StateError('offline');
+    lastUri = uri;
+    lastBody = body;
+    return SimHttpResponse(statusCode: statusCode, body: this.body);
+  }
+
+  @override
+  Stream<String> postEventStream(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Object? body,
+    Duration timeout = const Duration(seconds: 140),
+  }) async* {}
+
+  @override
+  Future<SimHttpResponse> postMultipart(
+    Uri uri, {
+    required Map<String, String> headers,
+    required String fieldName,
+    required String filename,
+    required String contentType,
+    required List<int> bytes,
+    Duration timeout = const Duration(seconds: 60),
+  }) {
+    throw UnimplementedError();
+  }
 }
 
 StudentLearningState seedState() {
@@ -748,4 +822,257 @@ void main() {
     expect(cleared.imageMetadata, isNull);
     expect(cleared.conteudo.question, 'Pergunta?');
   });
+
+  test('S12/N2 renderiza SVG pronto e template matematico local', () {
+    const pipeline = S12VisualPipeline();
+    final svg = pipeline.resolveLocal(
+      const S12VisualRequest(
+        trigger: LessonVisualTrigger(
+          needsImage: true,
+          svg: '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+        ),
+        lessonLocalId: 'l1',
+        marker: 'M1',
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        idioma: 'pt-BR',
+      ),
+    );
+    final template = pipeline.resolveLocal(
+      const S12VisualRequest(
+        trigger: LessonVisualTrigger(
+          needsImage: true,
+          mathTemplate: 'linear_function',
+        ),
+        lessonLocalId: 'l1',
+        marker: 'M1',
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        idioma: 'pt-BR',
+      ),
+    );
+
+    expect(svg.status, 'ready');
+    expect(svg.imageData, startsWith('<svg'));
+    expect(template.status, 'ready');
+    expect(template.imageData, contains('Funcao linear'));
+    expect(template.imageData, isNot(contains('<script')));
+    expect(template.imageData, isNot(contains('foreignObject')));
+  });
+
+  test('S12 classifica needs_image false como NO_IMAGE controlado', () {
+    const pipeline = S12VisualPipeline();
+    final result = pipeline.resolveLocal(
+      const S12VisualRequest(
+        trigger: LessonVisualTrigger(needsImage: false),
+        lessonLocalId: 'l1',
+        marker: 'M1',
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        idioma: 'pt-BR',
+      ),
+    );
+
+    expect(result.status, 'no_image');
+    expect(result.imageData, isNull);
+  });
+
+  test('N3 client chama somente /api/visual-route com slot da aula', () async {
+    final transport = VisualRecordingTransport();
+    final client = VisualRouterN3Client(
+      config: const SimAiServerConfig(baseUrl: 'https://sim.example'),
+      transport: transport,
+    );
+
+    final result = await client.route(
+      const VisualRouterN3Request(
+        visualTrigger: {
+          'needs_image': true,
+          'description': 'Triangulo de forcas',
+        },
+        lessonLocalId: 'l1',
+        itemMarker: 'M1',
+        itemIdx: 2,
+        layer: LessonLayer.l3,
+        requestId: 'rid-visual',
+        idioma: 'pt-BR',
+      ),
+    );
+
+    expect(
+      transport.lastUri.toString(),
+      'https://sim.example/api/visual-route',
+    );
+    expect((transport.lastBody as Map)['visual_trigger'], isA<Map>());
+    expect((transport.lastBody as Map)['lessonLocalId'], 'l1');
+    expect((transport.lastBody as Map)['itemId'], 'M1');
+    expect((transport.lastBody as Map)['itemIdx'], 2);
+    expect((transport.lastBody as Map)['layer'], 3);
+    expect((transport.lastBody as Map)['idioma'], 'pt-BR');
+    expect(result.imageData, startsWith('<svg'));
+  });
+
+  test(
+    'LessonOrchestrator nao bloqueia aula enquanto N3 resolve imagem',
+    () async {
+      final transport = VisualRecordingTransport()
+        ..body =
+            '{"dataUrl":"<svg viewBox=\\"0 0 10 10\\"><circle cx=\\"5\\" cy=\\"5\\" r=\\"4\\"/></svg>","status":"ready","mimeType":"image/svg+xml","rasterized":false,"reason":"N3V_OK"}';
+      final t02 = VisualT02Client(
+        T02LessonMaterial(
+          explanation: 'Texto antes da imagem.',
+          question: 'Pergunta?',
+          options: const {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+          whyCorrect: 'ok',
+          whyWrong: null,
+          generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
+          source: 'fake-t02',
+          visualTrigger: const {
+            'needs_image': true,
+            'description': 'Diagrama visual',
+          },
+        ),
+      );
+      final updates = <CompleteLesson>[];
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+        visualPipeline: S12VisualPipeline(
+          n3Client: VisualRouterN3Client(
+            config: const SimAiServerConfig(baseUrl: 'https://sim.example'),
+            transport: transport,
+          ),
+        ),
+        onImageReady: (_, lesson) => updates.add(lesson),
+        imageRefreshDelays: const [],
+      );
+
+      final lesson = await orchestrator.prefetchCompleteLesson(
+        const CompleteLessonParams(
+          lessonLocalId: 'l1',
+          item: 'Item',
+          lang: 'pt-BR',
+          academic: 'base',
+          layer: LessonLayer.l2,
+          mode: LessonMode.session,
+          marker: 'M1',
+          itemIdx: 1,
+        ),
+      );
+
+      expect(lesson.conteudo.explanation, 'Texto antes da imagem.');
+      expect(lesson.imagem, isNull);
+      expect(lesson.imageMetadata?.status, 'processing');
+      await Future<void>.delayed(Duration.zero);
+      expect(updates.single.imagem, startsWith('<svg'));
+      expect(
+        transport.lastUri.toString(),
+        'https://sim.example/api/visual-route',
+      );
+    },
+  );
+
+  test(
+    'falha visual registra estado controlado sem apagar texto da aula',
+    () async {
+      final transport = VisualRecordingTransport()..throwOnPost = true;
+      final t02 = VisualT02Client(
+        T02LessonMaterial(
+          explanation: 'Aula textual viva.',
+          question: 'Pergunta?',
+          options: const {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+          whyCorrect: 'ok',
+          whyWrong: null,
+          generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
+          source: 'fake-t02',
+          visualTrigger: const {
+            'needs_image': true,
+            'description': 'Diagrama remoto',
+          },
+        ),
+      );
+      final failed = <CompleteLesson>[];
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+        visualPipeline: S12VisualPipeline(
+          n3Client: VisualRouterN3Client(
+            config: const SimAiServerConfig(baseUrl: 'https://sim.example'),
+            transport: transport,
+          ),
+        ),
+        onImageFailed: (_, lesson) => failed.add(lesson),
+        imageRefreshDelays: const [],
+      );
+
+      final lesson = await orchestrator.prefetchCompleteLesson(
+        const CompleteLessonParams(
+          lessonLocalId: 'l1',
+          item: 'Item',
+          lang: 'pt-BR',
+          academic: 'base',
+          layer: LessonLayer.l1,
+          mode: LessonMode.session,
+          marker: 'M1',
+          itemIdx: 0,
+        ),
+      );
+
+      expect(lesson.conteudo.explanation, 'Aula textual viva.');
+      expect(lesson.imageMetadata?.status, 'processing');
+      await Future<void>.delayed(Duration.zero);
+      expect(failed.single.conteudo.question, 'Pergunta?');
+      expect(failed.single.imageMetadata?.status, 'failed');
+    },
+  );
+
+  testWidgets('UI renderiza SVG seguro sem WebView', (tester) async {
+    const svg = '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>';
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: LessonMediaImageView(data: svg)),
+      ),
+    );
+
+    expect(find.byType(SvgPicture), findsOneWidget);
+    expect(find.byType(LessonImageErrorView), findsNothing);
+  });
+
+  test(
+    'canal visual nao reintroduz rotas proibidas, WebView ou imagem paga',
+    () {
+      final mediaRuntime = Directory('lib/sim/media')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.dart'))
+          .map((file) => file.readAsStringSync())
+          .join('\n');
+      for (final forbidden in const [
+        '/api/warmup',
+        '/api/doubt',
+        '/api/review',
+        '/api/recovery',
+        '/api/advance-gate',
+        '/api/generate-lesson-image',
+        'WebView',
+        'paidImage',
+        'acceptedOfferId',
+      ]) {
+        expect(mediaRuntime, isNot(contains(forbidden)), reason: forbidden);
+      }
+      expect(mediaRuntime, contains('/api/visual-route'));
+    },
+  );
 }

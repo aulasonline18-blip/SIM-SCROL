@@ -178,6 +178,13 @@ class StudentLessonMediaService {
     });
   }
 
+  void markLessonNoImage(LessonMediaPosition position, {String? reason}) {
+    _appendMediaEvent(position, 'NO_IMAGE', {
+      'phase': 'no_image',
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason,
+    });
+  }
+
   void markLessonImageStarted(
     LessonMediaPosition position, {
     String? cacheKey,

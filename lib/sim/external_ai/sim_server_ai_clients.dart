@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import '../media/audio_core.dart';
 import '../media/lesson_audio_api_contract.dart';
+import '../media/lesson_visual_trigger.dart';
 import '../lesson/lesson_content_validator.dart';
 import '../localization/sim_locale_contract.dart';
 import '../modules/pedagogical_module_contracts.dart';
@@ -318,6 +319,18 @@ class SimServerT02Client implements T02LessonClient {
         ? JsonMap.from(json['conteudo'])
         : json;
     final content = validatedLessonContentFromJson(source);
+    Object? pick(String key, [String? alt]) =>
+        source[key] ??
+        json[key] ??
+        (alt == null ? null : source[alt] ?? json[alt]);
+    final imageData = _stringOrNull(
+      pick('imageDataUrl', 'image_data_url') ??
+          pick('dataUrl', 'data_url') ??
+          pick('imagem'),
+    );
+    final visualTrigger = LessonVisualTrigger.fromJson(
+      pick('visual_trigger', 'visualTrigger'),
+    )?.raw;
     return T02LessonMaterial(
       explanation: content.explanation,
       question: content.question,
@@ -327,6 +340,26 @@ class SimServerT02Client implements T02LessonClient {
       whyWrong: content.whyWrong,
       generatedAt: DateTime.now(),
       source: (source['source'] ?? 'sim-server-t02').toString(),
+      imageDataUrl: imageData,
+      imageId: _stringOrNull(pick('imageId', 'image_id') ?? pick('requestId')),
+      imageStatus: _stringOrNull(
+        pick('imageStatus', 'image_status') ?? pick('status'),
+      ),
+      imageError: _stringOrNull(
+        pick('imageError', 'image_error') ?? pick('error'),
+      ),
+      visualTrigger: visualTrigger,
+      mimeType: _stringOrNull(pick('mimeType', 'mime_type')),
+      rasterized: pick('rasterized') is bool
+          ? pick('rasterized') as bool
+          : null,
+      n2Reason: _stringOrNull(pick('n2Reason', 'n2_reason')),
+      n3Reason: _stringOrNull(pick('n3Reason', 'n3_reason')),
     );
   }
+}
+
+String? _stringOrNull(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
 }

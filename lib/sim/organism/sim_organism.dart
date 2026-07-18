@@ -32,6 +32,7 @@ import '../lesson/student_lesson_material_service.dart';
 import '../media/audio_core.dart';
 import '../media/audio_preference.dart';
 import '../media/lesson_audio_controller.dart';
+import '../media/lesson_visual_pipeline.dart';
 import '../media/student_lesson_media_service.dart';
 import '../placement/placement_route_controller.dart';
 import '../placement/placement_store.dart';
@@ -309,6 +310,9 @@ class SimOrganism {
       t02Client: t02Client,
       cache: cache,
       bus: eventBus,
+      visualPipeline: S12VisualPipeline(
+        n3Client: VisualRouterN3Client(config: aiConfig),
+      ),
     );
     final readyWindowEngine = DopamineReadyWindowEngine(
       service: stateService,

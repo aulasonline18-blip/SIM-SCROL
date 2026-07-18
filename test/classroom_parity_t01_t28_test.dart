@@ -293,9 +293,9 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // T04 – acerto L3 com sinal frágil → reforço; sem falso avanço
+  // T04 – L3 sempre encerra o item; sinal frágil vira registro auxiliar
   // -------------------------------------------------------------------------
-  test('T04: answer(A,3,A) em L3 → reforço sem falso avanço', () {
+  test('T04: answer(A,3,A) em L3 → proximo item L1', () {
     final stateL3 = _state0(layer: LessonLayer.l3);
     final next = _answer(
       stateL3,
@@ -303,13 +303,13 @@ void main() {
       DecisionSignal.three,
       AnswerLetter.A,
     );
-    expect(next.progress?.itemIdx, 0);
-    expect(next.progress?.layer, LessonLayer.l3);
+    expect(next.progress?.itemIdx, 1);
+    expect(next.progress?.layer, LessonLayer.l1);
     expect(
       next.events
           .lastWhere((event) => event.type == 'STUDENT_DECISION_APPLIED')
           .payload['decision'],
-      DecisionActionType.needsReinforcement.name,
+      DecisionActionType.advanceItem.name,
     );
   });
 
@@ -342,9 +342,9 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // T07 – erro L2 com sinal frágil → reforço; sem subir camada
+  // T07 – L2 sempre segue para L3; erro vira evidência auxiliar, não bloqueio
   // -------------------------------------------------------------------------
-  test('T07: answer(B,3,A) em L2 → reforço sem subir camada', () {
+  test('T07: answer(B,3,A) em L2 → layer=L3', () {
     final stateL2 = _state0(layer: LessonLayer.l2);
     final next = _answer(
       stateL2,
@@ -352,13 +352,13 @@ void main() {
       DecisionSignal.three,
       AnswerLetter.A,
     );
-    expect(next.progress?.layer, LessonLayer.l2);
+    expect(next.progress?.layer, LessonLayer.l3);
     expect(next.progress?.itemIdx, 0);
     expect(
       next.events
           .lastWhere((event) => event.type == 'STUDENT_DECISION_APPLIED')
           .payload['decision'],
-      DecisionActionType.needsReinforcement.name,
+      DecisionActionType.advanceLayer.name,
     );
   });
 

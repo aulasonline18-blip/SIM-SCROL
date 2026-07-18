@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../media/lesson_image_api_contract.dart';
+import '../media/lesson_visual_pipeline.dart';
 import '../modules/pedagogical_module_contracts.dart';
 import '../state/student_learning_state.dart';
 import 'lesson_event_bus.dart';
@@ -38,7 +39,11 @@ class LessonOrchestrator {
     required this.bus,
     this.onAudioTextReady,
     this.onImageReady,
+    this.onImageStarted,
+    this.onImageFailed,
+    this.onNoImage,
     List<Duration>? imageRefreshDelays,
+    this.visualPipeline,
   }) : imageRefreshDelays =
            imageRefreshDelays ??
            const [
@@ -58,8 +63,15 @@ class LessonOrchestrator {
   onAudioTextReady;
   void Function(CompleteLessonParams params, CompleteLesson lesson)?
   onImageReady;
+  void Function(CompleteLessonParams params, CompleteLesson lesson)?
+  onImageStarted;
+  void Function(CompleteLessonParams params, CompleteLesson lesson)?
+  onImageFailed;
+  void Function(CompleteLessonParams params, CompleteLesson lesson)? onNoImage;
+  final S12VisualPipeline? visualPipeline;
   final Map<String, Future<CompleteLesson>> _textInflight = {};
   final Map<String, Future<void>> _imageRefreshInflight = {};
+  final Map<String, Future<void>> _visualRouteInflight = {};
   final BackgroundTextSemaphore _bgText = BackgroundTextSemaphore();
   Future<void> _lastLessonFullyComplete = Future.value();
 
@@ -123,6 +135,8 @@ class LessonOrchestrator {
     CompleteLesson lesson,
   ) {
     _notifyReadyImage(params, lesson);
+    _notifyLocalVisualState(params, lesson);
+    _scheduleVisualRouteIfNeeded(params, lesson);
     _scheduleImageRefreshIfNeeded(params, lesson);
   }
 
@@ -188,7 +202,7 @@ class LessonOrchestrator {
 
   Future<CompleteLesson> _fetchText(CompleteLessonParams params) async {
     final material = await _fetchMaterial(params);
-    return _lessonFromMaterial(material);
+    return _lessonFromMaterial(material, params);
   }
 
   Future<T02LessonMaterial> _fetchMaterial(CompleteLessonParams params) {
@@ -218,12 +232,31 @@ class LessonOrchestrator {
     );
   }
 
-  CompleteLesson _lessonFromMaterial(T02LessonMaterial material) {
+  CompleteLesson _lessonFromMaterial(
+    T02LessonMaterial material,
+    CompleteLessonParams params,
+  ) {
     final imageDataUrl = material.imageDataUrl?.trim().isEmpty == true
         ? null
         : material.imageDataUrl;
     final status = _cleanText(material.imageStatus);
     final error = _cleanText(material.imageError);
+    final trigger = LessonVisualTrigger.fromJson(material.visualTrigger);
+    final s12 = imageDataUrl == null
+        ? visualPipeline?.resolveLocal(
+            S12VisualRequest(
+              trigger: trigger,
+              lessonLocalId: params.lessonLocalId,
+              marker: params.marker,
+              itemIdx: params.itemIdx,
+              layer: params.layer,
+              idioma:
+                  params.learningLocale ??
+                  params.explanationLanguage ??
+                  params.lang,
+            ),
+          )
+        : null;
     final conteudo = LessonContent(
       explanation: material.explanation,
       question: material.question,
@@ -234,22 +267,33 @@ class LessonOrchestrator {
     );
     return CompleteLesson(
       conteudo: conteudo,
-      imagem: imageDataUrl,
+      imagem: imageDataUrl ?? s12?.imageData,
       audioText: conteudo.audioText,
-      imageMetadata: imageDataUrl == null && status == null && error == null
+      visualTrigger: trigger?.raw,
+      imageMetadata:
+          imageDataUrl == null && s12 == null && status == null && error == null
           ? null
           : LessonImageGenerationMetadata(
-              requestId: material.imageId,
-              provider: 'complete-lesson',
+              requestId: material.imageId ?? s12?.requestId,
+              provider: s12 == null ? 'complete-lesson' : 's12',
               model: material.source,
-              mimeType: null,
+              mimeType: material.mimeType ?? s12?.mimeType,
               charged: false,
-              cacheHit: imageDataUrl != null,
-              retryable: status == null ? null : _isPendingImageStatus(status),
+              cacheHit: imageDataUrl != null || s12?.isReady == true,
+              retryable: s12?.shouldCallN3 == true
+                  ? true
+                  : status == null
+                  ? null
+                  : _isPendingImageStatus(status),
               mediaType: 'image',
-              status: imageDataUrl != null ? 'ready' : status,
-              source: material.source,
-              n3Reason: error,
+              status: imageDataUrl != null ? 'ready' : s12?.status ?? status,
+              source: s12 == null ? material.source : 's12',
+              n2Reason: material.n2Reason ?? s12?.n2Reason,
+              n3Reason: material.n3Reason ?? s12?.n3Reason ?? error,
+              lessonLocalId: params.lessonLocalId,
+              marker: params.marker,
+              itemIdx: params.itemIdx,
+              layer: params.layer.value,
             ),
     );
   }
@@ -261,6 +305,7 @@ class LessonOrchestrator {
     if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty) return;
     if (imageRefreshDelays.isEmpty) return;
     final status = lesson.imageMetadata?.status;
+    if (lesson.imageMetadata?.source == 's12') return;
     if (status != null && !_isPendingImageStatus(status)) return;
     final key = lessonKeyFor(params);
     if (_imageRefreshInflight.containsKey(key)) return;
@@ -286,7 +331,7 @@ class LessonOrchestrator {
       }
 
       final material = await _fetchMaterial(params);
-      final refreshed = _lessonFromMaterial(material);
+      final refreshed = _lessonFromMaterial(material, params);
       final currentAfterFetch = cache.peek(key);
       final base = currentAfterFetch ?? refreshed;
 
@@ -309,6 +354,83 @@ class LessonOrchestrator {
         bus.notify(key, updated);
         return;
       }
+    }
+  }
+
+  void _notifyLocalVisualState(
+    CompleteLessonParams params,
+    CompleteLesson lesson,
+  ) {
+    final status = lesson.imageMetadata?.status?.trim().toLowerCase();
+    if (status == 'processing') {
+      onImageStarted?.call(params, lesson);
+    } else if (status == 'failed' || status == 'error') {
+      onImageFailed?.call(params, lesson);
+    } else if (status == 'no_image') {
+      onNoImage?.call(params, lesson);
+    }
+  }
+
+  void _scheduleVisualRouteIfNeeded(
+    CompleteLessonParams params,
+    CompleteLesson lesson,
+  ) {
+    final pipeline = visualPipeline;
+    if (pipeline == null || lesson.imageMetadata?.source != 's12') return;
+    if (lesson.imageMetadata?.status != 'processing') return;
+    final key = lessonKeyFor(params);
+    if (_visualRouteInflight.containsKey(key)) return;
+    final trigger = LessonVisualTrigger.fromJson(lesson.visualTrigger);
+    if (trigger == null) return;
+    final future = _resolveVisualRoute(params, key, trigger);
+    _visualRouteInflight[key] = future;
+    unawaited(future.whenComplete(() => _visualRouteInflight.remove(key)));
+  }
+
+  Future<void> _resolveVisualRoute(
+    CompleteLessonParams params,
+    String key,
+    LessonVisualTrigger trigger,
+  ) async {
+    final current = cache.peek(key);
+    if (current == null) return;
+    final result = await visualPipeline!.resolveN3(
+      S12VisualRequest(
+        trigger: trigger,
+        lessonLocalId: params.lessonLocalId,
+        marker: params.marker,
+        itemIdx: params.itemIdx,
+        layer: params.layer,
+        idioma:
+            params.learningLocale ?? params.explanationLanguage ?? params.lang,
+      ),
+    );
+    final metadata = LessonImageGenerationMetadata(
+      requestId: result.requestId ?? current.imageMetadata?.requestId,
+      mimeType: result.mimeType ?? current.imageMetadata?.mimeType,
+      charged: false,
+      cacheHit: result.isReady,
+      retryable: false,
+      lessonLocalId: params.lessonLocalId,
+      marker: params.marker,
+      itemIdx: params.itemIdx,
+      layer: params.layer.value,
+      mediaType: 'image',
+      status: result.isReady ? 'ready' : 'failed',
+      source: 's12-n3',
+      n2Reason: result.n2Reason,
+      n3Reason: result.n3Reason,
+    );
+    final next = current.copyWith(
+      imagem: result.isReady ? result.imageData : null,
+      imageMetadata: metadata,
+    );
+    cache.putForParams(params, next);
+    bus.notify(key, next);
+    if (result.isReady) {
+      _notifyReadyImage(params, next);
+    } else {
+      onImageFailed?.call(params, next);
     }
   }
 

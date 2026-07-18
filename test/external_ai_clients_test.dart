@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -452,4 +453,64 @@ void main() {
       ),
     );
   });
+
+  test(
+    'T02 preserva visual_trigger e metadados de imagem do contrato',
+    () async {
+      final transport = RecordingTransport()
+        ..jsonBody = jsonEncode({
+          'conteudo': {
+            'explanation': 'Explique',
+            'question': 'Pergunta?',
+            'options': {'A': 'um', 'B': 'dois', 'C': 'tres'},
+            'correct_answer': 'A',
+            'why_correct': 'ok',
+            'visual_trigger': {
+              'needs_image': true,
+              'visual_type': 'math_template',
+              'math_template': 'linear_function',
+            },
+            'imageDataUrl': 'data:image/svg+xml;base64,AAAA',
+            'imageStatus': 'ready',
+            'imageId': 'img-1',
+            'imageError': 'VISUAL_OK',
+            'mimeType': 'image/svg+xml',
+            'rasterized': false,
+            'n2Reason': 'template_matematico_local',
+            'n3Reason': 'nao_usou_n3',
+          },
+        });
+      final client = SimServerT02Client(
+        config: SimAiServerConfig(
+          baseUrl: 'https://sim.example',
+          t02Path: '/api/sim/t02',
+        ),
+        transport: transport,
+      );
+
+      final material = await client.completeLesson(
+        const T02LessonRequest(
+          lessonLocalId: 'lesson-visual',
+          item: 'Funcao linear',
+          lang: 'pt-BR',
+          academic: 'ano 9',
+          layer: LessonLayer.l1,
+          mode: 'session',
+          errCount: 0,
+          history: [],
+        ),
+      );
+
+      expect(material.visualTrigger?['needs_image'], isTrue);
+      expect(material.visualTrigger?['math_template'], 'linear_function');
+      expect(material.imageDataUrl, startsWith('data:image/svg+xml'));
+      expect(material.imageStatus, 'ready');
+      expect(material.imageId, 'img-1');
+      expect(material.imageError, 'VISUAL_OK');
+      expect(material.mimeType, 'image/svg+xml');
+      expect(material.rasterized, isFalse);
+      expect(material.n2Reason, 'template_matematico_local');
+      expect(material.n3Reason, 'nao_usou_n3');
+    },
+  );
 }

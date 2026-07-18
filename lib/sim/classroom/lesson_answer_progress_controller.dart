@@ -227,8 +227,7 @@ class LessonAnswerProgressController {
         view.layer == position.layer) {
       final completedPhase = position.phase;
       final next = nextLessonSlot(position.itemIdx, position.layer, baseItems);
-      if (next != null &&
-          _hasCorrectEvidenceForCurrentPosition(state, position)) {
+      if (next != null && _hasEvidenceForCurrentPosition(state, position)) {
         final previousItemIdx = position.itemIdx;
         final previousLayer = position.layer;
         final previousLoadingLayer = position.loadingLayer;
@@ -269,24 +268,6 @@ class LessonAnswerProgressController {
         position.historia = previousHistoria;
         position.mainAdvances = previousMainAdvances;
         position.phase = previousPhase;
-      }
-      if (!_hasCorrectEvidenceForCurrentPosition(state, position)) {
-        position.loadingLayer = view.layer;
-        position.itemIdx = view.itemIdx;
-        position.layer = view.layer;
-        position.erros = view.erros;
-        position.historia = view.historia;
-        position.mainAdvances = view.mainAdvances;
-        final loadedPrepared = materialController.carregarRapidoSePronto(
-          lessonLocalId: lessonLocalId,
-          topic: topic,
-          position: position,
-          idioma: idioma,
-          academic: academic,
-          mode: _modeForNextMaterial(activeState, position.isReviewAtivo),
-          baseItems: baseItems,
-        );
-        if (loadedPrepared) return;
       }
       position.historia = view.historia;
       position.mainAdvances = view.mainAdvances;
@@ -462,10 +443,6 @@ class LessonAnswerProgressController {
     if (isReviewAtivo) return LessonMode.reforco;
     final amparoLvl = state.progress?.amparoLvl ?? 0;
     if (amparoLvl > 0) return LessonMode.amparo;
-    final nextAction = state.extra['next_action'];
-    if (nextAction is Map && nextAction['action'] == 'needsReinforcement') {
-      return LessonMode.reforco;
-    }
     return LessonMode.session;
   }
 
@@ -586,20 +563,6 @@ class LessonAnswerProgressController {
     return state.attempts.any(
       (attempt) => attempt.marker == marker && attempt.layer == position.layer,
     );
-  }
-
-  bool _hasCorrectEvidenceForCurrentPosition(
-    StudentLearningState state,
-    LessonPositionState position,
-  ) {
-    final marker = position.itemAtivo?.marker ?? state.current?.marker;
-    if (marker == null || marker.trim().isEmpty) return false;
-    for (final attempt in state.attempts.reversed) {
-      if (attempt.marker == marker && attempt.layer == position.layer) {
-        return attempt.correct;
-      }
-    }
-    return false;
   }
 
   StudentLearningState _withLocalAttemptEvidence(

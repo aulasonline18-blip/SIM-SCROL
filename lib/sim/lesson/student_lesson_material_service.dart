@@ -69,6 +69,19 @@ class StudentLessonMaterialService {
     orchestrator.onImageReady = (params, lesson) {
       previousOnImageReady?.call(params, lesson);
       _mirrorImageReady(params, lesson);
+      _markImageReady(params, lesson);
+    };
+    final previousOnImageStarted = orchestrator.onImageStarted;
+    orchestrator.onImageStarted = (params, lesson) {
+      previousOnImageStarted?.call(params, lesson); _markImageStarted(params, lesson);
+    };
+    final previousOnImageFailed = orchestrator.onImageFailed;
+    orchestrator.onImageFailed = (params, lesson) {
+      previousOnImageFailed?.call(params, lesson); _markImageFailed(params, lesson);
+    };
+    final previousOnNoImage = orchestrator.onNoImage;
+    orchestrator.onNoImage = (params, lesson) {
+      previousOnNoImage?.call(params, lesson); _markNoImage(params, lesson);
     };
   }
 
@@ -739,14 +752,11 @@ class StudentLessonMaterialService {
     };
   }
 
-  // D4: Resume Instantâneo — lê da fonte única (StudentLearningState) diretamente.
-  // Planta-Mãe §10: student_state > cache > T02.
   CompleteLesson? readReadyLessonMaterialFromStudentState(
     ResolveLessonMaterialInput input,
   ) {
     final lesson = _readReadyFromStudentState(input);
     if (lesson == null) return null;
-    // Log Resume Instantâneo
     stateService.appendEvent(
       input.lessonLocalId,
       StudentLearningEvent(
@@ -770,7 +780,6 @@ class StudentLessonMaterialService {
     );
   }
 
-  // D4: Pergunta "tem material pronto?" sem buscar T02 (síncrono, sem custo).
   bool isLessonMaterialReadyInStateOrCache(ResolveLessonMaterialInput input) {
     if (_readReadyFromStudentState(input) != null) return true;
     return orchestrator.peekCachedLesson(lessonKeyFor(input.params)) != null;
@@ -795,4 +804,22 @@ class StudentLessonMaterialService {
       ],
     );
   }
+
+  LessonMediaPosition _mediaPositionFor(CompleteLessonParams params, {ResolveLessonMaterialInput? input}) =>
+      LessonMediaPosition(lessonLocalId: params.lessonLocalId, itemMarker: input?.marker ?? params.marker,
+          itemIdx: input?.itemIdx ?? params.itemIdx, layer: input?.layer ?? params.layer);
+
+  ResolveLessonMaterialInput? _inputFor(CompleteLessonParams params) => _inputsByLessonKey[lessonKeyFor(params)];
+
+  void _markImageReady(CompleteLessonParams params, CompleteLesson lesson) => mediaService?.markLessonImageReady(
+      _mediaPositionFor(params, input: _inputFor(params)), cacheKey: lessonKeyFor(params), imageUrl: lesson.imagem);
+
+  void _markImageStarted(CompleteLessonParams params, CompleteLesson lesson) => mediaService?.markLessonImageStarted(
+      _mediaPositionFor(params, input: _inputFor(params)), cacheKey: lessonKeyFor(params));
+
+  void _markImageFailed(CompleteLessonParams params, CompleteLesson lesson) => mediaService?.markLessonImageFailed(
+      _mediaPositionFor(params, input: _inputFor(params)), error: lesson.imageMetadata?.n3Reason ?? 'VISUAL_ROUTE_FAILED');
+
+  void _markNoImage(CompleteLessonParams params, CompleteLesson lesson) => mediaService?.markLessonNoImage(
+      _mediaPositionFor(params, input: _inputFor(params)), reason: lesson.imageMetadata?.n2Reason);
 }

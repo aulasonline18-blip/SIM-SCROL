@@ -11,7 +11,13 @@ class ConversationalEntryScreen extends StatelessWidget {
   final LabSession session;
 
   @override
-  Widget build(BuildContext context) => _EntryScreen(session: session);
+  Widget build(BuildContext context) {
+    final routePath = Uri.tryParse(session.route)?.path ?? session.route;
+    if (routePath == '/cyber/idioma') {
+      return _LanguageScreen(session: session);
+    }
+    return _EntryScreen(session: session);
+  }
 }
 
 class ObjetoScreen extends StatelessWidget {
@@ -174,6 +180,106 @@ class _EntryScreenState extends State<_EntryScreen> {
       ),
     );
   }
+}
+
+class _LanguageScreen extends StatefulWidget {
+  const _LanguageScreen({required this.session});
+
+  final LabSession session;
+
+  @override
+  State<_LanguageScreen> createState() => _LanguageScreenState();
+}
+
+class _LanguageScreenState extends State<_LanguageScreen> {
+  late final TextEditingController otherController;
+
+  LabSession get session => widget.session;
+
+  @override
+  void initState() {
+    super.initState();
+    otherController = TextEditingController(text: session.otherLanguage);
+    session.addListener(_syncFromSession);
+  }
+
+  void _syncFromSession() {
+    if (!mounted) return;
+    if (otherController.text != session.otherLanguage) {
+      otherController.value = TextEditingValue(
+        text: session.otherLanguage,
+        selection: TextSelection.collapsed(
+          offset: session.otherLanguage.length,
+        ),
+      );
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    session.removeListener(_syncFromSession);
+    otherController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(
+      child: ListView(
+        key: const Key('language-screen'),
+        padding: const EdgeInsets.all(20),
+        children: [
+          StepHeader(
+            title: t('language_title'),
+            subtitle: t('language_subtitle'),
+          ),
+          const SizedBox(height: 16),
+          SimChatInputCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SimChatFieldLabel(t('language_choose_label')),
+                const SizedBox(height: 10),
+                SimChatChoiceWrap(
+                  children: [
+                    for (final language in supportedLangs)
+                      LanguageButton(
+                        language: language,
+                        selected: session.selectedLanguageCode == language.code,
+                        onTap: () => session.chooseLanguage(
+                          language.code,
+                          language.name,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                SimChatFieldLabel(t('language_other_label')),
+                const SizedBox(height: 8),
+                SimInput(
+                  key: const Key('language-other-input'),
+                  controller: otherController,
+                  hint: t('language_other_placeholder'),
+                  onChanged: session.setOtherLanguage,
+                ),
+                const SizedBox(height: 12),
+                PrimaryWideButton(
+                  label: t('continue'),
+                  onPressed: session.otherLanguage.trim().isEmpty
+                      ? null
+                      : () => session.chooseLanguage(
+                          'other',
+                          session.otherLanguage,
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class OnboardingChatFlow extends StatelessWidget {
