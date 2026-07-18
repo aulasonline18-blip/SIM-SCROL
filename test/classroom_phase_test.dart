@@ -886,15 +886,15 @@ void main() {
       expect(runtime.snapshot().itemMarker, 'M1');
       expect(service.read('cyber-class')?.current?.layer, LessonLayer.l2);
 
-      runtime.select(AnswerLetter.C);
-      await runtime.signal(DecisionSignal.three);
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.two);
       expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
       await runtime.advance();
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.lendo);
       expect(runtime.snapshot().itemMarker, 'M1');
       expect(service.read('cyber-class')?.current?.layer, LessonLayer.l3);
 
-      runtime.select(AnswerLetter.B);
+      runtime.select(AnswerLetter.A);
       await runtime.signal(DecisionSignal.one);
       expect(service.read('cyber-class')?.progress?.itemIdx, 1);
       expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l1);

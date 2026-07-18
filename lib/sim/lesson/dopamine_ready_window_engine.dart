@@ -237,21 +237,21 @@ class DopamineReadyWindowEngine {
             service,
             lessonLocalId,
             status: LiveEntryStatus.failedT02,
-            error: error.toString(),
+            error: 'DOPAMINE_SLOT_FAILED',
             firstItemMarker: slot.marker,
             firstLessonMaterialKey: firstLessonMaterialKey(slot.marker),
           );
           _event(lessonLocalId, 'DOPAMINE_SLOT_FAILED', {
             'source': source,
             'slot': slot.slot,
-            'error': error.toString(),
+            'error_code': 'DOPAMINE_SLOT_FAILED',
           });
           rethrow;
         }
         _event(lessonLocalId, 'DOPAMINE_SLOT_FAILED', {
           'source': source,
           'slot': slot.slot,
-          'error': error.toString(),
+          'error_code': 'DOPAMINE_SLOT_FAILED',
         });
         results.add(false);
       }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
@@ -47,12 +48,17 @@ class StudentStateDriftDatabase extends GeneratedDatabase {
   }
 }
 
-class DriftStudentStateLocalStorage implements StudentStateLocalStorage {
+class DriftStudentStateLocalStorage implements DurableStudentStateLocalStorage {
   DriftStudentStateLocalStorage._(this._db);
 
   final StudentStateDriftDatabase _db;
   final Map<String, String> _states = {};
   final Map<String, String> _events = {};
+  String? _lastStateLessonId;
+  String? _lastStatePayload;
+  String? _lastEventsLessonId;
+  String? _lastEventsPayload;
+  String? _lastDeletedLessonId;
 
   static Future<DriftStudentStateLocalStorage> open(
     String name, {
@@ -90,35 +96,95 @@ class DriftStudentStateLocalStorage implements StudentStateLocalStorage {
   @override
   void writeEvents(String lessonLocalId, String encoded) {
     _events[lessonLocalId] = encoded;
-    _db
-        .customStatement(
-          '''
-          INSERT INTO student_events (lesson_local_id, encoded_events, updated_at)
-          VALUES (?, ?, ?)
-          ON CONFLICT(lesson_local_id) DO UPDATE SET
-            encoded_events = excluded.encoded_events,
-            updated_at = excluded.updated_at
-        ''',
-          [lessonLocalId, encoded, DateTime.now().millisecondsSinceEpoch],
-        )
-        .ignore();
+    _lastEventsLessonId = lessonLocalId;
+    _lastEventsPayload = encoded;
+    unawaited(writeEventsDurably(lessonLocalId, encoded));
   }
 
   @override
   void writeState(String lessonLocalId, String encoded) {
     _states[lessonLocalId] = encoded;
-    _db
-        .customStatement(
-          '''
+    _lastStateLessonId = lessonLocalId;
+    _lastStatePayload = encoded;
+    unawaited(writeStateDurably(lessonLocalId, encoded));
+  }
+
+  @override
+  void deleteEvents(String lessonLocalId) {
+    _events.remove(lessonLocalId);
+    _lastDeletedLessonId = lessonLocalId;
+    unawaited(deleteEventsDurably(lessonLocalId));
+  }
+
+  @override
+  void deleteState(String lessonLocalId) {
+    _states.remove(lessonLocalId);
+    _lastDeletedLessonId = lessonLocalId;
+    unawaited(deleteStateDurably(lessonLocalId));
+  }
+
+  Future<void> writeStateDurably(String lessonLocalId, String encoded) {
+    return _db.customStatement(
+      '''
           INSERT INTO student_states (lesson_local_id, encoded_state, updated_at)
           VALUES (?, ?, ?)
           ON CONFLICT(lesson_local_id) DO UPDATE SET
             encoded_state = excluded.encoded_state,
             updated_at = excluded.updated_at
         ''',
-          [lessonLocalId, encoded, DateTime.now().millisecondsSinceEpoch],
-        )
-        .ignore();
+      [lessonLocalId, encoded, DateTime.now().millisecondsSinceEpoch],
+    );
+  }
+
+  Future<void> writeEventsDurably(String lessonLocalId, String encoded) {
+    return _db.customStatement(
+      '''
+          INSERT INTO student_events (lesson_local_id, encoded_events, updated_at)
+          VALUES (?, ?, ?)
+          ON CONFLICT(lesson_local_id) DO UPDATE SET
+            encoded_events = excluded.encoded_events,
+            updated_at = excluded.updated_at
+        ''',
+      [lessonLocalId, encoded, DateTime.now().millisecondsSinceEpoch],
+    );
+  }
+
+  Future<void> deleteStateDurably(String lessonLocalId) {
+    return _db.customStatement(
+      'DELETE FROM student_states WHERE lesson_local_id = ?',
+      [lessonLocalId],
+    );
+  }
+
+  Future<void> deleteEventsDurably(String lessonLocalId) {
+    return _db.customStatement(
+      'DELETE FROM student_events WHERE lesson_local_id = ?',
+      [lessonLocalId],
+    );
+  }
+
+  @override
+  Future<void> verifyLastStateWrite() async {
+    final id = _lastStateLessonId;
+    final payload = _lastStatePayload;
+    if (id == null || payload == null) return;
+    await writeStateDurably(id, payload);
+  }
+
+  @override
+  Future<void> verifyLastEventsWrite() async {
+    final id = _lastEventsLessonId;
+    final payload = _lastEventsPayload;
+    if (id == null || payload == null) return;
+    await writeEventsDurably(id, payload);
+  }
+
+  @override
+  Future<void> verifyLastDelete() async {
+    final id = _lastDeletedLessonId;
+    if (id == null) return;
+    await deleteStateDurably(id);
+    await deleteEventsDurably(id);
   }
 
   Future<void> _initialize() async {

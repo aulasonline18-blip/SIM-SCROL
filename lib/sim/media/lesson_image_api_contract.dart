@@ -1,6 +1,7 @@
 class LessonImageGenerationMetadata {
   const LessonImageGenerationMetadata({
     this.cacheKey,
+    this.cacheKeyHash,
     this.requestId,
     this.mimeType,
     this.provider,
@@ -21,6 +22,7 @@ class LessonImageGenerationMetadata {
   });
 
   final String? cacheKey;
+  final String? cacheKeyHash;
   final String? requestId;
   final String? mimeType;
   final String? provider;
@@ -41,6 +43,7 @@ class LessonImageGenerationMetadata {
 
   bool get isEmpty =>
       cacheKey == null &&
+      cacheKeyHash == null &&
       requestId == null &&
       mimeType == null &&
       provider == null &&
@@ -60,11 +63,9 @@ class LessonImageGenerationMetadata {
       n3Reason == null;
 
   Map<String, Object?> toJson() => {
-    'cacheKey': cacheKey,
+    'cacheKeyHash': cacheKeyHash ?? _hashString(cacheKey),
     'requestId': requestId,
     'mimeType': mimeType,
-    'provider': provider,
-    'model': model,
     'charged': charged,
     'cacheHit': cacheHit,
     'retryable': retryable,
@@ -92,11 +93,9 @@ class LessonImageGenerationMetadata {
     String? createdAt,
   }) {
     return LessonImageGenerationMetadata(
-      cacheKey: cacheKey,
+      cacheKeyHash: cacheKeyHash ?? _hashString(cacheKey),
       requestId: requestId,
       mimeType: mimeType,
-      provider: provider,
-      model: model,
       charged: charged,
       cacheHit: cacheHit,
       retryable: retryable,
@@ -106,7 +105,7 @@ class LessonImageGenerationMetadata {
       layer: layer,
       mediaType: mediaType,
       status: status,
-      source: source ?? this.source ?? provider,
+      source: source ?? this.source,
       createdAt: createdAt ?? this.createdAt,
       n2Reason: n2Reason,
       n3Reason: n3Reason,
@@ -115,12 +114,11 @@ class LessonImageGenerationMetadata {
 
   static LessonImageGenerationMetadata? fromJson(Object? raw) {
     if (raw is! Map) return null;
+    final rawCacheKey = raw['cacheKey']?.toString();
     final metadata = LessonImageGenerationMetadata(
-      cacheKey: raw['cacheKey']?.toString(),
+      cacheKeyHash: raw['cacheKeyHash']?.toString() ?? _hashString(rawCacheKey),
       requestId: raw['requestId']?.toString(),
       mimeType: raw['mimeType']?.toString(),
-      provider: raw['provider']?.toString(),
-      model: raw['model']?.toString(),
       charged: raw['charged'] is bool ? raw['charged'] as bool : null,
       cacheHit: raw['cacheHit'] is bool ? raw['cacheHit'] as bool : null,
       retryable: raw['retryable'] is bool ? raw['retryable'] as bool : null,
@@ -137,4 +135,13 @@ class LessonImageGenerationMetadata {
     );
     return metadata.isEmpty ? null : metadata;
   }
+}
+
+String? _hashString(String? input) {
+  if (input == null || input.trim().isEmpty) return null;
+  var hash = 5381;
+  for (final unit in input.codeUnits) {
+    hash = ((hash << 5) + hash) ^ unit;
+  }
+  return (hash & 0xffffffff).toRadixString(36);
 }

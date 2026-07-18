@@ -68,7 +68,8 @@ class ReadyWindowWorker {
           ((job['next_retry_at'] as num?)?.toInt() ?? 0) <= now,
     );
 
-    if (hasHotLocalReady || (hasBackgroundReady && id == _activeLessonLocalId)) {
+    if (hasHotLocalReady ||
+        (hasBackgroundReady && id == _activeLessonLocalId)) {
       drainReadyWindowJobs(id);
     } else {
       final nextJob = jobs
@@ -188,7 +189,7 @@ class ReadyWindowWorker {
                   ...cur,
                   'status': 'failed',
                   'finished_at': now,
-                  'error': error.toString(),
+                  'error_code': 'READY_WINDOW_JOB_FAILED',
                   'attempts': newAttempts,
                 };
               }).toList(),
@@ -201,7 +202,7 @@ class ReadyWindowWorker {
               ts: now,
               payload: {
                 'job_id': jobId,
-                'error': error.toString(),
+                'error_code': 'READY_WINDOW_JOB_FAILED',
                 'attempts': newAttempts,
               },
             ),
@@ -219,7 +220,7 @@ class ReadyWindowWorker {
                   'attempts': newAttempts,
                   'max_attempts': maxAttempts,
                   'next_retry_at': retryAt,
-                  'error': error.toString(),
+                  'error_code': 'READY_WINDOW_JOB_RETRYABLE',
                 };
               }).toList(),
             );

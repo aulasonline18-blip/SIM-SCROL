@@ -30,4 +30,18 @@ void main() {
     expect(manifest, contains('android:scheme="sim-mobile"'));
     expect(manifest, contains('android:host="login-callback"'));
   });
+
+  test('auth session never propagates raw provider error messages to UI', () {
+    final source = File('lib/session/auth_session.dart').readAsStringSync();
+
+    expect(source, isNot(contains('error.message')));
+    expect(source, isNot(contains('Unexpected error')));
+    expect(
+      source,
+      isNot(contains("authError = 'Supabase nao foi inicializado.'")),
+    );
+    expect(source, contains("authError = t('auth_login_failed')"));
+    expect(source, contains("authError = t('auth_signup_failed')"));
+    expect(source, contains("authError = t('auth_unavailable')"));
+  });
 }

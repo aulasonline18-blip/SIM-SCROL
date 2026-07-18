@@ -361,7 +361,12 @@ const Map<String, String> _simStrings = {
   'attachment_open_failed': 'Nao foi possivel abrir o anexo.',
   'attachment_read_failed': 'Não foi possível ler o anexo agora.',
   'audio_prepare_failed': 'Nao foi possivel preparar o audio agora.',
-  'supabase_not_initialized': 'Supabase nao foi inicializado.',
+  'supabase_not_initialized': 'Não foi possível preparar o login agora.',
+  'auth_unavailable': 'Não foi possível preparar o login agora.',
+  'auth_login_failed':
+      'Não foi possível entrar agora. Revise os dados e tente novamente.',
+  'auth_signup_failed':
+      'Não foi possível criar a conta agora. Tente novamente.',
   'google_login_open_failed': 'Não foi possível abrir o login do Google.',
   'account_delete_failed':
       'Não foi possível concluir a exclusão agora: {error}',
@@ -898,7 +903,12 @@ const Map<String, String> _ptStrings = {
   'attachment_open_failed': 'Nao foi possivel abrir o anexo.',
   'attachment_read_failed': 'Não foi possível ler o anexo agora.',
   'audio_prepare_failed': 'Nao foi possivel preparar o audio agora.',
-  'supabase_not_initialized': 'Supabase nao foi inicializado.',
+  'supabase_not_initialized': 'Não foi possível preparar o login agora.',
+  'auth_unavailable': 'Não foi possível preparar o login agora.',
+  'auth_login_failed':
+      'Não foi possível entrar agora. Revise os dados e tente novamente.',
+  'auth_signup_failed':
+      'Não foi possível criar a conta agora. Tente novamente.',
   'google_login_open_failed': 'Não foi possível abrir o login do Google.',
   'account_delete_failed':
       'Não foi possível concluir a exclusão agora: {error}',

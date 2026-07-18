@@ -84,7 +84,25 @@ abstract interface class StudentStateLocalStorage {
   void writeState(String lessonLocalId, String encoded);
   String? readEvents(String lessonLocalId);
   void writeEvents(String lessonLocalId, String encoded);
+  void deleteState(String lessonLocalId);
+  void deleteEvents(String lessonLocalId);
   List<String> listStateIds();
+}
+
+class StudentStateStorageException implements Exception {
+  const StudentStateStorageException(this.code);
+
+  final String code;
+
+  @override
+  String toString() => code;
+}
+
+abstract interface class DurableStudentStateLocalStorage
+    implements StudentStateLocalStorage {
+  Future<void> verifyLastStateWrite();
+  Future<void> verifyLastEventsWrite();
+  Future<void> verifyLastDelete();
 }
 
 class MemoryStudentStateLocalStorage implements StudentStateLocalStorage {
@@ -108,6 +126,16 @@ class MemoryStudentStateLocalStorage implements StudentStateLocalStorage {
   @override
   void writeState(String lessonLocalId, String encoded) {
     states[lessonLocalId] = encoded;
+  }
+
+  @override
+  void deleteEvents(String lessonLocalId) {
+    events.remove(lessonLocalId);
+  }
+
+  @override
+  void deleteState(String lessonLocalId) {
+    states.remove(lessonLocalId);
   }
 }
 
@@ -283,6 +311,13 @@ class StudentStateStore implements StudentStateRepository {
     );
   }
 
+  void removeLocalLessonData(String lessonLocalId) {
+    _memory.remove(lessonLocalId);
+    _eventLog.remove(lessonLocalId);
+    local.deleteState(lessonLocalId);
+    local.deleteEvents(lessonLocalId);
+  }
+
   @override
   List<StudentLearningState> listLocalStates({bool includeDeleted = false}) {
     final ids = {...local.listStateIds(), ..._memory.keys};
@@ -373,9 +408,6 @@ class StudentStateStore implements StudentStateRepository {
     final cloudScore = highWaterMark(cloudState);
     if (cloudScore > localScore) return StateConflictResolution.cloud;
     if (localScore > cloudScore) return StateConflictResolution.local;
-    if (localState.updatedAt != cloudState.updatedAt) {
-      return StateConflictResolution.cloud;
-    }
     return StateConflictResolution.equal;
   }
 
@@ -438,7 +470,7 @@ class StudentStateStore implements StudentStateRepository {
         _memory[state.lessonLocalId] ?? _readStateIfExists(state.lessonLocalId);
     final protectedState = existing == null
         ? state
-        : mergeStudentLearningStateFromServerAuthority(state, existing);
+        : mergeValidatedRemoteState(state, existing);
     _eventLog[state.lessonLocalId] = dedupedEvents;
     local.writeEvents(
       state.lessonLocalId,
@@ -484,7 +516,7 @@ class StudentStateStore implements StudentStateRepository {
       if (imported == null) continue;
       final merged = before == null
           ? imported
-          : mergeStudentLearningStateFromServerAuthority(imported, before);
+          : mergeValidatedRemoteState(imported, before);
       lastImported = writeState(
         merged.copyWith(
           lessonLocalId: id,

@@ -37,7 +37,7 @@ class SimServerPaymentsClient implements PaymentsFunctions {
       'environment': input.environment.wire,
     });
     if (data['error'] != null) {
-      return HostedCheckoutResult.failure(data['error'].toString());
+      return HostedCheckoutResult.failure(_humanBillingCode(data['error']));
     }
     return HostedCheckoutResult.success(
       url: (data['url'] ?? '').toString(),
@@ -55,7 +55,7 @@ class SimServerPaymentsClient implements PaymentsFunctions {
       'environment': input.environment.wire,
     });
     if (data['error'] != null) {
-      return EmbeddedCheckoutResult.failure(data['error'].toString());
+      return EmbeddedCheckoutResult.failure(_humanBillingCode(data['error']));
     }
     return EmbeddedCheckoutResult.success(
       (data['clientSecret'] ?? '').toString(),
@@ -68,14 +68,16 @@ class SimServerPaymentsClient implements PaymentsFunctions {
     required StripeEnvironment environment,
   }) async {
     if (!isValidStripeSessionId(sessionId)) {
-      return const CheckoutStatus.failure('Invalid sessionId');
+      return const CheckoutStatus.failure(
+        'Não foi possível confirmar esse pagamento agora.',
+      );
     }
     final data = await _post(statusPath, {
       'sessionId': sessionId,
       'environment': environment.wire,
     });
     if (data['error'] != null) {
-      return CheckoutStatus.failure(data['error'].toString());
+      return CheckoutStatus.failure(_humanBillingCode(data['error']));
     }
     return switch (data['status']?.toString()) {
       'complete' => CheckoutStatus.complete(
@@ -204,7 +206,10 @@ class SimServerPlayBillingGrantClient implements PlayBillingGrantGateway {
     final decoded = jsonDecode(response.body);
     final data = decoded is Map ? JsonMap.from(decoded) : <String, dynamic>{};
     if (data['error'] != null) {
-      throw SimExternalAiException(data['error'].toString());
+      throw SimExternalAiException(
+        _humanBillingCode(data['error']),
+        code: _safePublicCodeFromObject(data['error']),
+      );
     }
     return PlayBillingGrantResult(
       credits: (data['credits'] as num?)?.toInt() ?? 0,
@@ -274,6 +279,27 @@ String _safePublicCode(String code) {
   final raw = code.trim();
   if (!RegExp(r'^[A-Z0-9_]{3,80}$').hasMatch(raw)) return 'SERVER_ERROR';
   return raw;
+}
+
+String _safePublicCodeFromObject(Object? code) {
+  return _safePublicCode((code ?? '').toString().toUpperCase());
+}
+
+String _humanBillingCode(Object? code) {
+  final normalized = (code ?? '').toString().toUpperCase();
+  if (normalized.contains('PAYMENTS_NOT_CONFIGURED')) {
+    return 'Pagamentos indisponíveis no momento. Tente novamente mais tarde.';
+  }
+  if (normalized.contains('FORBIDDEN') || normalized.contains('UNAUTHORIZED')) {
+    return 'Não foi possível confirmar sua autorização para esta ação.';
+  }
+  if (normalized.contains('GOOGLE_PLAY')) {
+    return 'Não foi possível confirmar a compra agora. Tente novamente.';
+  }
+  if (normalized.contains('SESSION')) {
+    return 'Não foi possível confirmar esse pagamento agora.';
+  }
+  return 'Não conseguimos concluir esta operação agora. Tente novamente.';
 }
 
 String _humanBillingError(int statusCode) {

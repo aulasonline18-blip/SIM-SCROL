@@ -9,8 +9,10 @@ const int simOfflineMediaCacheMaxEntries = 80;
 enum SimOfflineEventStatus { queued, replaying, synced, failed, blocked }
 
 enum SimSyncResolution {
-  useRemote,
+  restoreValidatedRemote,
   useLocal,
+  keepLocalSynced,
+  mergeValidatedRemote,
   mergeAndRetry,
   queueLocalEvent,
   clearCacheOnly,
@@ -216,8 +218,8 @@ class SimOfflineSyncPolicy {
     }
     if (remote != null && local == null) {
       return const SimOfflineSyncDecision(
-        resolution: SimSyncResolution.useRemote,
-        reason: 'local_empty',
+        resolution: SimSyncResolution.restoreValidatedRemote,
+        reason: 'local_empty_restore_validated',
         auditEvent: SimSyncAuditEvent.syncCompleted,
       );
     }
@@ -234,8 +236,8 @@ class SimOfflineSyncPolicy {
     final remoteScore = scoreOfStudentLearningState(remote);
     if (remoteScore > localScore) {
       return const SimOfflineSyncDecision(
-        resolution: SimSyncResolution.useRemote,
-        reason: 'remote_high_water_mark_wins',
+        resolution: SimSyncResolution.mergeValidatedRemote,
+        reason: 'remote_restore_requires_validated_merge',
         auditEvent: SimSyncAuditEvent.syncBlockedRegression,
       );
     }
@@ -247,8 +249,8 @@ class SimOfflineSyncPolicy {
       );
     }
     return const SimOfflineSyncDecision(
-      resolution: SimSyncResolution.useRemote,
-      reason: 'server_source_of_truth',
+      resolution: SimSyncResolution.keepLocalSynced,
+      reason: 'equal_state_no_local_pending_change',
       auditEvent: SimSyncAuditEvent.syncCompleted,
     );
   }

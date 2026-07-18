@@ -11,16 +11,24 @@ class GenerateLessonAudioRequest {
   final String lessonKey;
   final String voice;
 
-  GenerateLessonAudioRequest normalized() => GenerateLessonAudioRequest(
-    text: text.trim().length > maxAudioInputChars
-        ? text.trim().substring(0, maxAudioInputChars)
-        : text.trim(),
-    lang: lang.trim().length > 80 ? lang.trim().substring(0, 80) : lang.trim(),
-    lessonKey: lessonKey.trim().length > 180
-        ? lessonKey.trim().substring(0, 180)
-        : lessonKey.trim(),
-    voice: voice.trim().isEmpty ? voiceByLang(lang) : voice.trim(),
-  );
+  GenerateLessonAudioRequest normalized() {
+    final cleanText = text.trim();
+    if (cleanText.length > maxAudioInputChars) {
+      throw const FormatException('AUDIO_TEXT_TOO_LARGE');
+    }
+    final cleanLessonKey = lessonKey.trim();
+    if (cleanLessonKey.length > 180) {
+      throw const FormatException('AUDIO_LESSON_KEY_TOO_LARGE');
+    }
+    return GenerateLessonAudioRequest(
+      text: cleanText,
+      lang: lang.trim().length > 80
+          ? lang.trim().substring(0, 80)
+          : lang.trim(),
+      lessonKey: cleanLessonKey,
+      voice: voice.trim().isEmpty ? voiceByLang(lang) : voice.trim(),
+    );
+  }
 }
 
 class GenerateLessonAudioResponse {

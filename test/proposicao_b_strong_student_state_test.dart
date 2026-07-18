@@ -157,10 +157,7 @@ void main() {
             ],
           );
 
-      final merged = mergeStudentLearningStateFromServerAuthority(
-        local,
-        remote,
-      );
+      final merged = mergeValidatedRemoteState(local, remote);
 
       expect(merged.events, hasLength(2));
       expect(

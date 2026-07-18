@@ -26,9 +26,7 @@ class SimAiServerConfig {
   Future<Map<String, String>> jsonHeaders() async {
     final token = await accessTokenProvider?.call();
     final trimmed = (token ?? '').trim();
-    debugPrint(
-      '[SIM_CFG] jsonHeaders baseUrl=$baseUrl tokenPresent=${trimmed.isNotEmpty}',
-    );
+    debugPrint('[SIM_CFG] jsonHeaders prepared');
     return {
       'content-type': 'application/json',
       'accept': 'application/json',
@@ -39,9 +37,7 @@ class SimAiServerConfig {
   Future<Map<String, String>> streamHeaders() async {
     final token = await accessTokenProvider?.call();
     final trimmed = (token ?? '').trim();
-    debugPrint(
-      '[SIM_CFG] streamHeaders baseUrl=$baseUrl tokenPresent=${trimmed.isNotEmpty}',
-    );
+    debugPrint('[SIM_CFG] streamHeaders prepared');
     return {
       'content-type': 'application/json',
       'accept': 'text/event-stream',

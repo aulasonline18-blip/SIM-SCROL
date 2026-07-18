@@ -27,7 +27,7 @@ class AuthSession extends ChangeNotifier {
     final client = _supabaseClientOrNull();
     if (client == null) {
       authReady = true;
-      authError = 'Supabase nao foi inicializado.';
+      authError = t('auth_unavailable');
       notifyListeners();
       return;
     }
@@ -146,16 +146,16 @@ class AuthSession extends ChangeNotifier {
     notifyListeners();
     final client = _supabaseClientOrNull();
     if (client == null) {
-      authError = 'Supabase nao foi inicializado.';
+      authError = t('auth_unavailable');
       notifyListeners();
       return;
     }
     try {
       await client.auth.signInWithPassword(email: email, password: password);
-    } on AuthException catch (error) {
-      authError = error.message;
+    } on AuthException {
+      authError = t('auth_login_failed');
     } catch (_) {
-      authError = 'Unexpected error';
+      authError = t('auth_login_failed');
     }
     notifyListeners();
   }
@@ -169,7 +169,7 @@ class AuthSession extends ChangeNotifier {
     notifyListeners();
     final client = _supabaseClientOrNull();
     if (client == null) {
-      authError = 'Supabase nao foi inicializado.';
+      authError = t('auth_unavailable');
       notifyListeners();
       return;
     }
@@ -184,10 +184,10 @@ class AuthSession extends ChangeNotifier {
               : name.trim(),
         },
       );
-    } on AuthException catch (error) {
-      authError = error.message;
+    } on AuthException {
+      authError = t('auth_signup_failed');
     } catch (_) {
-      authError = 'Unexpected error';
+      authError = t('auth_signup_failed');
     }
     notifyListeners();
   }

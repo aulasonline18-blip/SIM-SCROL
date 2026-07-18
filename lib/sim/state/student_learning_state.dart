@@ -1573,30 +1573,30 @@ bool _hasServerMasteryTruth(StudentMasteryTruth truth) =>
     truth.conquestRecords.isNotEmpty ||
     truth.itemConsolidationStatus.isNotEmpty;
 
-StudentLearningState mergeStudentLearningStateFromServerAuthority(
+StudentLearningState mergeValidatedRemoteState(
   StudentLearningState localCandidate,
-  StudentLearningState remoteAuthority,
+  StudentLearningState validatedRemote,
 ) {
-  return remoteAuthority.copyWith(
-    attempts: mergeAttempts(remoteAuthority.attempts, localCandidate.attempts),
-    events: mergeEvents(remoteAuthority.events, localCandidate.events),
+  return validatedRemote.copyWith(
+    attempts: mergeAttempts(validatedRemote.attempts, localCandidate.attempts),
+    events: mergeEvents(validatedRemote.events, localCandidate.events),
     readyLessonMaterials: {
       ...localCandidate.readyLessonMaterials,
-      ...remoteAuthority.readyLessonMaterials,
+      ...validatedRemote.readyLessonMaterials,
     },
     currentLessonMaterial:
-        remoteAuthority.currentLessonMaterial ??
+        validatedRemote.currentLessonMaterial ??
         localCandidate.currentLessonMaterial,
     queuedActions: _mergeJsonListByStableKey(
-      remoteAuthority.queuedActions,
+      validatedRemote.queuedActions,
       localCandidate.queuedActions,
     ),
     inflightJobs: _mergeJsonListByStableKey(
-      remoteAuthority.inflightJobs,
+      validatedRemote.inflightJobs,
       localCandidate.inflightJobs,
     ),
-    updatedAt: remoteAuthority.updatedAt > localCandidate.updatedAt
-        ? remoteAuthority.updatedAt
+    updatedAt: validatedRemote.updatedAt > localCandidate.updatedAt
+        ? validatedRemote.updatedAt
         : localCandidate.updatedAt,
   );
 }

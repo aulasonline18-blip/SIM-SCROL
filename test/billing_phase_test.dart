@@ -61,10 +61,13 @@ class FakePaymentsFunctions implements PaymentsFunctions {
 
 class FakeDeletionGateway implements AccountDeletionGateway {
   AccountDeletionRequest? request;
+  Object? failure;
 
   @override
   Future<void> requestAccountDeletion(AccountDeletionRequest request) async {
     this.request = request;
+    final error = failure;
+    if (error != null) throw error;
   }
 }
 
@@ -180,6 +183,20 @@ void main() {
     },
   );
 
+  test('checkout return invalid session uses human message', () async {
+    final store = PaymentReturnStore()..saveReturnTo('/cyber/aula');
+    final controller = CheckoutReturnController(
+      paymentsFunctions: FakePaymentsFunctions(),
+      returnStore: store,
+    );
+
+    final state = await controller.confirm('invalid session id');
+
+    expect(state.status, CheckoutStatusKind.error);
+    expect(state.error, 'Não foi possível confirmar esse pagamento agora.');
+    expect(state.error, isNot(contains('Invalid sessionId')));
+  });
+
   test(
     'webhook grant uses official pack credits and ignores unpaid sessions',
     () {
@@ -228,6 +245,19 @@ void main() {
       const DeleteAccountTexts().submitLabel,
       'Solicitar exclusao da conta',
     );
+  });
+
+  test('account deletion controller hides raw thrown errors from UI', () async {
+    final gateway = FakeDeletionGateway()
+      ..failure = StateError('raw server body token secret');
+    final controller = AccountDeletionController(gateway: gateway);
+
+    await controller.submit(confirm: 'DELETAR', userId: 'u1');
+
+    expect(controller.done, false);
+    expect(controller.error, 'Não foi possível registrar a solicitação.');
+    expect(controller.error, isNot(contains('raw server body')));
+    expect(controller.error, isNot(contains('token secret')));
   });
 
   test(

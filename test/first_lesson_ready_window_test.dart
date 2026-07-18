@@ -263,9 +263,10 @@ class BlockingHydrateCache extends LessonMaterialCache {
   bool hydrateStarted = false;
 
   @override
-  Future<void> hydrate() async {
+  Future<LessonMaterialCacheAudit> hydrate() async {
     hydrateStarted = true;
     await releaseHydrate.future;
+    return const LessonMaterialCacheAudit(ok: true, code: 'TEST_RELEASED');
   }
 }
 

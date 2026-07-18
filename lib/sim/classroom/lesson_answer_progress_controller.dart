@@ -271,6 +271,24 @@ class LessonAnswerProgressController {
         position.mainAdvances = previousMainAdvances;
         position.phase = previousPhase;
       }
+      if (!_hasCorrectEvidenceForCurrentPosition(state, position)) {
+        position.loadingLayer = view.layer;
+        position.itemIdx = view.itemIdx;
+        position.layer = view.layer;
+        position.erros = view.erros;
+        position.historia = view.historia;
+        position.mainAdvances = view.mainAdvances;
+        final loadedPrepared = materialController.carregarRapidoSePronto(
+          lessonLocalId: lessonLocalId,
+          topic: topic,
+          position: position,
+          idioma: idioma,
+          academic: academic,
+          mode: _modeForNextMaterial(activeState, position.isReviewAtivo),
+          baseItems: baseItems,
+        );
+        if (loadedPrepared) return;
+      }
       position.historia = view.historia;
       position.mainAdvances = view.mainAdvances;
       position.erros = view.erros;

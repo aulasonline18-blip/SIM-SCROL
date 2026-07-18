@@ -211,6 +211,33 @@ void main() {
     expect(client.calls, 1);
     expect(client.lastLang, 'pt-BR');
     expect(client.lastVoice, 'Charon');
+    expect(core.available(), true);
+  });
+
+  test('audio core availability follows preference and adapter capability', () {
+    final disabledPreference = AudioPreference()..setAudioEnabled(false);
+    expect(
+      AudioCore(
+        preference: disabledPreference,
+        playback: CountingPlaybackAdapter(),
+      ).available(),
+      false,
+    );
+    expect(
+      AudioCore(
+        preference: AudioPreference(),
+        playback: NoopAudioPlaybackAdapter(),
+      ).available(),
+      false,
+    );
+    expect(
+      AudioCore(
+        preference: AudioPreference(),
+        playback: NoopAudioPlaybackAdapter(),
+        availabilityProbe: () => true,
+      ).available(),
+      true,
+    );
   });
 
   test('audio disabled skips generated client and local playback', () async {
@@ -382,7 +409,8 @@ void main() {
       );
       expect(states['l1']!.audio.status, 'failed');
       expect(states['l1']!.audio.playing, false);
-      expect(states['l1']!.audio.error, 'audio_playback_unavailable');
+      expect(states['l1']!.audio.error, startsWith('SIM_MEDIA_ERROR_'));
+      expect(states['l1']!.audio.error, isNot(contains('audio_playback_unavailable')));
       expect(
         states['l1']!.events.map((event) => event.type),
         contains('AUDIO_FAILED'),
@@ -538,7 +566,7 @@ void main() {
     },
   );
 
-  test('lesson image media events preserve cache key item and layer', () {
+  test('lesson image media events use safe hashes item and layer', () {
     var state = StudentLearningState.empty(lessonLocalId: 'l1');
     final service = StudentLessonMediaService(
       audioCore: AudioCore(
@@ -568,11 +596,14 @@ void main() {
       'IMAGE_READY',
       'IMAGE_FAILED',
     ]);
-    expect(state.events[0].payload['cacheKey'], 'image:user:a');
+    expect(state.events[0].payload['cacheKey'], isNull);
+    expect(state.events[0].payload['cacheKeyHash'], isA<String>());
     expect(state.events[0].payload['itemMarker'], 'M1');
     expect(state.events[0].payload['layer'], 2);
-    expect(state.events[1].payload['imageUrlHead'], startsWith('data:image'));
-    expect(state.events[2].payload['errorMessage'], 'requestId=rid-1');
+    expect(state.events[1].payload['imageUrlHead'], isNull);
+    expect(state.events[1].payload['hasImageUrl'], true);
+    expect(state.events[2].payload['errorMessage'], isNull);
+    expect(state.events[2].payload['errorCode'], startsWith('SIM_MEDIA_ERROR_'));
   });
 
   test('visual learning feedback tracks answers and doubt after image', () {
@@ -638,13 +669,29 @@ void main() {
     expect(compressed, startsWith('data:image/jpeg;base64,'));
   });
   test('api contracts preserve limits and constants without secrets', () {
+    expect(
+      () => GenerateLessonAudioRequest(
+        text: 'a' * 5000,
+        lessonKey: 'lesson',
+        lang: 'pt-BR',
+      ).normalized(),
+      throwsFormatException,
+    );
+    expect(
+      () => GenerateLessonAudioRequest(
+        text: 'audio',
+        lessonKey: 'l' * 200,
+        lang: 'pt-BR',
+      ).normalized(),
+      throwsFormatException,
+    );
     final audio = GenerateLessonAudioRequest(
-      text: 'a' * 5000,
-      lessonKey: 'l' * 200,
+      text: 'audio curto',
+      lessonKey: 'lesson',
       lang: 'pt-BR',
     ).normalized();
-    expect(audio.text.length, maxAudioInputChars);
-    expect(audio.lessonKey.length, 180);
+    expect(audio.text, 'audio curto');
+    expect(audio.lessonKey, 'lesson');
     expect(voiceByLang('es'), 'Fenrir');
     expect(voiceByLang('pt-BR'), 'Charon');
     expect(voiceByLang('en-US'), 'Charon');

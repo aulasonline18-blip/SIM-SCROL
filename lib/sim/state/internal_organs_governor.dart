@@ -472,7 +472,12 @@ class SyncStateGovernor {
     try {
       final syncPort = remoteSync;
       if (syncPort == null) {
-        throw StateError('REMOTE_SYNC_PORT_NOT_CONFIGURED');
+        return recorder.recordFailed(
+          lessonLocalId: lessonLocalId,
+          direction: 'push',
+          message: 'REMOTE_SYNC_PORT_NOT_CONFIGURED',
+          source: source,
+        );
       }
       await syncPort(lessonLocalId: lessonLocalId, source: source);
       return recorder.recordCompleted(
@@ -484,7 +489,7 @@ class SyncStateGovernor {
       return recorder.recordFailed(
         lessonLocalId: lessonLocalId,
         direction: 'push',
-        message: error.toString(),
+        message: 'SYNC_PUSH_FAILED',
         source: source,
       );
     }
@@ -939,7 +944,7 @@ class InternalOrgansCoordinator {
       final failed = media.mediaFailed(
         lessonLocalId: lessonLocalId,
         kind: 'audio',
-        reason: error.toString(),
+        reason: 'AUDIO_FLOW_FAILED',
         marker: marker,
         source: 'internal-organs-coordinator',
       );
@@ -1003,7 +1008,7 @@ class InternalOrgansCoordinator {
     } catch (error) {
       final failed = doubt.answerFailed(
         lessonLocalId: lessonLocalId,
-        reason: error.toString(),
+        reason: 'DOUBT_FLOW_FAILED',
         marker: marker,
         source: 'internal-organs-coordinator',
       );

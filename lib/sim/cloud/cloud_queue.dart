@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 
@@ -9,35 +10,76 @@ import 'supabase_client_contract.dart';
 
 enum StudentLearningSyncOperation { patch, tombstone }
 
+enum CloudQueueEntryStatus { queued, blocked }
+
+class CloudQueueStorageException implements Exception {
+  const CloudQueueStorageException(this.code);
+
+  final String code;
+
+  @override
+  String toString() => code;
+}
+
 class CloudQueueEntry {
   const CloudQueueEntry({
+    this.id,
     required this.lessonLocalId,
     required this.operation,
     required this.pendingSince,
     required this.attempts,
     required this.nextRetryAt,
+    this.status = CloudQueueEntryStatus.queued,
+    this.lastFailureCode,
   });
 
+  final String? id;
   final String lessonLocalId;
   final StudentLearningSyncOperation operation;
   final int pendingSince;
   final int attempts;
   final int nextRetryAt;
+  final CloudQueueEntryStatus status;
+  final String? lastFailureCode;
+
+  String get stableId =>
+      id ??
+      stableCloudQueueItemId(
+        lessonLocalId: lessonLocalId,
+        operation: operation,
+        pendingSince: pendingSince,
+      );
 
   CloudQueueEntry copyWith({
+    String? id,
     StudentLearningSyncOperation? operation,
     int? pendingSince,
     int? attempts,
     int? nextRetryAt,
+    CloudQueueEntryStatus? status,
+    String? lastFailureCode,
   }) {
     return CloudQueueEntry(
+      id: id ?? this.id,
       lessonLocalId: lessonLocalId,
       operation: operation ?? this.operation,
       pendingSince: pendingSince ?? this.pendingSince,
       attempts: attempts ?? this.attempts,
       nextRetryAt: nextRetryAt ?? this.nextRetryAt,
+      status: status ?? this.status,
+      lastFailureCode: lastFailureCode ?? this.lastFailureCode,
     );
   }
+
+  JsonMap toRedactedDebugJson() => {
+    'id': stableId,
+    'operation': operation.name,
+    'pendingSince': pendingSince,
+    'attempts': attempts,
+    'nextRetryAt': nextRetryAt,
+    'status': status.name,
+    if (lastFailureCode != null) 'lastFailureCode': lastFailureCode,
+  };
 }
 
 abstract interface class CloudQueueStorage {
@@ -45,6 +87,11 @@ abstract interface class CloudQueueStorage {
   void writeQueue(Map<String, CloudQueueEntry> queue);
   Map<String, String> readLastHashes();
   void writeLastHash(String lessonLocalId, String hash);
+}
+
+abstract interface class DurableCloudQueueStorage implements CloudQueueStorage {
+  Future<void> verifyQueueWrite();
+  Future<void> verifyHashWrite();
 }
 
 class MemoryCloudQueueStorage implements CloudQueueStorage {
@@ -94,21 +141,29 @@ class CloudQueue with WidgetsBindingObserver {
 
   int get _now => now?.call() ?? DateTime.now().millisecondsSinceEpoch;
 
-  void enqueueStudentStateSync({
+  Future<void> enqueueStudentStateSync({
     required String lessonLocalId,
     StudentLearningSyncOperation operation = StudentLearningSyncOperation.patch,
-  }) {
+  }) async {
     if (lessonLocalId.isEmpty) return;
     final bag = storage.readQueue();
     final prev = bag[lessonLocalId];
+    final pendingSince = prev?.pendingSince ?? _now;
     bag[lessonLocalId] = CloudQueueEntry(
+      id:
+          prev?.id ??
+          stableCloudQueueItemId(
+            lessonLocalId: lessonLocalId,
+            operation: operation,
+            pendingSince: pendingSince,
+          ),
       lessonLocalId: lessonLocalId,
       operation: operation,
-      pendingSince: prev?.pendingSince ?? _now,
+      pendingSince: pendingSince,
       attempts: 0,
       nextRetryAt: _now + debounceMs,
     );
-    storage.writeQueue(bag);
+    await _writeQueue(bag);
   }
 
   Future<void> drainQueue({bool force = true}) async {
@@ -128,6 +183,7 @@ class CloudQueue with WidgetsBindingObserver {
     if (_flushingIds.contains(lessonLocalId)) return;
     final entry = storage.readQueue()[lessonLocalId];
     if (entry == null) return;
+    if (entry.status == CloudQueueEntryStatus.blocked) return;
     if (!force && entry.nextRetryAt > _now) return;
     _flushingIds.add(lessonLocalId);
     try {
@@ -138,26 +194,26 @@ class CloudQueue with WidgetsBindingObserver {
           entry,
           reason: 'missing_authenticated_session',
         );
-        _scheduleRetry(entry);
+        await _scheduleRetry(entry, 'SYNC_SESSION_UNAVAILABLE');
         return;
       }
       final snap = stateService.read(lessonLocalId);
       if (snap == null) {
         _markSyncFailed(lessonLocalId, entry, 'local_state_missing');
-        _scheduleRetry(entry);
+        await _scheduleRetry(entry, 'SYNC_LOCAL_STATE_MISSING');
         return;
       }
       if (entry.operation == StudentLearningSyncOperation.tombstone ||
           snap.extra['deletedAt'] != null) {
         await cloudFunctions.deleteStudentStateByLesson(lessonLocalId, session);
-        storage.writeLastHash(lessonLocalId, 'tombstone:${snap.updatedAt}');
-        _remove(lessonLocalId);
+        await _writeLastHash(lessonLocalId, 'tombstone:${snap.updatedAt}');
+        await _remove(lessonLocalId);
         return;
       }
       final remoteSnap = snap.toRemoteVaultState();
       final contentHash = stableHash(remoteSnap);
       if (storage.readLastHashes()[lessonLocalId] == contentHash) {
-        _remove(lessonLocalId);
+        await _remove(lessonLocalId);
         return;
       }
       final result = await cloudFunctions.persistStudentState(
@@ -174,20 +230,18 @@ class CloudQueue with WidgetsBindingObserver {
       if (result.rejected && result.remoteState != null) {
         stateService.write(
           _withSyncEvent(
-            mergeStudentLearningStateFromServerAuthority(
-              snap,
-              result.remoteState!,
-            ),
+            mergeValidatedRemoteState(snap, result.remoteState!),
             'REMOTE_VAULT_SYNC_REJECTED',
             entry,
             status: 'blocked_regression',
             message: 'remote_state_stronger',
             highWaterMark: result.remoteHighWaterMark,
           ),
-          acceptServerAuthority: true,
+          acceptServerAuthority: false,
+          allowLocalHousekeeping: true,
           scheduleShadow: false,
         );
-        enqueueStudentStateSync(lessonLocalId: lessonLocalId);
+        await enqueueStudentStateSync(lessonLocalId: lessonLocalId);
         return;
       }
       stateService.write(
@@ -200,17 +254,22 @@ class CloudQueue with WidgetsBindingObserver {
         ),
         scheduleShadow: false,
       );
-      storage.writeLastHash(lessonLocalId, contentHash);
-      _remove(lessonLocalId);
+      await _writeLastHash(lessonLocalId, contentHash);
+      await _remove(lessonLocalId);
     } catch (error) {
-      _markSyncFailed(lessonLocalId, entry, error.toString());
-      _scheduleRetry(entry);
+      _markSyncFailed(lessonLocalId, entry, _safeSyncFailureCode(error));
+      await _scheduleRetry(entry, _safeSyncFailureCode(error));
     } finally {
       _flushingIds.remove(lessonLocalId);
     }
   }
 
   Map<String, CloudQueueEntry> getQueueSnapshot() => storage.readQueue();
+
+  Map<String, JsonMap> internalDebugSnapshotForTest() => {
+    for (final entry in storage.readQueue().values)
+      entry.stableId: entry.toRedactedDebugJson(),
+  };
 
   void wireCloudQueueLifecycle() {
     WidgetsBinding.instance.addObserver(this);
@@ -226,27 +285,43 @@ class CloudQueue with WidgetsBindingObserver {
     }
   }
 
-  void _remove(String lessonLocalId) {
+  Future<void> _remove(String lessonLocalId) async {
     final bag = storage.readQueue()..remove(lessonLocalId);
-    storage.writeQueue(bag);
+    await _writeQueue(bag);
   }
 
-  void _scheduleRetry(CloudQueueEntry entry) {
+  Future<void> removeLesson(String lessonLocalId) => _remove(lessonLocalId);
+
+  Future<void> _scheduleRetry(
+    CloudQueueEntry entry, [
+    String failureCode = 'SYNC_RETRYABLE_FAILURE',
+  ]) async {
     final attempts = entry.attempts + 1;
+    final bag = storage.readQueue();
+    if (attempts > maxAttempts) {
+      bag[entry.lessonLocalId] = entry.copyWith(
+        attempts: attempts,
+        nextRetryAt: 0,
+        status: CloudQueueEntryStatus.blocked,
+        lastFailureCode: failureCode,
+      );
+      await _writeQueue(bag);
+      _markSyncBlocked(
+        entry.lessonLocalId,
+        entry.copyWith(attempts: attempts, lastFailureCode: failureCode),
+        reason: 'SYNC_MAX_ATTEMPTS_EXCEEDED',
+      );
+      return;
+    }
     final delay =
         retryDelaysMs[(attempts - 1).clamp(0, retryDelaysMs.length - 1)];
-    // F3.7: avisa quando atinge limite de tentativas
-    if (attempts >= maxAttempts) {
-      debugPrint(
-        'cloudQueue: max attempts ($maxAttempts) reached for ${entry.lessonLocalId}',
-      );
-    }
-    final bag = storage.readQueue();
     bag[entry.lessonLocalId] = entry.copyWith(
       attempts: attempts,
       nextRetryAt: _now + delay,
+      status: CloudQueueEntryStatus.queued,
+      lastFailureCode: failureCode,
     );
-    storage.writeQueue(bag);
+    await _writeQueue(bag);
     if (!enableRetryTimers) return;
     _retryTimers[entry.lessonLocalId]?.cancel();
     _retryTimers[entry.lessonLocalId] = Timer(
@@ -309,7 +384,7 @@ class CloudQueue with WidgetsBindingObserver {
       syncStatus: StudentSyncStatus(
         status: status,
         highWaterMark: highWaterMark ?? state.syncStatus?.highWaterMark ?? 0,
-        pendingJobs: status == 'synced' ? 0 : 1,
+        pendingJobs: status == 'synced' || status == 'blocked' ? 0 : 1,
         updatedAt: ts,
         lastSyncedAt: status == 'synced' ? ts : state.syncStatus?.lastSyncedAt,
         lastError: status == 'synced' ? null : message,
@@ -321,11 +396,12 @@ class CloudQueue with WidgetsBindingObserver {
           ts: ts,
           payload: {
             'lessonLocalId': entry.lessonLocalId,
+            'queueId': entry.stableId,
             'operation': entry.operation.name,
             'attempts': entry.attempts,
             'pendingSince': entry.pendingSince,
             'status': status,
-            ...message == null ? const {} : {'message': message},
+            ...message == null ? const {} : {'code': message},
             ...highWaterMark == null
                 ? const {}
                 : {'highWaterMark': highWaterMark},
@@ -337,6 +413,7 @@ class CloudQueue with WidgetsBindingObserver {
         'syncInfo': {
           ...syncInfo,
           'status': status,
+          'queueId': entry.stableId,
           'operation': entry.operation.name,
           'updatedAt': ts,
           ...message == null ? const {} : {'lastError': message},
@@ -347,6 +424,22 @@ class CloudQueue with WidgetsBindingObserver {
       },
     );
   }
+
+  Future<void> _writeQueue(Map<String, CloudQueueEntry> queue) async {
+    storage.writeQueue(queue);
+    final durable = storage;
+    if (durable is DurableCloudQueueStorage) {
+      await durable.verifyQueueWrite();
+    }
+  }
+
+  Future<void> _writeLastHash(String lessonLocalId, String hash) async {
+    storage.writeLastHash(lessonLocalId, hash);
+    final durable = storage;
+    if (durable is DurableCloudQueueStorage) {
+      await durable.verifyHashWrite();
+    }
+  }
 }
 
 String stableHash(StudentLearningState state) {
@@ -354,10 +447,54 @@ String stableHash(StudentLearningState state) {
     ..remove('updatedAt')
     ..remove('cacheInfo')
     ..remove('syncInfo');
-  final input = json.toString();
+  final input = canonicalJsonEncode(json);
   var hash = 5381;
   for (final unit in input.codeUnits) {
     hash = ((hash << 5) + hash) ^ unit;
   }
   return (hash & 0xffffffff).toRadixString(36);
+}
+
+String stableCloudQueueItemId({
+  required String lessonLocalId,
+  required StudentLearningSyncOperation operation,
+  required int pendingSince,
+}) {
+  return 'sync-${stableSmallHash(canonicalJsonEncode({'lessonLocalId': lessonLocalId, 'operation': operation.name, 'pendingSince': pendingSince}))}';
+}
+
+String stableSmallHash(String input) {
+  var hash = 5381;
+  for (final unit in input.codeUnits) {
+    hash = ((hash << 5) + hash) ^ unit;
+  }
+  return (hash & 0xffffffff).toRadixString(36);
+}
+
+String canonicalJsonEncode(Object? value) => jsonEncode(_canonicalJson(value));
+
+Object? _canonicalJson(Object? value) {
+  if (value is Map) {
+    final entries = value.entries.toList()
+      ..sort((a, b) => a.key.toString().compareTo(b.key.toString()));
+    return {
+      for (final entry in entries)
+        entry.key.toString(): _canonicalJson(entry.value),
+    };
+  }
+  if (value is Iterable) {
+    return value.map(_canonicalJson).toList(growable: false);
+  }
+  return value;
+}
+
+String _safeSyncFailureCode(Object error) {
+  if (error is CloudQueueStorageException) return error.code;
+  final text = error.toString().toLowerCase();
+  if (text.contains('session')) return 'SYNC_SESSION_UNAVAILABLE';
+  if (text.contains('timeout')) return 'SYNC_TIMEOUT';
+  if (text.contains('persist') || text.contains('storage')) {
+    return 'SYNC_LOCAL_PERSIST_FAILED';
+  }
+  return 'SYNC_REMOTE_UNAVAILABLE';
 }

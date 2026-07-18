@@ -34,7 +34,7 @@ class CheckoutReturnController {
     if (sessionId == null || !isValidStripeSessionId(sessionId)) {
       return CheckoutReturnState(
         status: CheckoutStatusKind.error,
-        error: 'Invalid sessionId',
+        error: 'Não foi possível confirmar esse pagamento agora.',
         returnTo: returnStore.readReturnTo(),
       );
     }

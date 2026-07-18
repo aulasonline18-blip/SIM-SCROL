@@ -66,6 +66,7 @@ class AudioCore {
     this.generatedAudioClient,
     this.stableLangProvider,
     this.onGeneratedAudioError,
+    this.availabilityProbe,
     this.maxAudioCache = 12,
   }) {
     preference.subscribe((enabled) {
@@ -78,10 +79,17 @@ class AudioCore {
   final GeneratedAudioClient? generatedAudioClient;
   final String Function()? stableLangProvider;
   final AudioErrorListener? onGeneratedAudioError;
+  final bool Function()? availabilityProbe;
   final int maxAudioCache;
   final Map<String, String> _generatedAudioCache = {};
 
-  bool available() => true;
+  bool available() {
+    if (!preference.getAudioEnabled()) return false;
+    if (generatedAudioClient != null) return true;
+    final probe = availabilityProbe;
+    if (probe != null) return probe();
+    return playback is! NoopAudioPlaybackAdapter;
+  }
 
   void prepareText(String text) {
     text.trim();

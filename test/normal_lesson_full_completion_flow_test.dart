@@ -278,6 +278,9 @@ Future<void> _prepareCurrentTargetMaterial(
   if (current.itemIdx < 0 || current.itemIdx >= curriculum.items.length) return;
   final item = curriculum.items[current.itemIdx];
   final profile = state.profile.toJson();
+  final mode = (state.progress?.amparoLvl ?? 0) > 0
+      ? LessonMode.amparo
+      : LessonMode.session;
   final curriculumItems = [
     for (var index = 0; index < curriculum.items.length; index += 1)
       {
@@ -304,7 +307,7 @@ Future<void> _prepareCurrentTargetMaterial(
         lang: state.profile.stableLang ?? 'pt-BR',
         academic: state.profile.nivel ?? 'fundamental',
         layer: current.layer,
-        mode: LessonMode.session,
+        mode: mode,
         marker: item.marker,
         amparoLvl: current.amparoLvl,
         curriculumItems: curriculumItems,
@@ -313,7 +316,7 @@ Future<void> _prepareCurrentTargetMaterial(
         pedagogicalEnvelope: profile,
       ),
       waitBeforeOrderMs: 0,
-      waitAfterOrderMs: 1,
+      waitAfterOrderMs: 50,
       allowRemoteOrder: true,
     ),
   );
@@ -544,13 +547,13 @@ void main() {
           letter: AnswerLetter.C,
           signal: DecisionSignal.three,
           itemIdx: 0,
-          layer: LessonLayer.l3,
+          layer: LessonLayer.l2,
         ),
         (
           letter: AnswerLetter.B,
           signal: DecisionSignal.one,
-          itemIdx: 1,
-          layer: LessonLayer.l1,
+          itemIdx: 0,
+          layer: LessonLayer.l2,
         ),
       ];
       for (var index = 0; index < wrongSteps.length; index++) {
@@ -585,6 +588,7 @@ void main() {
       expect(state.truth.masteryEvidence, isNotEmpty);
       expect(state.truth.conquestRecords, isEmpty);
 
+      await _prepareCurrentTargetMaterial(h, lessonLocalId);
       await h.runtime.advance();
       snap = h.runtime.snapshot();
       expect(snap.phase.type, ClassroomPhaseType.lendo);
@@ -596,13 +600,13 @@ void main() {
             .map((event) => event.payload['mode']),
         contains(LessonMode.amparo.name),
       );
-      expect(h.service.read(lessonLocalId)?.progress?.layer, LessonLayer.l1);
+      expect(h.service.read(lessonLocalId)?.progress?.layer, LessonLayer.l2);
 
       h.runtime.select(AnswerLetter.A);
       await h.runtime.signal(DecisionSignal.one);
       state = h.service.read(lessonLocalId)!;
       expect(server.requests, isEmpty);
-      expect(state.progress?.itemIdx, 1);
+      expect(state.progress?.itemIdx, 0);
       expect(state.progress?.layer, LessonLayer.l3);
       expect(state.progress?.concluidos, isEmpty);
       expect(state.attempts, hasLength(4));
@@ -636,7 +640,7 @@ void main() {
 
       final reopened = h.service.read(lessonLocalId)!;
       expect(snap.phase.type, ClassroomPhaseType.lendo);
-      expect(reopened.current?.marker, 'M2');
+      expect(reopened.current?.marker, 'M1');
       expect(reopened.progress?.layer, LessonLayer.l3);
       expect(reopened.progress?.amparoLvl, 1);
       expect(reopened.attempts, hasLength(4));
@@ -666,12 +670,12 @@ void main() {
         reason: 'a acao apos reabertura tambem nao chama advance gate remoto',
       );
       expect(postReopen.attempts, hasLength(5));
-      expect(postReopen.attempts.last.marker, 'M2');
+      expect(postReopen.attempts.last.marker, 'M1');
       expect(postReopen.attempts.last.layer, LessonLayer.l3);
-      expect(postReopen.progress?.itemIdx, 2);
+      expect(postReopen.progress?.itemIdx, 1);
       expect(postReopen.progress?.layer, LessonLayer.l1);
-      expect(postReopen.progress?.concluidos, isNot(contains('M2')));
-      expect(postReopen.current?.marker, 'M3');
+      expect(postReopen.progress?.concluidos, isNot(contains('M1')));
+      expect(postReopen.current?.marker, 'M2');
       expect(
         postReopen.events
             .lastWhere((event) => event.type == 'LOCAL_ADVANCE_DECIDED')
@@ -684,7 +688,7 @@ void main() {
       await h.runtime.advance();
       final continued = h.runtime.snapshot();
       expect(continued.phase.type, ClassroomPhaseType.lendo);
-      expect(continued.itemMarker, 'M3');
+      expect(continued.itemMarker, 'M2');
       expect(continued.conteudo?.question, isNotEmpty);
       expect(h.service.read(lessonLocalId)?.progress?.layer, LessonLayer.l1);
       expect(

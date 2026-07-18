@@ -5,22 +5,22 @@ class StudentLearningSync {
 
   final CloudQueue queue;
 
-  void enqueue({
+  Future<void> enqueue({
     required String lessonLocalId,
     required StudentLearningSyncOperation operation,
   }) {
-    queue.enqueueStudentStateSync(
+    return queue.enqueueStudentStateSync(
       lessonLocalId: lessonLocalId,
       operation: operation,
     );
   }
 
-  void enqueuePatch(String lessonLocalId) {
-    queue.enqueueStudentStateSync(lessonLocalId: lessonLocalId);
+  Future<void> enqueuePatch(String lessonLocalId) {
+    return queue.enqueueStudentStateSync(lessonLocalId: lessonLocalId);
   }
 
-  void enqueueTombstone(String lessonLocalId) {
-    queue.enqueueStudentStateSync(
+  Future<void> enqueueTombstone(String lessonLocalId) {
+    return queue.enqueueStudentStateSync(
       lessonLocalId: lessonLocalId,
       operation: StudentLearningSyncOperation.tombstone,
     );
@@ -30,5 +30,8 @@ class StudentLearningSync {
 
   void wireLifecycle() => queue.wireCloudQueueLifecycle();
 
-  Map<String, CloudQueueEntry> debugSnapshot() => queue.getQueueSnapshot();
+  Map<String, CloudQueueEntry> getQueueSnapshot() => queue.getQueueSnapshot();
+
+  Map<String, Map<String, Object?>> internalDebugSnapshotForTest() =>
+      queue.internalDebugSnapshotForTest();
 }

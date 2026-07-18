@@ -6,6 +6,13 @@ import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 
 import 'sim_pricing.dart';
 
+const _playBillingUnavailableMessage =
+    'Compras pelo Google Play não estão disponíveis neste aparelho.';
+const _playBillingPurchaseUnavailableMessage =
+    'Não foi possível iniciar a compra agora. Tente novamente.';
+const _playBillingConfirmationFailedMessage =
+    'Não foi possível confirmar a compra agora. Tente novamente.';
+
 enum PlayBillingPurchaseStatus { completed, pending, canceled, failed }
 
 class PlayBillingPurchaseOutcome {
@@ -112,31 +119,31 @@ class GooglePlayBillingFunctions implements PlayBillingFunctions {
   ) async {
     if (!Platform.isAndroid) {
       return const PlayBillingPurchaseOutcome.failed(
-        'google_play_billing_android_only',
+        _playBillingUnavailableMessage,
       );
     }
     if (_activePurchase != null) {
-      return const PlayBillingPurchaseOutcome.failed('purchase_already_active');
+      return const PlayBillingPurchaseOutcome.failed(
+        _playBillingPurchaseUnavailableMessage,
+      );
     }
     final available = await _store.isAvailable();
     if (!available) {
       return const PlayBillingPurchaseOutcome.failed(
-        'google_play_billing_unavailable',
+        _playBillingUnavailableMessage,
       );
     }
     final productId = packId.googlePlayProductId;
     final products = await _store.queryProductDetails({productId});
     if (products.error != null) {
-      return PlayBillingPurchaseOutcome.failed(
-        products.error!.message.isEmpty
-            ? products.error!.code
-            : products.error!.message,
+      return const PlayBillingPurchaseOutcome.failed(
+        _playBillingPurchaseUnavailableMessage,
       );
     }
     if (products.notFoundIDs.contains(productId) ||
         products.productDetails.isEmpty) {
-      return PlayBillingPurchaseOutcome.failed(
-        'google_play_product_not_found:$productId',
+      return const PlayBillingPurchaseOutcome.failed(
+        _playBillingPurchaseUnavailableMessage,
       );
     }
     final completer = Completer<PlayBillingPurchaseOutcome>();
@@ -149,7 +156,7 @@ class GooglePlayBillingFunctions implements PlayBillingFunctions {
     if (!sent) {
       _clearActivePurchase();
       return const PlayBillingPurchaseOutcome.failed(
-        'google_play_purchase_not_started',
+        _playBillingPurchaseUnavailableMessage,
       );
     }
     return completer.future.timeout(
@@ -157,7 +164,7 @@ class GooglePlayBillingFunctions implements PlayBillingFunctions {
       onTimeout: () {
         _clearActivePurchase();
         return const PlayBillingPurchaseOutcome.failed(
-          'google_play_purchase_timeout',
+          _playBillingPurchaseUnavailableMessage,
         );
       },
     );
@@ -187,8 +194,8 @@ class GooglePlayBillingFunctions implements PlayBillingFunctions {
     }
     if (purchase.status == PurchaseStatus.error) {
       completer.complete(
-        PlayBillingPurchaseOutcome.failed(
-          purchase.error?.message ?? purchase.error?.code ?? 'purchase_error',
+        const PlayBillingPurchaseOutcome.failed(
+          _playBillingPurchaseUnavailableMessage,
         ),
       );
       _clearActivePurchase();
@@ -202,8 +209,8 @@ class GooglePlayBillingFunctions implements PlayBillingFunctions {
         _activePackId ?? creditPackIdFromGooglePlayProduct(purchase.productID);
     if (packId == null) {
       completer.complete(
-        PlayBillingPurchaseOutcome.failed(
-          'unknown_google_play_product:${purchase.productID}',
+        const PlayBillingPurchaseOutcome.failed(
+          _playBillingPurchaseUnavailableMessage,
         ),
       );
       _clearActivePurchase();
@@ -235,8 +242,12 @@ class GooglePlayBillingFunctions implements PlayBillingFunctions {
           balance: grant.balance,
         ),
       );
-    } catch (error) {
-      completer.complete(PlayBillingPurchaseOutcome.failed(error.toString()));
+    } catch (_) {
+      completer.complete(
+        const PlayBillingPurchaseOutcome.failed(
+          _playBillingConfirmationFailedMessage,
+        ),
+      );
     } finally {
       _clearActivePurchase();
     }
@@ -260,7 +271,7 @@ class DisabledPlayBillingFunctions implements PlayBillingFunctions {
   @override
   Future<PlayBillingPurchaseOutcome> purchaseCreditPack(CreditPackId packId) {
     return Future.value(
-      const PlayBillingPurchaseOutcome.failed('play_billing_not_configured'),
+      const PlayBillingPurchaseOutcome.failed(_playBillingUnavailableMessage),
     );
   }
 

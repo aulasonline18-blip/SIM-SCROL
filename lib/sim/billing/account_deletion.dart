@@ -45,10 +45,8 @@ class AccountDeletionController {
         ),
       );
       done = true;
-    } catch (err) {
-      error = err is Error
-          ? err.toString()
-          : t('account_delete_register_failed');
+    } catch (_) {
+      error = t('account_delete_register_failed');
     } finally {
       loading = false;
     }

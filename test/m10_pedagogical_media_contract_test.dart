@@ -113,7 +113,12 @@ void main() {
           createdAt: '2026-07-08T00:00:00.000Z',
         );
     final restored = LessonImageGenerationMetadata.fromJson(metadata.toJson());
+    final json = metadata.toJson();
 
+    expect(json['cacheKey'], isNull);
+    expect(json['cacheKeyHash'], isA<String>());
+    expect(json['provider'], isNull);
+    expect(json['model'], isNull);
     expect(restored?.lessonLocalId, 'lesson-m10');
     expect(restored?.marker, 'M1');
     expect(restored?.itemIdx, 0);

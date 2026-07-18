@@ -102,13 +102,14 @@ class StudentLessonMediaService {
   }
 
   void markLessonAudioFailed(LessonMediaPosition position, {String? error}) {
+    final safeError = _safeMediaError(error);
     _appendMediaEvent(
       position,
       'AUDIO_FAILED',
-      {'phase': 'failed', 'source': 'tts-generated', 'errorMessage': error},
+      {'phase': 'failed', 'source': 'tts-generated', 'errorCode': safeError},
       audioStatus: 'failed',
       audioPlaying: false,
-      error: error,
+      error: safeError,
     );
   }
 
@@ -172,11 +173,8 @@ class StudentLessonMediaService {
   }) {
     _appendMediaEvent(position, 'IMAGE_READY', {
       'phase': 'ready',
-      'cacheKey': cacheKey,
-      'imageUrlHead': imageUrl?.substring(
-        0,
-        imageUrl.length < 40 ? imageUrl.length : 40,
-      ),
+      if (cacheKey != null) 'cacheKeyHash': hashString(cacheKey),
+      'hasImageUrl': imageUrl != null && imageUrl.isNotEmpty,
     });
   }
 
@@ -186,14 +184,14 @@ class StudentLessonMediaService {
   }) {
     _appendMediaEvent(position, 'IMAGE_STARTED', {
       'phase': 'started',
-      'cacheKey': cacheKey,
+      if (cacheKey != null) 'cacheKeyHash': hashString(cacheKey),
     });
   }
 
   void markLessonImageFailed(LessonMediaPosition position, {String? error}) {
     _appendMediaEvent(position, 'IMAGE_FAILED', {
       'phase': 'failed',
-      'errorMessage': error,
+      'errorCode': _safeMediaError(error),
     });
   }
 
@@ -238,4 +236,11 @@ class StudentLessonMediaService {
       ),
     );
   }
+}
+
+String? _safeMediaError(String? error) {
+  final raw = error?.trim();
+  if (raw == null || raw.isEmpty) return null;
+  if (RegExp(r'^[A-Z0-9_:-]{3,80}$').hasMatch(raw)) return raw;
+  return 'SIM_MEDIA_ERROR_${hashString(raw)}';
 }

@@ -379,13 +379,16 @@ class StudentLessonMaterialService {
               ),
             );
           })
-          .catchError((Object error) {
+          .catchError((Object _) {
             stateService.appendEvent(
               lessonLocalId,
               StudentLearningEvent(
                 type: 'BACKGROUND_READY_WINDOW_FAILED',
                 ts: DateTime.now().millisecondsSinceEpoch,
-                payload: {'source': source, 'error': error.toString()},
+                payload: {
+                  'source': source,
+                  'error_code': 'LESSON_READY_WINDOW_FAILED',
+                },
               ),
             );
           }),

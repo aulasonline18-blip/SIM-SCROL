@@ -168,7 +168,10 @@ void main() {
       final organism = await _makeOrganism();
 
       organism.sync.enqueuePatch(organism.lessonLocalId);
-      expect(organism.sync.debugSnapshot(), contains(organism.lessonLocalId));
+      expect(
+        organism.sync.getQueueSnapshot(),
+        contains(organism.lessonLocalId),
+      );
 
       final whatsapp = findSimRoute('https://wa.me/message/RLCYEXAYFUIIA1');
       expect(whatsapp?.kind, SimRouteKind.external);

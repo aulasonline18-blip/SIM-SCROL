@@ -432,7 +432,7 @@ void main() {
     });
 
     test(
-      'A4.12 L3 avanca para o proximo item e deixa reparo para auxiliares',
+      'A4.12 L2/L3 sem evidencia suficiente bloqueiam avanço e deixam reparo para auxiliares',
       () {
         final wrong = processAnswerWithEngine(
           _state(layer: LessonLayer.l3),
@@ -460,14 +460,20 @@ void main() {
         );
 
         expect(wrong.attempts.single.correct, false);
-        expect(wrong.current?.marker, 'M2');
-        expect(wrong.current?.layer, LessonLayer.l1);
-        expect(wrongDecision.payload['decision'], 'advanceItem');
-        expect(wrongDecision.payload['reason'], 'L3 encerrada -> proximo item');
+        expect(wrong.current?.marker, 'M1');
+        expect(wrong.current?.layer, LessonLayer.l3);
+        expect(wrongDecision.payload['decision'], 'needsReinforcement');
+        expect(
+          wrongDecision.payload['reason'],
+          'L3 sem evidencia suficiente para concluir item',
+        );
+        expect(wrongDecision.payload['blocked'], isTrue);
+        expect(wrongDecision.payload['recovery'], isTrue);
         expect(fragileCorrect.attempts.single.sinal, DecisionSignal.three);
-        expect(fragileCorrect.current?.marker, 'M2');
-        expect(fragileCorrect.current?.layer, LessonLayer.l1);
-        expect(fragileDecision.payload['decision'], 'advanceItem');
+        expect(fragileCorrect.current?.marker, 'M1');
+        expect(fragileCorrect.current?.layer, LessonLayer.l3);
+        expect(fragileDecision.payload['decision'], 'needsReinforcement');
+        expect(fragileDecision.payload['blocked'], isTrue);
       },
     );
   });

@@ -42,6 +42,12 @@ DecisionResult _noDecision(String reason) => DecisionResult(
   confidence: DecisionConfidence.low,
 );
 
+bool _hasSufficientAdvanceEvidence(LessonAttempt attempt) {
+  return attempt.correct &&
+      (attempt.sinal == DecisionSignal.one ||
+          attempt.sinal == DecisionSignal.two);
+}
+
 DecisionResult decideNextActionFromState(StudentLearningState? state) {
   try {
     if (state == null) return _noDecision('estado ausente');
@@ -93,6 +99,16 @@ DecisionResult decideNextActionFromState(StudentLearningState? state) {
         );
     if (lastForItem != null) {
       if (layer == LessonLayer.l3) {
+        if (!_hasSufficientAdvanceEvidence(lastForItem)) {
+          return DecisionResult(
+            actionType: DecisionActionType.needsReinforcement,
+            reason: 'L3 sem evidencia suficiente para concluir item',
+            confidence: DecisionConfidence.high,
+            proposedItemIdx: itemIdx,
+            proposedLayer: LessonLayer.l3,
+            proposedMarker: currentMarker,
+          );
+        }
         final nextIdx = itemIdx + 1;
         if (nextIdx >= total) {
           return const DecisionResult(
@@ -111,6 +127,16 @@ DecisionResult decideNextActionFromState(StudentLearningState? state) {
         );
       }
       if (layer == LessonLayer.l2) {
+        if (!_hasSufficientAdvanceEvidence(lastForItem)) {
+          return DecisionResult(
+            actionType: DecisionActionType.needsReinforcement,
+            reason: 'L2 sem evidencia suficiente para propor L3',
+            confidence: DecisionConfidence.high,
+            proposedItemIdx: itemIdx,
+            proposedLayer: LessonLayer.l2,
+            proposedMarker: currentMarker,
+          );
+        }
         return DecisionResult(
           actionType: DecisionActionType.advanceLayer,
           reason: 'L2 encerrada -> propor L3',

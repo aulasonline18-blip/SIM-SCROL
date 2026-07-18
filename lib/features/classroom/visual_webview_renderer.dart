@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../sim/media/visual_svg_safety.dart';
@@ -27,6 +28,8 @@ class _VisualWebViewRendererState extends State<VisualWebViewRenderer> {
   bool _failed = false;
   bool _settled = false;
 
+  bool get _useDebugPlaceholder => kDebugMode && debugUseVisualWebViewPlaceholder;
+
   @override
   void initState() {
     super.initState();
@@ -53,7 +56,7 @@ class _VisualWebViewRendererState extends State<VisualWebViewRenderer> {
       return;
     }
     _safeSvg = svg;
-    if (debugUseVisualWebViewPlaceholder) {
+    if (_useDebugPlaceholder) {
       _notifySettled();
       return;
     }
@@ -99,7 +102,7 @@ class _VisualWebViewRendererState extends State<VisualWebViewRenderer> {
         ),
       );
     }
-    if (debugUseVisualWebViewPlaceholder) {
+    if (_useDebugPlaceholder) {
       return ColoredBox(
         color: Colors.transparent,
         child: Center(

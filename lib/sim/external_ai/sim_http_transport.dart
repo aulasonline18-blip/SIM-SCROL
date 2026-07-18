@@ -69,9 +69,7 @@ class DartIoSimHttpTransport implements SimHttpTransport {
     required Object? body,
     Duration timeout = const Duration(seconds: 45),
   }) async {
-    _debug(
-      '[SIM_HTTP] postJson → $uri | tokenPresent=${headers.containsKey('authorization')}',
-    );
+    _debug('[SIM_HTTP] postJson start');
     HttpClientRequest? request;
     try {
       request = await client.postUrl(uri).timeout(timeout);
@@ -100,9 +98,8 @@ class DartIoSimHttpTransport implements SimHttpTransport {
         body: text,
         headers: outHeaders,
       );
-    } catch (e, st) {
-      _debug('[SIM_HTTP] postJson ERRO em $uri: $e');
-      _debug('[SIM_HTTP] postJson stacktrace: $st');
+    } catch (_) {
+      _debug('[SIM_HTTP] postJson erro');
       rethrow;
     }
   }
@@ -114,9 +111,7 @@ class DartIoSimHttpTransport implements SimHttpTransport {
     required Object? body,
     Duration timeout = const Duration(seconds: 140),
   }) async* {
-    _debug(
-      '[SIM_HTTP] postEventStream → $uri | tokenPresent=${headers.containsKey('authorization')}',
-    );
+    _debug('[SIM_HTTP] postEventStream start');
     final HttpClientResponse response;
     try {
       final request = await client.postUrl(uri).timeout(timeout);
@@ -130,9 +125,8 @@ class DartIoSimHttpTransport implements SimHttpTransport {
       _debug('[SIM_HTTP] postEventStream body escrito, fechando');
       response = await request.close().timeout(timeout);
       _debug('[SIM_HTTP] postEventStream status ${response.statusCode}');
-    } catch (e, st) {
-      _debug('[SIM_HTTP] postEventStream ERRO em $uri: $e');
-      _debug('[SIM_HTTP] postEventStream stacktrace: $st');
+    } catch (_) {
+      _debug('[SIM_HTTP] postEventStream erro');
       rethrow;
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -140,7 +134,7 @@ class DartIoSimHttpTransport implements SimHttpTransport {
       _debug(
         '[SIM_HTTP] postEventStream erro ${response.statusCode}: bodyBytes=${utf8.encode(text).length}',
       );
-      throw HttpException('HTTP ${response.statusCode}: $text', uri: uri);
+      throw HttpException('HTTP ${response.statusCode}');
     }
     yield* response
         .transform(utf8.decoder)

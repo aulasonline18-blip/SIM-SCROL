@@ -4,10 +4,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'student_state_store.dart';
 
-class SharedPrefsStudentStateLocalStorage implements StudentStateLocalStorage {
+class SharedPrefsStudentStateLocalStorage
+    implements DurableStudentStateLocalStorage {
   SharedPrefsStudentStateLocalStorage(this._prefs, {this.activeLessonLocalId});
 
   final SharedPreferences _prefs;
+  String? _lastStateLessonId;
+  String? _lastStatePayload;
+  String? _lastEventsLessonId;
+  String? _lastEventsPayload;
+  String? _lastDeletedLessonId;
 
   // Set by the caller to protect the active lesson from LRU eviction (I.7)
   String? activeLessonLocalId;
@@ -34,6 +40,8 @@ class SharedPrefsStudentStateLocalStorage implements StudentStateLocalStorage {
 
   @override
   void writeState(String lessonLocalId, String encoded) {
+    _lastStateLessonId = lessonLocalId;
+    _lastStatePayload = encoded;
     _prefs.setString(_stateKey(lessonLocalId), encoded);
     _updateIndexAndReclaim(lessonLocalId);
   }
@@ -45,7 +53,69 @@ class SharedPrefsStudentStateLocalStorage implements StudentStateLocalStorage {
 
   @override
   void writeEvents(String lessonLocalId, String encoded) {
+    _lastEventsLessonId = lessonLocalId;
+    _lastEventsPayload = encoded;
     _prefs.setString('$_eventsKeyPrefix$lessonLocalId', encoded);
+  }
+
+  @override
+  void deleteEvents(String lessonLocalId) {
+    _lastDeletedLessonId = lessonLocalId;
+    _prefs.remove('$_eventsKeyPrefix$lessonLocalId');
+  }
+
+  @override
+  void deleteState(String lessonLocalId) {
+    _lastDeletedLessonId = lessonLocalId;
+    _prefs.remove(_stateKey(lessonLocalId));
+    _prefs.remove('$_legacyStatePrefix$lessonLocalId');
+    final ids = readIndex().where((id) => id != lessonLocalId).toList();
+    _prefs.setStringList(indexKey, ids);
+  }
+
+  @override
+  Future<void> verifyLastStateWrite() async {
+    final id = _lastStateLessonId;
+    final payload = _lastStatePayload;
+    if (id == null || payload == null) return;
+    final stateOk = await _prefs.setString(_stateKey(id), payload);
+    final index = readIndex().toSet()..add(id);
+    final indexOk = await _prefs.setStringList(indexKey, index.toList());
+    if (!stateOk ||
+        !indexOk ||
+        _prefs.getString(_stateKey(id)) != payload ||
+        !readIndex().contains(id)) {
+      throw const StudentStateStorageException('STATE_LOCAL_PERSIST_FAILED');
+    }
+  }
+
+  @override
+  Future<void> verifyLastEventsWrite() async {
+    final id = _lastEventsLessonId;
+    final payload = _lastEventsPayload;
+    if (id == null || payload == null) return;
+    final ok = await _prefs.setString('$_eventsKeyPrefix$id', payload);
+    if (!ok || _prefs.getString('$_eventsKeyPrefix$id') != payload) {
+      throw const StudentStateStorageException('STATE_EVENTS_PERSIST_FAILED');
+    }
+  }
+
+  @override
+  Future<void> verifyLastDelete() async {
+    final id = _lastDeletedLessonId;
+    if (id == null) return;
+    final stateOk = await _prefs.remove(_stateKey(id));
+    final legacyOk = await _prefs.remove('$_legacyStatePrefix$id');
+    final eventsOk = await _prefs.remove('$_eventsKeyPrefix$id');
+    final ids = readIndex().where((value) => value != id).toList();
+    final indexOk = await _prefs.setStringList(indexKey, ids);
+    if (!stateOk ||
+        !legacyOk ||
+        !eventsOk ||
+        !indexOk ||
+        readIndex().contains(id)) {
+      throw const StudentStateStorageException('STATE_LOCAL_DELETE_FAILED');
+    }
   }
 
   @override
@@ -79,6 +149,8 @@ class SharedPrefsStudentStateLocalStorage implements StudentStateLocalStorage {
     final toRemove = removable.take(excess).toSet();
     for (final id in toRemove) {
       _prefs.remove(_stateKey(id));
+      _prefs.remove('$_eventsKeyPrefix$id');
+      _prefs.remove('$_legacyStatePrefix$id');
       ids.remove(id);
     }
     _prefs.setStringList(indexKey, ids.toList());

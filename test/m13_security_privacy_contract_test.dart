@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/billing/account_deletion.dart';
+import 'package:sim_mobile/sim/billing/payments_functions.dart';
 import 'package:sim_mobile/sim/billing/play_billing_functions.dart';
 import 'package:sim_mobile/sim/billing/sim_server_billing_clients.dart';
 import 'package:sim_mobile/sim/cloud/cloud_functions.dart';
@@ -170,6 +171,104 @@ void main() {
       expect(thrown.toString(), isNot(contains('purchase-token-secret')));
     },
   );
+
+  test(
+    'M13 billing clients map HTTP 200 error bodies to human messages',
+    () async {
+      final payments = SimServerPaymentsClient(
+        config: _config(),
+        transport: _FakeTransport(
+          statusCode: 200,
+          body: '{"error":"PAYMENTS_NOT_CONFIGURED","stack":"secret stack"}',
+        ),
+      );
+
+      final hosted = await payments.createCreditsCheckoutHosted(
+        const CreateCreditsCheckoutHostedInput(
+          packId: 'credits_100',
+          successUrl: 'https://sim.test/ok',
+          cancelUrl: 'https://sim.test/cancel',
+          environment: StripeEnvironment.sandbox,
+        ),
+      );
+      final status = await payments.getCheckoutStatus(
+        sessionId: 'invalid session id',
+        environment: StripeEnvironment.sandbox,
+      );
+
+      expect(hosted.error, contains('Pagamentos indisponíveis'));
+      expect(hosted.error, isNot(contains('PAYMENTS_NOT_CONFIGURED')));
+      expect(hosted.error, isNot(contains('secret stack')));
+      expect(status.error, 'Não foi possível confirmar esse pagamento agora.');
+    },
+  );
+
+  test('M13 play billing HTTP 200 error body is not shown raw', () async {
+    final client = SimServerPlayBillingGrantClient(
+      config: _config(),
+      transport: _FakeTransport(
+        statusCode: 200,
+        body:
+            '{"error":"google_play_purchase_verification_failed","raw":"provider"}',
+      ),
+    );
+
+    Object? thrown;
+    try {
+      await client.grantCreditPack(
+        const PlayBillingGrantRequest(
+          packId: 'credits_100',
+          productId: 'sim_credits_100',
+          purchaseToken: 'purchase-token-secret',
+          verificationSource: 'google_play',
+          localVerificationData: '{}',
+        ),
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown, isA<SimExternalAiException>());
+    final text = thrown.toString();
+    expect(text, contains('Não foi possível confirmar a compra agora'));
+    expect(text, isNot(contains('google_play_purchase_verification_failed')));
+    expect(text, isNot(contains('provider')));
+    expect(text, isNot(contains('purchase-token-secret')));
+  });
+
+  test('M13 native Play Billing errors are public human messages', () {
+    final source = File(
+      'lib/sim/billing/play_billing_functions.dart',
+    ).readAsStringSync();
+
+    expect(source, isNot(contains('products.error!.message')));
+    expect(source, isNot(contains('purchase.error?.message')));
+    expect(source, isNot(contains('google_play_product_not_found:')));
+    expect(source, isNot(contains('unknown_google_play_product:')));
+    expect(
+      source,
+      contains('Não foi possível iniciar a compra agora. Tente novamente.'),
+    );
+  });
+
+  test('M13 server config and transport debug logs are redacted', () {
+    final configSource = File(
+      'lib/sim/external_ai/sim_ai_server_config.dart',
+    ).readAsStringSync();
+    final transportSource = File(
+      'lib/sim/external_ai/sim_http_transport.dart',
+    ).readAsStringSync();
+
+    expect(configSource, isNot(contains(r'baseUrl=$baseUrl')));
+    expect(configSource, isNot(contains('tokenPresent=')));
+    expect(transportSource, isNot(contains('tokenPresent=')));
+    expect(transportSource, isNot(contains('stacktrace')));
+    expect(transportSource, isNot(contains(r'ERRO em $uri')));
+    expect(
+      transportSource,
+      isNot(contains(r'HTTP ${response.statusCode}: $text')),
+    );
+  });
 
   test(
     'M13 student-state 409 regression returns remoteState contract',

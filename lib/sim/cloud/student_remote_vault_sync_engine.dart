@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import '../state/student_learning_state.dart';
 import '../state/student_state_store.dart';
-import 'cloud_queue.dart';
 import 'student_learning_sync.dart';
 
 class StudentRemoteVaultSyncEngine {
@@ -15,7 +16,7 @@ class StudentRemoteVaultSyncEngine {
   }) {
     if (lessonLocalId.trim().isEmpty) return;
     _markQueued(lessonLocalId, reason);
-    sync.enqueuePatch(lessonLocalId);
+    unawaited(sync.enqueuePatch(lessonLocalId));
   }
 
   void enqueueTombstone({
@@ -24,7 +25,7 @@ class StudentRemoteVaultSyncEngine {
   }) {
     if (lessonLocalId.trim().isEmpty) return;
     _markQueued(lessonLocalId, reason);
-    sync.enqueueTombstone(lessonLocalId);
+    unawaited(sync.enqueueTombstone(lessonLocalId));
   }
 
   Future<void> drain() => sync.drain();
@@ -38,11 +39,12 @@ class StudentRemoteVaultSyncEngine {
         status: 'hydrated',
         reason: 'remote_vault_bootstrap',
       ),
-      acceptServerAuthority: true,
+      acceptServerAuthority: false,
     );
   }
 
-  Map<String, CloudQueueEntry> debugQueue() => sync.debugSnapshot();
+  Map<String, Map<String, Object?>> internalDebugQueueSnapshotForTest() =>
+      sync.internalDebugSnapshotForTest();
 
   void _markQueued(String lessonLocalId, String reason) {
     final state = store.readState(lessonLocalId);

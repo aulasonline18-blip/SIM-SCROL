@@ -24,6 +24,27 @@ class _CacheEntry {
   final int lastAccessedAt;
 }
 
+class LessonMaterialCacheAudit {
+  const LessonMaterialCacheAudit({
+    required this.ok,
+    required this.code,
+    this.details = const {},
+  });
+
+  final bool ok;
+  final String code;
+  final JsonMap details;
+}
+
+class LessonMaterialCacheException implements Exception {
+  const LessonMaterialCacheException(this.code);
+
+  final String code;
+
+  @override
+  String toString() => code;
+}
+
 class LessonColdCacheEntry {
   const LessonColdCacheEntry({
     required this.lessonKey,
@@ -38,7 +59,7 @@ class LessonColdCacheEntry {
     this.localItemIndex,
     this.status = 'cold-index',
     required this.savedAt,
-    this.hadMaterial = true,
+    this.hadMaterial = false,
   });
 
   final String lessonKey;
@@ -97,7 +118,7 @@ class LessonColdCacheEntry {
       localItemIndex: _intOrNull(json['localItemIndex']),
       status: _stringOrNull(json['status']) ?? 'cold-index',
       savedAt: _intOrNull(json['savedAt']) ?? 0,
-      hadMaterial: json['hadMaterial'] != false,
+      hadMaterial: json['hadMaterial'] == true,
     );
   }
 
@@ -146,6 +167,7 @@ class LessonColdCacheEntry {
       ]),
       status: status,
       savedAt: savedAt,
+      hadMaterial: true,
     );
   }
 }
@@ -160,6 +182,12 @@ class LessonMaterialCache {
   final Map<String, _CacheEntry> _memory = {};
   final Map<String, LessonColdCacheEntry> _cold = {};
   final Set<String> _protectedKeys = {};
+  LessonMaterialCacheAudit _lastAudit = const LessonMaterialCacheAudit(
+    ok: true,
+    code: 'CACHE_IDLE',
+  );
+
+  LessonMaterialCacheAudit get lastAudit => _lastAudit;
 
   int get warmEntryCount => _memory.length;
 
@@ -175,34 +203,40 @@ class LessonMaterialCache {
 
   // Deve ser chamado no boot antes de usar o cache.
   // Lê sim-lesson-text-cache-v1, descarta entradas expiradas, popula _memory.
-  Future<void> hydrate() async {
+  Future<LessonMaterialCacheAudit> hydrate() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      hydrateFromPreferences(prefs);
-    } catch (_) {}
+      return hydrateFromPreferences(prefs);
+    } catch (_) {
+      return _audit(false, 'CACHE_HYDRATE_FAILED');
+    }
   }
 
-  void hydrateFromPreferences(SharedPreferences prefs) {
+  LessonMaterialCacheAudit hydrateFromPreferences(SharedPreferences prefs) {
     final raw = prefs.getString(_kCacheKey);
-    if (raw == null || raw.trim().isEmpty) return;
+    if (raw == null || raw.trim().isEmpty) {
+      return _audit(true, 'CACHE_EMPTY');
+    }
     dynamic decoded;
     try {
       decoded = jsonDecode(raw);
     } catch (_) {
-      return;
+      return _audit(false, 'CACHE_CORRUPTED_JSON');
     }
-    if (decoded is! Map) return;
+    if (decoded is! Map) return _audit(false, 'CACHE_CORRUPTED_SHAPE');
     final root = JsonMap.from(decoded);
     final warmRaw = root['warm'] is Map ? root['warm'] as Map : root;
     final coldRaw = root['cold'] is Map ? root['cold'] as Map : const {};
+    final now = DateTime.now().millisecondsSinceEpoch;
     for (final entry in coldRaw.entries) {
       final key = entry.key.toString();
       final cold = LessonColdCacheEntry.fromJson(entry.value);
-      if (cold != null && cold.hasValidatedLargeCurriculumPart) {
+      if (cold != null &&
+          cold.hasValidatedLargeCurriculumPart &&
+          now - cold.savedAt <= ttlMs) {
         _cold[key] = cold;
       }
     }
-    final now = DateTime.now().millisecondsSinceEpoch;
     for (final entry in warmRaw.entries) {
       final key = entry.key as String;
       if (key == 'version' || key == 'warm' || key == 'cold') continue;
@@ -213,12 +247,13 @@ class LessonMaterialCache {
           (value['lastAccessedAt'] as num?)?.toInt() ?? savedAt;
       final lessonRaw = value['lesson'];
       if (now - lastAccessedAt > ttlMs) {
-        _rememberColdFromJson(key, value, savedAt);
+        _rememberColdFromJson(key, value, savedAt, status: 'cold-index');
         continue;
       }
       if (lessonRaw is! Map) continue;
       final lesson = _lessonFromJson(Map<String, dynamic>.from(lessonRaw));
       if (lesson == null) continue;
+      if (!_hasUsableLessonMaterial(lesson)) continue;
       _memory[key] = _CacheEntry(
         lesson: lesson,
         savedAt: savedAt,
@@ -227,14 +262,20 @@ class LessonMaterialCache {
       _rememberColdFromJson(key, value, savedAt);
     }
     _enforceWarmLimit(persist: false);
+    return _audit(true, 'CACHE_HYDRATED');
   }
 
   // Peek sem promover LRU — não altera ordem de evicção.
   CompleteLesson? peek(String key) {
     final entry = _memory[key];
-    if (entry == null) return null;
+    if (entry == null) {
+      _removeWarmOnlyColdIndex(key);
+      return null;
+    }
     if (_isExpired(entry)) {
+      _demoteWarmEntry(key, entry);
       _memory.remove(key);
+      _persist();
       return null;
     }
     return entry.lesson;
@@ -245,8 +286,15 @@ class LessonMaterialCache {
   // get promove LRU (remove e reinserida no final).
   CompleteLesson? get(String key) {
     final entry = _memory.remove(key);
-    if (entry == null) return null;
-    if (_isExpired(entry)) return null;
+    if (entry == null) {
+      _removeWarmOnlyColdIndex(key);
+      return null;
+    }
+    if (_isExpired(entry)) {
+      _demoteWarmEntry(key, entry);
+      _persist();
+      return null;
+    }
     _memory[key] = _CacheEntry(
       lesson: entry.lesson,
       savedAt: entry.savedAt,
@@ -273,6 +321,7 @@ class LessonMaterialCache {
   }
 
   bool putForParams(CompleteLessonParams params, CompleteLesson lesson) {
+    if (!_hasUsableLessonMaterial(lesson)) return false;
     final key = lessonKeyFor(params);
     final savedAt = DateTime.now().millisecondsSinceEpoch;
     final cold = LessonColdCacheEntry.fromParams(
@@ -288,7 +337,15 @@ class LessonMaterialCache {
   }
 
   void _put(String key, CompleteLesson lesson, {int? savedAt}) {
-    _memory.removeWhere((_, entry) => _isExpired(entry));
+    if (!_hasUsableLessonMaterial(lesson)) return;
+    for (final entry in List<MapEntry<String, _CacheEntry>>.from(
+      _memory.entries,
+    )) {
+      if (_isExpired(entry.value)) {
+        _demoteWarmEntry(entry.key, entry.value);
+        _memory.remove(entry.key);
+      }
+    }
     _memory.remove(key);
     final timestamp = savedAt ?? DateTime.now().millisecondsSinceEpoch;
     _memory[key] = _CacheEntry(
@@ -297,6 +354,20 @@ class LessonMaterialCache {
       lastAccessedAt: timestamp,
     );
     _enforceWarmLimit();
+  }
+
+  void removeForLesson(String lessonLocalId) {
+    _memory.removeWhere(
+      (key, _) =>
+          key.split(':').contains(lessonLocalId) ||
+          _cold[key]?.lessonLocalId == lessonLocalId,
+    );
+    _cold.removeWhere(
+      (key, entry) =>
+          key.split(':').contains(lessonLocalId) ||
+          entry.lessonLocalId == lessonLocalId,
+    );
+    _persist();
   }
 
   void protectWarmKeys(Iterable<String> keys) {
@@ -359,34 +430,76 @@ class LessonMaterialCache {
   // O cache persiste texto validado e metadados; mídia pesada pode ser removida pela autolimpeza.
   void _persist() {
     unawaited(
-      Future(() async {
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          final warm = <String, dynamic>{};
-          for (final entry in _memory.entries) {
-            warm[entry.key] = {
-              'savedAt': entry.value.savedAt,
-              'lastAccessedAt': entry.value.lastAccessedAt,
-              'lesson': _lessonToJsonForCache(entry.value.lesson),
-              if (_cold[entry.key] != null) 'cold': _cold[entry.key]!.toJson(),
-            };
-          }
-          final payload = <String, dynamic>{
-            'version': 2,
-            'warm': warm,
-            'cold': {
-              for (final entry in _cold.entries)
-                entry.key: entry.value.toJson(),
-            },
-          };
-          await prefs.setString(_kCacheKey, jsonEncode(payload));
-        } catch (_) {}
-      }),
+      persistNow().catchError((_) => _audit(false, 'CACHE_PERSIST_FAILED')),
+    );
+  }
+
+  Future<LessonMaterialCacheAudit> persistNow() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = _cachePayload();
+      final encoded = jsonEncode(payload);
+      final ok = await prefs.setString(_kCacheKey, encoded);
+      if (!ok || prefs.getString(_kCacheKey) != encoded) {
+        return _audit(false, 'CACHE_PERSIST_FAILED');
+      }
+      return _audit(true, 'CACHE_PERSISTED');
+    } catch (_) {
+      return _audit(false, 'CACHE_PERSIST_FAILED');
+    }
+  }
+
+  JsonMap _cachePayload() {
+    final warm = <String, dynamic>{};
+    for (final entry in _memory.entries) {
+      warm[entry.key] = {
+        'savedAt': entry.value.savedAt,
+        'lastAccessedAt': entry.value.lastAccessedAt,
+        'lesson': _lessonToJsonForCache(entry.value.lesson),
+        if (_cold[entry.key] != null) 'cold': _cold[entry.key]!.toJson(),
+      };
+    }
+    return {
+      'version': 2,
+      'warm': warm,
+      'cold': {
+        for (final entry in _cold.entries) entry.key: entry.value.toJson(),
+      },
+    };
+  }
+
+  LessonMaterialCacheAudit _audit(
+    bool ok,
+    String code, {
+    JsonMap details = const {},
+  }) {
+    return _lastAudit = LessonMaterialCacheAudit(
+      ok: ok,
+      code: code,
+      details: details,
     );
   }
 
   bool _isExpired(_CacheEntry entry) {
     return DateTime.now().millisecondsSinceEpoch - entry.lastAccessedAt > ttlMs;
+  }
+
+  void _removeWarmOnlyColdIndex(String key) {
+    final cold = _cold[key];
+    if (cold == null) return;
+    if (cold.status == 'warm-index') {
+      _cold.remove(key);
+      _persist();
+    }
+  }
+
+  static bool _hasUsableLessonMaterial(CompleteLesson lesson) {
+    final content = lesson.conteudo;
+    return content.explanation.trim().isNotEmpty &&
+        content.question.trim().isNotEmpty &&
+        content.options[AnswerLetter.A]?.trim().isNotEmpty == true &&
+        content.options[AnswerLetter.B]?.trim().isNotEmpty == true &&
+        content.options[AnswerLetter.C]?.trim().isNotEmpty == true;
   }
 
   static Map<String, dynamic> _lessonToJsonForCache(CompleteLesson lesson) {
@@ -460,19 +573,38 @@ class LessonMaterialCache {
           );
   }
 
-  void _rememberColdFromJson(String key, Map value, int savedAt) {
+  void _rememberColdFromJson(
+    String key,
+    Map value,
+    int savedAt, {
+    String status = 'cold-index',
+  }) {
     final cold = LessonColdCacheEntry.fromJson(value['cold']);
     if (cold != null && cold.hasValidatedLargeCurriculumPart) {
-      _cold[key] = cold;
+      _cold[key] = LessonColdCacheEntry(
+        lessonKey: cold.lessonKey,
+        lessonLocalId: cold.lessonLocalId,
+        itemIdx: cold.itemIdx,
+        marker: cold.marker,
+        layer: cold.layer,
+        rootLessonLocalId: cold.rootLessonLocalId,
+        partLessonLocalId: cold.partLessonLocalId,
+        partNumber: cold.partNumber,
+        globalItemNumber: cold.globalItemNumber,
+        localItemIndex: cold.localItemIndex,
+        status: status,
+        savedAt: cold.savedAt,
+        hadMaterial: cold.hadMaterial,
+      );
       return;
     }
     _cold.putIfAbsent(
       key,
       () => LessonColdCacheEntry(
         lessonKey: key,
-        status: 'cold-index',
+        status: status,
         savedAt: savedAt,
-        hadMaterial: true,
+        hadMaterial: false,
       ),
     );
   }
