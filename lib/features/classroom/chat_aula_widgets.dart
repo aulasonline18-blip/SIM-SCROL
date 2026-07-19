@@ -8,7 +8,7 @@ import '../session/lab_session.dart';
 import 'aula_widgets.dart';
 import 'chat_aula_messages.dart';
 
-class ChatAulaTimeline extends StatelessWidget {
+class ChatAulaTimeline extends StatefulWidget {
   const ChatAulaTimeline({
     required this.messages,
     required this.onChooseAnswer,
@@ -41,8 +41,123 @@ class ChatAulaTimeline extends StatelessWidget {
   final EdgeInsets padding;
 
   @override
+  State<ChatAulaTimeline> createState() => _ChatAulaTimelineState();
+}
+
+class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
+  late final ScrollController _ownedScrollController;
+  final Map<String, GlobalKey> _messageKeys = <String, GlobalKey>{};
+  String? _lastScrollSignature;
+  bool _scrollScheduled = false;
+
+  ScrollController get _effectiveScrollController =>
+      widget.scrollController ?? _ownedScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownedScrollController = ScrollController();
+    _schedulePedagogicalScroll();
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatAulaTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.messages != widget.messages ||
+        oldWidget.initialScrollKey != widget.initialScrollKey ||
+        oldWidget.initialScrollToCurrent != widget.initialScrollToCurrent) {
+      _schedulePedagogicalScroll();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ownedScrollController.dispose();
+    super.dispose();
+  }
+
+  void _schedulePedagogicalScroll() {
+    if (!widget.initialScrollToCurrent || widget.messages.isEmpty) return;
+    if (_scrollScheduled) return;
+    _scrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollScheduled = false;
+      if (!mounted) return;
+      _scrollToPedagogicalTarget();
+    });
+  }
+
+  void _scrollToPedagogicalTarget() {
+    if (!_effectiveScrollController.hasClients) return;
+    final target = _selectPedagogicalScrollTarget(widget.messages);
+    if (target == null) return;
+    final signature =
+        '${widget.initialScrollKey ?? ''}|${target.signaturePart}';
+    if (_lastScrollSignature == signature) return;
+    _lastScrollSignature = signature;
+
+    final key = _messageKeys[target.message.id];
+    final context = key?.currentContext;
+    if (context != null) {
+      _ensureTargetVisible(context, target);
+      return;
+    }
+
+    final position = _effectiveScrollController.position;
+    final max = position.maxScrollExtent;
+    if (max <= 0) return;
+    final estimated = target.index <= 0 || widget.messages.length <= 1
+        ? 0.0
+        : max * (target.index / (widget.messages.length - 1));
+    _effectiveScrollController
+        .animateTo(
+          estimated.clamp(position.minScrollExtent, position.maxScrollExtent),
+          duration: _scrollDurationForDistance(
+            (position.pixels - estimated).abs(),
+          ),
+          curve: Curves.easeOutCubic,
+        )
+        .whenComplete(() {
+          if (!mounted) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final retryContext = key?.currentContext;
+            if (retryContext != null) {
+              _ensureTargetVisible(retryContext, target);
+            }
+          });
+        });
+  }
+
+  void _ensureTargetVisible(
+    BuildContext targetContext,
+    _PedagogicalScrollTarget target,
+  ) {
+    Scrollable.ensureVisible(
+      targetContext,
+      alignment: target.alignment,
+      duration: target.duration,
+      curve: Curves.easeOutCubic,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+    );
+  }
+
+  Duration _scrollDurationForDistance(double distance) {
+    if (distance < 160) return const Duration(milliseconds: 180);
+    if (distance < 520) return const Duration(milliseconds: 280);
+    return const Duration(milliseconds: 380);
+  }
+
+  GlobalKey _keyForMessage(ChatLessonMessage message) {
+    return _messageKeys.putIfAbsent(
+      message.id,
+      () => GlobalKey(debugLabel: 'chat-aula-message-${message.id}'),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (messages.isEmpty) {
+    if (widget.messages.isEmpty) {
       return Center(
         key: const Key('chat-empty-state'),
         child: Text(t('aula_choose_goal')),
@@ -50,23 +165,127 @@ class ChatAulaTimeline extends StatelessWidget {
     }
     return ListView.builder(
       key: const Key('chat-aula-timeline'),
-      controller: scrollController,
-      padding: padding,
-      itemCount: messages.length,
+      controller: _effectiveScrollController,
+      padding: widget.padding,
+      itemCount: widget.messages.length,
       itemBuilder: (context, index) => ChatAulaMessageBubble(
-        message: messages[index],
+        key: _keyForMessage(widget.messages[index]),
+        message: widget.messages[index],
         semanticIndex: index,
-        onChooseAnswer: onChooseAnswer,
-        onSignal: onSignal,
-        onRetry: onRetry,
-        onNext: onNext,
-        onOpenDoubt: onOpenDoubt,
-        session: session,
-        pendingActionKeys: pendingActionKeys,
-        onImageSettled: onImageSettled,
+        onChooseAnswer: widget.onChooseAnswer,
+        onSignal: widget.onSignal,
+        onRetry: widget.onRetry,
+        onNext: widget.onNext,
+        onOpenDoubt: widget.onOpenDoubt,
+        session: widget.session,
+        pendingActionKeys: widget.pendingActionKeys,
+        onImageSettled: widget.onImageSettled,
       ),
     );
   }
+}
+
+class _PedagogicalScrollTarget {
+  const _PedagogicalScrollTarget({
+    required this.message,
+    required this.index,
+    required this.alignment,
+    required this.duration,
+  });
+
+  final ChatLessonMessage message;
+  final int index;
+  final double alignment;
+  final Duration duration;
+
+  String get signaturePart {
+    final selected = message.selectedAnswer?.name ?? '';
+    final signalCount = message.signals.length;
+    final status = message.deliveryStatus.name;
+    return '${message.id}|$selected|$signalCount|$status';
+  }
+}
+
+_PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
+  List<ChatLessonMessage> messages,
+) {
+  final stateIndex = _lastIndexWhere(
+    messages,
+    (message) =>
+        message.kind == ChatLessonMessageKind.error ||
+        message.kind == ChatLessonMessageKind.loading ||
+        message.kind == ChatLessonMessageKind.processing,
+  );
+  if (stateIndex != null) {
+    return _target(messages, stateIndex, alignment: 0.72);
+  }
+
+  final feedbackIndex = _lastIndexWhere(
+    messages,
+    (message) => message.kind == ChatLessonMessageKind.feedback,
+  );
+  if (feedbackIndex != null) {
+    return _target(messages, feedbackIndex, alignment: 0.62);
+  }
+
+  final expandedOptionsIndex = _lastIndexWhere(
+    messages,
+    (message) =>
+        message.kind == ChatLessonMessageKind.options &&
+        message.signals.isNotEmpty,
+  );
+  if (expandedOptionsIndex != null) {
+    return _target(messages, expandedOptionsIndex, alignment: 0.50);
+  }
+
+  final explanationIndex = _lastIndexWhere(
+    messages,
+    (message) => message.kind == ChatLessonMessageKind.explanation,
+  );
+  if (explanationIndex != null) {
+    return _target(messages, explanationIndex, alignment: 0.06);
+  }
+
+  final questionIndex = _lastIndexWhere(
+    messages,
+    (message) => message.kind == ChatLessonMessageKind.question,
+  );
+  if (questionIndex != null) {
+    return _target(messages, questionIndex, alignment: 0.18);
+  }
+
+  final actionIndex = _lastIndexWhere(
+    messages,
+    (message) => message.isActionable && !message.isHistorical,
+  );
+  if (actionIndex != null) {
+    return _target(messages, actionIndex, alignment: 0.58);
+  }
+
+  return _target(messages, messages.length - 1, alignment: 0.72);
+}
+
+_PedagogicalScrollTarget _target(
+  List<ChatLessonMessage> messages,
+  int index, {
+  required double alignment,
+}) {
+  return _PedagogicalScrollTarget(
+    message: messages[index],
+    index: index,
+    alignment: alignment,
+    duration: const Duration(milliseconds: 320),
+  );
+}
+
+int? _lastIndexWhere(
+  List<ChatLessonMessage> messages,
+  bool Function(ChatLessonMessage message) test,
+) {
+  for (var i = messages.length - 1; i >= 0; i--) {
+    if (test(messages[i])) return i;
+  }
+  return null;
 }
 
 class AulaConversationActions {

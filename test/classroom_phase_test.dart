@@ -746,7 +746,7 @@ void main() {
         seed: {'cyber-class': _classroomState()},
       );
       final t02 = FailingClassroomT02();
-      final runtime = _runtime(service, FakeClassroomT02());
+      final runtime = _runtime(service, t02);
       await runtime.open(lessonLocalId: 'cyber-class');
 
       runtime.select(AnswerLetter.A);
@@ -761,7 +761,7 @@ void main() {
             as Map?)?['status'],
         'preparing',
       );
-      expect(t02.calls, 0);
+      expect(t02.calls, 1);
     },
   );
 
@@ -900,7 +900,7 @@ void main() {
   );
 
   test(
-    'M7.1 cache miss preserva alvo e reavalia quando material fica pronto',
+    'M7.1 cache miss busca texto oficial antes de mostrar pendencia',
     () async {
       final service = StudentLearningStateService(
         seed: {'cyber-class': _classroomState()},
@@ -914,51 +914,13 @@ void main() {
       await runtime.advance();
 
       var snapshot = runtime.snapshot();
-      expect(snapshot.phase.type, ClassroomPhaseType.avancoPendente);
-      expect(snapshot.itemMarker, 'M1');
-      final pending = service.read('cyber-class')?.extra['advancePending'];
-      expect(pending, isA<Map>());
-      expect((pending as Map)['toItemIdx'], 0);
-      expect(pending['toLayer'], LessonLayer.l2.value);
-      expect(pending['toMarker'], 'M1');
-
-      service.mutate('cyber-class', (state) {
-        final material = preparedMaterialFromLesson(
-          lesson: const CompleteLesson(
-            conteudo: LessonContent(
-              explanation: 'Texto preparado depois do miss.',
-              question: 'Material ficou pronto?',
-              options: {
-                AnswerLetter.A: 'Sim',
-                AnswerLetter.B: 'Nao',
-                AnswerLetter.C: 'Talvez',
-              },
-              correctAnswer: AnswerLetter.A,
-            ),
-            imagem: null,
-            audioText: 'Texto preparado depois do miss.',
-          ),
-          itemIdx: 0,
-          marker: 'M1',
-          layer: LessonLayer.l2,
-        );
-        return state.copyWith(
-          readyLessonMaterials: {
-            ...state.readyLessonMaterials,
-            preparedLessonMaterialKey(0, 'M1', LessonLayer.l2): material,
-          },
-        );
-      });
-
-      expect(runtime.reavaliarAvancoPendente(), isTrue);
-      snapshot = runtime.snapshot();
       expect(snapshot.phase.type, ClassroomPhaseType.lendo);
       expect(snapshot.itemMarker, 'M1');
       expect(snapshot.viewModel?.headerLabel, 'aula_item_of:1/2:aula_layer_2');
-      expect(snapshot.conteudo?.question, 'Material ficou pronto?');
+      expect(snapshot.conteudo?.question, 'Pergunta M1?');
       expect(service.read('cyber-class')?.current?.layer, LessonLayer.l2);
       expect(service.read('cyber-class')?.extra['advancePending'], isNull);
-      expect(t02.calls, 0);
+      expect(t02.calls, 1);
     },
   );
 
@@ -968,7 +930,7 @@ void main() {
       final service = StudentLearningStateService(
         seed: {'cyber-class': _classroomState()},
       );
-      final t02 = FakeClassroomT02();
+      final t02 = FailingClassroomT02();
       final runtime = _runtime(service, t02);
       await runtime.open(lessonLocalId: 'cyber-class');
 
@@ -1047,7 +1009,7 @@ void main() {
     final service = StudentLearningStateService(
       seed: {'cyber-class': _classroomState()},
     );
-    final t02 = FakeClassroomT02();
+    final t02 = FailingClassroomT02();
     final cache = LessonMaterialCache();
     final runtime = _runtime(service, t02, cache: cache);
     await runtime.open(lessonLocalId: 'cyber-class');

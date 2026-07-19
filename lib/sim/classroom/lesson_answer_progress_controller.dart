@@ -261,6 +261,27 @@ class LessonAnswerProgressController {
           );
           return;
         }
+        await materialController.carregarTextoDeAvanco(
+          lessonLocalId: lessonLocalId,
+          topic: topic,
+          position: position,
+          idioma: idioma,
+          academic: academic,
+          mode: _modeForNextMaterial(activeState, position.isReviewAtivo),
+          baseItems: baseItems,
+        );
+        if (position.phase.type == ClassroomPhaseType.lendo &&
+            position.conteudo != null) {
+          _recordLocalPendingAdvanceDisplayed(
+            lessonLocalId: lessonLocalId,
+            fromItemIdx: previousItemIdx,
+            fromLayer: previousLayer,
+            toItemIdx: next.idx,
+            toLayer: next.layer,
+            marker: position.itemAtivo?.marker,
+          );
+          return;
+        }
         position.itemIdx = previousItemIdx;
         position.layer = previousLayer;
         position.loadingLayer = previousLoadingLayer;
@@ -336,6 +357,27 @@ class LessonAnswerProgressController {
         baseItems: baseItems,
       );
       if (loadedPrepared) {
+        _recordLocalPendingAdvanceDisplayed(
+          lessonLocalId: lessonLocalId,
+          fromItemIdx: previousItemIdx,
+          fromLayer: previousLayer,
+          toItemIdx: view.itemIdx,
+          toLayer: view.layer,
+          marker: targetMarker,
+        );
+        return;
+      }
+      await materialController.carregarTextoDeAvanco(
+        lessonLocalId: lessonLocalId,
+        topic: topic,
+        position: position,
+        idioma: idioma,
+        academic: academic,
+        mode: _modeForNextMaterial(activeState, position.isReviewAtivo),
+        baseItems: baseItems,
+      );
+      if (position.phase.type == ClassroomPhaseType.lendo &&
+          position.conteudo != null) {
         _recordLocalPendingAdvanceDisplayed(
           lessonLocalId: lessonLocalId,
           fromItemIdx: previousItemIdx,

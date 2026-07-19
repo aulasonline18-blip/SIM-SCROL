@@ -146,4 +146,146 @@ void main() {
     expect(find.byKey(const Key('chat-empty-state')), findsOneWidget);
     expect(find.text(t('aula_choose_goal')), findsOneWidget);
   });
+
+  testWidgets('timeline positions current explanation on lesson entry', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 260,
+            child: ChatAulaTimeline(
+              scrollController: controller,
+              initialScrollToCurrent: true,
+              initialScrollKey: 'lesson-scroll-a',
+              messages: [
+                for (var i = 0; i < 18; i++)
+                  ChatLessonMessage(
+                    id: 'history-$i',
+                    role: ChatLessonMessageRole.sim,
+                    kind: ChatLessonMessageKind.historyQuestion,
+                    text: 'Histórico $i\nlinha\nlinha\nlinha',
+                    isHistorical: true,
+                    isActionable: false,
+                  ),
+                const ChatLessonMessage(
+                  id: 'active-explanation',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.explanation,
+                  text: 'Explicação atual que deve abrir na área de estudo.',
+                ),
+                const ChatLessonMessage(
+                  id: 'active-question',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.question,
+                  text: 'Pergunta atual?',
+                ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, greaterThan(0));
+    expect(
+      find.text('Explicação atual que deve abrir na área de estudo.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('timeline moves to confidence signals after answer selection', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 280,
+            child: ChatAulaTimeline(
+              scrollController: controller,
+              initialScrollToCurrent: true,
+              initialScrollKey: 'lesson-scroll-b',
+              messages: const [
+                ChatLessonMessage(
+                  id: 'explanation',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.explanation,
+                  text: 'Texto longo\nlinha\nlinha\nlinha\nlinha\nlinha\nlinha',
+                ),
+                ChatLessonMessage(
+                  id: 'question',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.question,
+                  text: 'Qual alternativa?',
+                ),
+                ChatLessonMessage(
+                  id: 'options',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.options,
+                  selectedAnswer: AnswerLetter.B,
+                  options: [
+                    ChatLessonOption(
+                      letter: AnswerLetter.A,
+                      text: 'A',
+                      selected: false,
+                      enabled: true,
+                    ),
+                    ChatLessonOption(
+                      letter: AnswerLetter.B,
+                      text: 'B',
+                      selected: true,
+                      enabled: true,
+                    ),
+                    ChatLessonOption(
+                      letter: AnswerLetter.C,
+                      text: 'C',
+                      selected: false,
+                      enabled: true,
+                    ),
+                  ],
+                  signals: [
+                    ChatLessonSignal(
+                      value: 1,
+                      labelKey: 'aula_sig_certeza',
+                      enabled: true,
+                    ),
+                    ChatLessonSignal(
+                      value: 2,
+                      labelKey: 'aula_sig_duvida',
+                      enabled: true,
+                    ),
+                  ],
+                ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('signal-button-1')), findsOneWidget);
+    expect(controller.offset, greaterThan(0));
+  });
 }

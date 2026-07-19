@@ -87,6 +87,11 @@ class LessonMaterialController {
     required LessonMode mode,
     required List<PlannedItem> baseItems,
     bool forceRefresh = false,
+    bool allowRemoteOrder = false,
+    int waitAfterOrderMs = 0,
+    String missingSource = 'cyber.aula.local-preparation',
+    String missingPriority = 'background',
+    String missingReason = 'material_missing_prepare_without_fallback',
   }) async {
     final item = position.itemAtivo;
     if (item == null) {
@@ -150,20 +155,25 @@ class LessonMaterialController {
     position.imagem = null;
     position.imageMetadata = null;
     position.teoriaPronta = false;
-    final resolved = await materialService
-        .resolveLessonMaterialFromStateOrEngine(
-          ResolveLessonMaterialInput(
-            lessonLocalId: lessonLocalId,
-            topic: topic,
-            itemIdx: position.itemIdx,
-            marker: item.marker,
-            layer: position.layer,
-            params: params,
-            forceRefresh: forceRefresh,
-            waitBeforeOrderMs: 0,
-            waitAfterOrderMs: 0,
-          ),
-        );
+    ResolveLessonMaterialResult? resolved;
+    try {
+      resolved = await materialService.resolveLessonMaterialFromStateOrEngine(
+        ResolveLessonMaterialInput(
+          lessonLocalId: lessonLocalId,
+          topic: topic,
+          itemIdx: position.itemIdx,
+          marker: item.marker,
+          layer: position.layer,
+          params: params,
+          forceRefresh: forceRefresh,
+          waitBeforeOrderMs: 0,
+          waitAfterOrderMs: waitAfterOrderMs,
+          allowRemoteOrder: allowRemoteOrder,
+        ),
+      );
+    } catch (_) {
+      resolved = null;
+    }
     if (resolved == null) {
       position.phase = const ClassroomPhase.advancePending(
         message: 'aula_advance_preparing',
@@ -179,9 +189,9 @@ class LessonMaterialController {
                   DopamineWindowItem(text: item.text, marker: item.marker),
             )
             .toList(),
-        source: 'cyber.aula.local-preparation',
-        priority: 'background',
-        reason: 'material_missing_prepare_without_fallback',
+        source: missingSource,
+        priority: missingPriority,
+        reason: missingReason,
       );
       return;
     }
@@ -206,6 +216,31 @@ class LessonMaterialController {
       source: 'cyber.aula.loaded-window',
       priority: 'hot-local',
       reason: 'lesson_loaded_keeps_ready_window_alive',
+    );
+  }
+
+  Future<void> carregarTextoDeAvanco({
+    required String lessonLocalId,
+    required String? topic,
+    required LessonPositionState position,
+    required String idioma,
+    required String academic,
+    required LessonMode mode,
+    required List<PlannedItem> baseItems,
+  }) {
+    return carregar(
+      lessonLocalId: lessonLocalId,
+      topic: topic,
+      position: position,
+      idioma: idioma,
+      academic: academic,
+      mode: mode,
+      baseItems: baseItems,
+      allowRemoteOrder: true,
+      waitAfterOrderMs: 45000,
+      missingSource: 'cyber.aula.advance-hot-miss',
+      missingPriority: 'hot-local',
+      missingReason: 'advance_hot_path_fetch_failed',
     );
   }
 
