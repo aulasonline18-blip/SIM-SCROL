@@ -374,17 +374,21 @@ class SimOrganism {
       lessonLocalId: lessonLocalId,
     );
     final placementStore = PlacementStore(placementService);
+    const placementEnabled = false;
     final placementController = PlacementRouteController(
       lessonLocalId: lessonLocalId,
       stateService: stateService,
       store: placementStore,
-      t02Caller: PlacementT02Caller(t02Client: t02Client, enabled: true),
-      enabled: true,
+      t02Caller: PlacementT02Caller(
+        t02Client: t02Client,
+        enabled: placementEnabled,
+      ),
+      enabled: placementEnabled,
     );
     final placementReader = _OrganismPlacementDecisionReader(
       StudentExperiencePlacementAdapter(
         service: placementService,
-        enabled: true,
+        enabled: placementEnabled,
       ),
     );
     final experienceEngine = StudentExperienceEngine(

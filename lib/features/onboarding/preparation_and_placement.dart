@@ -56,14 +56,20 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
   @override
   void initState() {
     super.initState();
-    widget.session.addListener(_launchWhenReady);
+    widget.session.addListener(_handleSessionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _launchWhenReady());
   }
 
   @override
   void dispose() {
-    widget.session.removeListener(_launchWhenReady);
+    widget.session.removeListener(_handleSessionChanged);
     super.dispose();
+  }
+
+  void _handleSessionChanged() {
+    if (!mounted) return;
+    setState(() {});
+    _launchWhenReady();
   }
 
   void _launchWhenReady() {
@@ -201,10 +207,9 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                             child: SimPreparationExperience(
                               stage: simStage,
                               ready: isReady,
-                              onContinue: () {
-                                _started = false;
-                                _launch();
-                              },
+                              onContinue: () => unawaited(
+                                widget.session.continueFromPreparationToAula(),
+                              ),
                             ),
                           ),
                         ],

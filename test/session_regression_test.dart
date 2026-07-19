@@ -65,6 +65,10 @@ void main() {
       expect(called, isTrue);
       expect(session.entryStatus, 'primeira_aula_pronta');
       expect(session.entryError, isNull);
+      expect(session.route, '/cyber/curriculo');
+
+      await session.continueFromPreparationToAula();
+
       expect(session.route, '/cyber/aula');
     },
   );
@@ -196,6 +200,10 @@ void main() {
       expect(attempts, 2);
       expect(session.entryStatus, 'primeira_aula_pronta');
       expect(session.entryError, isNull);
+      expect(session.route, '/cyber/curriculo');
+
+      await session.continueFromPreparationToAula();
+
       expect(session.route, '/cyber/aula');
     },
   );
@@ -346,9 +354,7 @@ void main() {
   );
 
   test('drawer cloud lesson normalizes missing state lessonLocalId', () async {
-    final remoteState = StudentLearningState.empty(
-      lessonLocalId: '',
-    ).copyWith(
+    final remoteState = StudentLearningState.empty(lessonLocalId: '').copyWith(
       profile: const StudentProfile(objetivo: 'Aula remota'),
       curriculum: const StudentCurriculum(
         topic: 'Aula remota',
@@ -546,6 +552,12 @@ void main() {
     await tester.pump();
 
     expect(called, isTrue);
+    expect(session.route, '/cyber/curriculo');
+    expect(find.text('Continuar'), findsOneWidget);
+
+    await tester.tap(find.text('Continuar'));
+    await tester.pump();
+
     expect(session.route, '/cyber/aula');
   });
 
@@ -745,8 +757,7 @@ class _SingleLessonCloud implements StudentStateCloudFunctions {
   Future<StudentStateRow?> getStudentStateByLesson(
     String lessonLocalId,
     SupabaseSession session,
-  ) async =>
-      lessonLocalId == row.lessonLocalId ? row : null;
+  ) async => lessonLocalId == row.lessonLocalId ? row : null;
 
   @override
   Future<void> deleteStudentStateByLesson(

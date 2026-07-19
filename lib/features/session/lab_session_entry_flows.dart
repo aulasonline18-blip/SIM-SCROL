@@ -160,12 +160,6 @@ extension LabSessionEntryFlows on LabSession {
       debugPrint('[SIM] CLASSROOM_OPENED route=${result.destination}');
       if (route == '/cyber/warmup' || warmupWaitingForOfficialLesson) {
         unawaited(_tryOpenOfficialAula(source: 'official_ready'));
-      } else if (route == '/cyber/curriculo' && !_entryWarmupExpected) {
-        navigationState.openRoute(result.destination);
-        if (result.destination == '/cyber/aula') {
-          _entryAulaNavigationStarted = true;
-          unawaited(openAulaRuntime());
-        }
       }
     } on StudentExperienceEngineException catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
@@ -248,6 +242,14 @@ extension LabSessionEntryFlows on LabSession {
     warmupWaitingForOfficialLesson = false;
     _notifyFromChild();
     await _tryOpenOfficialAula(source: 'warmup_continue');
+  }
+
+  Future<void> continueFromPreparationToAula() async {
+    if (entryStatus != 'primeira_aula_pronta') {
+      await launchExperience();
+      return;
+    }
+    await _tryOpenOfficialAula(source: 'preparation_continue');
   }
 
   void _resetEntryCoordinator({required bool warmupExpected}) {

@@ -57,7 +57,8 @@ const _strings = <String, String>{
   'lesson_name': 'Nome da aula',
   'rename_lesson': 'Renomear aula',
   'delete_lesson': 'Apagar aula',
-  'delete_lesson_confirm': 'Apagar "{title}"? Essa ação remove a aula do histórico.',
+  'delete_lesson_confirm':
+      'Apagar "{title}"? Essa ação remove a aula do histórico.',
   'new_lesson': 'Nova aula',
   'credits': 'Créditos',
   'credits_unlimited': 'Ilimitado',
@@ -139,6 +140,13 @@ const _strings = <String, String>{
   'preparing_curriculum': 'Preparando seu currículo',
   'preparing_lesson': 'Preparando sua aula',
   'preparing_short': 'Isso leva alguns instantes.',
+  'done_title': 'A primeira aula chegou',
+  'done_cta': 'Continuar',
+  'done_hint': 'A primeira questão está pronta.',
+  'ready_to_continue': 'Pronto para continuar.',
+  'can_skip_when_ready':
+      'O botão aparece quando a primeira questão estiver pronta.',
+  'continue_arrow': 'Continuar',
   'preparing_next_lesson': 'Preparando próxima aula',
   'aula_advance_pending': 'Preparando próximo passo',
   'aula_registering': 'Registrando sua resposta',
