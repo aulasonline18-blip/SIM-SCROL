@@ -65,7 +65,11 @@ void main() {
       expect(client.lastContinuation?['nextGlobalItemToRequest'], 81);
       expect(client.lastContinuation?['globalTotalItems'], 360);
 
-      final refreshedPart1 = service.read('lesson-p2')!;
+      final refreshedPart1 = await _waitForState(
+        service,
+        'lesson-p2',
+        (state) => state.extra['nextCurriculumPartStatus'] == 'ready',
+      );
       expect(refreshedPart1.extra['nextCurriculumPartStatus'], 'ready');
       expect(
         readyNextCurriculumPart(service: service, state: refreshedPart1),
@@ -95,6 +99,78 @@ void main() {
 
       await adapter.startT00UntilFirstItem(args);
       expect(client.continuationCalls, 1);
+    },
+  );
+
+  test(
+    'P2 does not mark next curriculum part ready while it is still partial',
+    () async {
+      final service = StudentLearningStateService();
+      final client = _DelayedPart2T00Client();
+      final adapter = StudentExperienceT00Adapter(
+        service: service,
+        client: client,
+      );
+      const args = StudentExperienceArgs(
+        academic: 'ensino medio',
+        idioma: 'pt',
+        lessonLocalId: 'lesson-p2-delayed',
+        localeContract: SimLocaleContract(
+          interfaceLocale: 'pt-BR',
+          learningLocale: 'pt-BR',
+          explanationLanguage: 'Portuguese',
+          targetLanguage: 'Portuguese',
+        ),
+        onboarding: {
+          'objetivo': 'Matemática financeira para concurso',
+          'free_text': 'Matemática financeira para concurso',
+          'nivel': 'ensino medio',
+        },
+      );
+
+      await adapter.startT00UntilFirstItem(args);
+      final part1 = await _waitForState(
+        service,
+        'lesson-p2-delayed',
+        (state) => state.curriculum?.items.length == 80,
+      );
+      final nextId = nextCurriculumPartLessonId(part1)!;
+      final partialPart2 = await _waitForState(
+        service,
+        nextId,
+        (state) => state.curriculum?.items.length == 1,
+      );
+
+      expect(partialPart2.curriculum?.provisional, isTrue);
+      expect(
+        readyNextCurriculumPart(
+          service: service,
+          state: service.read('lesson-p2-delayed')!,
+        ),
+        isNull,
+      );
+      expect(
+        service.read('lesson-p2-delayed')?.extra['nextCurriculumPartStatus'],
+        'preparing',
+      );
+
+      client.releasePart2Final.complete();
+      final fullPart2 = await _waitForState(
+        service,
+        nextId,
+        (state) => state.curriculum?.items.length == 80,
+      );
+      final refreshedPart1 = await _waitForState(
+        service,
+        'lesson-p2-delayed',
+        (state) => state.extra['nextCurriculumPartStatus'] == 'ready',
+      );
+
+      expect(fullPart2.curriculum?.provisional, isFalse);
+      expect(
+        readyNextCurriculumPart(service: service, state: refreshedPart1),
+        isNotNull,
+      );
     },
   );
 }
@@ -172,6 +248,49 @@ class _P2T00Client implements T00BootstrapClient {
     'microitem_for_teacher': 'Item $globalIndex',
     'global_item_index': globalIndex,
   };
+}
+
+class _DelayedPart2T00Client extends _P2T00Client {
+  final Completer<void> releasePart2Final = Completer<void>();
+
+  @override
+  Stream<T00BootstrapChunk> runBootstrap(T00BootstrapRequest request) async* {
+    final isContinuation =
+        request.onboarding['curriculum_continuation'] == true;
+    if (!isContinuation) {
+      yield* super.runBootstrap(request);
+      return;
+    }
+
+    continuationCalls += 1;
+    lastContinuation = request.onboarding;
+    yield T00BootstrapChunk(
+      type: 't00_item_partial',
+      payload: {'item': _item(81)},
+    );
+    await releasePart2Final.future;
+    yield T00BootstrapChunk(
+      type: 't00_final',
+      payload: {
+        'curriculo': {
+          'curriculum_plan': {
+            'globalTotalItems': 360,
+            'operationalBatchLimit': 80,
+            'batchStartItem': 81,
+            'batchEndItem': 160,
+            'partNumber': 2,
+            'partTitle': 'Matemática Financeira — Parte 2',
+            'unitsCovered': 'juros compostos',
+            'unitsPending': '',
+            'nextGlobalItemToRequest': null,
+            'continuationNeeded': false,
+          },
+          'items': List.generate(80, (index) => _item(index + 81)),
+        },
+      },
+    );
+    yield const T00BootstrapChunk(type: 'done', payload: {'ok': true});
+  }
 }
 
 Future<StudentLearningState> _waitForState(

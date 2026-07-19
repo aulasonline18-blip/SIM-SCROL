@@ -535,6 +535,10 @@ class StudentExperienceT00Adapter {
           localeContract: args.localeContract,
         ),
       );
+      await _waitUntilContinuationPartReady(
+        sourceState: sourceState,
+        nextLessonLocalId: nextLessonLocalId,
+      );
       service.mutate(sourceState.lessonLocalId, (state) {
         return markCurriculumPartStatus(
           state: state,
@@ -554,6 +558,27 @@ class StudentExperienceT00Adapter {
     } finally {
       _continuationInFlight.remove(inFlightKey);
     }
+  }
+
+  Future<void> _waitUntilContinuationPartReady({
+    required StudentLearningState sourceState,
+    required String nextLessonLocalId,
+  }) async {
+    final deadline = DateTime.now().add(const Duration(minutes: 2));
+    while (DateTime.now().isBefore(deadline)) {
+      final next = service.read(nextLessonLocalId);
+      if (next != null &&
+          isReadyNextCurriculumPart(source: sourceState, next: next)) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    throw const StudentExperienceEngineException(
+      StudentExperienceErrorInfo(
+        kind: StudentExperienceErrorKind.generic,
+        message: 'CG_NEXT_PART_NOT_READY',
+      ),
+    );
   }
 
   JsonMap _buildContinuationOnboarding({

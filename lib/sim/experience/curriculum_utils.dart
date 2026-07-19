@@ -172,7 +172,68 @@ StudentLearningState? readyNextCurriculumPart({
   final nextId = nextCurriculumPartLessonId(state);
   if (nextId == null) return null;
   final next = service.read(nextId);
-  return next?.curriculum?.items.isNotEmpty == true ? next : null;
+  if (next == null) return null;
+  return isReadyNextCurriculumPart(source: state, next: next) ? next : null;
+}
+
+bool hasPendingNextCurriculumPart(StudentLearningState state) {
+  return buildCurriculumContinuationRequest(state) != null;
+}
+
+bool isReadyNextCurriculumPart({
+  required StudentLearningState source,
+  required StudentLearningState next,
+}) {
+  final request = buildCurriculumContinuationRequest(source);
+  final curriculum = next.curriculum;
+  final plan = curriculum?.globalPlan;
+  if (request == null || curriculum == null || plan == null) return false;
+  if (curriculum.provisional || curriculum.items.isEmpty) return false;
+
+  final expectedPart = _intFrom(request['partNumber']);
+  final expectedStart = _intFrom(request['nextGlobalItemToRequest']);
+  final globalTotal = _intFrom(request['globalTotalItems']);
+  if (expectedPart == null || expectedStart == null || globalTotal == null) {
+    return false;
+  }
+  if (plan.partNumber != expectedPart) return false;
+  if (plan.batchStartItem != expectedStart) return false;
+  if (plan.globalTotalItems != globalTotal) return false;
+  if (plan.batchEndItem < plan.batchStartItem) return false;
+  if (plan.batchEndItem > plan.globalTotalItems) return false;
+
+  final expectedRoot = curriculumPlanRootLessonId(source);
+  final expectedPartLessonId = curriculumPartLessonId(
+    expectedRoot,
+    expectedPart,
+  );
+  final rawNextRoot = next.extra['curriculumPlanRootLessonId']
+      ?.toString()
+      .trim();
+  final nextRoot = rawNextRoot?.isNotEmpty == true
+      ? rawNextRoot!
+      : next.lessonLocalId == expectedPartLessonId
+      ? expectedRoot
+      : curriculumPlanRootLessonId(next);
+  if (nextRoot != expectedRoot) return false;
+  if (next.lessonLocalId != expectedPartLessonId) return false;
+
+  final expectedBatchSize = plan.batchEndItem - plan.batchStartItem + 1;
+  if (curriculum.items.length < expectedBatchSize) return false;
+
+  final firstItem = curriculum.items.first;
+  final firstGlobal = _intFrom(
+    firstItem.extra['globalItemNumber'] ?? firstItem.extra['global_item_index'],
+  );
+  if (firstGlobal != null && firstGlobal != plan.batchStartItem) return false;
+  final firstPartLessonId = firstItem.extra['partLessonLocalId']
+      ?.toString()
+      .trim();
+  if (firstPartLessonId?.isNotEmpty == true &&
+      firstPartLessonId != expectedPartLessonId) {
+    return false;
+  }
+  return true;
 }
 
 JsonMap? _planMapFrom(Object? value) {

@@ -168,5 +168,67 @@ void main() {
       expect(request?['continuationInstruction'], contains('item 81'));
       expect((request?['previousBatch'] as Map)['end'], 80);
     });
+
+    test(
+      'ready next part accepts correct deterministic part id without extra root',
+      () {
+        final source = StudentLearningState.empty(lessonLocalId: 'lesson-c2')
+            .copyWith(
+              curriculum: StudentCurriculum(
+                topic: 'Matemática financeira',
+                totalItems: 80,
+                generatedAt: 10,
+                provisional: false,
+                items: List.generate(
+                  80,
+                  (index) => CurriculumItem(
+                    marker: 'M${index + 1}',
+                    text: 'Item ${index + 1}',
+                  ),
+                ),
+                globalPlan: const CurriculumGlobalPlan(
+                  globalTotalItems: 180,
+                  operationalBatchLimit: 80,
+                  batchStartItem: 1,
+                  batchEndItem: 80,
+                  partNumber: 1,
+                  nextGlobalItemToRequest: 81,
+                  continuationNeeded: true,
+                  continuationInstruction: 'Continue do item 81.',
+                ),
+              ),
+            );
+        final next =
+            StudentLearningState.empty(
+              lessonLocalId: 'lesson-c2::part-2',
+            ).copyWith(
+              curriculum: StudentCurriculum(
+                topic: 'Matemática financeira',
+                totalItems: 80,
+                generatedAt: 11,
+                provisional: false,
+                items: List.generate(
+                  80,
+                  (index) => CurriculumItem(
+                    marker: 'M${index + 81}',
+                    text: 'Item ${index + 81}',
+                    extra: {'globalItemNumber': index + 81},
+                  ),
+                ),
+                globalPlan: const CurriculumGlobalPlan(
+                  globalTotalItems: 180,
+                  operationalBatchLimit: 80,
+                  batchStartItem: 81,
+                  batchEndItem: 160,
+                  partNumber: 2,
+                  nextGlobalItemToRequest: 161,
+                  continuationNeeded: true,
+                ),
+              ),
+            );
+
+        expect(isReadyNextCurriculumPart(source: source, next: next), isTrue);
+      },
+    );
   });
 }

@@ -1507,6 +1507,41 @@ extension LabSessionFlowExtensions on LabSession {
       await openAulaRuntime();
       return;
     }
+    if (currentId != null && _hasPendingNextCurriculumPart(currentId)) {
+      aulaSnapshot = aulaSnapshot?.copyWith(
+        isDone: false,
+        phase: const ClassroomPhase.advancePending(
+          message: 'aula_advance_preparing',
+        ),
+      );
+      aulaRuntimeError = null;
+      navigationState.openRoute('/cyber/aula');
+      _notifyFromChild();
+      unawaited(_retryOpenAulaWhenNextCurriculumPartIsReady(currentId));
+      return;
+    }
     openSupport('/cyber/objeto');
+  }
+
+  bool _hasPendingNextCurriculumPart(String currentLessonId) {
+    if (prefs == null) return false;
+    final organism = _organismForActiveLesson();
+    final state = organism.stateService.read(currentLessonId);
+    return state != null && hasPendingNextCurriculumPart(state);
+  }
+
+  Future<void> _retryOpenAulaWhenNextCurriculumPartIsReady(
+    String currentLessonId,
+  ) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (!_disposed &&
+        lessonLocalId == currentLessonId &&
+        DateTime.now().isBefore(deadline)) {
+      if (_activateReadyNextCurriculumPartIfNeeded(currentLessonId)) {
+        await openAulaRuntime();
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
   }
 }
