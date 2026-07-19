@@ -175,6 +175,19 @@ class VitalHarness {
   late final LessonRuntimeEngine runtime;
 }
 
+Future<void> _waitUntil(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    if (condition()) return;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  if (condition()) return;
+  fail('condicao esperada nao ocorreu antes do timeout');
+}
+
 void main() {
   test(
     'fluxo vital: objetivo -> T00 -> T02 -> aula -> A/B/C -> 1/2/3 -> motor -> janela',
@@ -199,6 +212,7 @@ void main() {
 
       expect(result.destination, '/cyber/aula');
       expect(h.t00.requests, hasLength(1), reason: 'T00 precisa ser chamado');
+      await _waitUntil(() => h.t02.requests.isNotEmpty);
       expect(h.t02.requests, isNotEmpty, reason: 'T02 precisa ser chamado');
 
       final firstT02 = h.t02.requests.first;

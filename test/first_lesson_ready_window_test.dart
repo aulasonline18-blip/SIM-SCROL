@@ -3348,6 +3348,7 @@ void main() {
 
       expect(result.destination, '/cyber/aula');
       expect(t00.requests, hasLength(1));
+      await _waitUntil(() => t02.requests.isNotEmpty);
       expect(t02.requests, isNotEmpty);
       final firstRequest = t02.requests.first;
       expect(firstRequest.item, 'Entender metade e um quarto');
@@ -3421,154 +3422,153 @@ void main() {
     },
   );
 
-  test(
-    'onboarding aguarda T02 minimo antes de abrir sala',
-    () async {
-      final service = StudentLearningStateService();
-      final releaseFinal = Completer<void>();
-      final t00 = AuditT00Client(releaseFinal: releaseFinal);
-      final t02 = SlowFirstT02Client();
-      final orchestrator = LessonOrchestrator(
-        t02Client: t02,
-        cache: LessonMaterialCache(),
-        bus: LessonEventBus(),
-      );
-      final materialService = StudentLessonMaterialService(
-        stateService: service,
-        orchestrator: orchestrator,
-        readyWindowEngine: DopamineReadyWindowEngine(
-          service: service,
-          orchestrator: orchestrator,
-        ),
-      );
-      final engine = StudentExperienceEngine(
+  test('onboarding abre sala antes do T02 minimo concluir', () async {
+    final service = StudentLearningStateService();
+    final releaseFinal = Completer<void>();
+    final t00 = AuditT00Client(releaseFinal: releaseFinal);
+    final t02 = SlowFirstT02Client();
+    final orchestrator = LessonOrchestrator(
+      t02Client: t02,
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
         service: service,
-        t00: StudentExperienceT00Adapter(service: service, client: t00),
-        t02: StudentExperienceT02Adapter(
-          service: service,
-          materialService: materialService,
-        ),
-        placement: const SettledPlacementReader(settled: true),
-      );
-
-      final resultFuture = engine.prepareStudentExperienceEntry(
-        const StudentExperienceArgs(
-          academic: 'fundamental',
-          idioma: 'pt-BR',
-          lessonLocalId: 'cyber-rocket',
-          onboarding: {
-            'objetivo': 'Aprender frações',
-            'academic_level': 'fundamental',
-          },
-        ),
-      );
-
-      await _waitUntil(() => t02.requests.isNotEmpty);
-      expect(t02.requests, hasLength(1));
-      var completedBeforeT02 = false;
-      unawaited(resultFuture.then((_) => completedBeforeT02 = true));
-      await Future<void>.delayed(Duration.zero);
-      expect(completedBeforeT02, isFalse);
-
-      final waiting = service.read('cyber-rocket');
-      expect(waiting?.currentLessonMaterial, isNull);
-      expect(
-        readLiveEntryState(service, 'cyber-rocket').status,
-        LiveEntryStatus.t02FirstLessonRunning,
-      );
-
-      t02.firstLesson.complete(t02._material(t02.requests.first));
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-
-      final result = await resultFuture;
-      expect(result.destination, '/cyber/aula');
-      expect(
-        t02.requests.where((request) => request.layer == LessonLayer.l1),
-        hasLength(1),
-      );
-      final ready = service.read('cyber-rocket');
-      expect(ready?.current?.marker, 'M1');
-      expect(ready?.currentLessonMaterial?['text_status'], 'ready');
-      final readyEvents = ready?.events
-          .where((event) => event.type == 'PROGRESS_UPDATED')
-          .map((event) => event.payload['event'])
-          .toList();
-      expect(readyEvents, contains('firstLessonShellOpened'));
-      expect(readyEvents, contains('t02FirstLessonStarted'));
-      expect(readyEvents, contains('t02FirstMinimumLessonReady'));
-      expect(readyEvents, contains('timeToFirstQuestion'));
-      expect(
-        readLiveEntryState(service, 'cyber-rocket').status,
-        LiveEntryStatus.showingFirstLesson,
-      );
-      releaseFinal.complete();
-    },
-  );
-
-  test(
-    'placement so aparece depois da primeira aula minima',
-    () async {
-      final service = StudentLearningStateService();
-      final releaseFinal = Completer<void>();
-      final t00 = AuditT00Client(releaseFinal: releaseFinal);
-      final t02 = SlowFirstT02Client();
-      final orchestrator = LessonOrchestrator(
-        t02Client: t02,
-        cache: LessonMaterialCache(),
-        bus: LessonEventBus(),
-      );
-      final materialService = StudentLessonMaterialService(
-        stateService: service,
         orchestrator: orchestrator,
-        readyWindowEngine: DopamineReadyWindowEngine(
-          service: service,
-          orchestrator: orchestrator,
-        ),
-      );
-      final engine = StudentExperienceEngine(
+      ),
+    );
+    final engine = StudentExperienceEngine(
+      service: service,
+      t00: StudentExperienceT00Adapter(service: service, client: t00),
+      t02: StudentExperienceT02Adapter(
         service: service,
-        t00: StudentExperienceT00Adapter(service: service, client: t00),
-        t02: StudentExperienceT02Adapter(
-          service: service,
-          materialService: materialService,
-        ),
-        placement: const SettledPlacementReader(settled: false),
-      );
+        materialService: materialService,
+      ),
+      placement: const SettledPlacementReader(settled: true),
+    );
 
-      final resultFuture = engine.prepareStudentExperienceEntry(
-        const StudentExperienceArgs(
-          academic: 'fundamental',
-          idioma: 'pt-BR',
-          lessonLocalId: 'cyber-no-placement-block',
-          onboarding: {'objetivo': 'Aprender frações'},
-        ),
-      );
+    final resultFuture = engine.prepareStudentExperienceEntry(
+      const StudentExperienceArgs(
+        academic: 'fundamental',
+        idioma: 'pt-BR',
+        lessonLocalId: 'cyber-rocket',
+        onboarding: {
+          'objetivo': 'Aprender frações',
+          'academic_level': 'fundamental',
+        },
+      ),
+    );
 
-      await _waitUntil(() => t02.requests.isNotEmpty);
-      var completedBeforeT02 = false;
-      unawaited(resultFuture.then((_) => completedBeforeT02 = true));
-      await Future<void>.delayed(Duration.zero);
-      expect(completedBeforeT02, isFalse);
-      t02.firstLesson.complete(t02._material(t02.requests.first));
-      final result = await resultFuture;
-      expect(result.destination, '/cyber/placement');
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      final events = service
-          .read('cyber-no-placement-block')
-          ?.events
-          .where((event) => event.type == 'PROGRESS_UPDATED')
-          .map((event) => event.payload['event'])
-          .toList();
-      expect(events, contains('placementRequired'));
-      expect(events, contains('placementScreenReleasedAfterSlotA'));
-      expect(events, isNot(contains('firstLessonShellOpened')));
-      expect(
-        t02.requests.where((request) => request.layer == LessonLayer.l1),
-        hasLength(1),
-      );
-      releaseFinal.complete();
-    },
-  );
+    await _waitUntil(() => t02.requests.isNotEmpty);
+    expect(t02.requests, hasLength(1));
+    var completedBeforeT02 = false;
+    unawaited(resultFuture.then((_) => completedBeforeT02 = true));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(completedBeforeT02, isTrue);
+
+    final result = await resultFuture;
+    expect(result.destination, '/cyber/aula');
+
+    final waiting = service.read('cyber-rocket');
+    expect(waiting?.current?.marker, 'M1');
+    expect(waiting?.currentLessonMaterial, isNull);
+    expect(
+      readLiveEntryState(service, 'cyber-rocket').status,
+      LiveEntryStatus.showingFirstLesson,
+    );
+
+    t02.firstLesson.complete(t02._material(t02.requests.first));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      t02.requests.where((request) => request.layer == LessonLayer.l1),
+      hasLength(1),
+    );
+    final ready = service.read('cyber-rocket');
+    expect(ready?.current?.marker, 'M1');
+    expect(ready?.currentLessonMaterial?['text_status'], 'ready');
+    final readyEvents = ready?.events
+        .where((event) => event.type == 'PROGRESS_UPDATED')
+        .map((event) => event.payload['event'])
+        .toList();
+    expect(readyEvents, contains('firstLessonShellOpened'));
+    expect(readyEvents, contains('t02FirstLessonStarted'));
+    expect(readyEvents, contains('t02FirstMinimumLessonReady'));
+    expect(readyEvents, contains('timeToFirstQuestion'));
+    expect(
+      readLiveEntryState(service, 'cyber-rocket').status,
+      LiveEntryStatus.showingFirstLesson,
+    );
+    releaseFinal.complete();
+  });
+
+  test('placement so aparece depois da primeira aula minima', () async {
+    final service = StudentLearningStateService();
+    final releaseFinal = Completer<void>();
+    final t00 = AuditT00Client(releaseFinal: releaseFinal);
+    final t02 = SlowFirstT02Client();
+    final orchestrator = LessonOrchestrator(
+      t02Client: t02,
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      ),
+    );
+    final engine = StudentExperienceEngine(
+      service: service,
+      t00: StudentExperienceT00Adapter(service: service, client: t00),
+      t02: StudentExperienceT02Adapter(
+        service: service,
+        materialService: materialService,
+      ),
+      placement: const SettledPlacementReader(settled: false),
+    );
+
+    final resultFuture = engine.prepareStudentExperienceEntry(
+      const StudentExperienceArgs(
+        academic: 'fundamental',
+        idioma: 'pt-BR',
+        lessonLocalId: 'cyber-no-placement-block',
+        onboarding: {'objetivo': 'Aprender frações'},
+      ),
+    );
+
+    await _waitUntil(() => t02.requests.isNotEmpty);
+    var completedBeforeT02 = false;
+    unawaited(resultFuture.then((_) => completedBeforeT02 = true));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(completedBeforeT02, isTrue);
+    final result = await resultFuture;
+    expect(result.destination, '/cyber/placement');
+
+    t02.firstLesson.complete(t02._material(t02.requests.first));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    final events = service
+        .read('cyber-no-placement-block')
+        ?.events
+        .where((event) => event.type == 'PROGRESS_UPDATED')
+        .map((event) => event.payload['event'])
+        .toList();
+    expect(events, contains('placementRequired'));
+    expect(events, contains('placementScreenReleasedAfterSlotA'));
+    expect(events, isNot(contains('firstLessonShellOpened')));
+    expect(
+      t02.requests.where((request) => request.layer == LessonLayer.l1),
+      hasLength(1),
+    );
+    releaseFinal.complete();
+  });
 }

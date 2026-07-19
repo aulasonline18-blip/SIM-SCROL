@@ -6,7 +6,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../shared/widgets/shared_widgets.dart';
 import '../../sim/media/visual_router_n2.dart';
+import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
+import '../../sim/ui/sim_theme.dart';
 import '../session/lab_session.dart';
 
 class AulaTopBar extends StatelessWidget {
@@ -63,6 +65,7 @@ class AulaTopBar extends StatelessWidget {
               onPressed: onFontScaleTap,
               icon: const Icon(Icons.format_size),
             ),
+          _ClassroomDarkModeButton(),
           if (showReviewButton)
             IconButton(
               tooltip: t('aula_open_review'),
@@ -73,6 +76,28 @@ class AulaTopBar extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _ClassroomDarkModeButton extends StatelessWidget {
+  const _ClassroomDarkModeButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = SimThemeScope.of(context);
+    final icon = scope.darkMode
+        ? Icons.light_mode_outlined
+        : Icons.dark_mode_outlined;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: SimIconAction(
+        icon: icon,
+        semanticLabel: scope.darkMode ? t('theme_light') : t('theme_dark'),
+        onPressed: scope.onToggleDarkMode,
+        size: 40,
+        iconSize: 18,
+      ),
+    );
+  }
 }
 
 class LessonImagePanel extends StatelessWidget {

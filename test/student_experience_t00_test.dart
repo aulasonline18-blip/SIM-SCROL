@@ -142,6 +142,19 @@ class FakeT02Client implements T02LessonClient {
       completeLesson(request);
 }
 
+Future<void> _waitUntil(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    if (condition()) return;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  if (condition()) return;
+  fail('condicao esperada nao ocorreu antes do timeout');
+}
+
 void main() {
   test('buildT00Phase1Body preserves the live ficha contract', () {
     final body = buildT00Phase1Body(
@@ -239,6 +252,7 @@ void main() {
 
       expect(result.destination, '/cyber/placement');
       expect(result.curriculum.items.first.marker, 'M1');
+      await _waitUntil(() => t02Client.requests.isNotEmpty);
       expect(t02Client.requests, isNotEmpty);
       final state = service.read('cyber-fractions');
       await Future<void>.delayed(Duration.zero);
