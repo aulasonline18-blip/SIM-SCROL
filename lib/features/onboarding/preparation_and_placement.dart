@@ -613,6 +613,7 @@ class _PlacementChoice extends StatelessWidget {
   Widget build(BuildContext context) {
     return OnboardingChatFlow(
       semanticLabel: t('onboarding_chat_region'),
+      scrollable: false,
       children: [
         SimChatBubble(
           text: t('placement_choice_h1'),
@@ -647,6 +648,7 @@ class _PlacementIntro extends StatelessWidget {
   Widget build(BuildContext context) {
     return OnboardingChatFlow(
       semanticLabel: t('onboarding_chat_region'),
+      scrollable: false,
       children: [
         SimChatBubble(
           text: t('placement_intro_h1'),
@@ -686,6 +688,7 @@ class _PlacementQuestion extends StatelessWidget {
     if (screen == null) {
       return OnboardingChatFlow(
         semanticLabel: t('onboarding_chat_region'),
+        scrollable: false,
         children: [
           SimChatBubble(
             text: t('placement_waiting_h1'),
@@ -697,6 +700,7 @@ class _PlacementQuestion extends StatelessWidget {
     }
     return OnboardingChatFlow(
       semanticLabel: t('onboarding_chat_region'),
+      scrollable: false,
       children: [
         SimChatBubble(
           text: screen.prompt,
@@ -733,6 +737,7 @@ class _PlacementResult extends StatelessWidget {
   Widget build(BuildContext context) {
     return OnboardingChatFlow(
       semanticLabel: t('onboarding_chat_region'),
+      scrollable: false,
       children: [
         SimChatBubble(
           text: t('placement_result_h1'),

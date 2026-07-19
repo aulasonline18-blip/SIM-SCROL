@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_screen.dart';
 import 'package:sim_mobile/features/onboarding/onboarding_screens.dart';
+import 'package:sim_mobile/features/onboarding/preparation_and_placement.dart';
 import 'package:sim_mobile/main.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 import 'package:sim_mobile/sim/ui/sim_theme.dart';
@@ -39,6 +40,36 @@ void main() {
     expect(find.byType(ChatAulaScreen), findsNothing);
     expect(find.byType(ConversationalEntryScreen), findsOneWidget);
     expect(find.text('Recepção pedagógica'), findsOneWidget);
+  });
+
+  testWidgets('portao de nivelamento renderiza conteudo e nao tela branca', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final session = LabSession(prefs: prefs)
+      ..authed = true
+      ..authReady = true
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'pt-BR'
+      ..lessonLocalId = 'placement-rendered'
+      ..route = '/cyber/placement';
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: PlacementLabScreen(session: session)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Passo 1 de 4'), findsOneWidget);
+    expect(
+      find.text('Antes de começar, escolha seu ponto de partida.'),
+      findsOneWidget,
+    );
+    expect(find.text('Começar do início'), findsOneWidget);
+    expect(find.text('Encontrar meu ponto'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(seconds: 1));
   });
 
   testWidgets('portal renderiza entrada principal do SIM', (tester) async {

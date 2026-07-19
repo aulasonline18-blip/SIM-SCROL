@@ -984,17 +984,30 @@ class OnboardingChatFlow extends StatelessWidget {
   const OnboardingChatFlow({
     required this.children,
     required this.semanticLabel,
+    this.scrollable = true,
     super.key,
   });
 
   final List<Widget> children;
   final String semanticLabel;
+  final bool scrollable;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: semanticLabel,
-    child: ListView(padding: const EdgeInsets.all(20), children: children),
-  );
+  Widget build(BuildContext context) {
+    final content = Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+    return Semantics(
+      label: semanticLabel,
+      child: scrollable
+          ? ListView(padding: EdgeInsets.zero, children: [content])
+          : content,
+    );
+  }
 }
 
 class SimChatReveal extends StatelessWidget {
