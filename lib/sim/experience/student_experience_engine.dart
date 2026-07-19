@@ -4,6 +4,7 @@ import '../placement/placement_state.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
 import 'student_experience_placement_adapter.dart';
+import 'start_first_lesson_use_case.dart';
 import 'student_experience_store.dart';
 import 'student_experience_t00_adapter.dart';
 import 'student_experience_t02_adapter.dart';
@@ -123,12 +124,15 @@ class StudentExperienceEngine {
     required this.t00,
     required this.placement,
     this.t02,
-  });
+    StartFirstLessonUseCase? startFirstLesson,
+  }) : startFirstLesson =
+           startFirstLesson ?? StartFirstLessonUseCase(service: service);
 
   final StudentLearningStateService service;
   final StudentExperienceT00Adapter t00;
   final StudentExperienceT02Adapter? t02;
   final PlacementDecisionReader placement;
+  final StartFirstLessonUseCase startFirstLesson;
 
   Future<StudentExperienceResult> prepareStudentExperienceEntry(
     StudentExperienceArgs args,
@@ -184,13 +188,17 @@ class StudentExperienceEngine {
         },
       );
 
-      final placementIsSettled = placement.settled;
+      final placementDecision = placement.readPlacementDecision();
+      final placementIsSettled = placementDecision.settled;
       if (!placementIsSettled) {
-        _prepareFirstLessonInBackground(
-          args: args,
-          first: first,
-          phase: 'background_first_t02_before_placement',
-        );
+        final choice = placementDecision.placement.choice;
+        if (choice != 'find_my_point') {
+          _prepareFirstLessonInBackground(
+            args: args,
+            first: first,
+            phase: 'background_first_t02_before_placement',
+          );
+        }
         args.onStage?.call(StudentExperienceRouteStage.placement);
         writeStudentExperienceSnapshot(
           service,
@@ -322,52 +330,6 @@ class StudentExperienceEngine {
     StudentExperienceArgs args,
     FirstCurriculumItem first,
   ) {
-    service.mutate(args.lessonLocalId, (state) {
-      return state.copyWith(
-        current: LessonCurrent(
-          itemIdx: first.itemIndex,
-          marker: first.marker,
-          layer: LessonLayer.l1,
-          amparoLvl: 0,
-        ),
-        progress: LessonProgress(
-          itemIdx: first.itemIndex,
-          layer: LessonLayer.l1,
-          erros: 0,
-          amparoLvl: 0,
-          historia: const [],
-          mainAdvances: first.itemIndex,
-          concluidos: const [],
-          pendentesMarkers: const [],
-          totalItems: first.curriculum.items.length,
-          pctAvanco: first.curriculum.items.isEmpty
-              ? 0
-              : ((first.itemIndex / first.curriculum.items.length) * 100)
-                    .round(),
-        ),
-      );
-    });
-    args.onStage?.call(StudentExperienceRouteStage.ready);
-    writeStudentExperienceSnapshot(
-      service,
-      lessonLocalId: args.lessonLocalId,
-      state: StudentExperienceState.salaAberta,
-      destination: '/cyber/aula',
-      startMarker: first.marker,
-      startItemIndex: first.itemIndex,
-    );
-    final now = DateTime.now().millisecondsSinceEpoch;
-    publishStudentExperienceEvent(
-      service,
-      args.lessonLocalId,
-      StudentExperienceEventType.firstLessonShellOpened,
-      {'at': now, 'marker': first.marker, 'itemIdx': first.itemIndex},
-    );
-    publishStudentExperienceEvent(
-      service,
-      args.lessonLocalId,
-      StudentExperienceEventType.timeToClassroom,
-      {'at': now, 'marker': first.marker, 'itemIdx': first.itemIndex},
-    );
+    startFirstLesson.openShell(args: args, first: first);
   }
 }

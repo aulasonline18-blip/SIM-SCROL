@@ -26,9 +26,32 @@ JsonMap createEmptyRecoveryRoom() => {
   'completedAt': null,
 };
 
+JsonMap createEmptyAmparoRoom() => {
+  'enabled': true,
+  'active': false,
+  'pending': false,
+  'currentQueue': <String>[],
+  'currentIndex': 0,
+  'amparoLvl': 0,
+  'completedCycles': 0,
+  'sequenceCount': 0,
+  'sequenceMarker': null,
+  'sequenceLayer': null,
+  'recentAggravants': <JsonMap>[],
+  'triggeredAggravants': <JsonMap>[],
+  'lastTriggeredMarker': null,
+  'lastTriggeredLayer': null,
+  'lastTriggeredAt': null,
+  'startedAt': null,
+  'updatedAt': null,
+  'completedAt': null,
+};
+
 JsonMap createEmptyAuxRooms() => {
   'review': createEmptyReviewRoom(),
   'recovery': createEmptyRecoveryRoom(),
+  'amparo': createEmptyAmparoRoom(),
+  'doubt': {'history': <JsonMap>[]},
   'pendingMap': <JsonMap>[],
 };
 
@@ -44,6 +67,29 @@ JsonMap ensureAuxRooms(StudentLearningState state) {
     (existing['recovery'] as Map?)?.cast<String, dynamic>() ??
         createEmptyRecoveryRoom(),
   );
+  existing['amparo'] = JsonMap.of(
+    (existing['amparo'] as Map?)?.cast<String, dynamic>() ??
+        createEmptyAmparoRoom(),
+  );
+  existing['amparo']['recentAggravants'] =
+      (existing['amparo']['recentAggravants'] as List? ?? const [])
+          .whereType<Map>()
+          .map((entry) => JsonMap.from(entry))
+          .toList();
+  existing['amparo']['triggeredAggravants'] =
+      (existing['amparo']['triggeredAggravants'] as List? ?? const [])
+          .whereType<Map>()
+          .map((entry) => JsonMap.from(entry))
+          .toList();
+  existing['doubt'] = JsonMap.of(
+    (existing['doubt'] as Map?)?.cast<String, dynamic>() ??
+        const {'history': <JsonMap>[]},
+  );
+  existing['doubt']['history'] =
+      (existing['doubt']['history'] as List? ?? const [])
+          .whereType<Map>()
+          .map((entry) => JsonMap.from(entry))
+          .toList();
   existing['pendingMap'] = (existing['pendingMap'] as List? ?? const [])
       .whereType<Map>()
       .map((entry) => JsonMap.from(entry))
@@ -51,11 +97,84 @@ JsonMap ensureAuxRooms(StudentLearningState state) {
   return existing;
 }
 
+StudentLearningState recordDoubtAuxiliaryEvent(
+  StudentLearningState state, {
+  required String type,
+  required JsonMap payload,
+}) {
+  final ts = DateTime.now().millisecondsSinceEpoch;
+  final aux = ensureAuxRooms(state);
+  final doubt = JsonMap.of(aux['doubt'] as JsonMap);
+  final history = (doubt['history'] as List? ?? const [])
+      .whereType<Map>()
+      .map((entry) => JsonMap.from(entry))
+      .toList();
+  history.add({
+    ...payload,
+    'eventType': type,
+    'ts': ts,
+    'source': 'doubt',
+    'authoritative': false,
+    'writesProgress': false,
+    'writesTruth': false,
+    'writesMastery': false,
+    'auxiliary': true,
+    'itemAdvanced': false,
+    'layerChanged': false,
+    'nextAction': 'return_to_lesson',
+  });
+  doubt['history'] = history;
+  aux['doubt'] = doubt;
+  return state.copyWith(
+    auxRooms: aux,
+    events: [
+      ...state.events,
+      StudentLearningEvent(
+        type: type,
+        ts: ts,
+        payload: {
+          ...payload,
+          'source': 'doubt',
+          'authoritative': false,
+          'writesProgress': false,
+          'writesTruth': false,
+          'writesMastery': false,
+          'auxiliary': true,
+          'itemAdvanced': false,
+          'layerChanged': false,
+          'nextAction': 'return_to_lesson',
+        },
+      ),
+    ],
+  );
+}
+
 List<JsonMap> pendingMapOf(JsonMap auxRooms) =>
     (auxRooms['pendingMap'] as List? ?? const [])
         .whereType<Map>()
         .map((entry) => JsonMap.from(entry))
         .toList();
+
+bool isStrongRecoveryPending(JsonMap entry) {
+  if (entry['status'] != 'pending') return false;
+  final signal = DecisionSignalValue.fromValue(entry['signal']);
+  final priority = (entry['priority'] ?? '').toString();
+  final reason = (entry['reason'] ?? '').toString();
+  final masteryStatus = (entry['masteryStatus'] ?? '').toString();
+  return priority == 'high' ||
+      signal == DecisionSignal.three ||
+      {
+        'wrong',
+        'wrong_answer',
+        'false_mastery',
+        'falseMastery',
+        'low_confidence_heavy',
+        'review_failed',
+        'needsReinforcement',
+      }.contains(reason) ||
+      masteryStatus == MasteryStatus.falseMastery.name ||
+      masteryStatus == 'needsReinforcement';
+}
 
 StudentLearningState mirrorAttemptToAuxRooms(
   StudentLearningState state,
@@ -163,7 +282,7 @@ StudentLearningState scheduleReviewFromEvidence(
   final priority =
       signal == DecisionSignal.three ||
           evidence.status == MasteryStatus.falseMastery ||
-          evidence.status == MasteryStatus.reviewNeeded
+          evidence.needsReinforcement
       ? 'high'
       : 'medium';
   final entry = {
@@ -181,6 +300,7 @@ StudentLearningState scheduleReviewFromEvidence(
     'clearedAt': null,
     'status': 'pending',
     'priority': priority,
+    'masteryStatus': evidence.status.name,
   };
   if (existingIndex >= 0) {
     pending[existingIndex] = entry;
@@ -246,22 +366,114 @@ StudentLearningState clearPendingIfSignalOne(
   );
 }
 
+StudentLearningState resolvePendingFromRecoveryAnswer(
+  StudentLearningState state, {
+  required String marker,
+  required LessonLayer layer,
+  required DecisionSignal signal,
+  required bool correct,
+  required int ts,
+}) {
+  final aux = ensureAuxRooms(state);
+  final pending = pendingMapOf(aux);
+  var changed = false;
+  final layerValue = layer.value;
+
+  if (correct && signal != DecisionSignal.three) {
+    final updated = pending.map((entry) {
+      final sameMarker = entry['marker'] == marker;
+      final sameLayer = entry['layer'] == null || entry['layer'] == layerValue;
+      if (sameMarker && sameLayer && entry['status'] == 'pending') {
+        changed = true;
+        return {
+          ...entry,
+          'status': 'cleared',
+          'clearedAt': ts,
+          'lastUpdatedAt': ts,
+          'clearedBy': 'recovery_answer',
+        };
+      }
+      return entry;
+    }).toList();
+    if (!changed) return state;
+    aux['pendingMap'] = updated;
+    return state.copyWith(
+      auxRooms: aux,
+      events: [
+        ...state.events,
+        StudentLearningEvent(
+          type: 'RECOVERY_PENDING_CLEARED',
+          ts: ts,
+          payload: {
+            'marker': marker,
+            'layer': layerValue,
+            'signal': signal.value,
+            'reason': 'minimum_repair_sufficient',
+          },
+        ),
+      ],
+    );
+  }
+
+  final existingIndex = pending.indexWhere(
+    (entry) =>
+        entry['marker'] == marker &&
+        entry['status'] == 'pending' &&
+        (entry['layer'] == null || entry['layer'] == layerValue),
+  );
+  final entry = {
+    'marker': marker,
+    'itemIdx': existingIndex >= 0 ? pending[existingIndex]['itemIdx'] : null,
+    'layer': layerValue,
+    'signal': DecisionSignal.three.value,
+    'reason': correct ? 'low_confidence_heavy' : 'recovery_failed',
+    'priority': 'high',
+    'origin': 'recovery_answer',
+    'lessonLocalId': state.lessonLocalId,
+    'firstRegisteredAt': existingIndex >= 0
+        ? pending[existingIndex]['firstRegisteredAt']
+        : ts,
+    'lastUpdatedAt': ts,
+    'clearedAt': null,
+    'status': 'pending',
+  };
+  if (existingIndex >= 0) {
+    pending[existingIndex] = entry;
+  } else {
+    pending.add(entry);
+  }
+  aux['pendingMap'] = pending;
+  return state.copyWith(
+    auxRooms: aux,
+    events: [
+      ...state.events,
+      StudentLearningEvent(
+        type: 'PENDING_REGISTERED',
+        ts: ts,
+        payload: {
+          'marker': marker,
+          'layer': layerValue,
+          'signal': DecisionSignal.three.value,
+          'reason': entry['reason'],
+          'priority': 'high',
+          'origin': 'recovery_answer',
+        },
+      ),
+    ],
+  );
+}
+
 List<String> buildReviewQueue(StudentLearningState state, int requestedCount) {
   final aux = ensureAuxRooms(state);
   final count = requestedCount.clamp(0, 10);
   if (count == 0) return const [];
   final pendingMarkers =
-      pendingMapOf(
-        aux,
-      ).where((entry) => entry['status'] == 'pending').toList()..sort((a, b) {
-        final signalRank = _reviewSignalRank(a).compareTo(_reviewSignalRank(b));
-        if (signalRank != 0) return signalRank;
-        final reasonRank = _reviewReasonRank(a).compareTo(_reviewReasonRank(b));
-        if (reasonRank != 0) return reasonRank;
-        return ((a['firstRegisteredAt'] as num?)?.toInt() ?? 0).compareTo(
-          (b['firstRegisteredAt'] as num?)?.toInt() ?? 0,
+      pendingMapOf(aux).where((entry) => entry['status'] == 'pending').toList()
+        ..sort(
+          (a, b) => ((a['firstRegisteredAt'] as num?)?.toInt() ?? 0).compareTo(
+            (b['firstRegisteredAt'] as num?)?.toInt() ?? 0,
+          ),
         );
-      });
   final queue = <String>[];
   for (final pending in pendingMarkers) {
     final marker = (pending['marker'] ?? '').toString();
@@ -289,27 +501,11 @@ List<String> buildReviewQueue(StudentLearningState state, int requestedCount) {
   return queue;
 }
 
-int _reviewSignalRank(Map entry) {
-  if ((entry['reason'] ?? '').toString() == 'wrong') return 2;
-  final signal = DecisionSignalValue.fromValue(entry['signal']);
-  return switch (signal) {
-    DecisionSignal.three => 0,
-    DecisionSignal.two => 1,
-    DecisionSignal.one => 3,
-  };
-}
-
-int _reviewReasonRank(Map entry) {
-  final reason = (entry['reason'] ?? '').toString();
-  if (reason == 'wrong') return 2;
-  return 3;
-}
-
 List<String> buildRecoveryQueue(StudentLearningState state) {
   final aux = ensureAuxRooms(state);
   final pending =
       pendingMapOf(aux)
-          .where((entry) => entry['status'] == 'pending')
+          .where(isStrongRecoveryPending)
           .map((entry) => JsonMap.from(entry))
           .toList()
         ..sort((a, b) {
@@ -320,10 +516,11 @@ List<String> buildRecoveryQueue(StudentLearningState state) {
             (b['firstRegisteredAt'] as num?)?.toInt() ?? 0,
           );
         });
-  final queue = pending
-      .map((entry) => (entry['marker'] ?? '').toString())
-      .where((marker) => marker.isNotEmpty)
-      .toList();
+  final queue = <String>[];
+  for (final entry in pending) {
+    final marker = (entry['marker'] ?? '').toString();
+    if (marker.isNotEmpty && !queue.contains(marker)) queue.add(marker);
+  }
   final currentItems = pending.map((entry) {
     return {
       'marker': (entry['marker'] ?? '').toString(),
@@ -355,7 +552,7 @@ bool shouldBlockFinalCompletionForRecovery(
 }) {
   final hasPending = pendingMapOf(
     ensureAuxRooms(state),
-  ).any((entry) => entry['status'] == 'pending');
+  ).any(isStrongRecoveryPending);
   if (!auxRoomsEnabled && !recoveryRoomEnabled) return false;
   return hasPending;
 }

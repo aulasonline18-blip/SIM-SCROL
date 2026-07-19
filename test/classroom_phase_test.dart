@@ -1145,6 +1145,69 @@ void main() {
   );
 
   test(
+    'M7.1 texto atrasado destrava advancePending sem exigir reabrir o app',
+    () async {
+      final pendingTarget = _classroomState().copyWith(
+        current: const LessonCurrent(
+          itemIdx: 0,
+          marker: 'M1',
+          layer: LessonLayer.l2,
+          amparoLvl: 0,
+        ),
+        progress: const LessonProgress(
+          itemIdx: 0,
+          layer: LessonLayer.l2,
+          erros: 0,
+          amparoLvl: 0,
+          historia: [],
+          mainAdvances: 0,
+          concluidos: [],
+          pendentesMarkers: [],
+          totalItems: 2,
+          pctAvanco: 0,
+        ),
+        currentLessonMaterial: null,
+        readyLessonMaterials: const {},
+      );
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': pendingTarget},
+      );
+      final runtime = _runtime(service, FailingClassroomT02());
+      await runtime.open(lessonLocalId: 'cyber-class');
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.avancoPendente);
+      expect(runtime.snapshot().conteudo, isNull);
+
+      final key = runtime.activeLessonKey();
+      expect(key, isNotNull);
+      final applied = runtime.applyLessonUpdateForKey(
+        key!,
+        const CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto chegou depois.',
+            question: 'A pergunta deve aparecer sem preparo preso?',
+            options: {
+              AnswerLetter.A: 'Sim',
+              AnswerLetter.B: 'Nao',
+              AnswerLetter.C: 'Ainda travou',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText: 'Texto chegou depois.',
+        ),
+      );
+
+      final snap = runtime.snapshot();
+      expect(applied, isTrue);
+      expect(snap.phase.type, ClassroomPhaseType.lendo);
+      expect(
+        snap.conteudo?.question,
+        'A pergunta deve aparecer sem preparo preso?',
+      );
+    },
+  );
+
+  test(
     'M7.1 troca de aula ignora resultado atrasado da aula anterior',
     () async {
       SharedPreferences.setMockInitialValues({});

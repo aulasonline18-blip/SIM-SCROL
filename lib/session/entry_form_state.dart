@@ -10,6 +10,7 @@ import '../sim/ui/sim_i18n.dart';
 
 const entryFormMaxFreeText = 1500;
 const entryFormMaxAttachments = 3;
+const entryFormMaxAttachmentBytes = 10 * 1024 * 1024;
 const entryFormMinExtractedChars = 20;
 const entryFormAudioNotSupportedMessage =
     'Áudio ainda não está disponível. Envie texto, foto ou arquivo.';
@@ -497,7 +498,27 @@ class EntryFormState extends ChangeNotifier {
   }
 
   void addLabAttachmentFile(SimAttachmentFile file) {
-    if (attachments.length >= entryFormMaxAttachments) return;
+    if (attachments.length >= entryFormMaxAttachments) {
+      attachmentError = 'Limite de 3 anexos por envio.';
+      notifyListeners();
+      return;
+    }
+    final contentType = file.contentType.toLowerCase();
+    if (contentType.startsWith('audio/')) {
+      attachmentError = entryFormAudioNotSupportedMessage;
+      notifyListeners();
+      return;
+    }
+    if (contentType.startsWith('video/')) {
+      attachmentError = entryFormVideoNotSupportedMessage;
+      notifyListeners();
+      return;
+    }
+    if (file.bytes.length > entryFormMaxAttachmentBytes) {
+      attachmentError = 'Arquivo maior que 10 MB. Escolha um arquivo menor.';
+      notifyListeners();
+      return;
+    }
     unawaited(_processLabAttachmentFile(file));
   }
 

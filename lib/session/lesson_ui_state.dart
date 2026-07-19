@@ -12,6 +12,7 @@ class LessonUiState extends ChangeNotifier {
 
   ReviewRoomView? reviewRoom;
   RecoveryRoomView? recoveryRoom;
+  AmparoRoomView? amparoRoom;
   DoubtState doubt = DoubtState.idle;
 
   void openReviewRoom() {
@@ -50,6 +51,26 @@ class LessonUiState extends ChangeNotifier {
 
   void setRecoveryRoom(RecoveryRoomView view) {
     recoveryRoom = view;
+    notifyListeners();
+  }
+
+  void openAmparoRoom() {
+    amparoRoom = const AmparoRoomView(
+      status: AmparoRoomStatus.preparing,
+      stations: [],
+      idx: 0,
+      amparoLvl: 0,
+    );
+    notifyListeners();
+  }
+
+  void closeAmparoRoom() {
+    amparoRoom = null;
+    notifyListeners();
+  }
+
+  void setAmparoRoom(AmparoRoomView view) {
+    amparoRoom = view;
     notifyListeners();
   }
 

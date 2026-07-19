@@ -1,5 +1,7 @@
 part of 'lab_session.dart';
 
+const Duration _autoAdvanceAfterFeedbackDelay = Duration(milliseconds: 900);
+
 String humanErrorMessage(
   Object? error, {
   String fallback =
@@ -48,6 +50,7 @@ extension LabSessionFlowExtensions on LabSession {
       ..doubtOpen = false
       ..reviewRoom = null
       ..recoveryRoom = null
+      ..amparoRoom = null
       ..resetDoubt();
     navigationState.openRoute('/cyber/objeto');
     _notifyFromChild();
@@ -99,137 +102,6 @@ extension LabSessionFlowExtensions on LabSession {
     }
     _notifyFromChild();
     return cloudOk;
-  }
-
-  String buildDrawerBackupText() {
-    final store = canonicalStore;
-    if (store == null) {
-      throw StateError('Backup indisponivel.');
-    }
-    final states = store.listLocalStates(includeDeleted: false);
-    if (states.isEmpty) {
-      throw StateError('Nenhuma aula para exportar.');
-    }
-    final snapshots = <String, dynamic>{};
-    final lessons = <Map<String, dynamic>>[];
-    for (final state in states) {
-      snapshots[state.lessonLocalId] = state.toJson();
-      lessons.add(_cyberLessonFromState(state));
-    }
-    final file = <String, dynamic>{
-      'magic': 'SIM_CYBER_BACKUP_V1',
-      'exportedAt': DateTime.now().millisecondsSinceEpoch,
-      'lessons': lessons,
-      'studentLearningStates': snapshots,
-    };
-    final encoded = base64.encode(utf8.encode(jsonEncode(file)));
-    return [
-      'SIM — BACKUP DE AULA',
-      'SIM_CYBER_V1_BEGIN',
-      encoded,
-      'SIM_CYBER_V1_END',
-    ].join('\n');
-  }
-
-  Future<File> writeDrawerBackupFile(String text) async {
-    final stamp = DateTime.now().toIso8601String().substring(0, 10);
-    final fileName = 'sim-backup-$stamp.txt';
-    final savedPath = await _saveTextFile(fileName: fileName, text: text);
-    if (savedPath != null && savedPath.trim().isNotEmpty) {
-      return File(savedPath);
-    }
-    final file = File('${Directory.systemTemp.path}/$fileName');
-    return file.writeAsString(text);
-  }
-
-  Future<String?> pickDrawerBackupFileText() async {
-    final injected = _drawerBackupFileTextPicker;
-    if (injected != null) return injected();
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['txt', 'json'],
-      withData: true,
-    );
-    final file = result?.files.singleOrNull;
-    if (file == null) return null;
-    final bytes = file.bytes;
-    if (bytes != null) return utf8.decode(bytes);
-    final path = file.path;
-    if (path == null || path.trim().isEmpty) return null;
-    return File(path).readAsString();
-  }
-
-  String buildDrawerStatusText() {
-    final id = lessonLocalId;
-    final store = canonicalStore;
-    if (id == null || store == null) {
-      throw StateError('Curriculo nao encontrado.');
-    }
-    final state = store.readState(id);
-    final progress = state.progress;
-    final curriculum = state.curriculum;
-    return [
-      'SIM - STATUS PEDAGOGICO',
-      'Objetivo: ${state.profile.objetivo ?? '-'}',
-      'Topico: ${curriculum?.topic ?? '-'}',
-      'Item: ${state.current?.marker ?? '-'}',
-      'Camada: ${state.current?.layer.name ?? '-'}',
-      'Progresso: ${progress?.concluidos.length ?? 0}/${curriculum?.totalItems ?? 0}',
-      'Tentativas: ${state.attempts.length}',
-    ].join('\n');
-  }
-
-  Future<File> writeDrawerStatusFile(String text) async {
-    final stamp = DateTime.now().toIso8601String().substring(0, 10);
-    final fileName = 'sim-status-$stamp.txt';
-    final savedPath = await _saveTextFile(fileName: fileName, text: text);
-    if (savedPath != null && savedPath.trim().isNotEmpty) {
-      return File(savedPath);
-    }
-    final file = File('${Directory.systemTemp.path}/$fileName');
-    return file.writeAsString(text);
-  }
-
-  Future<String?> _saveTextFile({
-    required String fileName,
-    required String text,
-  }) async {
-    final injected = _drawerBackupFileSaver;
-    if (injected != null) return injected(fileName, text);
-    try {
-      return await FilePicker.platform.saveFile(
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: const ['txt'],
-        bytes: Uint8List.fromList(utf8.encode(text)),
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<StudentLearningState> importDrawerBackup(String raw) async {
-    final store = canonicalStore;
-    if (store == null) {
-      throw StateError('Backup indisponivel.');
-    }
-    final backup = store.parseBackupText(raw);
-    final ids = _lessonIdsFromBackup(backup);
-    final state = store.importBackup(backup);
-    lessonLocalId = state.lessonLocalId;
-    for (final id in ids.isEmpty ? <String>[state.lessonLocalId] : ids) {
-      final imported = _readExistingLocalState(id);
-      if (imported == null || _stateDeleted(imported)) continue;
-      _enqueueLessonForRemoteVaultSync(id, reason: 'drawer_backup_imported');
-    }
-    if (authed) {
-      final engine = _remoteVaultSync();
-      if (engine != null) {
-        await engine.drain();
-      }
-    }
-    _notifyFromChild();
-    return state;
   }
 
   void retryExperience() {
@@ -339,6 +211,9 @@ extension LabSessionFlowExtensions on LabSession {
         'entry_path',
         'age_range',
         'material_type',
+        'material_based',
+        'attachments_text',
+        'student_profile_notes',
         'subject',
         'topic',
         'country_curriculum',
@@ -948,15 +823,16 @@ extension LabSessionFlowExtensions on LabSession {
     _activeLessonMediaOrganism = organism;
     _syncImageStateFromSnapshot();
     _lessonImageUnsubscribe = organism.eventBus.subscribe(key, (lesson) {
-      if (lesson.imagem == null || lesson.imagem!.trim().isEmpty) return;
       final applied = organism.lessonRuntimeEngine.applyLessonUpdateForKey(
         key,
         lesson,
       );
       if (!applied) return;
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
-      imageStatus = 'ready';
-      imageError = null;
+      if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty) {
+        imageStatus = 'ready';
+        imageError = null;
+      }
       _syncImageMetadataFromSnapshot();
       _notifyFromChild();
     });
@@ -1186,7 +1062,7 @@ extension LabSessionFlowExtensions on LabSession {
 
   void preparationDone() {
     lessonUiState.markPreparationDone();
-    navigationState.openRoute('/cyber/placement');
+    navigationState.openRoute('/cyber/warmup');
     _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
   }
 
@@ -1212,7 +1088,8 @@ extension LabSessionFlowExtensions on LabSession {
     if (id == null || id.trim().isEmpty) return;
 
     final organism = _organismForActiveLesson();
-    final startMarker = organism.placementService.readStartMarker()?.trim();
+    final placement = organism.placementService.read();
+    final startMarker = placement.startMarker?.trim();
     if (startMarker == null || startMarker.isEmpty) return;
 
     final state = organism.stateService.read(id);
@@ -1221,9 +1098,13 @@ extension LabSessionFlowExtensions on LabSession {
       return;
     }
 
-    final itemIndex = curriculum.items.indexWhere(
-      (item) => item.marker == startMarker,
-    );
+    final itemIndex =
+        placement.startItemIdx != null &&
+            placement.startItemIdx! >= 0 &&
+            placement.startItemIdx! < curriculum.items.length &&
+            curriculum.items[placement.startItemIdx!].marker == startMarker
+        ? placement.startItemIdx!
+        : curriculum.items.indexWhere((item) => item.marker == startMarker);
     if (itemIndex < 0) return;
     if (state.current?.marker == startMarker &&
         state.current?.itemIdx == itemIndex) {
@@ -1295,7 +1176,7 @@ extension LabSessionFlowExtensions on LabSession {
       _notifyFromChild();
       return;
     }
-    controller.chooseStart();
+    controller.chooseFindMyPoint();
     _notifyFromChild();
     await controller.startTest();
     _notifyFromChild();
@@ -1354,6 +1235,10 @@ extension LabSessionFlowExtensions on LabSession {
     organism.lessonRuntimeEngine.select(answer);
     aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
     _bindActiveLessonMedia(organism);
+    _keepActiveAulaOfflineWindowWarm(
+      organism,
+      source: 'cyber.aula.answer-selected',
+    );
     _notifyFromChild();
   }
 
@@ -1396,6 +1281,7 @@ extension LabSessionFlowExtensions on LabSession {
       _bindActiveLessonMedia(organism);
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
       _keepActiveAulaOfflineWindowWarm(organism, source: 'cyber.aula.signal');
+      await _openTriggeredAmparoIfNeeded(organism);
       _scheduleAutoAdvanceAfterFeedback(organism);
     } catch (error) {
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
@@ -1412,7 +1298,7 @@ extension LabSessionFlowExtensions on LabSession {
       return;
     }
     final generation = ++_autoAdvanceAulaGeneration;
-    Future<void>.delayed(const Duration(milliseconds: 900), () async {
+    Future<void>.delayed(_autoAdvanceAfterFeedbackDelay, () async {
       if (_disposed ||
           generation != _autoAdvanceAulaGeneration ||
           _activeOrganism != organism ||
@@ -1479,12 +1365,19 @@ extension LabSessionFlowExtensions on LabSession {
     aulaRuntimeError = null;
     _notifyFromChild();
     var crossedToNextPart = false;
+    var blockedByRecovery = false;
     try {
       await organism.lessonRuntimeEngine.advance();
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
       _keepActiveAulaOfflineWindowWarm(organism, source: 'cyber.aula.advance');
+      final latestEvents = organism.stateService
+          .read(organism.lessonLocalId)
+          ?.events;
+      blockedByRecovery =
+          latestEvents?.isNotEmpty == true &&
+          latestEvents!.last.type == 'FINAL_COMPLETION_BLOCKED_BY_PENDING';
       final currentId = lessonLocalId;
       if (aulaSnapshot?.isDone == true &&
           currentId != null &&
@@ -1496,6 +1389,9 @@ extension LabSessionFlowExtensions on LabSession {
     } finally {
       aulaRuntimeLoading = false;
       _notifyFromChild();
+    }
+    if (blockedByRecovery && recoveryRoom == null) {
+      await startRecoveryRoom();
     }
     if (crossedToNextPart) await openAulaRuntime();
   }

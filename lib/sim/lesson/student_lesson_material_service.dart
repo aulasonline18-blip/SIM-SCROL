@@ -7,9 +7,9 @@ import '../state/student_learning_state_service.dart';
 import '../media/lesson_image_api_contract.dart';
 import '../media/student_lesson_media_service.dart';
 import 'dopamine_ready_window_engine.dart';
-import 'lesson_content_validator.dart';
 import 'lesson_models.dart';
 import 'lesson_orchestrator.dart';
+import 'lesson_readiness_resolver.dart';
 
 enum LessonMaterialSource {
   studentState,
@@ -95,18 +95,29 @@ class StudentLessonMaterialService {
   final StudentLessonMediaService? mediaService;
   final Map<String, ResolveLessonMaterialInput> _inputsByLessonKey = {};
   final Map<String, void Function()> _imageUnsubscribersByLessonKey = {};
+  final LessonReadinessResolver _readinessResolver =
+      const LessonReadinessResolver();
 
   ResolveLessonMaterialResult? resolveFastLessonMaterialFromStateOrCache(
     ResolveLessonMaterialInput input,
   ) {
     _rememberInput(input);
-    final fromState = _readReadyFromStudentState(input);
-    if (fromState != null) {
+    final stateReadiness = _readinessResolver.resolveFromState(
+      state: stateService.read(input.lessonLocalId),
+      identity: _identityFor(input),
+    );
+    if (stateReadiness.status == LessonReadinessStatus.invalid ||
+        stateReadiness.status == LessonReadinessStatus.stale) {
+      _discardUnreadableReadyMaterial(input, stateReadiness);
+    }
+    final readyFromState = stateReadiness.lesson;
+    if (stateReadiness.status == LessonReadinessStatus.readyFromState &&
+        readyFromState != null) {
       final visualReady = orchestrator.ensureVisualForReadyLesson(
         input.params,
-        fromState.conteudo,
+        readyFromState.conteudo,
         priority: 'hot-local',
-        initialImage: fromState.imagem,
+        initialImage: readyFromState.imagem,
       );
       _prepareLessonAudio(input, visualReady.conteudo);
       _mirrorCurrentLessonMaterial(input, visualReady);
@@ -129,11 +140,15 @@ class StudentLessonMaterialService {
         imageMetadata: visualReady.imageMetadata,
       );
     }
-    final cached = orchestrator.peekCachedLesson(lessonKeyFor(input.params));
-    if (cached == null) return null;
+    final cacheReadiness = _readinessResolver.resolveFromMemoryCache(
+      orchestrator: orchestrator,
+      params: input.params,
+    );
+    final lesson = cacheReadiness.lesson;
+    if (lesson == null) return null;
     final visualReady = orchestrator.ensureVisualForReadyLesson(
       input.params,
-      cached.conteudo,
+      lesson.conteudo,
       priority: 'hot-local',
     );
     _prepareLessonAudio(input, visualReady.conteudo);
@@ -429,7 +444,11 @@ class StudentLessonMaterialService {
     String priority = 'background',
     String? reason,
   }) {
-    final window = _buildReadyWindow(itemIdx, layer, items);
+    final window = readyWindowEngine.buildDopamineWindowPlan(
+      fromIdx: itemIdx,
+      layer: layer,
+      items: items,
+    );
     stateService.mutate(lessonLocalId, (state) {
       final now = DateTime.now().millisecondsSinceEpoch;
       final marker = items.length > itemIdx ? items[itemIdx].marker : null;
@@ -561,106 +580,18 @@ class StudentLessonMaterialService {
     );
   }
 
-  List<({int offset, int idx, DopamineWindowItem item, LessonLayer layer})>
-  _buildReadyWindow(
-    int fromIdx,
-    LessonLayer layer,
-    List<DopamineWindowItem> items,
-  ) {
-    if (fromIdx < 0 || fromIdx >= items.length) return const [];
-    final first = items[fromIdx];
-    final firstLayer = first.isReview
-        ? first.reviewLayer ?? LessonLayer.l1
-        : layer;
-    final window =
-        <({int offset, int idx, DopamineWindowItem item, LessonLayer layer})>[
-          (offset: 0, idx: fromIdx, item: first, layer: firstLayer),
-        ];
-    var cursor = (idx: fromIdx, layer: firstLayer);
-    while (window.length < localLessonTraySize) {
-      final next = _nextReadyWindowSlot(cursor.idx, cursor.layer, items);
-      if (next == null || next.idx < 0 || next.idx >= items.length) break;
-      final item = items[next.idx];
-      window.add((
-        offset: window.length,
-        idx: next.idx,
-        item: item,
-        layer: next.layer,
-      ));
-      cursor = next;
-    }
-    return window;
-  }
-
-  ({int idx, LessonLayer layer})? _nextReadyWindowSlot(
-    int idx,
-    LessonLayer layer,
-    List<DopamineWindowItem> items,
-  ) {
-    final item = idx >= 0 && idx < items.length ? items[idx] : null;
-    if (item == null) return null;
-    if (!item.isReview && layer != LessonLayer.l3) {
-      return (
-        idx: idx,
-        layer: layer == LessonLayer.l1 ? LessonLayer.l2 : LessonLayer.l3,
-      );
-    }
-    final nextIdx = idx + 1;
-    if (nextIdx >= items.length) return null;
-    final next = items[nextIdx];
-    return (
-      idx: nextIdx,
-      layer: next.isReview
-          ? next.reviewLayer ?? LessonLayer.l1
-          : LessonLayer.l1,
-    );
-  }
-
   CompleteLesson? _readReadyFromStudentState(ResolveLessonMaterialInput input) {
-    final state = stateService.read(input.lessonLocalId);
-    final key = preparedLessonMaterialKey(
-      input.itemIdx,
-      input.marker,
-      input.layer,
+    final result = _readinessResolver.resolveFromState(
+      state: stateService.read(input.lessonLocalId),
+      identity: _identityFor(input),
     );
-    final material = state?.readyLessonMaterials[key];
-    if (material == null || material['text_status'] != 'ready') return null;
-    if (material['for_itemIdx'] != input.itemIdx) return null;
-    if (material['for_layer'] != input.layer.name) return null;
-    if ((material['for_marker'] as String?) != input.marker) return null;
-    try {
-      final content = validatedLessonContentFromJson(JsonMap.from(material));
-      return CompleteLesson(
-        conteudo: content,
-        imagem: _stringOrNull(material['imagem']),
-        audioText: content.audioText,
-        imageMetadata: LessonImageGenerationMetadata.fromJson(
-          material['imageMetadata'],
-        ),
-      );
-    } on LessonContentValidationException catch (error) {
-      stateService.mutate(input.lessonLocalId, (state) {
-        final next = {...state.readyLessonMaterials}..remove(key);
-        return state.copyWith(
-          readyLessonMaterials: next,
-          events: [
-            ...state.events,
-            StudentLearningEvent(
-              type: 'LESSON_MATERIAL_INVALID_DISCARDED',
-              ts: DateTime.now().millisecondsSinceEpoch,
-              payload: {
-                'key': key,
-                'itemIdx': input.itemIdx,
-                'marker': input.marker,
-                'layer': input.layer.value,
-                'error': error.message,
-              },
-            ),
-          ],
-        );
-      });
-      return null;
+    if (result.status == LessonReadinessStatus.invalid ||
+        result.status == LessonReadinessStatus.stale) {
+      _discardUnreadableReadyMaterial(input, result);
     }
+    return result.status == LessonReadinessStatus.readyFromState
+        ? result.lesson
+        : null;
   }
 
   String? _stringOrNull(Object? value) {
@@ -790,8 +721,58 @@ class StudentLessonMaterialService {
   }
 
   bool isLessonMaterialReadyInStateOrCache(ResolveLessonMaterialInput input) {
-    if (_readReadyFromStudentState(input) != null) return true;
-    return orchestrator.peekCachedLesson(lessonKeyFor(input.params)) != null;
+    final stateResult = _readinessResolver.resolveFromState(
+      state: stateService.read(input.lessonLocalId),
+      identity: _identityFor(input),
+    );
+    if (stateResult.status == LessonReadinessStatus.invalid ||
+        stateResult.status == LessonReadinessStatus.stale) {
+      _discardUnreadableReadyMaterial(input, stateResult);
+    }
+    if (stateResult.isReady) return true;
+    return _readinessResolver
+        .resolveFromMemoryCache(
+          orchestrator: orchestrator,
+          params: input.params,
+        )
+        .isReady;
+  }
+
+  LessonReadinessIdentity _identityFor(ResolveLessonMaterialInput input) {
+    return LessonReadinessIdentity(
+      lessonLocalId: input.lessonLocalId,
+      itemIdx: input.itemIdx,
+      marker: input.marker,
+      layer: input.layer,
+    );
+  }
+
+  void _discardUnreadableReadyMaterial(
+    ResolveLessonMaterialInput input,
+    LessonReadinessResult result,
+  ) {
+    final key = result.discardedKey;
+    if (key == null) return;
+    stateService.mutate(input.lessonLocalId, (state) {
+      final next = {...state.readyLessonMaterials}..remove(key);
+      return state.copyWith(
+        readyLessonMaterials: next,
+        events: [
+          ...state.events,
+          StudentLearningEvent(
+            type: 'LESSON_MATERIAL_INVALID_DISCARDED',
+            ts: DateTime.now().millisecondsSinceEpoch,
+            payload: {
+              'key': key,
+              'itemIdx': input.itemIdx,
+              'marker': input.marker,
+              'layer': input.layer.value,
+              'error': result.safeReason ?? result.status.name,
+            },
+          ),
+        ],
+      );
+    });
   }
 
   void _prepareLessonAudio(

@@ -144,11 +144,11 @@ const _strings = <String, String>{
   'done_cta': 'Continuar',
   'done_hint': 'A primeira questão está pronta.',
   'ready_to_continue': 'Pronto para continuar.',
-  'can_skip_when_ready':
-      'O botão aparece quando a primeira questão estiver pronta.',
+  'can_skip_when_ready': 'O botão aparece quando a primeira questão chega.',
   'continue_arrow': 'Continuar',
   'preparing_next_lesson': 'Preparando próxima aula',
   'aula_advance_pending': 'Preparando próximo passo',
+  'aula_advance_preparing': 'Preparando próximo passo',
   'aula_registering': 'Registrando sua resposta',
   'aula_next': 'Próximo',
   'aula_try_again_2': 'Tentar novamente',

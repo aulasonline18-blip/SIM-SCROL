@@ -156,8 +156,9 @@ class LessonRuntimeEngine {
     position.conteudo = lesson.conteudo;
     position.imagem = lesson.imagem;
     position.imageMetadata = lesson.imageMetadata;
-    if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty) {
-      position.teoriaPronta = true;
+    position.teoriaPronta = true;
+    if (position.phase.type == ClassroomPhaseType.avancoPendente) {
+      position.phase = const ClassroomPhase.reading();
     }
     return true;
   }

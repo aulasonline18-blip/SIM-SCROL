@@ -11,7 +11,7 @@ void main() {
     setSimActiveLanguage('pt-BR');
   });
 
-  testWidgets('entrada conversacional atual é fina e focada no objetivo', (
+  testWidgets('entrada conversacional renderiza recepcao pedagogica viva', (
     tester,
   ) async {
     final prefs = await SharedPreferences.getInstance();
@@ -24,9 +24,9 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text(t('objeto_title')), findsOneWidget);
-    expect(find.text(t('objeto_input_label')), findsOneWidget);
-    expect(find.byType(TextField), findsWidgets);
+    expect(find.text('Recepção pedagógica'), findsOneWidget);
+    expect(find.text('Como vamos começar?'), findsOneWidget);
+    expect(find.byKey(const Key('reception-guided-path')), findsOneWidget);
 
     session.dispose();
   });

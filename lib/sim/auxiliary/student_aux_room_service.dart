@@ -1,5 +1,6 @@
 import '../lesson/lesson_models.dart';
 import '../state/student_learning_state.dart';
+import 'amparo_room_engine.dart' as amparo_engine;
 import 'aux_room_models.dart';
 import 'aux_room_t02_caller.dart';
 import 'student_aux_rooms.dart' as aux_state;
@@ -37,6 +38,7 @@ class StudentAuxRoomService {
           (item) => AuxRoomItem(
             marker: (item.marker ?? '').trim(),
             text: (item.text ?? '').trim(),
+            itemIdx: item.itemIdx,
           ),
         )
         .where((item) => item.marker!.isNotEmpty && item.text!.isNotEmpty)
@@ -134,21 +136,34 @@ class StudentAuxRoomService {
         ),
       );
     }
-    final queue = aux_state.buildRecoveryQueue(state);
     var aux = aux_state.ensureAuxRooms(state);
+    final pendingItems = aux_state.pendingMapOf(aux)
+      ..retainWhere(aux_state.isStrongRecoveryPending)
+      ..sort((a, b) {
+        final ap = (a['priority'] ?? '').toString() == 'high' ? 0 : 1;
+        final bp = (b['priority'] ?? '').toString() == 'high' ? 0 : 1;
+        if (ap != bp) return ap.compareTo(bp);
+        return ((a['firstRegisteredAt'] as num?)?.toInt() ?? 0).compareTo(
+          (b['firstRegisteredAt'] as num?)?.toInt() ?? 0,
+        );
+      });
+    final queue = <String>[];
+    for (final entry in pendingItems) {
+      final marker = (entry['marker'] ?? '').toString();
+      if (marker.isNotEmpty && !queue.contains(marker)) queue.add(marker);
+    }
     final signalByMarker = <String, DecisionSignal>{};
-    for (final entry in aux_state.pendingMapOf(aux)) {
-      if (entry['status'] == 'pending') {
-        signalByMarker[(entry['marker'] ?? '').toString()] =
-            DecisionSignalValue.fromValue(entry['signal']);
-      }
+    for (final entry in pendingItems) {
+      signalByMarker[(entry['marker'] ?? '').toString()] =
+          DecisionSignalValue.fromValue(entry['signal']);
     }
     final now = DateTime.now().millisecondsSinceEpoch;
-    final pendingItems = aux_state
-        .pendingMapOf(aux)
-        .where((entry) => entry['status'] == 'pending')
-        .map(
-          (entry) => {
+    final existingRecovery = JsonMap.of(aux['recovery'] as JsonMap);
+    final recovery = existingRecovery
+      ..['currentQueue'] = queue
+      ..['currentItems'] = [
+        for (final entry in pendingItems)
+          {
             'marker': (entry['marker'] ?? '').toString(),
             'itemIdx': entry['itemIdx'],
             'layer': entry['layer'],
@@ -160,11 +175,7 @@ class StudentAuxRoomService {
             'lessonLocalId': entry['lessonLocalId'] ?? lessonLocalId,
             'signal': entry['signal'],
           },
-        )
-        .toList();
-    final recovery = JsonMap.of(aux['recovery'] as JsonMap)
-      ..['currentQueue'] = queue
-      ..['currentItems'] = pendingItems
+      ]
       ..['currentIndex'] = 0
       ..['sourceLessonLocalId'] = lessonLocalId
       ..['updatedAt'] = now;
@@ -206,19 +217,22 @@ class StudentAuxRoomService {
         marker: picked.marker!,
         item: picked.text!,
         signal: signal,
+        itemIdx: picked.itemIdx,
         confirmEnabled: true,
       );
       if (!result.aborted) {
         content = result.conteudo;
       }
     } catch (_) {
-      content = null;
+      return PreparedAuxRoomQuestion.failed(
+        mode == AuxRoomMode.review
+            ? 'Nao consegui preparar a revisao agora. Sua aula foi preservada.'
+            : 'Nao consegui preparar a recuperacao agora. Sua aula foi preservada.',
+      );
     }
-    content ??= _localAuxRoomFallbackContent(
-      mode: mode,
-      item: picked.text!,
-      signal: signal,
-    );
+    if (content == null) {
+      return const PreparedAuxRoomQuestion.failed('invalid aux room material');
+    }
     if (content.options[AnswerLetter.A]?.isEmpty != false ||
         content.options[AnswerLetter.B]?.isEmpty != false ||
         content.options[AnswerLetter.C]?.isEmpty != false) {
@@ -226,7 +240,9 @@ class StudentAuxRoomService {
     }
     final eventType = mode == AuxRoomMode.review
         ? 'REVIEW_QUESTION_SHOWN'
-        : 'RECOVERY_QUESTION_SHOWN';
+        : mode == AuxRoomMode.recovery
+        ? 'RECOVERY_QUESTION_SHOWN'
+        : 'AMPARO_STEP_SHOWN';
     final state = readState(lessonLocalId);
     writeState(
       state.copyWith(
@@ -243,6 +259,84 @@ class StudentAuxRoomService {
     return PreparedAuxRoomQuestion.ok(AuxRoomContent.fromLesson(content));
   }
 
+  Future<PreparedAuxRoomQuestion> prepareAmparoRoomStep({
+    required AmparoRoomContext context,
+    required AmparoStation station,
+    required int amparoLevel,
+  }) async {
+    final picked = pickAuxRoomItem(context.marker ?? '', context.items);
+    if (picked == null) {
+      return const PreparedAuxRoomQuestion.failed('no item for amparo');
+    }
+    final state = readState(context.lessonLocalId);
+    final amparo = aux_state.ensureAuxRooms(state)['amparo'] as Map;
+    final recentAggravants =
+        (amparo['triggeredAggravants'] as List? ??
+                amparo['recentAggravants'] as List? ??
+                const [])
+            .whereType<Map>()
+            .map((entry) => JsonMap.from(entry))
+            .toList();
+    try {
+      final result = await t02Caller.call(
+        lessonLocalId: context.lessonLocalId,
+        mode: AuxRoomMode.amparo,
+        profile: context.profile,
+        marker: picked.marker!,
+        item: picked.text!,
+        signal: context.signal ?? DecisionSignal.three,
+        itemIdx: picked.itemIdx,
+        layer: station.layer,
+        amparoLevel: amparoLevel,
+        auxContext: {
+          'amparo_step_index':
+              amparo_engine.AmparoPlanEngine.stations.indexOf(station) + 1,
+          'amparo_step_marker': station.marker,
+          'amparo_type': station.amparoType,
+          'amparo_purpose': station.purpose,
+          'blockage_point': _blockagePoint(context, recentAggravants),
+          'recent_aggravants': recentAggravants,
+          'current_item': picked.text,
+          'current_marker': picked.marker,
+          'current_question': context.currentQuestion,
+          'current_options': _optionsPayload(context.currentOptions),
+          'student_selected_answer': context.selectedAnswer?.name,
+          'correct_answer': context.correctAnswer?.name,
+          'signal': context.signal?.value,
+        },
+        confirmEnabled: true,
+      );
+      final content = result.conteudo;
+      if (result.aborted || content == null) {
+        return const PreparedAuxRoomQuestion.failed('invalid amparo material');
+      }
+      if (content.options[AnswerLetter.A]?.isEmpty != false ||
+          content.options[AnswerLetter.B]?.isEmpty != false ||
+          content.options[AnswerLetter.C]?.isEmpty != false) {
+        return const PreparedAuxRoomQuestion.failed('invalid amparo material');
+      }
+      _appendAuxEvent(context.lessonLocalId, 'AMPARO_STEP_SHOWN', {
+        'marker': picked.marker,
+        'itemIdx': picked.itemIdx,
+        'layer': context.layer.value,
+        'amparoLvl': amparoLevel,
+        'amparoStepMarker': station.marker,
+        'amparoType': station.amparoType,
+      });
+      return PreparedAuxRoomQuestion.ok(AuxRoomContent.fromLesson(content));
+    } catch (_) {
+      _appendAuxEvent(context.lessonLocalId, 'AMPARO_FAILED', {
+        'marker': context.marker,
+        'itemIdx': context.itemIdx,
+        'layer': context.layer.value,
+        'amparoLvl': amparoLevel,
+      });
+      return const PreparedAuxRoomQuestion.failed(
+        'Nao consegui preparar o amparo agora. Sua aula foi preservada.',
+      );
+    }
+  }
+
   void recordAuxRoomAnswer({
     required String lessonLocalId,
     required String marker,
@@ -253,23 +347,50 @@ class StudentAuxRoomService {
     required DecisionSignal sinal,
     required String source,
   }) {
-    var state = readState(lessonLocalId);
+    final state = readState(lessonLocalId);
     final ts = DateTime.now().millisecondsSinceEpoch;
-    final attempt = LessonAttempt(
-      marker: marker,
-      layer: layer,
-      letra: letra,
-      sinal: sinal,
-      correct: letra == conteudo.correctAnswer,
-      ts: ts,
-    );
-    state = state.copyWith(attempts: [...state.attempts, attempt]);
+    final correct = letra == conteudo.correctAnswer;
+    final aux = aux_state.ensureAuxRooms(state);
+    final roomKey = source.startsWith('review')
+        ? 'review'
+        : source.startsWith('recovery')
+        ? 'recovery'
+        : source.startsWith('amparo')
+        ? 'amparo'
+        : 'doubt';
+    final room = JsonMap.of(aux[roomKey] as JsonMap);
+    final attempts = (room['attempts'] as List? ?? const [])
+        .whereType<Map>()
+        .map((entry) => JsonMap.from(entry))
+        .toList();
+    attempts.add({
+      'marker': marker,
+      'layer': layer.value,
+      'letra': letra.name,
+      'sinal': sinal.value,
+      'correct': correct,
+      'ts': ts,
+      'source': source,
+      'authoritative': false,
+      'strongEffect': false,
+      'writesProgress': false,
+      'writesTruth': false,
+      'writesMastery': false,
+      'requiresServerDecision': false,
+      'decisionSource': 'sim_app_local_aux_evidence',
+      'auxiliary': true,
+    });
+    room['attempts'] = attempts;
+    aux[roomKey] = room;
     final eventType = source.startsWith('review')
         ? 'REVIEW_ANSWER_RECORDED'
         : source.startsWith('recovery')
         ? 'RECOVERY_ANSWER_RECORDED'
+        : source.startsWith('amparo')
+        ? 'AMPARO_ANSWER_RECORDED'
         : 'AUX_ROOM_ANSWER_RECORDED';
     var nextState = state.copyWith(
+      auxRooms: aux,
       events: [
         ...state.events,
         StudentLearningEvent(
@@ -283,44 +404,30 @@ class StudentAuxRoomService {
             'question': conteudo.question,
             'letra': letra.name,
             'sinal': sinal.value,
-            'correct': attempt.correct,
+            'correct': correct,
             'authoritative': false,
             'strongEffect': false,
+            'writesProgress': false,
             'writesTruth': false,
             'requiresServerDecision': false,
             'decisionSource': 'sim_app_local_aux_evidence',
+            'auxiliary': true,
+            'writesMastery': false,
           },
         ),
       ],
     );
+    if (source.startsWith('recovery')) {
+      nextState = aux_state.resolvePendingFromRecoveryAnswer(
+        nextState,
+        marker: marker,
+        layer: layer,
+        signal: sinal,
+        correct: correct,
+        ts: ts,
+      );
+    }
     writeState(nextState);
-  }
-
-  LessonContent _localAuxRoomFallbackContent({
-    required AuxRoomMode mode,
-    required String item,
-    required DecisionSignal signal,
-  }) {
-    final room = mode == AuxRoomMode.recovery ? 'recuperacao' : 'revisao';
-    final prompt = mode == AuxRoomMode.recovery
-        ? 'Qual alternativa reconstrói melhor a ideia central de "$item"?'
-        : 'Qual alternativa revisa corretamente "$item"?';
-    return LessonContent(
-      explanation:
-          'Esta $room usa a evidencia local da aula enquanto novo conteudo pode ser preparado.',
-      question: prompt,
-      options: const {
-        AnswerLetter.A: 'Retomar a ideia principal com calma.',
-        AnswerLetter.B: 'Pular sem verificar a compreensao.',
-        AnswerLetter.C: 'Trocar de assunto agora.',
-      },
-      correctAnswer: AnswerLetter.A,
-      whyCorrect: 'Mantem continuidade e reforca a evidencia local.',
-      whyWrong: const {
-        'B': 'Pular nao confirma dominio.',
-        'C': 'Trocar de assunto nao repara a duvida atual.',
-      },
-    );
   }
 
   void completeReviewSession(String lessonLocalId) {
@@ -370,6 +477,42 @@ class StudentAuxRoomService {
     );
   }
 
+  void registerAmparoStarted(
+    String lessonLocalId,
+    List<AmparoStation> stations,
+    int amparoLevel,
+  ) {
+    final state = readState(lessonLocalId);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final aux = aux_state.ensureAuxRooms(state);
+    final amparo = JsonMap.of(aux['amparo'] as JsonMap)
+      ..['active'] = true
+      ..['pending'] = false
+      ..['currentQueue'] = [for (final station in stations) station.marker]
+      ..['currentIndex'] = 0
+      ..['amparoLvl'] = amparoLevel
+      ..['startedAt'] = now
+      ..['updatedAt'] = now;
+    aux['amparo'] = amparo;
+    writeState(
+      state.copyWith(
+        auxRooms: aux,
+        events: [
+          ...state.events,
+          StudentLearningEvent(
+            type: 'AMPARO_STARTED',
+            ts: now,
+            payload: {
+              'amparoLvl': amparoLevel,
+              'queue': [for (final station in stations) station.marker],
+              ..._auxFlags(),
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   bool shouldLessonBlockFinalCompletion(String lessonLocalId) {
     return aux_state.shouldBlockFinalCompletionForRecovery(
       readState(lessonLocalId),
@@ -409,4 +552,79 @@ class StudentAuxRoomService {
       ),
     );
   }
+
+  void registerAmparoCompleted(String lessonLocalId) {
+    final state = readState(lessonLocalId);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final aux = aux_state.ensureAuxRooms(state);
+    final amparo = JsonMap.of(aux['amparo'] as JsonMap)
+      ..['active'] = false
+      ..['pending'] = false
+      ..['currentIndex'] = 0
+      ..['sequenceCount'] = 0
+      ..['sequenceMarker'] = null
+      ..['sequenceLayer'] = null
+      ..['recentAggravants'] = <JsonMap>[]
+      ..['completedAt'] = now
+      ..['updatedAt'] = now;
+    aux['amparo'] = amparo;
+    writeState(
+      state.copyWith(
+        auxRooms: aux,
+        events: [
+          ...state.events,
+          StudentLearningEvent(
+            type: 'AMPARO_COMPLETED',
+            ts: now,
+            payload: {
+              'amparoLvl': (amparo['amparoLvl'] as num?)?.toInt() ?? 0,
+              ..._auxFlags(),
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _appendAuxEvent(String lessonLocalId, String type, JsonMap payload) {
+    final state = readState(lessonLocalId);
+    writeState(
+      state.copyWith(
+        events: [
+          ...state.events,
+          StudentLearningEvent(
+            type: type,
+            ts: DateTime.now().millisecondsSinceEpoch,
+            payload: {...payload, ..._auxFlags()},
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+JsonMap _optionsPayload(Map<AnswerLetter, String> options) => {
+  'A': options[AnswerLetter.A] ?? '',
+  'B': options[AnswerLetter.B] ?? '',
+  'C': options[AnswerLetter.C] ?? '',
+};
+
+String _blockagePoint(
+  AmparoRoomContext context,
+  List<JsonMap> recentAggravants,
+) {
+  final marker = context.marker ?? 'item';
+  final question = context.currentQuestion.trim();
+  if (question.isEmpty) return 'Travamento no item $marker.';
+  return 'Travamento no item $marker: $question';
+}
+
+JsonMap _auxFlags() => const {
+  'authoritative': false,
+  'writesProgress': false,
+  'writesTruth': false,
+  'writesMastery': false,
+  'requiresServerDecision': false,
+  'decisionSource': 'sim_app_local_aux_evidence',
+  'auxiliary': true,
+};

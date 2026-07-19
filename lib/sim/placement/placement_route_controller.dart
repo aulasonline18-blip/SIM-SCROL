@@ -3,6 +3,8 @@ import '../experience/student_experience_types.dart';
 import '../state/student_learning_state_service.dart';
 import 'placement_blocks.dart';
 import 'placement_payload.dart';
+import 'placement_plan_engine.dart';
+import 'placement_scoring_engine.dart';
 import 'placement_state.dart';
 import 'placement_store.dart';
 import 'placement_t02_caller.dart';
@@ -79,6 +81,8 @@ class PlacementRouteController {
     result = initial.result;
     index = _resumePlacementIndex(initial);
     stage = switch (initial.status) {
+      PlacementStatus.requested ||
+      PlacementStatus.waitingPreparation ||
       PlacementStatus.running => PlacementLocalStage.running,
       PlacementStatus.done when initial.result != null =>
         PlacementLocalStage.result,
@@ -94,6 +98,8 @@ class PlacementRouteController {
   final PlacementStore store;
   final PlacementT02Caller t02Caller;
   final bool enabled;
+  final PlacementPlanEngine planEngine = const PlacementPlanEngine();
+  final PlacementScoringEngine scoringEngine = const PlacementScoringEngine();
 
   late PlacementLocalStage stage;
   List<PlacementBlock> blocks = const [];
@@ -133,7 +139,10 @@ class PlacementRouteController {
     store.writePlacement(
       PlacementStoreState(
         pretestStatus: PlacementStatus.skipped,
+        choice: 'start_from_zero',
         startMarker: null,
+        startItemIdx: null,
+        pretestSource: 'choice_gate',
         pretestFinishedAt: DateTime.now().millisecondsSinceEpoch,
       ),
     );
@@ -146,14 +155,16 @@ class PlacementRouteController {
     stage = PlacementLocalStage.redirectToAula;
   }
 
-  void chooseStart() {
+  void chooseFindMyPoint() {
     store.writePlacement(
       PlacementStoreState(
-        pretestStatus: PlacementStatus.intro,
+        pretestStatus: PlacementStatus.requested,
+        choice: 'find_my_point',
+        pretestSource: 'adaptive_t02',
         pretestStartedAt: DateTime.now().millisecondsSinceEpoch,
       ),
     );
-    stage = PlacementLocalStage.intro;
+    stage = PlacementLocalStage.running;
   }
 
   Future<void> startTest() async {
@@ -163,27 +174,56 @@ class PlacementRouteController {
       final context = buildPlacementContext(stateService.read(lessonLocalId));
       if (context == null) {
         blocks = const [];
+        store.writePlacement(
+          const PlacementStoreState(
+            pretestStatus: PlacementStatus.waitingPreparation,
+            choice: 'find_my_point',
+            pretestSource: 'adaptive_t02',
+            reason: 'Curriculo ainda vazio; aguardando preparacao.',
+          ),
+        );
+        stage = PlacementLocalStage.running;
       } else {
-        final t02 = await t02Caller.callPlacementT02(context);
-        blocks = t02?.blocks.isNotEmpty == true
-            ? t02!.blocks
-            : createPretestBlocks(context.curriculumItems);
-        final source = t02?.blocks.isNotEmpty == true
-            ? 't02'
-            : 'fallback_limited';
+        final plan = planEngine.build(context.curriculumItems);
+        if (plan.waitingForCurriculum) {
+          store.writePlacement(
+            const PlacementStoreState(
+              pretestStatus: PlacementStatus.waitingPreparation,
+              choice: 'find_my_point',
+              pretestSource: 'adaptive_t02',
+              reason: 'Curriculo ainda vazio; aguardando preparacao.',
+            ),
+          );
+          stage = PlacementLocalStage.running;
+          return;
+        }
+        final PlacementT02Result? t02;
+        try {
+          t02 = await t02Caller.callPlacementT02ForPlan(context, plan);
+        } catch (_) {
+          _fallBackToBeginningAfterPlacementFailure();
+          return;
+        }
+        if (t02?.blocks.isNotEmpty != true) {
+          _fallBackToBeginningAfterPlacementFailure();
+          return;
+        }
+        blocks = t02!.blocks;
         answers = [];
         index = 0;
         result = null;
         store.writePlacement(
           PlacementStoreState(
             pretestStatus: PlacementStatus.running,
+            choice: 'find_my_point',
             pretestBlocks: blocks,
             pretestAnswers: answers,
             pretestResult: null,
             startMarker: null,
+            startItemIdx: null,
             pretestIndex: 0,
-            pretestSource: source,
-            pretestLimited: source == 'fallback_limited',
+            pretestSource: 'adaptive_t02',
+            pretestLimited: false,
             pretestStartedAt: DateTime.now().millisecondsSinceEpoch,
           ),
         );
@@ -209,7 +249,16 @@ class PlacementRouteController {
       answeredAt: DateTime.now().millisecondsSinceEpoch,
     );
     answers = [...answers, next];
-    if (index + 1 < blocks.length) {
+    final currentState = stateService.read(lessonLocalId);
+    final curriculum = currentState?.curriculum;
+    final shouldStop =
+        curriculum != null &&
+        scoringEngine.shouldStopEarly(
+          curriculumItems: curriculum.items,
+          blocks: blocks,
+          answers: answers,
+        );
+    if (!shouldStop && index + 1 < blocks.length) {
       index += 1;
       store.writePlacement(
         PlacementStoreState(
@@ -224,18 +273,71 @@ class PlacementRouteController {
     store.writePlacement(
       const PlacementStoreState(pretestStatus: PlacementStatus.scoring),
     );
-    result = scorePlacement(blocks, answers);
+    result = curriculum == null
+        ? null
+        : scoringEngine.score(
+            curriculumItems: curriculum.items,
+            blocks: blocks,
+            answers: answers,
+          );
+    if (result == null) {
+      _fallBackToBeginningAfterPlacementFailure();
+      return;
+    }
     store.writePlacement(
       PlacementStoreState(
         pretestStatus: PlacementStatus.done,
+        choice: 'find_my_point',
         pretestAnswers: answers,
         pretestResult: result,
         startMarker: result?.startMarker,
+        startItemIdx: result?.startItemIdx,
         pretestIndex: index,
+        pretestSource: result?.source,
+        confidence: result?.confidence,
+        reason: result?.reason,
         pretestFinishedAt: DateTime.now().millisecondsSinceEpoch,
       ),
     );
     stage = PlacementLocalStage.result;
+  }
+
+  void _fallBackToBeginningAfterPlacementFailure() {
+    final state = stateService.read(lessonLocalId);
+    final first = state?.curriculum?.items.firstOrNull;
+    result = first == null
+        ? null
+        : PlacementResult(
+            startMarker: first.marker,
+            startItemIdx: 0,
+            masteredMarkers: const [],
+            uncertainMarkers: const [],
+            failedMarkers: const [],
+            testedMarkers: const [],
+            confidence: 'low',
+            reason:
+                'Nao consegui diagnosticar com seguranca; inicio seguro no começo.',
+            source: 'adaptive_t02_failed_safe_start',
+            scoredAt: DateTime.now().millisecondsSinceEpoch,
+          );
+    store.writePlacement(
+      PlacementStoreState(
+        pretestStatus: first == null
+            ? PlacementStatus.failed
+            : PlacementStatus.done,
+        choice: 'find_my_point',
+        pretestResult: result,
+        startMarker: result?.startMarker,
+        startItemIdx: result?.startItemIdx,
+        pretestSource: result?.source ?? 'adaptive_t02_failed',
+        confidence: result?.confidence ?? 'low',
+        reason: result?.reason ?? 'Curriculo ainda indisponivel.',
+        pretestFinishedAt: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+    stage = first == null
+        ? PlacementLocalStage.running
+        : PlacementLocalStage.result;
   }
 
   void continueToAula() {

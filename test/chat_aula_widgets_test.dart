@@ -353,4 +353,144 @@ void main() {
     expect(controller.offset, greaterThan(0));
     expect(questionTop, closeTo(expected, 48));
   });
+
+  testWidgets('timeline reacts when same lesson renders answer signals', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    Widget timeline(List<ChatLessonMessage> messages) {
+      return MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 360,
+            child: ChatAulaTimeline(
+              scrollController: controller,
+              initialScrollToCurrent: true,
+              initialScrollKey: 'same-lesson-live-scroll',
+              padding: EdgeInsets.zero,
+              messages: messages,
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      );
+    }
+
+    final baseMessages = [
+      for (var i = 0; i < 18; i++)
+        ChatLessonMessage(
+          id: 'live-history-$i',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.historyQuestion,
+          text: 'Histórico vivo $i\nlinha\nlinha\nlinha',
+          isHistorical: true,
+          isActionable: false,
+        ),
+      const ChatLessonMessage(
+        id: 'live-question',
+        role: ChatLessonMessageRole.sim,
+        kind: ChatLessonMessageKind.question,
+        text: 'Pergunta viva?',
+        isActionable: false,
+      ),
+      const ChatLessonMessage(
+        id: 'live-options',
+        role: ChatLessonMessageRole.sim,
+        kind: ChatLessonMessageKind.options,
+        options: [
+          ChatLessonOption(
+            letter: AnswerLetter.A,
+            text: 'A',
+            selected: false,
+            enabled: true,
+          ),
+          ChatLessonOption(
+            letter: AnswerLetter.B,
+            text: 'B',
+            selected: false,
+            enabled: true,
+          ),
+          ChatLessonOption(
+            letter: AnswerLetter.C,
+            text: 'C',
+            selected: false,
+            enabled: true,
+          ),
+        ],
+      ),
+      for (var i = 0; i < 18; i++)
+        ChatLessonMessage(
+          id: 'live-tail-$i',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.historyAnswer,
+          text: 'Final vivo $i\nlinha',
+          isHistorical: true,
+          isActionable: false,
+        ),
+    ];
+
+    await tester.pumpWidget(timeline(baseMessages));
+    await tester.pumpAndSettle();
+    final before = controller.offset;
+
+    await tester.pumpWidget(
+      timeline([
+        ...baseMessages.take(19),
+        const ChatLessonMessage(
+          id: 'live-options',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.options,
+          selectedAnswer: AnswerLetter.B,
+          options: [
+            ChatLessonOption(
+              letter: AnswerLetter.A,
+              text: 'A',
+              selected: false,
+              enabled: true,
+            ),
+            ChatLessonOption(
+              letter: AnswerLetter.B,
+              text: 'B',
+              selected: true,
+              enabled: true,
+            ),
+            ChatLessonOption(
+              letter: AnswerLetter.C,
+              text: 'C',
+              selected: false,
+              enabled: true,
+            ),
+          ],
+          signals: [
+            ChatLessonSignal(
+              value: 1,
+              labelKey: 'aula_sig_certeza',
+              enabled: true,
+            ),
+            ChatLessonSignal(
+              value: 2,
+              labelKey: 'aula_sig_revisar',
+              enabled: true,
+            ),
+            ChatLessonSignal(
+              value: 3,
+              labelKey: 'aula_sig_nao_sei',
+              enabled: true,
+            ),
+          ],
+        ),
+        ...baseMessages.skip(baseMessages.length - 18),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('signal-button-1')), findsOneWidget);
+    expect(controller.offset, isNot(closeTo(before, 1)));
+  });
 }

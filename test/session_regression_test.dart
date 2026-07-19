@@ -53,7 +53,8 @@ void main() {
             )
             ..selectedLanguageCode = 'pt'
             ..stableLang = 'pt-BR'
-            ..freeText = 'Quero aprender frações começando do zero.';
+            ..freeText = 'Quero aprender frações começando do zero.'
+            ..setPedagogicalEntryField('entry_path', 'material_help');
 
       expect(session.saveObjectiveEntry(), isTrue);
       expect(session.route, '/cyber/curriculo');
@@ -147,6 +148,7 @@ void main() {
             ..selectedLanguageCode = 'pt'
             ..stableLang = 'pt-BR'
             ..freeText = 'Quero aprender frações começando do zero.'
+            ..setPedagogicalEntryField('entry_path', 'material_help')
             ..authReady = true
             ..authed = true;
 
@@ -199,6 +201,7 @@ void main() {
             ..selectedLanguageCode = 'pt'
             ..stableLang = 'pt-BR'
             ..freeText = 'Quero aprender frações começando do zero.'
+            ..setPedagogicalEntryField('entry_path', 'material_help')
             ..authReady = true
             ..authed = true;
 
@@ -272,7 +275,8 @@ void main() {
             ..selectedLanguageCode = 'pt'
             ..stableLang = 'pt-BR'
             ..freeText =
-                'Quero aprender deslocamento em física começando do zero.';
+                'Quero aprender deslocamento em física começando do zero.'
+            ..setPedagogicalEntryField('entry_path', 'material_help');
 
       expect(session.saveObjectiveEntry(), isTrue);
       final launch = session.launchExperience();
@@ -324,7 +328,8 @@ void main() {
             ..selectedLanguageCode = 'pt'
             ..stableLang = 'pt-BR'
             ..freeText =
-                'Quero aprender deslocamento em física começando do zero.';
+                'Quero aprender deslocamento em física começando do zero.'
+            ..setPedagogicalEntryField('entry_path', 'material_help');
 
       expect(session.saveObjectiveEntry(), isTrue);
       final launch = session.launchExperience();
@@ -520,7 +525,7 @@ void main() {
     },
   );
 
-  testWidgets('curriculo espera authReady/authed antes de chamar T00', (
+  testWidgets('curriculo com preparo local pode iniciar apos recepcao viva', (
     tester,
   ) async {
     var called = false;
@@ -547,7 +552,8 @@ void main() {
           )
           ..selectedLanguageCode = 'pt'
           ..stableLang = 'pt-BR'
-          ..freeText = 'Quero aprender frações começando do zero.';
+          ..freeText = 'Quero aprender frações começando do zero.'
+          ..setPedagogicalEntryField('entry_path', 'material_help');
 
     expect(session.saveObjectiveEntry(), isTrue);
 
@@ -557,16 +563,6 @@ void main() {
     await tester.pump();
     expect(find.byType(SimPreparationExperience), findsOneWidget);
     expect(find.text('Carregando...'), findsNothing);
-    expect(called, isFalse);
-
-    session
-      ..authReady = true
-      ..authed = true;
-    session.setFreeText(session.freeText);
-
-    await tester.pump();
-    await tester.pump();
-
     expect(called, isTrue);
     expect(session.route, '/cyber/curriculo');
     expect(session.aulaSnapshot?.conteudo?.explanation.trim(), isNotEmpty);

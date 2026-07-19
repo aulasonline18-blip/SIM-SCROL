@@ -58,7 +58,7 @@ void main() {
 
     expect(auxService, contains("'requiresServerDecision': false"));
     expect(auxService, contains('sim_app_local_aux_evidence'));
-    expect(auxService, contains('_localAuxRoomFallbackContent'));
+    expect(auxService, isNot(contains('_localAuxRoomFallbackContent')));
   });
 
   test('P2: marcadores de gate remoto ficam fora do runtime principal', () {

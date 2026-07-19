@@ -1,16 +1,7 @@
 import '../lesson/lesson_models.dart';
 import '../state/student_learning_state.dart';
 
-enum AuxRoomMode { review, recovery, doubt }
-
-const Map<AuxRoomMode, String> auxRoomAddonReference = {
-  AuxRoomMode.review: 'SIM_AUX_ADDON_REVIEW_SERVER_SIDE',
-  AuxRoomMode.recovery: 'SIM_AUX_ADDON_RECOVERY_SERVER_SIDE',
-  AuxRoomMode.doubt: 'ADENDO_DOUBT_SERVER_SIDE',
-};
-
-String getAuxRoomAddonReference(AuxRoomMode mode) =>
-    auxRoomAddonReference[mode]!;
+enum AuxRoomMode { review, recovery, doubt, amparo }
 
 enum ReviewRoomStatus {
   choose,
@@ -31,6 +22,8 @@ enum RecoveryRoomStatus {
   done,
   failed,
 }
+
+enum AmparoRoomStatus { preparing, ready, answering, result, done, failed }
 
 enum DoubtStatus { idle, processing, explaining, error }
 
@@ -59,10 +52,11 @@ class AuxRoomProfile {
 }
 
 class AuxRoomItem {
-  const AuxRoomItem({this.marker, this.text});
+  const AuxRoomItem({this.marker, this.text, this.itemIdx});
 
   final String? marker;
   final String? text;
+  final int? itemIdx;
 }
 
 class AuxRoomContent {
@@ -118,6 +112,62 @@ class RecoveryRoomContext {
   final List<AuxRoomItem> items;
   final LessonLayer layer;
   final AuxRoomProfile profile;
+}
+
+class AmparoStation {
+  const AmparoStation({
+    required this.marker,
+    required this.title,
+    required this.purpose,
+    required this.layer,
+    required this.amparoType,
+  });
+
+  final String marker;
+  final String title;
+  final String purpose;
+  final LessonLayer layer;
+  final String amparoType;
+
+  JsonMap toJson() => {
+    'marker': marker,
+    'title': title,
+    'purpose': purpose,
+    'layer': layer.value,
+    'amparo_type': amparoType,
+  };
+}
+
+class AmparoRoomContext {
+  const AmparoRoomContext({
+    required this.lessonLocalId,
+    required this.topic,
+    required this.items,
+    required this.itemIdx,
+    required this.marker,
+    required this.layer,
+    required this.profile,
+    this.currentExplanation = '',
+    this.currentQuestion = '',
+    this.currentOptions = const {},
+    this.selectedAnswer,
+    this.correctAnswer,
+    this.signal,
+  });
+
+  final String lessonLocalId;
+  final String topic;
+  final List<AuxRoomItem> items;
+  final int itemIdx;
+  final String? marker;
+  final LessonLayer layer;
+  final AuxRoomProfile profile;
+  final String currentExplanation;
+  final String currentQuestion;
+  final Map<AnswerLetter, String> currentOptions;
+  final AnswerLetter? selectedAnswer;
+  final AnswerLetter? correctAnswer;
+  final DecisionSignal? signal;
 }
 
 class ReviewRoomView {
@@ -240,6 +290,58 @@ class RecoveryRoomView {
   }
 }
 
+class AmparoRoomView {
+  const AmparoRoomView({
+    required this.status,
+    required this.stations,
+    required this.idx,
+    required this.amparoLvl,
+    this.conteudo,
+    this.letra,
+    this.sinal,
+    this.resultCorrect,
+    this.resultMsg,
+    this.errMsg,
+  });
+
+  final AmparoRoomStatus status;
+  final List<AmparoStation> stations;
+  final int idx;
+  final int amparoLvl;
+  final AuxRoomContent? conteudo;
+  final AnswerLetter? letra;
+  final DecisionSignal? sinal;
+  final bool? resultCorrect;
+  final String? resultMsg;
+  final String? errMsg;
+
+  AmparoRoomView copyWith({
+    AmparoRoomStatus? status,
+    List<AmparoStation>? stations,
+    int? idx,
+    int? amparoLvl,
+    AuxRoomContent? conteudo,
+    AnswerLetter? letra,
+    DecisionSignal? sinal,
+    bool? resultCorrect,
+    String? resultMsg,
+    String? errMsg,
+  }) {
+    return AmparoRoomView(
+      status: status ?? this.status,
+      stations: stations ?? this.stations,
+      idx: idx ?? this.idx,
+      amparoLvl: amparoLvl ?? this.amparoLvl,
+      conteudo: conteudo ?? this.conteudo,
+      letra: letra ?? this.letra,
+      sinal: sinal ?? this.sinal,
+      resultCorrect: resultCorrect ?? this.resultCorrect,
+      resultMsg: resultMsg ?? this.resultMsg,
+      errMsg: errMsg ?? this.errMsg,
+    );
+  }
+}
+
 class DoubtImagePayload {
   const DoubtImagePayload({
     required this.name,
@@ -255,9 +357,13 @@ class DoubtImagePayload {
 }
 
 class DoubtResponse {
-  const DoubtResponse({required this.explanation});
+  const DoubtResponse({
+    required this.explanation,
+    this.visualTrigger = const {},
+  });
 
   final String explanation;
+  final JsonMap visualTrigger;
 }
 
 class DoubtState {

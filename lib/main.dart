@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/utils/sim_constants.dart';
 import 'features/auth/login_screen.dart';
 import 'features/billing/billing_and_simple_pages.dart';
+import 'features/classroom/aux_room_screens.dart';
 import 'features/classroom/chat_aula_screen.dart';
 import 'features/onboarding/onboarding_screens.dart';
 import 'features/onboarding/preparation_and_placement.dart';
@@ -21,6 +22,7 @@ import 'sim/cloud/supabase_student_state_cloud_storage.dart';
 import 'sim/config/sim_environment.dart';
 import 'sim/external_ai/sim_ai_server_config.dart';
 import 'sim/localization/sim_locale_contract.dart';
+import 'sim/organism/sim_organism.dart';
 import 'sim/state/drift_student_state_storage.dart';
 import 'sim/state/shared_prefs_state_storage.dart';
 import 'sim/state/student_state_store.dart';
@@ -266,7 +268,20 @@ class _SimAppState extends State<SimApp> {
     );
     setSimActiveLanguage(simUiCodeForLocaleTag(interfaceLocale));
     Widget screen;
-    final routePath = Uri.tryParse(session.route)?.path ?? session.route;
+    final requestedRoute = Uri.tryParse(session.route)?.path ?? session.route;
+    final hasActiveLesson = (session.lessonLocalId ?? '').trim().isNotEmpty;
+    final hasResolvedLanguage =
+        (session.selectedLanguageCode ?? session.stableLang ?? '')
+            .trim()
+            .isNotEmpty ||
+        hasActiveLesson;
+    final routeDecision = const SimOrganismRouter().resolve(
+      path: requestedRoute,
+      authed: session.authed,
+      hasLanguage: hasResolvedLanguage,
+      hasObjective: hasActiveLesson,
+    );
+    final routePath = routeDecision.destination;
     switch (routePath) {
       case '/login':
         screen = LoginScreen(session: session);
@@ -280,6 +295,11 @@ class _SimAppState extends State<SimApp> {
         screen = PlacementLabScreen(session: session);
       case '/cyber/warmup':
         screen = WarmupBridgeScreen(session: session);
+      case '/cyber/amparo':
+        screen = _guardActiveLesson(
+          session,
+          child: AmparoRoomScreen(session: session),
+        );
       case '/cyber/aula':
         screen = _guardActiveLesson(
           session,

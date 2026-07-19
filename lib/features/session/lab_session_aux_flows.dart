@@ -7,8 +7,13 @@ extension LabSessionAuxFlowExtensions on LabSession {
     );
     final curriculum = state.curriculum;
     final items = [
-      for (final item in curriculum?.items ?? const <CurriculumItem>[])
-        AuxRoomItem(marker: item.marker, text: item.text),
+      for (final indexed
+          in (curriculum?.items ?? const <CurriculumItem>[]).indexed)
+        AuxRoomItem(
+          marker: indexed.$2.marker,
+          text: indexed.$2.text,
+          itemIdx: indexed.$1,
+        ),
     ];
     final progress = state.progress;
     return ReviewRoomContext(
@@ -46,6 +51,7 @@ extension LabSessionAuxFlowExtensions on LabSession {
     ReviewRoomView? previous;
     try {
       final organism = _activeOrganism ?? _organismForActiveLesson();
+      if (recoveryRoom != null) return;
       previous = lessonUiState.reviewRoom;
       setReviewRoom(
         ReviewRoomView(

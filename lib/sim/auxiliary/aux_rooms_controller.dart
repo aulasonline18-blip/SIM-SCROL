@@ -1,4 +1,5 @@
 import '../state/student_learning_state.dart';
+import 'amparo_room_service.dart';
 import 'aux_room_models.dart';
 import 'recovery_room_service.dart';
 import 'review_room_service.dart';
@@ -7,12 +8,15 @@ class AuxRoomsController {
   AuxRoomsController({
     required this.reviewRoomService,
     required this.recoveryRoomService,
+    required this.amparoRoomService,
   }) : review = reviewRoomService.createReviewChoiceView();
 
   final ReviewRoomService reviewRoomService;
   final RecoveryRoomService recoveryRoomService;
+  final AmparoRoomService amparoRoomService;
   ReviewRoomView review;
   RecoveryRoomView? recovery;
+  AmparoRoomView? amparo;
 
   void openReviewChoice() {
     review = reviewRoomService.createReviewChoiceView();
@@ -96,5 +100,55 @@ class AuxRoomsController {
     if (current != null) {
       recovery = recoveryRoomService.finishRecoveryRoom(lessonLocalId, current);
     }
+  }
+
+  bool shouldStartAmparo(String lessonLocalId) {
+    return recovery == null &&
+        amparoRoomService.shouldStartAmparoRoom(lessonLocalId);
+  }
+
+  Future<void> startAmparo(AmparoRoomContext context) async {
+    amparo = const AmparoRoomView(
+      status: AmparoRoomStatus.preparing,
+      stations: [],
+      idx: 0,
+      amparoLvl: 0,
+    );
+    amparo = await amparoRoomService.startAmparoRoom(context);
+  }
+
+  void amparoSelecionar(AnswerLetter letter) {
+    final current = amparo;
+    if (current != null) {
+      amparo = amparoRoomService.selectLetter(current, letter);
+    }
+  }
+
+  Future<void> amparoEnviarSinal(
+    AmparoRoomContext context,
+    DecisionSignal signal,
+  ) async {
+    final current = amparo;
+    if (current != null) {
+      amparo = amparoRoomService.answerAmparoRoom(context, current, signal);
+    }
+  }
+
+  Future<void> amparoNext(AmparoRoomContext context) async {
+    final current = amparo;
+    if (current != null) {
+      amparo = await amparoRoomService.nextAmparoRoom(context, current);
+    }
+  }
+
+  void finishAmparo(String lessonLocalId) {
+    final current = amparo;
+    if (current != null) {
+      amparo = amparoRoomService.finishAmparoRoom(lessonLocalId, current);
+    }
+  }
+
+  void closeAmparo() {
+    amparo = null;
   }
 }

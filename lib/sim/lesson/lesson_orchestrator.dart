@@ -330,7 +330,12 @@ class LessonOrchestrator {
         return;
       }
 
-      final material = await _fetchMaterial(params);
+      final T02LessonMaterial material;
+      try {
+        material = await _fetchMaterial(params);
+      } catch (_) {
+        return;
+      }
       final refreshed = _lessonFromMaterial(material, params);
       final currentAfterFetch = cache.peek(key);
       final base = currentAfterFetch ?? refreshed;

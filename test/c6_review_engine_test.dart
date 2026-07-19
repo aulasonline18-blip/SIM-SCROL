@@ -410,14 +410,25 @@ void main() {
         final recorded = saved.events.lastWhere(
           (event) => event.type == 'REVIEW_ANSWER_RECORDED',
         );
+        final reviewRoom = ensureAuxRooms(saved)['review'] as Map;
+        final reviewAttempts = (reviewRoom['attempts'] as List)
+            .cast<Map>()
+            .map((entry) => JsonMap.from(entry))
+            .toList();
+        final auxAttempt = reviewAttempts.last;
 
         expect(view.status, ReviewRoomStatus.result);
-        expect(saved.attempts.last.marker, 'M1');
-        expect(saved.attempts.last.layer, LessonLayer.l1);
-        expect(saved.attempts.last.letra, AnswerLetter.B);
-        expect(saved.attempts.last.sinal, DecisionSignal.one);
-        expect(saved.attempts.last.correct, isTrue);
-        expect(saved.attempts.last.ts, greaterThan(0));
+        expect(saved.attempts, hasLength(1));
+        expect(saved.attempts.single, attempt);
+        expect(auxAttempt['marker'], 'M1');
+        expect(auxAttempt['layer'], 1);
+        expect(auxAttempt['letra'], 'B');
+        expect(auxAttempt['sinal'], 1);
+        expect(auxAttempt['correct'], isTrue);
+        expect(auxAttempt['ts'], greaterThan(0));
+        expect(auxAttempt['authoritative'], isFalse);
+        expect(auxAttempt['writesProgress'], isFalse);
+        expect(auxAttempt['writesTruth'], isFalse);
         expect(recorded.payload['marker'], 'M1');
         expect(recorded.payload['type'], 'review');
         expect(recorded.payload['slot'], 'review:0');
@@ -425,6 +436,11 @@ void main() {
         expect(recorded.payload['sinal'], 1);
         expect(recorded.payload['correct'], isTrue);
         expect(recorded.payload['question'], 'Pergunta review');
+        expect(recorded.payload['authoritative'], isFalse);
+        expect(recorded.payload['writesProgress'], isFalse);
+        expect(recorded.payload['writesTruth'], isFalse);
+        expect(recorded.payload['writesMastery'], isFalse);
+        expect(recorded.payload['requiresServerDecision'], isFalse);
       },
     );
 

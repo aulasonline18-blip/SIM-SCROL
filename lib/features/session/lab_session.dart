@@ -31,9 +31,12 @@ import '../../sim/classroom/lesson_runtime_engine.dart';
 import '../../sim/classroom/lesson_main_view_model.dart';
 import '../../sim/experience/student_experience_types.dart';
 import '../../sim/experience/curriculum_utils.dart';
+import '../../sim/experience/warmup_bridge_coordinator.dart';
+import '../../sim/experience/warmup_bridge_service.dart';
 import '../../sim/organism/sim_organism.dart';
 import '../../sim/organism/sim_organism_provider.dart';
 import '../../sim/placement/placement_route_controller.dart';
+import '../../sim/reception/pedagogical_reception_builder.dart';
 import '../../session/auth_session.dart';
 import '../../session/entry_form_state.dart';
 import '../../session/lesson_ui_state.dart';
@@ -54,11 +57,15 @@ import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/auxiliary/doubt_input_sheet.dart';
 import '../../sim/auxiliary/doubt_t02_caller.dart';
 import '../../sim/auxiliary/lesson_doubt_controller.dart';
+import '../../sim/auxiliary/student_aux_rooms.dart' as aux_rooms;
 
 import '../../core/utils/sim_constants.dart';
 
 part 'lab_session_flows.dart';
+part 'lab_session_backup_flows.dart';
 part 'lab_session_entry_flows.dart';
+part 'lab_session_warmup_flows.dart';
+part 'lab_session_amparo_flows.dart';
 part 'lab_session_aux_flows.dart';
 
 class LabSession extends ChangeNotifier {
@@ -74,6 +81,7 @@ class LabSession extends ChangeNotifier {
     drawerBackupFileSaver,
     PlayBillingFunctions? playBillingFunctions,
     CreditsFunctions? creditsFunctions,
+    this.warmupBridgeService,
     this.experiencePreparerOverride,
     this.prefs,
   }) : canonicalStore =
@@ -98,6 +106,7 @@ class LabSession extends ChangeNotifier {
   experiencePreparerOverride;
   final StudentStateStore? canonicalStore;
   final SimServerAttachmentClient? _attachmentClient;
+  final WarmupBridgeService? warmupBridgeService;
   AccountDeletionGateway? _accountDeletionGateway;
   StudentStateCloudFunctions? _drawerCloudFunctions;
   SupabaseSessionProvider? _drawerSessionProvider;
@@ -143,6 +152,7 @@ class LabSession extends ChangeNotifier {
   String? warmupError;
   String? warmupSelectedAnswer;
   bool warmupWaitingForOfficialLesson = false;
+  final WarmupBridgeCoordinator _warmupCoordinator = WarmupBridgeCoordinator();
 
   VisualLearningFeedbackReport get visualLearningFeedbackReport =>
       VisualLearningFeedbackReport.fromLesson(
@@ -160,8 +170,6 @@ class LabSession extends ChangeNotifier {
   int _experienceGeneration = 0;
   int _aulaRuntimeGeneration = 0;
   bool _entryOfficialLessonReady = false;
-  bool _entryWarmupExpected = false;
-  bool _entryAulaNavigationStarted = false;
   late SimLocaleSettings localeSettings = SimLocaleSettings.load(prefs);
 
   late final AudioPreference _audioPreference = AudioPreference(
@@ -176,9 +184,13 @@ class LabSession extends ChangeNotifier {
   String? _aulaStateSubscriptionLessonId;
   bool _advancePendingReevaluationScheduled = false;
   int _autoAdvanceAulaGeneration = 0;
+  int _doubtRequestSeq = 0;
   bool _disposed = false;
 
-  void _notifyFromChild() => notifyListeners();
+  void _notifyFromChild() {
+    if (_disposed) return;
+    notifyListeners();
+  }
 
   StudentLearningState? get _activeCanonicalState {
     final id = lessonLocalId;
@@ -268,6 +280,7 @@ class LabSession extends ChangeNotifier {
   String get expectedResult => entryForm.expectedResult;
   String get difficulties => entryForm.difficulties;
   String get learningPreference => entryForm.learningPreference;
+  bool get materialEntryPath => entryForm.entryPath == 'material_help';
 
   String? get lessonLocalId => lessonUiState.lessonLocalId;
   set lessonLocalId(String? value) => lessonUiState.lessonLocalId = value;
@@ -295,11 +308,16 @@ class LabSession extends ChangeNotifier {
 
   ReviewRoomView? get reviewRoom => lessonUiState.reviewRoom;
   RecoveryRoomView? get recoveryRoom => lessonUiState.recoveryRoom;
+  AmparoRoomView? get amparoRoom => lessonUiState.amparoRoom;
   DoubtState get doubt => lessonUiState.doubt;
 
   void setDoubt(DoubtState s) => lessonUiState.setDoubt(s);
   void resetDoubt() => lessonUiState.resetDoubt();
-  void openReviewRoom() => lessonUiState.openReviewRoom();
+  void openReviewRoom() {
+    if (recoveryRoom != null || amparoRoom != null) return;
+    lessonUiState.openReviewRoom();
+  }
+
   void closeReviewRoom() {
     _doubtAudio?.stopDoubtAudio();
     lessonUiState.closeReviewRoom();
@@ -327,6 +345,26 @@ class LabSession extends ChangeNotifier {
       _doubtAudio?.stopDoubtAudio();
     }
     lessonUiState.setRecoveryRoom(v);
+  }
+
+  void openAmparoRoom() {
+    if (recoveryRoom != null) return;
+    lessonUiState.openAmparoRoom();
+  }
+
+  void closeAmparoRoom() {
+    _doubtAudio?.stopDoubtAudio();
+    lessonUiState.closeAmparoRoom();
+    if (route == '/cyber/amparo') navigationState.openRoute('/cyber/aula');
+  }
+
+  void setAmparoRoom(AmparoRoomView v) {
+    if (v.status == AmparoRoomStatus.result ||
+        v.status == AmparoRoomStatus.done ||
+        v.letra != null) {
+      _doubtAudio?.stopDoubtAudio();
+    }
+    lessonUiState.setAmparoRoom(v);
   }
 
   void goPortal() => navigationState.goPortal();
@@ -514,20 +552,14 @@ class LabSession extends ChangeNotifier {
       entryForm.submitTraversalExpectedResult(skipped: skipped);
 
   JsonMap buildPedagogicalFicha({String? objectiveOverride}) {
-    final previous = entryForm.freeText;
-    if (objectiveOverride != null) {
-      entryForm.freeText = objectiveOverride;
-    }
-    final ficha = entryForm.buildPedagogicalFicha(
+    return const PedagogicalReceptionBuilder().build(
+      form: entryForm,
       appLocale: interfaceLocaleTag,
       lessonLocale: learningLocaleTag,
       explanationLanguage: explanationLanguage,
       targetLanguage: localeContract.targetLanguage,
+      objectiveOverride: objectiveOverride,
     );
-    if (objectiveOverride != null) {
-      entryForm.freeText = previous;
-    }
-    return JsonMap.from(ficha);
   }
 
   void addLabAttachment(String source) => entryForm.addLabAttachment(source);
@@ -842,8 +874,6 @@ class LabSession extends ChangeNotifier {
     if (notify) notifyListeners();
   }
 
-  void toggleDoubt() => lessonUiState.toggleDoubt();
-
   Future<void> speakAuxRoomContent(
     AuxRoomContent content, {
     required String source,
@@ -866,100 +896,6 @@ class LabSession extends ChangeNotifier {
     } catch (_) {
       audioError = t('audio_prepare_failed');
       notifyListeners();
-    }
-  }
-
-  Future<void> submitDoubt(DoubtInputDraft input) async {
-    if (lessonUiState.doubt.status == DoubtStatus.processing) return;
-    final validation = input.validate();
-    if (validation != null) {
-      setDoubt(
-        DoubtState(
-          status: DoubtStatus.error,
-          progress: 0,
-          sheetOpen: true,
-          error: validation,
-        ),
-      );
-      return;
-    }
-    if (lessonUiState.doubtOpen) lessonUiState.toggleDoubt();
-    final snapshot = aulaSnapshot;
-    final content = snapshot?.conteudo;
-    if (prefs == null || _runningUnderFlutterTest) {
-      setDoubt(const DoubtState(status: DoubtStatus.processing, progress: 15));
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      setDoubt(
-        const DoubtState(
-          status: DoubtStatus.explaining,
-          progress: 100,
-          response: DoubtResponse(
-            explanation:
-                'A dúvida foi recebida. Observe que frações equivalentes mantêm a mesma proporção.',
-          ),
-        ),
-      );
-      return;
-    }
-    if (content == null) {
-      setDoubt(
-        const DoubtState(
-          status: DoubtStatus.error,
-          progress: 0,
-          error: defaultDoubtError,
-        ),
-      );
-      return;
-    }
-    final id = lessonLocalId;
-    if (id == null || id.trim().isEmpty) {
-      setDoubt(
-        const DoubtState(
-          status: DoubtStatus.error,
-          progress: 0,
-          error: defaultDoubtError,
-        ),
-      );
-      return;
-    }
-    final state = _activeCanonicalState;
-    final profile = state?.profile;
-    final controller = LessonDoubtController(
-      caller: DoubtT02Caller(
-        client: SimServerT02Client(config: _serverConfig()),
-      ),
-    );
-    setDoubt(const DoubtState(status: DoubtStatus.processing, progress: 15));
-    await controller.submitDoubt(
-      lessonLocalId: id,
-      profile: AuxRoomProfile(
-        stableLang: profile?.stableLang ?? stableLang ?? selectedLanguageCode,
-        academicLevel:
-            profile?.academicLevel ?? profile?.nivel ?? 'ensino_medio',
-        preferredName: profile?.preferredName ?? preferredName,
-        notes: studentProfileNotes.isNotEmpty ? studentProfileNotes : null,
-        extra: profile?.extra ?? const {},
-      ),
-      itemText: snapshot?.itemText ?? content.question,
-      currentContent: '${content.explanation}\n\n${content.question}'.trim(),
-      layer: currentAulaLayer,
-      itemIdx: (state?.current?.itemIdx ?? state?.progress?.itemIdx ?? 0),
-      marker: snapshot?.itemMarker ?? state?.current?.marker,
-      input: input,
-    );
-    setDoubt(controller.state);
-    if (controller.state.status == DoubtStatus.explaining) {
-      final response = controller.state.response?.explanation;
-      if (response != null && response.trim().isNotEmpty) {
-        unawaited(
-          _doubtAudioFor().speakDoubt(
-            response,
-            lang: profile?.stableLang ?? stableLang ?? selectedLanguageCode,
-            lessonKey: '$id:${snapshot?.itemMarker ?? 'item'}',
-          ),
-        );
-      }
-      _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
     }
   }
 

@@ -11,17 +11,13 @@ class PlacementChoice {
   final String label;
   final bool correct;
 
-  JsonMap toJson() => {
-        'id': id,
-        'label': label,
-        'correct': correct,
-      };
+  JsonMap toJson() => {'id': id, 'label': label, 'correct': correct};
 
   factory PlacementChoice.fromJson(JsonMap json) => PlacementChoice(
-        id: (json['id'] ?? '').toString(),
-        label: (json['label'] ?? '').toString(),
-        correct: json['correct'] == true,
-      );
+    id: (json['id'] ?? '').toString(),
+    label: (json['label'] ?? '').toString(),
+    correct: json['correct'] == true,
+  );
 }
 
 class PlacementBlock {
@@ -38,21 +34,21 @@ class PlacementBlock {
   final List<PlacementChoice> choices;
 
   JsonMap toJson() => {
-        'id': id,
-        'marker': marker,
-        'prompt': prompt,
-        'choices': choices.map((choice) => choice.toJson()).toList(),
-      };
+    'id': id,
+    'marker': marker,
+    'prompt': prompt,
+    'choices': choices.map((choice) => choice.toJson()).toList(),
+  };
 
   factory PlacementBlock.fromJson(JsonMap json) => PlacementBlock(
-        id: (json['id'] ?? '').toString(),
-        marker: (json['marker'] ?? '').toString(),
-        prompt: (json['prompt'] ?? '').toString(),
-        choices: (json['choices'] as List? ?? const [])
-            .whereType<Map>()
-            .map((choice) => PlacementChoice.fromJson(JsonMap.from(choice)))
-            .toList(),
-      );
+    id: (json['id'] ?? '').toString(),
+    marker: (json['marker'] ?? '').toString(),
+    prompt: (json['prompt'] ?? '').toString(),
+    choices: (json['choices'] as List? ?? const [])
+        .whereType<Map>()
+        .map((choice) => PlacementChoice.fromJson(JsonMap.from(choice)))
+        .toList(),
+  );
 }
 
 class PlacementAnswer {
@@ -62,6 +58,7 @@ class PlacementAnswer {
     required this.choiceId,
     required this.correct,
     required this.answeredAt,
+    this.signal,
   });
 
   final String blockId;
@@ -69,22 +66,25 @@ class PlacementAnswer {
   final String choiceId;
   final bool correct;
   final int answeredAt;
+  final int? signal;
 
   JsonMap toJson() => {
-        'block_id': blockId,
-        'marker': marker,
-        'choice_id': choiceId,
-        'correct': correct,
-        'answered_at': answeredAt,
-      };
+    'block_id': blockId,
+    'marker': marker,
+    'choice_id': choiceId,
+    'correct': correct,
+    'answered_at': answeredAt,
+    if (signal != null) 'signal': signal,
+  };
 
   factory PlacementAnswer.fromJson(JsonMap json) => PlacementAnswer(
-        blockId: (json['block_id'] ?? '').toString(),
-        marker: (json['marker'] ?? '').toString(),
-        choiceId: (json['choice_id'] ?? '').toString(),
-        correct: json['correct'] == true,
-        answeredAt: (json['answered_at'] as num?)?.toInt() ?? 0,
-      );
+    blockId: (json['block_id'] ?? '').toString(),
+    marker: (json['marker'] ?? '').toString(),
+    choiceId: (json['choice_id'] ?? '').toString(),
+    correct: json['correct'] == true,
+    answeredAt: (json['answered_at'] as num?)?.toInt() ?? 0,
+    signal: (json['signal'] as num?)?.toInt(),
+  );
 }
 
 class PlacementResult {
@@ -93,6 +93,11 @@ class PlacementResult {
     required this.masteredMarkers,
     required this.uncertainMarkers,
     required this.failedMarkers,
+    required this.testedMarkers,
+    required this.confidence,
+    required this.reason,
+    required this.source,
+    this.startItemIdx,
     required this.scoredAt,
   });
 
@@ -100,29 +105,46 @@ class PlacementResult {
   final List<String> masteredMarkers;
   final List<String> uncertainMarkers;
   final List<String> failedMarkers;
+  final List<String> testedMarkers;
+  final String confidence;
+  final String reason;
+  final String source;
+  final int? startItemIdx;
   final int scoredAt;
 
   JsonMap toJson() => {
-        'start_marker': startMarker,
-        'mastered_markers': masteredMarkers,
-        'uncertain_markers': uncertainMarkers,
-        'failed_markers': failedMarkers,
-        'scored_at': scoredAt,
-      };
+    'start_marker': startMarker,
+    'mastered_markers': masteredMarkers,
+    'uncertain_markers': uncertainMarkers,
+    'failed_markers': failedMarkers,
+    'tested_markers': testedMarkers,
+    'confidence': confidence,
+    'reason': reason,
+    'source': source,
+    if (startItemIdx != null) 'start_item_idx': startItemIdx,
+    'scored_at': scoredAt,
+  };
 
   factory PlacementResult.fromJson(JsonMap json) => PlacementResult(
-        startMarker: (json['start_marker'] ?? '').toString(),
-        masteredMarkers: (json['mastered_markers'] as List? ?? const [])
-            .map((value) => value.toString())
-            .toList(),
-        uncertainMarkers: (json['uncertain_markers'] as List? ?? const [])
-            .map((value) => value.toString())
-            .toList(),
-        failedMarkers: (json['failed_markers'] as List? ?? const [])
-            .map((value) => value.toString())
-            .toList(),
-        scoredAt: (json['scored_at'] as num?)?.toInt() ?? 0,
-      );
+    startMarker: (json['start_marker'] ?? '').toString(),
+    masteredMarkers: (json['mastered_markers'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toList(),
+    uncertainMarkers: (json['uncertain_markers'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toList(),
+    failedMarkers: (json['failed_markers'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toList(),
+    testedMarkers: (json['tested_markers'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toList(),
+    confidence: (json['confidence'] ?? 'low').toString(),
+    reason: (json['reason'] ?? '').toString(),
+    source: (json['source'] ?? 'adaptive_t02').toString(),
+    startItemIdx: (json['start_item_idx'] as num?)?.toInt(),
+    scoredAt: (json['scored_at'] as num?)?.toInt() ?? 0,
+  );
 }
 
 List<PlacementBlock> createPretestBlocks(List<CurriculumItem> items) {
@@ -156,9 +178,7 @@ PlacementResult? scorePlacement(
 }) {
   if (blocks.isEmpty || answers.isEmpty) return null;
   final markerOrder = blocks.map((block) => block.marker).toList();
-  final answerByMarker = {
-    for (final answer in answers) answer.marker: answer,
-  };
+  final answerByMarker = {for (final answer in answers) answer.marker: answer};
   final mastered = <String>[];
   final failed = <String>[];
   final uncertain = <String>[];
@@ -179,8 +199,9 @@ PlacementResult? scorePlacement(
     startMarker = failed.first;
   } else {
     final lastCorrect = mastered.isEmpty ? null : mastered.last;
-    final lastCorrectIdx =
-        lastCorrect == null ? -1 : markerOrder.indexOf(lastCorrect);
+    final lastCorrectIdx = lastCorrect == null
+        ? -1
+        : markerOrder.indexOf(lastCorrect);
     final nextIdx = lastCorrectIdx + 1;
     startMarker = nextIdx >= 0 && nextIdx < markerOrder.length
         ? markerOrder[nextIdx]
@@ -193,6 +214,12 @@ PlacementResult? scorePlacement(
     masteredMarkers: mastered,
     uncertainMarkers: uncertain,
     failedMarkers: failed,
+    testedMarkers: answers.map((answer) => answer.marker).toList(),
+    confidence: failed.isEmpty && uncertain.isEmpty ? 'high' : 'medium',
+    reason: failed.isEmpty
+        ? 'Aluno respondeu os gates curtos sem falha; inicio no proximo ponto seguro.'
+        : 'Aluno falhou em $startMarker; inicio seguro nesse ponto.',
+    source: 'legacy_pretest',
     scoredAt: now ?? DateTime.now().millisecondsSinceEpoch,
   );
 }

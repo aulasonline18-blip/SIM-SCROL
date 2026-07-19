@@ -3,7 +3,9 @@ import '../state/student_learning_state.dart';
 class PlacementContext {
   const PlacementContext({
     required this.language,
+    required this.lessonLocalId,
     required this.objetivo,
+    required this.profile,
     required this.curriculumItems,
     required this.markers,
     this.academicLevel,
@@ -11,7 +13,9 @@ class PlacementContext {
   });
 
   final String language;
+  final String lessonLocalId;
   final String objetivo;
+  final JsonMap profile;
   final String? academicLevel;
   final Object? studentProfileInternal;
   final List<CurriculumItem> curriculumItems;
@@ -24,17 +28,20 @@ PlacementContext? buildPlacementContext(StudentLearningState? state) {
     return null;
   }
   final profile = state.profile.toJson();
-  final lang = (profile['stableLang'] ??
-          profile['STABLE_LANG'] ??
-          profile['language'] ??
-          profile['idioma'] ??
-          'English')
-      .toString();
+  final lang =
+      (profile['stableLang'] ??
+              profile['STABLE_LANG'] ??
+              profile['language'] ??
+              profile['idioma'] ??
+              'English')
+          .toString();
   return PlacementContext(
+    lessonLocalId: state.lessonLocalId,
     language: lang,
     objetivo: (profile['objetivo'] ?? curriculum.topic).toString(),
-    academicLevel:
-        (profile['academic_level'] ?? profile['ACADEMIC_LEVEL']) as String?,
+    profile: profile,
+    academicLevel: (profile['academic_level'] ?? profile['ACADEMIC_LEVEL'])
+        ?.toString(),
     studentProfileInternal: profile['student_profile_internal'],
     curriculumItems: curriculum.items,
     markers: curriculum.items.map((item) => item.marker).toList(),

@@ -4,6 +4,9 @@ extension LabSessionEntryFlows on LabSession {
   bool saveObjectiveEntry() {
     final freeTrim = freeText.trim();
     if (freeTrim.length < 10) return false;
+    if (attachments.any((attachment) => attachment.status == 'processing')) {
+      return false;
+    }
     final clipped = freeTrim.length > maxFreeText
         ? freeTrim.substring(0, maxFreeText)
         : freeTrim;
@@ -33,7 +36,13 @@ extension LabSessionEntryFlows on LabSession {
     entryStatus = 'pedido_recebido';
     entryError = null;
     _experienceGeneration += 1;
-    navigationState.openRoute('/cyber/curriculo');
+    if (materialEntryPath) {
+      _markPlacementSkippedForMaterial(id);
+      navigationState.openRoute('/cyber/curriculo');
+    } else {
+      navigationState.openRoute('/cyber/placement');
+    }
+    unawaited(launchExperience());
     _notifyFromChild();
     return true;
   }
@@ -74,7 +83,9 @@ extension LabSessionEntryFlows on LabSession {
     warmupError = null;
     warmupSelectedAnswer = null;
     warmupWaitingForOfficialLesson = false;
-    _resetEntryCoordinator(warmupExpected: false);
+    _resetEntryCoordinator(
+      warmupExpected: warmupBridgeService != null || prefs != null,
+    );
     _notifyFromChild();
 
     try {
@@ -110,6 +121,8 @@ extension LabSessionEntryFlows on LabSession {
         'target_topic': freeText.trim(),
         'TARGET_TOPIC': freeText.trim(),
         'pedagogical_entry_ficha': ficha,
+        'entry_path': materialEntryPath ? 'material_help' : 'guided_path',
+        'material_based': materialEntryPath,
         ...guidedProfile,
         if (preferredName.trim().isNotEmpty)
           'preferred_name': preferredName.trim(),
@@ -158,12 +171,16 @@ extension LabSessionEntryFlows on LabSession {
         generation: generation,
       );
       if (!_isCurrentExperience(id, generation)) return;
-      _entryOfficialLessonReady = true;
+      _warmupCoordinator.markOfficialReady();
+      _syncEntryCoordinatorFields();
       entryStatus = 'primeira_aula_pronta';
       _notifyFromChild();
 
       debugPrint('[SIM] CLASSROOM_OPENED route=${result.destination}');
       if (route == '/cyber/warmup' || warmupWaitingForOfficialLesson) {
+        unawaited(_tryOpenOfficialAula(source: 'official_ready'));
+      } else if (route == '/cyber/curriculo' &&
+          _warmupCoordinator.warmupUnavailableAfterExpected) {
         unawaited(_tryOpenOfficialAula(source: 'official_ready'));
       }
     } on StudentExperienceEngineException catch (err) {
@@ -185,68 +202,33 @@ extension LabSessionEntryFlows on LabSession {
     }
   }
 
-  Future<void> _prepareWarmupLesson({
-    required String lessonLocalId,
-    required String objective,
-    required Map<String, dynamic> onboarding,
-    required String academic,
-    required int generation,
-  }) async {
-    _entryWarmupExpected = false;
-    warmupLoading = false;
-    warmupError = null;
-    _notifyFromChild();
-    if (_isCurrentExperience(lessonLocalId, generation)) {
-      unawaited(_tryOpenOfficialAula(source: 'warmup_removed'));
-    }
-  }
-
-  void chooseWarmupAnswer(String answer) {
-    final normalized = answer.trim().toUpperCase();
-    if (!const {'A', 'B', 'C'}.contains(normalized)) return;
-    warmupSelectedAnswer = normalized;
-    final id = lessonLocalId;
-    final lesson = warmupLesson;
-    if (id != null && lesson != null) {
-      canonicalStore?.patchState(id, (state) {
-        return state.copyWith(
-          extra: {
-            ...state.extra,
-            'warmup': {
-              ...lesson.toJson(),
-              'selectedAnswer': normalized,
-              'selectedAt': DateTime.now().millisecondsSinceEpoch,
+  void _markPlacementSkippedForMaterial(String id) {
+    canonicalStore?.patchState(id, (state) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final placement = {
+        ...?state.placement,
+        'status': 'skipped',
+        'choice': 'material_based',
+        'source': 'material_based_entry',
+        'reason': 'Material trazido define o ponto inicial; sem nivelamento.',
+        'updated_at': now,
+        'finished_at': now,
+      };
+      return state.copyWith(
+        placement: placement,
+        events: [
+          ...state.events,
+          StudentLearningEvent(
+            type: 'PLACEMENT_SKIPPED_MATERIAL_BASED',
+            ts: now,
+            payload: const {
+              'choice': 'material_based',
+              'route': '/cyber/curriculo',
             },
-          },
-        );
-      });
-    }
-    _notifyFromChild();
-    unawaited(continueFromWarmupToAula());
-  }
-
-  void openWarmupBridge({bool preparePlacement = false}) {
-    final controller = activePlacementController;
-    if (preparePlacement) {
-      if (controller != null) {
-        controller.chooseStart();
-        unawaited(controller.startTest());
-      }
-    } else {
-      controller?.skip();
-    }
-    navigationState.openRoute('/cyber/warmup');
-    _notifyFromChild();
-  }
-
-  Future<void> continueFromWarmupToAula() async {
-    final controller = activePlacementController;
-    if (controller != null && controller.destination != '/cyber/aula') {
-      controller.continueToAula();
-    }
-    warmupWaitingForOfficialLesson = false;
-    _notifyFromChild();
-    await _tryOpenOfficialAula(source: 'warmup_continue');
+          ),
+        ],
+      );
+    }, allowLocalHousekeeping: true);
   }
 
   Future<void> continueFromPreparationToAula() async {
@@ -306,44 +288,5 @@ extension LabSessionEntryFlows on LabSession {
         .where((option) => option.trim().isNotEmpty)
         .length;
     return hasExplanation && hasQuestion && optionCount >= 3;
-  }
-
-  void _resetEntryCoordinator({required bool warmupExpected}) {
-    _entryOfficialLessonReady = false;
-    _entryWarmupExpected = warmupExpected;
-    _entryAulaNavigationStarted = false;
-  }
-
-  Future<void> _tryOpenOfficialAula({required String source}) async {
-    if (_entryAulaNavigationStarted) return;
-    if (!_entryOfficialLessonReady) {
-      if (_entryWarmupExpected || !_hasLocalOfficialAulaState()) return;
-    }
-    warmupWaitingForOfficialLesson = false;
-    final controller = activePlacementController;
-    if (controller == null) {
-      _entryAulaNavigationStarted = true;
-      debugPrint('[SIM] ENTRY_NAVIGATE_AULA source=$source placement=false');
-      navigationState.openRoute('/cyber/aula');
-      await openAulaRuntime();
-      return;
-    }
-    if (controller.destination != '/cyber/aula') return;
-    _entryAulaNavigationStarted = true;
-    debugPrint('[SIM] ENTRY_NAVIGATE_AULA source=$source placement=true');
-    await openAulaAfterPlacementIfReady();
-  }
-
-  bool _hasLocalOfficialAulaState() {
-    final id = lessonLocalId;
-    if (id == null || id.trim().isEmpty || prefs == null) return false;
-    try {
-      final organism = _organismForActiveLesson();
-      final state = organism.stateService.read(id);
-      return state?.curriculum?.items.isNotEmpty == true &&
-          (state?.current != null || state?.progress != null);
-    } catch (_) {
-      return false;
-    }
   }
 }

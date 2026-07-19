@@ -119,6 +119,40 @@ class RecoveryRoomScreen extends StatelessWidget {
   }
 }
 
+class AmparoRoomScreen extends StatelessWidget {
+  const AmparoRoomScreen({required this.session, super.key});
+
+  final LabSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final amparo = session.amparoRoom;
+    if (amparo == null) return const SizedBox.shrink();
+    if (amparo.status == AmparoRoomStatus.preparing) {
+      return _Preparing(stage: 'amparo', onClose: session.closeAmparoRoom);
+    }
+    final total = amparo.stations.length;
+    final station = amparo.idx < total ? amparo.stations[amparo.idx] : null;
+    return _AuxQuestionScaffold(
+      title: station?.title ?? 'Amparo',
+      statusText: total == 0
+          ? 'Amparo'
+          : '${amparo.idx + 1}/$total - nivel ${amparo.amparoLvl}',
+      content: amparo.conteudo,
+      selected: amparo.letra,
+      result: amparo.resultMsg ?? amparo.errMsg,
+      done: amparo.status == AmparoRoomStatus.done,
+      failed: amparo.status == AmparoRoomStatus.failed,
+      onClose: session.closeAmparoRoom,
+      onAnswer: session.amparoSelecionar,
+      onContinue: amparo.status == AmparoRoomStatus.result
+          ? () => unawaited(session.amparoNext())
+          : session.finishAmparo,
+      onSignal: (signal) => unawaited(session.amparoSignal(signal)),
+    );
+  }
+}
+
 class _Preparing extends StatelessWidget {
   const _Preparing({
     required this.stage,
@@ -238,6 +272,10 @@ class _AuxQuestionScaffold extends StatelessWidget {
         ] else if (content == null) ...[
           const Center(child: CircularProgressIndicator()),
         ] else ...[
+          if (content!.explanation.trim().isNotEmpty) ...[
+            AuxRoomCard(title: 'Explicacao', body: content!.explanation),
+            const SizedBox(height: 14),
+          ],
           Text(
             content!.question,
             style: Theme.of(context).textTheme.titleMedium,

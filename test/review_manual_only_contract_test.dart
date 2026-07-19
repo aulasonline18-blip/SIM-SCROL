@@ -23,12 +23,12 @@ void main() {
     expect(source, isNot(contains('RecoveryRoom')));
   });
 
-  test('revisao manual prioriza sinal 3, depois sinal 2, erro e antigo', () {
+  test('revisao manual prioriza pendencias reais antigas primeiro', () {
     final state = _stateWithPendingAttempts();
 
     final queue = buildReviewQueue(state, 5);
 
-    expect(queue, ['M3', 'M2', 'M4']);
+    expect(queue, ['M2', 'M4', 'M3']);
     expect(queue, isNot(contains('M1')));
   });
 

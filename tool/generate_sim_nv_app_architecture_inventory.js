@@ -252,6 +252,14 @@ function classify(file) {
     set('officialPaths', ['objetivo do aluno ate T00', 'curriculo']);
     set('inputs', ['curriculo', 'respostas de diagnostico']);
     set('outputs', ['posicionamento local']);
+  } else if (file.startsWith('lib/sim/reception/')) {
+    out.layer = 'Assistente local';
+    out.category = 'recepcao-pedagogica';
+    set('contracts', ['estado forte do aluno', 'sessao/aula', 'cache/sync']);
+    set('stateMachines', ['sessao/aula', 'falha/retry']);
+    set('officialPaths', ['objetivo do aluno ate T00']);
+    set('inputs', ['objetivo', 'perfil pedagogico', 'anexos processados']);
+    set('outputs', ['ficha pedagogica', 'decisao de entrada']);
   } else if (file.startsWith('lib/session/')) {
     out.layer = 'Assistente local';
     out.category = 'session-state';
@@ -321,6 +329,8 @@ function classify(file) {
     'lib/sim/cloud/cloud_queue.dart': ['test/m12_offline_cache_sync_contract_test.dart'],
     'lib/sim/external_ai/sim_server_ai_clients.dart': ['test/external_ai_clients_test.dart'],
     'lib/features/classroom/chat_aula_screen.dart': ['test/normal_lesson_full_completion_flow_test.dart', 'test/classroom_phase_test.dart'],
+    'lib/sim/reception/pedagogical_reception_builder.dart': ['test/pedagogical_reception_contract_test.dart'],
+    'lib/sim/reception/pedagogical_reception_controller.dart': ['test/pedagogical_reception_contract_test.dart'],
   };
   out.tests.push(...(directTests[file] || ['test/sim_app_architecture_shape_test.dart']));
   if (text.includes('/api/')) set('officialPaths', ['objetivo do aluno ate T00', 'aula/pergunta']);

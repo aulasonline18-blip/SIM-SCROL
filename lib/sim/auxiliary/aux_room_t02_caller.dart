@@ -1,6 +1,7 @@
 import '../lesson/lesson_models.dart';
 import '../modules/pedagogical_module_contracts.dart';
 import '../state/student_learning_state.dart';
+import 'aux_room_addendums.dart';
 import 'aux_room_models.dart';
 
 class AuxRoomT02Payload {
@@ -15,6 +16,9 @@ class AuxRoomT02Payload {
     required this.preferredName,
     required this.notes,
     required this.auxAddonReference,
+    this.layer = LessonLayer.l1,
+    this.amparoLevel,
+    this.auxContext = const {},
   });
 
   final AuxRoomMode auxMode;
@@ -27,6 +31,9 @@ class AuxRoomT02Payload {
   final String preferredName;
   final String notes;
   final String auxAddonReference;
+  final LessonLayer layer;
+  final int? amparoLevel;
+  final JsonMap auxContext;
 }
 
 class AuxRoomCallResult {
@@ -67,6 +74,9 @@ class AuxRoomT02Caller {
     required String item,
     required DecisionSignal signal,
     int? itemIdx,
+    LessonLayer layer = LessonLayer.l1,
+    int? amparoLevel,
+    JsonMap auxContext = const {},
   }) {
     return AuxRoomT02Payload(
       auxMode: mode,
@@ -78,7 +88,10 @@ class AuxRoomT02Caller {
       academicLevel: profile.academicLevel ?? '',
       preferredName: profile.preferredName ?? '',
       notes: profile.notes ?? '',
-      auxAddonReference: getAuxRoomAddonReference(mode),
+      auxAddonReference: getAuxRoomAddon(mode),
+      layer: layer,
+      amparoLevel: amparoLevel,
+      auxContext: auxContext,
     );
   }
 
@@ -90,6 +103,9 @@ class AuxRoomT02Caller {
     required String item,
     required DecisionSignal signal,
     int? itemIdx,
+    LessonLayer layer = LessonLayer.l1,
+    int? amparoLevel,
+    JsonMap auxContext = const {},
     bool confirmEnabled = false,
   }) async {
     final payload = buildPayload(
@@ -100,11 +116,15 @@ class AuxRoomT02Caller {
       item: item,
       signal: signal,
       itemIdx: itemIdx,
+      layer: layer,
+      amparoLevel: amparoLevel,
+      auxContext: auxContext,
     );
     final modeFlag = switch (mode) {
       AuxRoomMode.review => reviewRoomEnabled || auxRoomsEnabled,
       AuxRoomMode.recovery => recoveryRoomEnabled || auxRoomsEnabled,
       AuxRoomMode.doubt => auxRoomsEnabled,
+      AuxRoomMode.amparo => auxRoomsEnabled,
     };
     if (!modeFlag) {
       return AuxRoomCallResult.aborted(
@@ -133,13 +153,22 @@ class AuxRoomT02Caller {
         academic: payload.academicLevel.isEmpty
             ? 'ensino_medio'
             : payload.academicLevel,
-        layer: LessonLayer.l1,
+        layer: payload.layer,
         mode: mode.name,
         errCount: 0,
         history: const [],
         marker: payload.marker.isEmpty ? null : payload.marker,
-        profile: profile.toJson(),
+        profile: {
+          ...profile.toJson(),
+          ...payload.auxContext,
+          'aux_mode': mode.name,
+          'mode': mode.name,
+          'signal': payload.signal.value,
+          if (payload.amparoLevel != null) 'amparo_level': payload.amparoLevel,
+        },
         addendum: payload.auxAddonReference,
+        itemIdx: payload.itemIdx,
+        amparoLvl: payload.amparoLevel,
       ),
     );
     return AuxRoomCallResult.completed(

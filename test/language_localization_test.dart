@@ -64,7 +64,7 @@ void main() {
     },
   );
 
-  testWidgets('conversational entry remains a thin objective screen', (
+  testWidgets('conversational entry renders pedagogical reception', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -76,8 +76,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text(t('objeto_title')), findsOneWidget);
-    expect(find.text(t('objeto_input_label')), findsOneWidget);
+    expect(find.text('Recepção pedagógica'), findsOneWidget);
+    expect(find.byKey(const Key('reception-guided-path')), findsOneWidget);
 
     session.dispose();
   });

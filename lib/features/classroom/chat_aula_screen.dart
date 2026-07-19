@@ -249,11 +249,14 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       return LessonNoCurriculumScreen(session: session);
     }
 
-    if (session.reviewRoom != null) {
-      return ReviewRoomScreen(session: session);
-    }
     if (session.recoveryRoom != null) {
       return RecoveryRoomScreen(session: session);
+    }
+    if (session.amparoRoom != null) {
+      return AmparoRoomScreen(session: session);
+    }
+    if (session.reviewRoom != null) {
+      return ReviewRoomScreen(session: session);
     }
 
     final viewModel = snapshot?.viewModel;

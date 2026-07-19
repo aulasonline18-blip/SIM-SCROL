@@ -303,7 +303,10 @@ class SimServerT02Client implements T02LessonClient {
       );
     }
     try {
-      return _parseT02Material(JsonMap.from(decoded));
+      final payload = JsonMap.from(decoded);
+      return mode == 'doubt'
+          ? _parseDoubtT02Material(payload)
+          : _parseT02Material(payload);
     } on LessonContentValidationException {
       throw SimExternalAiException(
         invalidCode,
@@ -312,6 +315,42 @@ class SimServerT02Client implements T02LessonClient {
         retryable: false,
       );
     }
+  }
+
+  T02LessonMaterial _parseDoubtT02Material(JsonMap json) {
+    final source = json['conteudo'] is Map
+        ? JsonMap.from(json['conteudo'])
+        : json;
+    Object? pick(String key, [String? alt]) =>
+        source[key] ??
+        json[key] ??
+        (alt == null ? null : source[alt] ?? json[alt]);
+    final explanation = _stringOrNull(
+      pick('explanation') ?? pick('explicacao') ?? pick('answer'),
+    );
+    if (explanation == null) {
+      throw const LessonContentValidationException(
+        'Doubt response missing explanation.',
+      );
+    }
+    final visualTrigger = LessonVisualTrigger.fromJson(
+      pick('visual_trigger', 'visualTrigger'),
+    )?.raw;
+    return T02LessonMaterial(
+      explanation: explanation,
+      question: '',
+      options: const {
+        AnswerLetter.A: '',
+        AnswerLetter.B: '',
+        AnswerLetter.C: '',
+      },
+      correctAnswer: AnswerLetter.A,
+      whyCorrect: '',
+      whyWrong: '',
+      generatedAt: DateTime.now(),
+      source: (source['source'] ?? 'sim-server-t02').toString(),
+      visualTrigger: visualTrigger,
+    );
   }
 
   T02LessonMaterial _parseT02Material(JsonMap json) {

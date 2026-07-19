@@ -4,9 +4,9 @@ import '../experience/curriculum_utils.dart';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
-import 'lesson_content_validator.dart';
 import 'lesson_models.dart';
 import 'lesson_orchestrator.dart';
+import 'lesson_readiness_resolver.dart';
 
 const int offlineWarmCacheSize = 15;
 const int localLessonTraySize = offlineWarmCacheSize;
@@ -47,11 +47,47 @@ class DopamineReadyWindowEngine {
   DopamineReadyWindowEngine({
     required this.service,
     required this.orchestrator,
+    this.readinessResolver = const LessonReadinessResolver(),
   });
 
   final StudentLearningStateService service;
   final LessonOrchestrator orchestrator;
+  final LessonReadinessResolver readinessResolver;
   final Map<String, Future<List<bool>>> _inflight = {};
+
+  List<({int offset, int idx, DopamineWindowItem item, LessonLayer layer})>
+  buildDopamineWindowPlan({
+    required int fromIdx,
+    required LessonLayer layer,
+    required List<DopamineWindowItem> items,
+    int maxSlots = localLessonTraySize,
+  }) {
+    if (fromIdx < 0 || fromIdx >= items.length) return const [];
+    final first = items[fromIdx];
+    final firstLayer = first.isReview
+        ? first.reviewLayer ?? LessonLayer.l1
+        : layer;
+    final window =
+        <({int offset, int idx, DopamineWindowItem item, LessonLayer layer})>[
+          (offset: 0, idx: fromIdx, item: first, layer: firstLayer),
+        ];
+    var cursor = (idx: fromIdx, layer: firstLayer);
+    while (window.length < maxSlots) {
+      final next = _nextSlot(cursor.idx, cursor.layer, items);
+      if (next == null || next.itemIdx < 0 || next.itemIdx >= items.length) {
+        break;
+      }
+      final item = items[next.itemIdx];
+      window.add((
+        offset: window.length,
+        idx: next.itemIdx,
+        item: item,
+        layer: next.layer,
+      ));
+      cursor = (idx: next.itemIdx, layer: next.layer);
+    }
+    return window;
+  }
 
   List<DopamineReadySlot> buildDopamineReadySlots({
     required String lessonLocalId,
@@ -67,29 +103,24 @@ class DopamineReadyWindowEngine {
     int maxSlots = localLessonTraySize,
   }) {
     final slots = <DopamineReadySlot>[];
-    ({int itemIdx, LessonLayer layer})? cursor = (
-      itemIdx: currentItemIdx < 0 ? 0 : currentItemIdx,
-      layer: items.isNotEmpty && items[currentItemIdx].isReview
-          ? items[currentItemIdx].reviewLayer ?? LessonLayer.l1
-          : currentLayer,
+    final planned = buildDopamineWindowPlan(
+      fromIdx: currentItemIdx < 0 ? 0 : currentItemIdx,
+      layer: currentLayer,
+      items: items,
+      maxSlots: maxSlots,
     );
-
-    for (var slotIndex = 0; slotIndex < maxSlots; slotIndex++) {
-      if (cursor == null) break;
-      if (cursor.itemIdx >= items.length) break;
-      final item = items[cursor.itemIdx];
-      final params = buildParams(item, cursor.layer);
+    for (final plan in planned) {
+      final params = buildParams(plan.item, plan.layer);
       slots.add(
         DopamineReadySlot(
-          slot: _slotName(slotIndex),
-          itemIdx: cursor.itemIdx,
-          marker: item.marker,
-          layer: cursor.layer,
+          slot: _slotName(plan.offset),
+          itemIdx: plan.idx,
+          marker: plan.item.marker,
+          layer: plan.layer,
           params: params,
           expectedKey: lessonKeyFor(params),
         ),
       );
-      cursor = _nextSlot(cursor.itemIdx, cursor.layer, items);
     }
     return slots;
   }
@@ -139,22 +170,26 @@ class DopamineReadyWindowEngine {
         results.add(false);
         continue;
       }
-      final existing = _readReadyMaterial(
-        lessonLocalId,
-        slot.itemIdx,
-        slot.marker,
-        slot.layer,
+      final readiness = readinessResolver.resolve(
+        state: service.read(lessonLocalId),
+        orchestrator: orchestrator,
+        identity: LessonReadinessIdentity(
+          lessonLocalId: lessonLocalId,
+          itemIdx: slot.itemIdx,
+          marker: slot.marker,
+          layer: slot.layer,
+        ),
+        params: slot.params,
       );
-      if (existing != null) {
-        final lesson = _prepareMediaFromPreparedMaterial(
+      if (readiness.status == LessonReadinessStatus.readyFromState &&
+          readiness.lesson != null) {
+        final lesson = _prepareMediaFromCachedLesson(
           lessonLocalId: lessonLocalId,
           source: source,
           slot: slot,
-          material: existing,
+          lesson: readiness.lesson!,
         );
-        if (lesson != null) {
-          mediaSlots.add(_ReadyWindowMediaSlot(slot: slot, lesson: lesson));
-        }
+        mediaSlots.add(_ReadyWindowMediaSlot(slot: slot, lesson: lesson));
         _markFirstLessonIfNeeded(lessonLocalId, slot);
         _event(lessonLocalId, 'DOPAMINE_SLOT_ALREADY_READY', {
           'source': source,
@@ -165,19 +200,19 @@ class DopamineReadyWindowEngine {
         continue;
       }
 
-      final cached = orchestrator.peekCachedLesson(key);
-      if (cached != null) {
+      if (readiness.status == LessonReadinessStatus.readyFromMemoryCache &&
+          readiness.lesson != null) {
         _mirrorPreparedLesson(
           lessonLocalId: lessonLocalId,
           slot: slot,
-          lesson: cached,
+          lesson: readiness.lesson!,
           model: 'DopamineReadyWindowEngine-cache',
         );
         final lesson = _prepareMediaFromCachedLesson(
           lessonLocalId: lessonLocalId,
           source: source,
           slot: slot,
-          lesson: cached,
+          lesson: readiness.lesson!,
         );
         mediaSlots.add(_ReadyWindowMediaSlot(slot: slot, lesson: lesson));
         _markFirstLessonIfNeeded(lessonLocalId, slot);
@@ -433,22 +468,6 @@ class DopamineReadyWindowEngine {
     return (itemIdx: nextIdx, layer: next.reviewLayer ?? LessonLayer.l1);
   }
 
-  JsonMap? _readReadyMaterial(
-    String lessonLocalId,
-    int itemIdx,
-    String? marker,
-    LessonLayer layer,
-  ) {
-    final state = service.read(lessonLocalId);
-    final key = preparedLessonMaterialKey(itemIdx, marker, layer);
-    final prepared = state?.readyLessonMaterials[key];
-    if (prepared == null || prepared['text_status'] != 'ready') return null;
-    if (prepared['for_itemIdx'] != itemIdx) return null;
-    if (prepared['for_layer'] != layer.name) return null;
-    if ((prepared['for_marker'] as String?) != marker) return null;
-    return prepared;
-  }
-
   void _mirrorPreparedLesson({
     required String lessonLocalId,
     required DopamineReadySlot slot,
@@ -477,38 +496,6 @@ class DopamineReadyWindowEngine {
         },
       );
     });
-  }
-
-  CompleteLesson? _prepareMediaFromPreparedMaterial({
-    required String lessonLocalId,
-    required String source,
-    required DopamineReadySlot slot,
-    required JsonMap material,
-  }) {
-    late final LessonContent content;
-    try {
-      content = validatedLessonContentFromJson(JsonMap.from(material));
-    } on LessonContentValidationException catch (error) {
-      _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_FAILED', {
-        'source': source,
-        'slot': slot.slot,
-        'storage': 'student_state',
-        'error': error.message,
-      });
-      return null;
-    }
-    _event(lessonLocalId, 'DOPAMINE_SLOT_MEDIA_REFRESH_REQUESTED', {
-      'source': source,
-      'slot': slot.slot,
-      'storage': 'student_state',
-    });
-    return orchestrator.ensureVisualForReadyLesson(
-      slot.params,
-      content,
-      priority: 'background',
-      initialImage: material['imagem'] as String?,
-      deferMedia: true,
-    );
   }
 
   CompleteLesson _prepareMediaFromCachedLesson({

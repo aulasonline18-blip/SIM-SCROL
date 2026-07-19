@@ -18,6 +18,11 @@ class LessonMaterialController {
   final StudentLearningStateService stateService;
   final StudentLessonMaterialService materialService;
   final SimConstitutionalContract constitutionalContract;
+  static const int _hotAdvanceWaitAfterOrderMs = 120000;
+  static const int _hotAdvanceCachePolls = 40;
+  static const Duration _hotAdvanceCachePollInterval = Duration(
+    milliseconds: 5,
+  );
 
   bool carregarRapidoSePronto({
     required String lessonLocalId,
@@ -175,6 +180,18 @@ class LessonMaterialController {
       resolved = null;
     }
     if (resolved == null) {
+      if (missingPriority == 'hot-local') {
+        final hotRecovered = await _waitForHotPreparedMaterial(
+          lessonLocalId: lessonLocalId,
+          topic: topic,
+          position: position,
+          idioma: idioma,
+          academic: academic,
+          mode: mode,
+          baseItems: baseItems,
+        );
+        if (hotRecovered) return;
+      }
       position.phase = const ClassroomPhase.advancePending(
         message: 'aula_advance_preparing',
       );
@@ -237,11 +254,64 @@ class LessonMaterialController {
       mode: mode,
       baseItems: baseItems,
       allowRemoteOrder: true,
-      waitAfterOrderMs: 45000,
+      waitAfterOrderMs: _hotAdvanceWaitAfterOrderMs,
       missingSource: 'cyber.aula.advance-hot-miss',
       missingPriority: 'hot-local',
       missingReason: 'advance_hot_path_fetch_failed',
     );
+  }
+
+  Future<bool> _waitForHotPreparedMaterial({
+    required String lessonLocalId,
+    required String? topic,
+    required LessonPositionState position,
+    required String idioma,
+    required String academic,
+    required LessonMode mode,
+    required List<PlannedItem> baseItems,
+  }) async {
+    for (var attempt = 0; attempt < _hotAdvanceCachePolls; attempt++) {
+      await Future<void>.delayed(_hotAdvanceCachePollInterval);
+      final loaded = carregarRapidoSePronto(
+        lessonLocalId: lessonLocalId,
+        topic: topic,
+        position: position,
+        idioma: idioma,
+        academic: academic,
+        mode: mode,
+        baseItems: baseItems,
+      );
+      if (loaded) {
+        stateService.appendEvent(
+          lessonLocalId,
+          StudentLearningEvent(
+            type: 'ADVANCE_HOT_CACHE_RECOVERED',
+            ts: DateTime.now().millisecondsSinceEpoch,
+            payload: {
+              'itemIdx': position.itemIdx,
+              'marker': position.itemAtivo?.marker,
+              'layer': position.layer.value,
+              'attempt': attempt + 1,
+            },
+          ),
+        );
+        return true;
+      }
+    }
+    stateService.appendEvent(
+      lessonLocalId,
+      StudentLearningEvent(
+        type: 'ADVANCE_HOT_CACHE_RECOVERY_EXHAUSTED',
+        ts: DateTime.now().millisecondsSinceEpoch,
+        payload: {
+          'itemIdx': position.itemIdx,
+          'marker': position.itemAtivo?.marker,
+          'layer': position.layer.value,
+          'attempts': _hotAdvanceCachePolls,
+        },
+      ),
+    );
+    return false;
   }
 
   CompleteLessonParams _paramsForPosition({

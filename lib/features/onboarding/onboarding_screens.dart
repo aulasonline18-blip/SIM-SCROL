@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../features/session/lab_session.dart';
 import '../../session/entry_form_state.dart';
 import '../../shared/widgets/shared_widgets.dart';
+import '../../sim/reception/pedagogical_reception_controller.dart';
 import '../../sim/ui/sim_i18n.dart';
 
 class ConversationalEntryScreen extends StatelessWidget {
@@ -41,7 +42,18 @@ class _EntryScreen extends StatefulWidget {
 class _EntryScreenState extends State<_EntryScreen> {
   late final TextEditingController objectiveController;
   late final TextEditingController nameController;
-  final guidedControllers = <String, TextEditingController>{};
+  late final TextEditingController levelController;
+  late final TextEditingController purposeController;
+  late final TextEditingController deadlineController;
+  late final TextEditingController resultController;
+  late final TextEditingController blockerController;
+  late final TextEditingController preferenceController;
+  late final TextEditingController materialTypeController;
+  late final TextEditingController ageController;
+  late final TextEditingController observationController;
+  late final PedagogicalReceptionController reception;
+  final scrollController = ScrollController();
+  final blockKeys = <String, GlobalKey>{};
   String? error;
 
   LabSession get session => widget.session;
@@ -51,24 +63,43 @@ class _EntryScreenState extends State<_EntryScreen> {
     super.initState();
     objectiveController = TextEditingController(text: session.freeText);
     nameController = TextEditingController(text: session.preferredName);
-    for (final group in GuidedOnboardingSection.groups) {
-      guidedControllers[group.keyName] = TextEditingController(
-        text: session.guidedAnswers[group.keyName] ?? '',
-      );
-    }
+    levelController = TextEditingController(text: session.academicLevel);
+    purposeController = TextEditingController(text: session.traversalGoal);
+    deadlineController = TextEditingController(text: session.deadline);
+    resultController = TextEditingController(text: session.expectedResult);
+    blockerController = TextEditingController(text: session.difficulties);
+    preferenceController = TextEditingController(
+      text: session.learningPreference,
+    );
+    materialTypeController = TextEditingController(text: session.materialType);
+    ageController = TextEditingController(text: session.studentAge);
+    observationController = TextEditingController(
+      text: session.profileObservation,
+    );
+    reception = PedagogicalReceptionController(form: session.entryForm)
+      ..addListener(_handleReceptionChanged);
     session.addListener(_syncFromSession);
+  }
+
+  void _handleReceptionChanged() {
+    if (!mounted) return;
+    setState(() => error = reception.error);
+    _scrollToActive();
   }
 
   void _syncFromSession() {
     if (!mounted) return;
     _syncText(objectiveController, session.freeText);
     _syncText(nameController, session.preferredName);
-    for (final group in GuidedOnboardingSection.groups) {
-      _syncText(
-        guidedControllers[group.keyName]!,
-        session.guidedAnswers[group.keyName] ?? '',
-      );
-    }
+    _syncText(levelController, session.academicLevel);
+    _syncText(purposeController, session.traversalGoal);
+    _syncText(deadlineController, session.deadline);
+    _syncText(resultController, session.expectedResult);
+    _syncText(blockerController, session.difficulties);
+    _syncText(preferenceController, session.learningPreference);
+    _syncText(materialTypeController, session.materialType);
+    _syncText(ageController, session.studentAge);
+    _syncText(observationController, session.profileObservation);
     setState(() {});
   }
 
@@ -86,7 +117,44 @@ class _EntryScreenState extends State<_EntryScreen> {
     setState(() => error = message);
   }
 
+  void _next() {
+    reception.advance();
+    _scrollToActive();
+  }
+
+  void _scrollToActive() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final step = reception.steps[reception.activeIndex];
+      final context = blockKeys[step.id]?.currentContext;
+      if (context == null) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    });
+  }
+
   void _submit() {
+    if (session.attachments.any(
+      (attachment) => attachment.status == 'processing',
+    )) {
+      setState(
+        () => error =
+            'Estou lendo seu material. Aguarde terminar para continuar.',
+      );
+      _scrollToActive();
+      return;
+    }
+    final current = reception.steps[reception.activeIndex];
+    final validation = reception.validateStep(current.id);
+    if (validation != null) {
+      setState(() => error = validation);
+      _scrollToActive();
+      return;
+    }
     final ok = session.saveObjectiveEntry();
     setState(() => error = ok ? null : 'objeto_required');
   }
@@ -94,92 +162,564 @@ class _EntryScreenState extends State<_EntryScreen> {
   @override
   void dispose() {
     session.removeListener(_syncFromSession);
+    reception.removeListener(_handleReceptionChanged);
+    reception.dispose();
+    scrollController.dispose();
     objectiveController.dispose();
     nameController.dispose();
-    for (final controller in guidedControllers.values) {
-      controller.dispose();
-    }
+    levelController.dispose();
+    purposeController.dispose();
+    deadlineController.dispose();
+    resultController.dispose();
+    blockerController.dispose();
+    preferenceController.dispose();
+    materialTypeController.dispose();
+    ageController.dispose();
+    observationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final remaining = entryFormMaxFreeText - session.freeText.length;
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          key: const Key('pedagogical-reception-scroll'),
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
           children: [
             StepHeader(
-              title: t('objeto_title'),
-              subtitle: t('objeto_subtitle'),
+              title: 'Recepção pedagógica',
+              subtitle: 'Vou entender seu objetivo antes de preparar a aula.',
             ),
             const SizedBox(height: 16),
-            SimChatBubble(
-              text: t('objeto_card1_title'),
-              supportingText: t('objeto_card1_body'),
-            ),
-            const SizedBox(height: 12),
-            SimChatInputCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SimChatFieldLabel(t('objeto_input_label')),
-                  const SizedBox(height: 8),
-                  SimInput(
-                    controller: objectiveController,
-                    hint: t('objeto_placeholder'),
-                    maxLines: 5,
-                    onChanged: session.setFreeText,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '$remaining',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  if (remaining < 0) SimChatError(text: t('objeto_too_long')),
-                  if (session.attachments.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    AttachmentPreviewList(
-                      attachments: session.attachments,
-                      onRemove: session.removeAttachment,
-                    ),
-                  ],
-                  if (session.attachmentError != null)
-                    SimChatError(text: session.attachmentError!),
-                  const SizedBox(height: 12),
-                  AttachmentMenu(onPick: _pickAttachment),
-                ],
+            for (var i = 0; i < reception.steps.length; i++) ...[
+              _ReceptionBlock(
+                key: blockKeys.putIfAbsent(
+                  reception.steps[i].id,
+                  () => GlobalKey(),
+                ),
+                step: reception.steps[i],
+                active: i == reception.activeIndex,
+                complete: i < reception.activeIndex,
+                summary: reception.summaryFor(reception.steps[i].id),
+                error: i == reception.activeIndex ? error : null,
+                onEdit: () => reception.edit(reception.steps[i].id),
+                child: _stepBody(reception.steps[i].id),
               ),
-            ),
-            const SizedBox(height: 16),
-            SimChatInputCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SimChatFieldLabel(t('objeto_preferred_name')),
-                  const SizedBox(height: 8),
-                  SimInput(
-                    controller: nameController,
-                    hint: t('objeto_name_placeholder'),
-                    onChanged: session.setPreferredName,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            GuidedOnboardingSection(session: session),
-            if (error != null) ...[
               const SizedBox(height: 12),
-              SimChatError(text: t(error!)),
             ],
-            const SizedBox(height: 20),
-            PrimaryWideButton(label: t('start_lesson'), onPressed: _submit),
           ],
         ),
       ),
     );
   }
+
+  Widget _stepBody(String id) {
+    switch (id) {
+      case 'path':
+        return Column(
+          children: [
+            _BigChoiceButton(
+              key: const Key('reception-guided-path'),
+              icon: Icons.route_outlined,
+              title: 'Quero que o SIM monte meu caminho',
+              body: 'Bom para aprender um tema e encontrar o ponto certo.',
+              selected: reception.path == PedagogicalReceptionPath.guided,
+              onTap: () =>
+                  reception.choosePath(PedagogicalReceptionPath.guided),
+            ),
+            const SizedBox(height: 10),
+            _BigChoiceButton(
+              key: const Key('reception-material-path'),
+              icon: Icons.attach_file,
+              title: 'Tenho um material e quero ajuda',
+              body: 'Use foto, PDF, lista, prova, questão ou caderno.',
+              selected: reception.path == PedagogicalReceptionPath.material,
+              onTap: () =>
+                  reception.choosePath(PedagogicalReceptionPath.material),
+            ),
+          ],
+        );
+      case 'objective':
+        return _TextStep(
+          key: const Key('reception-objective-input'),
+          controller: objectiveController,
+          label: 'Tema ou habilidade',
+          help: 'Exemplo: frações, redação do ENEM, cinemática.',
+          minLines: 3,
+          onChanged: session.setFreeText,
+          onNext: _next,
+        );
+      case 'level':
+        return _ChoiceTextStep(
+          controller: levelController,
+          label: 'Nível, série ou contexto',
+          options: const [
+            'Começando do zero',
+            'Ensino fundamental',
+            'Ensino médio',
+            'Faculdade',
+            'Trabalho',
+          ],
+          onChanged: (value) =>
+              session.setPedagogicalEntryField('academic_level', value),
+          onNext: _next,
+        );
+      case 'purpose':
+        return _ChoiceTextStep(
+          controller: purposeController,
+          label: 'Finalidade',
+          options: const [
+            'Prova',
+            'Tarefa',
+            'Trabalho',
+            'Aprender sozinho',
+            'Concurso',
+          ],
+          onChanged: (value) =>
+              session.setPedagogicalEntryField('traversal_goal', value),
+          onNext: _next,
+        );
+      case 'deadline':
+        return _ChoiceTextStep(
+          controller: deadlineController,
+          label: 'Prazo',
+          options: const ['Sem prazo', 'Hoje', 'Esta semana', 'Este mês'],
+          onChanged: (value) =>
+              session.setPedagogicalEntryField('deadline', value),
+          onNext: _next,
+          optional: true,
+        );
+      case 'result':
+        return _TextStep(
+          controller: resultController,
+          label: 'Resultado esperado',
+          help: 'O que você quer conseguir fazer ao final?',
+          onChanged: (value) =>
+              session.setPedagogicalEntryField('expected_result', value),
+          onNext: _next,
+          optional: true,
+        );
+      case 'blocker':
+      case 'material_blocker':
+        return _TextStep(
+          controller: blockerController,
+          label: 'Onde trava',
+          help: 'Pode ser uma dúvida específica ou uma sensação geral.',
+          onChanged: (value) =>
+              session.setPedagogicalEntryField('difficulties', value),
+          onNext: _next,
+          optional: true,
+        );
+      case 'style':
+        return _ChoiceTextStep(
+          controller: preferenceController,
+          label: 'Condução preferida',
+          options: const [
+            'Passo a passo',
+            'Com exemplos',
+            'Com exercícios',
+            'Revisando pontos fracos',
+            'Direto ao ponto',
+          ],
+          onChanged: (value) =>
+              session.setPedagogicalEntryField('learning_preference', value),
+          onNext: _next,
+          optional: true,
+        );
+      case 'material_type':
+        return _ChoiceTextStep(
+          controller: materialTypeController,
+          label: 'Tipo de material',
+          options: const [
+            'Foto do caderno',
+            'PDF',
+            'Lista de exercícios',
+            'Prova',
+            'Questão',
+            'Resposta que tentei fazer',
+          ],
+          onChanged: (value) =>
+              session.setPedagogicalEntryField('material_type', value),
+          onNext: _next,
+        );
+      case 'attachments':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AttachmentPreviewList(
+              attachments: session.attachments,
+              onRemove: session.removeAttachment,
+            ),
+            if (session.attachments.isEmpty)
+              const Text('Você pode anexar agora ou seguir só com texto.'),
+            if (session.attachments.any((a) => a.status == 'processing'))
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text('Estou lendo seu material...'),
+              ),
+            if (session.attachments.any((a) => a.status == 'ready'))
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text('Consegui extrair o conteúdo.'),
+              ),
+            if (session.attachments.any((a) => a.status == 'error'))
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'Não consegui ler bem. Você pode descrever com texto.',
+                ),
+              ),
+            if (session.attachmentError != null)
+              SimChatError(text: session.attachmentError!),
+            const SizedBox(height: 12),
+            AttachmentMenu(onPick: _pickAttachment),
+            const SizedBox(height: 12),
+            PrimaryWideButton(label: 'Continuar', onPressed: _next),
+          ],
+        );
+      case 'material_goal':
+        return _TextStep(
+          key: const Key('reception-material-goal-input'),
+          controller: objectiveController,
+          label: 'Pedido para o material',
+          help: 'Exemplo: explique a questão 3 e monte uma aula curta.',
+          minLines: 3,
+          onChanged: session.setFreeText,
+          onNext: _next,
+        );
+      case 'material_purpose':
+        return _ChoiceTextStep(
+          controller: purposeController,
+          label: 'Uso do material',
+          options: const [
+            'Prova',
+            'Tarefa',
+            'Lista',
+            'Revisão',
+            'Entender um exercício',
+          ],
+          onChanged: (value) =>
+              session.setPedagogicalEntryField('traversal_goal', value),
+          onNext: _next,
+        );
+      case 'profile':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SmallTextField(
+              controller: nameController,
+              label: 'Como devo chamar você?',
+              help: 'Opcional.',
+              onChanged: session.setPreferredName,
+            ),
+            const SizedBox(height: 12),
+            _SmallTextField(
+              controller: ageController,
+              label: 'Idade',
+              help: 'Opcional. Ajuda a ajustar linguagem e exemplos.',
+              onChanged: session.setStudentAge,
+            ),
+            const SizedBox(height: 12),
+            _SmallTextField(
+              controller: observationController,
+              label: 'Observação livre',
+              help: 'Algo que devo considerar na condução?',
+              onChanged: session.setProfileObservation,
+              maxLines: 3,
+            ),
+            const SizedBox(height: 12),
+            PrimaryWideButton(label: 'Continuar', onPressed: _next),
+          ],
+        );
+      case 'finish':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_finishSummary(), style: const TextStyle(height: 1.4)),
+            const SizedBox(height: 14),
+            PrimaryWideButton(
+              key: const Key('reception-submit'),
+              label: 'Preparar minha aula',
+              onPressed: _submit,
+            ),
+          ],
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  String _finishSummary() {
+    final lines = [
+      reception.summaryFor('path'),
+      if (session.freeText.trim().isNotEmpty) session.freeText.trim(),
+      if (session.academicLevel.trim().isNotEmpty)
+        'Nível: ${session.academicLevel.trim()}',
+      if (session.traversalGoal.trim().isNotEmpty)
+        'Finalidade: ${session.traversalGoal.trim()}',
+      if (session.attachments.isNotEmpty)
+        'Anexos: ${session.attachments.length}',
+    ];
+    return lines.where((line) => line.trim().isNotEmpty).join('\n');
+  }
+}
+
+class _ReceptionBlock extends StatelessWidget {
+  const _ReceptionBlock({
+    required this.step,
+    required this.active,
+    required this.complete,
+    required this.summary,
+    required this.error,
+    required this.onEdit,
+    required this.child,
+    super.key,
+  });
+
+  final PedagogicalReceptionStep step;
+  final bool active;
+  final bool complete;
+  final String summary;
+  final String? error;
+  final VoidCallback onEdit;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = active ? Colors.white : const Color(0xFFF8FAFC);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: active ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        step.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        step.help,
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (complete)
+                  TextButton(onPressed: onEdit, child: const Text('Editar')),
+              ],
+            ),
+            if (complete && summary.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(summary, maxLines: 3, overflow: TextOverflow.ellipsis),
+            ],
+            if (active) ...[
+              const SizedBox(height: 14),
+              child,
+              if (error != null) SimChatError(text: error!),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BigChoiceButton extends StatelessWidget {
+  const _BigChoiceButton({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon),
+      label: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(body, style: const TextStyle(fontSize: 13)),
+          ],
+        ),
+      ),
+      style: OutlinedButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        side: BorderSide(
+          color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+        ),
+        minimumSize: const Size.fromHeight(58),
+      ),
+    ),
+  );
+}
+
+class _TextStep extends StatelessWidget {
+  const _TextStep({
+    required this.controller,
+    required this.label,
+    required this.help,
+    required this.onChanged,
+    required this.onNext,
+    this.minLines = 2,
+    this.optional = false,
+    super.key,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String help;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onNext;
+  final int minLines;
+  final bool optional;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _SmallTextField(
+        controller: controller,
+        label: label,
+        help: help,
+        onChanged: onChanged,
+        maxLines: minLines,
+      ),
+      const SizedBox(height: 12),
+      PrimaryWideButton(
+        label: optional ? 'Continuar' : 'Salvar e continuar',
+        onPressed: onNext,
+      ),
+    ],
+  );
+}
+
+class _ChoiceTextStep extends StatelessWidget {
+  const _ChoiceTextStep({
+    required this.controller,
+    required this.label,
+    required this.options,
+    required this.onChanged,
+    required this.onNext,
+    this.optional = false,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onNext;
+  final bool optional;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SimChatFieldLabel(label),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final option in options)
+            ChoiceChip(
+              label: Text(option),
+              selected: controller.text == option,
+              onSelected: (_) {
+                controller.text = option;
+                onChanged(option);
+              },
+            ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      SimInput(
+        controller: controller,
+        hint: optional
+            ? 'Escreva outro ou deixe em branco.'
+            : 'Escreva se preferir.',
+        onChanged: onChanged,
+      ),
+      const SizedBox(height: 12),
+      PrimaryWideButton(
+        label: optional ? 'Continuar' : 'Salvar e continuar',
+        onPressed: onNext,
+      ),
+    ],
+  );
+}
+
+class _SmallTextField extends StatelessWidget {
+  const _SmallTextField({
+    required this.controller,
+    required this.label,
+    required this.help,
+    required this.onChanged,
+    this.maxLines = 1,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String help;
+  final ValueChanged<String> onChanged;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SimChatFieldLabel(label),
+      const SizedBox(height: 4),
+      Text(
+        help,
+        style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+      ),
+      const SizedBox(height: 8),
+      SimInput(
+        controller: controller,
+        hint: '',
+        maxLines: maxLines,
+        onChanged: onChanged,
+      ),
+    ],
+  );
 }
 
 class _LanguageScreen extends StatefulWidget {
@@ -551,9 +1091,9 @@ class AttachmentMenu extends StatelessWidget {
   Widget build(BuildContext context) => Wrap(
     spacing: 8,
     children: [
-      MenuLine(label: t('attach_photo'), onTap: () => onPick('photo')),
-      MenuLine(label: t('attach_file'), onTap: () => onPick('file')),
-      MenuLine(label: t('attach_text'), onTap: () => onPick('text')),
+      MenuLine(label: t('attach_file'), onTap: () => onPick('document')),
+      MenuLine(label: t('attach_camera'), onTap: () => onPick('camera')),
+      MenuLine(label: t('attach_image'), onTap: () => onPick('gallery')),
     ],
   );
 }

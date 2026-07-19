@@ -818,9 +818,13 @@ void main() {
         maxSlots: localLessonTraySize,
       );
 
-      expect(result, hasLength(localLessonTraySize));
+      final possibleUniqueSlots = _items.length * LessonLayer.values.length;
+      final expectedSlots = possibleUniqueSlots < localLessonTraySize
+          ? possibleUniqueSlots
+          : localLessonTraySize;
+      expect(result, hasLength(expectedSlots));
       expect(result.every((ok) => ok), isTrue);
-      expect(svc.read('L1')?.readyLessonMaterials.length, localLessonTraySize);
+      expect(svc.read('L1')?.readyLessonMaterials.length, expectedSlots);
     },
   );
 

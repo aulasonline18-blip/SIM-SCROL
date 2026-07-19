@@ -166,6 +166,35 @@ void main() {
       expect(runtimeText, isNot(contains(route)), reason: route);
     }
   });
+
+  test('fim oficial passa pelo RecoveryGate antes de publicar conclusao', () {
+    final controller = File(
+      'lib/sim/classroom/lesson_answer_progress_controller.dart',
+    ).readAsStringSync();
+    final gateIndex = controller.indexOf(
+      'shouldBlockFinalCompletionByRecoveryGate(state)',
+    );
+
+    expect(gateIndex, greaterThanOrEqualTo(0));
+    expect(controller, contains('if (_blockFinalCompletionForRecovery('));
+    expect(controller, contains("'FINAL_COMPLETION_BLOCKED_BY_PENDING'"));
+    expect(controller, contains("type: 'FINAL_COMPLETION_ALLOWED'"));
+    expect(controller, contains("'requiresRecovery': true"));
+  });
+
+  test('tentativa auxiliar recovery nao existe como evidencia oficial', () {
+    final auxService = File(
+      'lib/sim/auxiliary/student_aux_room_service.dart',
+    ).readAsStringSync();
+    final executor = File(
+      'lib/sim/state/student_lesson_executor.dart',
+    ).readAsStringSync();
+
+    expect(auxService, contains("'source': source"));
+    expect(auxService, contains("'auxiliary': true"));
+    expect(auxService, isNot(contains('LessonAttempt(')));
+    expect(executor, isNot(contains("source: 'recovery")));
+  });
 }
 
 const _content = LessonContent(

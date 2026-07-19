@@ -71,7 +71,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   @override
   void didUpdateWidget(covariant ChatAulaTimeline oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.messages != widget.messages ||
+    if (_timelineSignature(oldWidget.messages) !=
+            _timelineSignature(widget.messages) ||
         oldWidget.initialScrollKey != widget.initialScrollKey ||
         oldWidget.initialScrollToCurrent != widget.initialScrollToCurrent) {
       _schedulePedagogicalScroll();
@@ -243,27 +244,41 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
     return _target(messages, feedbackIndex);
   }
 
+  final signalIndex = _lastIndexWhere(
+    messages,
+    (message) =>
+        message.kind == ChatLessonMessageKind.signals && !message.isHistorical,
+  );
+  if (signalIndex != null) {
+    return _target(messages, signalIndex);
+  }
+
   final expandedOptionsIndex = _lastIndexWhere(
     messages,
     (message) =>
         message.kind == ChatLessonMessageKind.options &&
-        message.signals.isNotEmpty,
+        message.signals.isNotEmpty &&
+        !message.isHistorical,
   );
   if (expandedOptionsIndex != null) {
     return _target(messages, expandedOptionsIndex);
   }
 
-  final explanationIndex = _lastIndexWhere(
+  final selectedOptionsIndex = _lastIndexWhere(
     messages,
-    (message) => message.kind == ChatLessonMessageKind.explanation,
+    (message) =>
+        message.kind == ChatLessonMessageKind.options &&
+        message.selectedAnswer != null &&
+        !message.isHistorical,
   );
-  if (explanationIndex != null) {
-    return _target(messages, explanationIndex);
+  if (selectedOptionsIndex != null) {
+    return _target(messages, selectedOptionsIndex);
   }
 
   final questionIndex = _lastIndexWhere(
     messages,
-    (message) => message.kind == ChatLessonMessageKind.question,
+    (message) =>
+        message.kind == ChatLessonMessageKind.question && !message.isHistorical,
   );
   if (questionIndex != null) {
     return _target(messages, questionIndex);
@@ -275,6 +290,25 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
   );
   if (actionIndex != null) {
     return _target(messages, actionIndex);
+  }
+
+  final imageIndex = _lastIndexWhere(
+    messages,
+    (message) =>
+        message.kind == ChatLessonMessageKind.image && !message.isHistorical,
+  );
+  if (imageIndex != null) {
+    return _target(messages, imageIndex);
+  }
+
+  final explanationIndex = _lastIndexWhere(
+    messages,
+    (message) =>
+        message.kind == ChatLessonMessageKind.explanation &&
+        !message.isHistorical,
+  );
+  if (explanationIndex != null) {
+    return _target(messages, explanationIndex);
   }
 
   return _target(messages, messages.length - 1);
@@ -296,6 +330,32 @@ int? _lastIndexWhere(
     if (test(messages[i])) return i;
   }
   return null;
+}
+
+String _timelineSignature(List<ChatLessonMessage> messages) {
+  return messages.map(_messageSignaturePart).join('|');
+}
+
+String _messageSignaturePart(ChatLessonMessage message) {
+  final selected = message.selectedAnswer?.name ?? '';
+  final signal = message.selectedSignal?.name ?? '';
+  final signalCount = message.signals.length;
+  final status = message.deliveryStatus.name;
+  final action = message.isActionable ? '1' : '0';
+  final historical = message.isHistorical ? '1' : '0';
+  final textHash = message.text?.hashCode.toString() ?? '';
+  return [
+    message.id,
+    message.kind.name,
+    selected,
+    signal,
+    signalCount,
+    status,
+    action,
+    historical,
+    message.imageStatus,
+    textHash,
+  ].join(':');
 }
 
 class AulaConversationActions {

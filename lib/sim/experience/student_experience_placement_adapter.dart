@@ -47,7 +47,8 @@ class StudentExperiencePlacementAdapter {
   bool isPlacementSettled(PlacementState placement, bool enabled) {
     return !enabled ||
         placement.status == PlacementStatus.done ||
-        placement.status == PlacementStatus.skipped;
+        placement.status == PlacementStatus.skipped ||
+        placement.choice == 'material_based';
   }
 
   StartPosition resolveStartPosition(

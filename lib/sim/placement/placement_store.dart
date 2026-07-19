@@ -9,8 +9,12 @@ class PlacementStoreState {
     this.pretestAnswers,
     this.pretestResult,
     this.startMarker,
+    this.startItemIdx,
     this.pretestIndex,
+    this.choice,
     this.pretestSource,
+    this.confidence,
+    this.reason,
     this.pretestLimited,
     this.pretestStartedAt,
     this.pretestFinishedAt,
@@ -21,8 +25,12 @@ class PlacementStoreState {
   final List<PlacementAnswer>? pretestAnswers;
   final PlacementResult? pretestResult;
   final String? startMarker;
+  final int? startItemIdx;
   final int? pretestIndex;
+  final String? choice;
   final String? pretestSource;
+  final String? confidence;
+  final String? reason;
   final bool? pretestLimited;
   final int? pretestStartedAt;
   final int? pretestFinishedAt;
@@ -44,14 +52,24 @@ class PlacementStore {
         answers: patch.pretestAnswers,
         result: patch.pretestResult,
         startMarker: patch.startMarker,
+        startItemIdx: patch.startItemIdx,
         index: patch.pretestIndex,
+        choice: patch.choice,
         source: patch.pretestSource,
+        confidence: patch.confidence,
+        reason: patch.reason,
         limited: patch.pretestLimited,
         startedAt: patch.pretestStartedAt,
         finishedAt: patch.pretestFinishedAt,
-        clearResult: patch.pretestResult == null &&
+        clearResult:
+            patch.pretestResult == null &&
             patch.pretestStatus == PlacementStatus.running,
-        clearStartMarker: patch.startMarker == null &&
+        clearStartMarker:
+            patch.startMarker == null &&
+            (patch.pretestStatus == PlacementStatus.running ||
+                patch.pretestStatus == PlacementStatus.skipped),
+        clearStartItemIdx:
+            patch.startItemIdx == null &&
             (patch.pretestStatus == PlacementStatus.running ||
                 patch.pretestStatus == PlacementStatus.skipped),
       ),

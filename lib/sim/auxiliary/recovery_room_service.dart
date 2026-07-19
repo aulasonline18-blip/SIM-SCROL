@@ -1,6 +1,18 @@
 import '../state/student_learning_state.dart';
 import 'aux_room_models.dart';
 import 'student_aux_room_service.dart';
+import 'student_aux_rooms.dart';
+
+bool isFinalBlockedByRecovery(
+  RecoveryRoomService recoveryRoomService,
+  String lessonLocalId,
+) {
+  return recoveryRoomService.shouldStartRecoveryRoom(lessonLocalId);
+}
+
+bool shouldBlockFinalCompletionByRecoveryGate(StudentLearningState state) {
+  return shouldBlockFinalCompletionForRecovery(state);
+}
 
 class RecoveryRoomService {
   const RecoveryRoomService(this.service);

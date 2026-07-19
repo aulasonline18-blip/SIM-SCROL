@@ -727,9 +727,7 @@ class _PlacementResult extends StatelessWidget {
       children: [
         SimChatBubble(
           text: t('placement_result_h1'),
-          supportingText: controller.result?.startMarker == null
-              ? t('placement_result_body')
-              : '${t('placement_result_body')}\n\n${t('placement_starting_at')}: ${controller.result!.startMarker}',
+          supportingText: t('placement_result_body'),
         ),
         FilledButton.icon(
           onPressed: onContinue,

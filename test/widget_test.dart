@@ -25,7 +25,7 @@ void main() {
     expect(find.byType(ChatAulaScreen), findsOneWidget);
   });
 
-  testWidgets('rota de aula sem lessonLocalId volta para entrada fina', (
+  testWidgets('rota de aula sem lessonLocalId volta para recepcao', (
     tester,
   ) async {
     final session = LabSession()
@@ -38,7 +38,7 @@ void main() {
 
     expect(find.byType(ChatAulaScreen), findsNothing);
     expect(find.byType(ConversationalEntryScreen), findsOneWidget);
-    expect(find.text(t('objeto_title')), findsOneWidget);
+    expect(find.text('Recepção pedagógica'), findsOneWidget);
   });
 
   testWidgets('portal renderiza entrada principal do SIM', (tester) async {
@@ -121,9 +121,7 @@ void main() {
     expect(prefs.getBool('sim.ui.dark_mode'), isTrue);
   });
 
-  testWidgets('entrada fina salva objetivo e cria lessonLocalId', (
-    tester,
-  ) async {
+  testWidgets('recepcao salva objetivo e cria lessonLocalId', (tester) async {
     final session = LabSession()
       ..authed = true
       ..authReady = true;
@@ -133,6 +131,8 @@ void main() {
     );
     await tester.pump();
 
+    await tester.tap(find.byKey(const Key('reception-guided-path')));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byType(TextField).first,
       'Quero estudar porcentagem com exemplos simples',

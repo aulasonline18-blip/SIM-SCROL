@@ -4,6 +4,7 @@ import '../billing/account_deletion.dart';
 import '../billing/credits_route_controller.dart';
 import '../billing/payment_return_store.dart';
 import '../billing/sim_server_billing_clients.dart';
+import '../auxiliary/amparo_room_service.dart';
 import '../auxiliary/aux_room_t02_caller.dart';
 import '../auxiliary/aux_rooms_controller.dart';
 import '../auxiliary/recovery_room_service.dart';
@@ -21,8 +22,10 @@ import '../cloud/lesson_curriculum_sync_engine.dart';
 import '../cloud/student_learning_sync.dart';
 import '../experience/student_experience_engine.dart';
 import '../experience/student_experience_placement_adapter.dart';
+import '../experience/start_first_lesson_use_case.dart';
 import '../experience/student_experience_t00_adapter.dart';
 import '../experience/student_experience_t02_adapter.dart';
+import '../experience/warmup_bridge_service.dart';
 import '../lesson/dopamine_ready_window_engine.dart';
 import '../lesson/lesson_event_bus.dart';
 import '../lesson/lesson_material_cache.dart';
@@ -81,6 +84,8 @@ class SimOrganismRouter {
     '/cyber/objeto',
     '/cyber/curriculo',
     '/cyber/placement',
+    '/cyber/warmup',
+    '/cyber/amparo',
     '/cyber/aula',
     '/creditos',
     '/checkout/return',
@@ -156,6 +161,8 @@ class SimOrganismRouter {
     '/cyber/objeto',
     '/cyber/curriculo',
     '/cyber/placement',
+    '/cyber/warmup',
+    '/cyber/amparo',
     '/cyber/aula',
     '/creditos',
     '/checkout/return',
@@ -167,12 +174,15 @@ class SimOrganismRouter {
     '/cyber/objeto',
     '/cyber/curriculo',
     '/cyber/placement',
+    '/cyber/warmup',
+    '/cyber/amparo',
     '/cyber/aula',
   }.contains(path);
 
   bool _requiresObjective(String path) => const {
     '/cyber/curriculo',
     '/cyber/placement',
+    '/cyber/warmup',
     '/cyber/aula',
   }.contains(path);
 }
@@ -236,6 +246,7 @@ class SimOrganism {
     required this.readyWindowEngine,
     required this.readyWindowWorker,
     required this.materialService,
+    required this.warmupBridgeService,
     required this.experienceEngine,
     required this.placementService,
     required this.placementController,
@@ -263,6 +274,7 @@ class SimOrganism {
   final DopamineReadyWindowEngine readyWindowEngine;
   final ReadyWindowWorker readyWindowWorker;
   final StudentLessonMaterialService materialService;
+  final WarmupBridgeService warmupBridgeService;
   final StudentExperienceEngine experienceEngine;
   final StudentPlacementService placementService;
   final PlacementRouteController placementController;
@@ -303,6 +315,7 @@ class SimOrganism {
 
     final t00Client = SimServerT00Client(config: aiConfig);
     final t02Client = SimServerT02Client(config: aiConfig);
+    final warmupBridgeService = WarmupBridgeService(t02Client: t02Client);
     final cache = LessonMaterialCache();
     cache.hydrateFromPreferences(prefs);
     final eventBus = LessonEventBus();
@@ -365,16 +378,18 @@ class SimOrganism {
       client: t00Client,
       onCurriculumExpanded: materialService.prepareReadyWindowInBackground,
     );
+    final startFirstLesson = StartFirstLessonUseCase(service: stateService);
     final t02Adapter = StudentExperienceT02Adapter(
       service: stateService,
       materialService: materialService,
+      startFirstLesson: startFirstLesson,
     );
     final placementService = StudentPlacementService(
       stateService: stateService,
       lessonLocalId: lessonLocalId,
     );
     final placementStore = PlacementStore(placementService);
-    const placementEnabled = false;
+    const placementEnabled = true;
     final placementController = PlacementRouteController(
       lessonLocalId: lessonLocalId,
       stateService: stateService,
@@ -396,6 +411,7 @@ class SimOrganism {
       t00: t00Adapter,
       t02: t02Adapter,
       placement: placementReader,
+      startFirstLesson: startFirstLesson,
     );
 
     final lessonMaterialController = LessonMaterialController(
@@ -410,6 +426,7 @@ class SimOrganism {
     final auxRoomsController = AuxRoomsController(
       reviewRoomService: ReviewRoomService(auxRoomService),
       recoveryRoomService: RecoveryRoomService(auxRoomService),
+      amparoRoomService: AmparoRoomService(auxRoomService),
     );
     final lessonRuntimeEngine = LessonRuntimeEngine(
       stateService: stateService,
@@ -465,6 +482,7 @@ class SimOrganism {
       readyWindowEngine: readyWindowEngine,
       readyWindowWorker: readyWindowWorker,
       materialService: materialService,
+      warmupBridgeService: warmupBridgeService,
       experienceEngine: experienceEngine,
       placementService: placementService,
       placementController: placementController,

@@ -5,6 +5,8 @@ import '../lesson/dopamine_ready_window_engine.dart';
 import '../lesson/lesson_models.dart';
 import '../lesson/student_lesson_material_service.dart';
 import '../media/audio_core.dart';
+import '../auxiliary/amparo_room_engine.dart';
+import '../auxiliary/recovery_room_service.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
 import '../state/learning_decision_engine.dart';
@@ -13,6 +15,7 @@ import '../state/mastery_truth_engine.dart';
 import '../state/student_state_store.dart';
 import 'classroom_models.dart';
 import 'lesson_answer_feedback.dart';
+import 'local_advance_engine.dart';
 import 'lesson_material_controller.dart';
 import 'lesson_position_engine.dart';
 
@@ -25,9 +28,11 @@ class LessonAnswerProgressController {
     this.audioCore,
     SignalTracker? signalTracker,
     MasteryTruthEngine? truthEngine,
+    LocalAdvanceEngine? localAdvanceEngine,
     SimConstitutionalContract? constitutionalContract,
   }) : signalTracker = signalTracker ?? SignalTracker(stateService),
        truthEngine = truthEngine ?? const MasteryTruthEngine(),
+       localAdvanceEngine = localAdvanceEngine ?? const LocalAdvanceEngine(),
        constitutionalContract =
            constitutionalContract ?? const SimConstitutionalContract();
 
@@ -38,6 +43,7 @@ class LessonAnswerProgressController {
   final AudioCore? audioCore;
   final SignalTracker signalTracker;
   final MasteryTruthEngine truthEngine;
+  final LocalAdvanceEngine localAdvanceEngine;
   final SimConstitutionalContract constitutionalContract;
 
   void selecionar(LessonPositionState position, AnswerLetter letter) {
@@ -125,8 +131,13 @@ class LessonAnswerProgressController {
         ? currentState
         : _withLocalAttemptEvidence(currentState, localAttempt);
     if (stateWithLocalEvidence != null && !position.isReviewAtivo) {
-      final stateWithTruth = _withLocalMasteryEvidence(
+      final stateWithAmparo = const AmparoGate().recordOfficialAttempt(
         stateWithLocalEvidence,
+        localAttempt,
+        itemIdx: position.itemIdx,
+      );
+      final stateWithTruth = _withLocalMasteryEvidence(
+        stateWithAmparo,
         item.marker,
       );
       stateService.write(
@@ -186,6 +197,10 @@ class LessonAnswerProgressController {
     final state = stateService.read(lessonLocalId);
     final view = state == null ? null : activeLessonView(state);
     if (item == null) {
+      if (state != null &&
+          _blockFinalCompletionForRecovery(lessonLocalId, state)) {
+        return;
+      }
       position.phase = const ClassroomPhase.doneEnd();
       stateService.appendEvent(
         lessonLocalId,
@@ -431,6 +446,9 @@ class LessonAnswerProgressController {
     position.historia = view.historia;
     position.mainAdvances = view.mainAdvances;
     if (view.ended) {
+      if (_blockFinalCompletionForRecovery(lessonLocalId, state)) {
+        return;
+      }
       position.phase = const ClassroomPhase.doneEnd();
       stateService.appendEvent(
         lessonLocalId,
@@ -478,13 +496,33 @@ class LessonAnswerProgressController {
     );
   }
 
+  bool _blockFinalCompletionForRecovery(
+    String lessonLocalId,
+    StudentLearningState state,
+  ) {
+    if (!shouldBlockFinalCompletionByRecoveryGate(state)) return false;
+    stateService.appendEvent(
+      lessonLocalId,
+      StudentLearningEvent(
+        type: 'FINAL_COMPLETION_BLOCKED_BY_PENDING',
+        ts: DateTime.now().millisecondsSinceEpoch,
+        payload: {
+          'pendingCount': ((state.auxRooms?['pendingMap'] as List?) ?? const [])
+              .whereType<Map>()
+              .where((entry) => entry['status'] == 'pending')
+              .length,
+          'requiresRecovery': true,
+        },
+      ),
+    );
+    return true;
+  }
+
   LessonMode _modeForNextMaterial(
     StudentLearningState state,
     bool isReviewAtivo,
   ) {
     if (isReviewAtivo) return LessonMode.reforco;
-    final amparoLvl = state.progress?.amparoLvl ?? 0;
-    if (amparoLvl > 0) return LessonMode.amparo;
     return LessonMode.session;
   }
 
@@ -602,9 +640,7 @@ class LessonAnswerProgressController {
   ) {
     final marker = position.itemAtivo?.marker ?? state.current?.marker;
     if (marker == null || marker.trim().isEmpty) return false;
-    return state.attempts.any(
-      (attempt) => attempt.marker == marker && attempt.layer == position.layer,
-    );
+    return localAdvanceEngine.hasEvidenceForCurrentPosition(state, position);
   }
 
   StudentLearningState _withLocalAttemptEvidence(
