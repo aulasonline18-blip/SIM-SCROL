@@ -245,7 +245,7 @@ void main() {
   testWidgets('timeline progressiva tem erro claro, scroll e layout mobile', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(360, 640);
+    tester.view.physicalSize = const Size(360, 520);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -258,27 +258,111 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Recepção pedagógica'), findsOneWidget);
     expect(find.byKey(const Key('reception-guided-path')), findsOneWidget);
+    expect(find.byKey(const Key('reception-material-path')), findsOneWidget);
+    expect(find.text('Algum cuidado para adaptar a aula?'), findsNothing);
+    expect(find.text('Tudo certo?'), findsNothing);
 
-    await tester.tap(find.byKey(const Key('reception-guided-path')));
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('reception-guided-path')));
     expect(find.text('O que você quer aprender?'), findsOneWidget);
     expect(find.text('Editar'), findsWidgets);
+    expect(find.byKey(const Key('reception-answer-path')), findsOneWidget);
+    expect(
+      find.text('Quero que o SIM monte meu caminho'),
+      findsAtLeastNWidgets(1),
+    );
 
-    await tester.tap(find.text('Salvar e continuar').first);
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('Salvar e continuar').first);
     expect(find.text('Escreva o que você quer aprender.'), findsOneWidget);
 
     await tester.enterText(
       find.byType(TextField).first,
       'Quero aprender porcentagem',
     );
-    await tester.tap(find.text('Salvar e continuar').first);
-    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('Salvar e continuar').first);
     expect(
       find.text('Qual nível ou contexto devo considerar?'),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const Key('reception-answer-objective'), skipOffstage: false),
+      findsOneWidget,
+    );
+    final list = tester.widget<ListView>(
+      find.byKey(const Key('pedagogical-reception-scroll')),
+    );
+    expect(list.controller?.hasClients, isTrue);
+
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('reception-edit-answer'), skipOffstage: false).last,
+    );
+    expect(find.byKey(const Key('reception-active-objective')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('material aparece como item da conversa e pula nivelamento', (
+    tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true;
+    session.entryForm.attachments = [
+      AttachmentDraft(
+        id: 'att-ui',
+        name: 'lista.pdf',
+        type: 'application/pdf',
+        size: 1200,
+        status: 'ready',
+        method: 'pdf-text',
+        extractedText: 'Questao 1: resolva 2x + 4 = 10 mostrando os passos.',
+      ),
+    ];
+
+    await tester.pumpWidget(MaterialApp(home: ObjetoScreen(session: session)));
+    await tester.pumpAndSettle();
+
+    await _tapVisible(tester, find.byKey(const Key('reception-material-path')));
+    expect(find.text('Que tipo de material você trouxe?'), findsOneWidget);
+    await _tapVisible(tester, find.text('PDF'));
+    await _tapVisible(tester, find.text('Salvar e continuar').first);
+
+    expect(find.text('Envie o material'), findsOneWidget);
+    expect(find.text('lista.pdf'), findsOneWidget);
+    expect(find.text('Consegui extrair o conteúdo.'), findsOneWidget);
+
+    session
+      ..freeText = 'Explique esta lista e monte uma aula curta pelo material.'
+      ..setPedagogicalEntryField('traversal_goal', 'Lista');
+    expect(session.saveObjectiveEntry(), isTrue);
+    expect(session.route, '/cyber/curriculo');
+    final state = session.canonicalStore!.readState(session.lessonLocalId!);
+    expect(state.placement?['choice'], 'material_based');
+    expect(state.profile.extra['attachments_text'], contains('Questao 1'));
+    expect(jsonEncode(state.toJson()), isNot(contains('base64')));
+  });
+
+  testWidgets('recepcao nao mostra termos tecnicos ao aluno', (tester) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true;
+
+    await tester.pumpWidget(MaterialApp(home: ObjetoScreen(session: session)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('reception-guided-path')));
+    await tester.pumpAndSettle();
+
+    for (final term in const [
+      'T00',
+      'T02',
+      'JSON',
+      'placement',
+      'API',
+      'state',
+      'attempts',
+      'payload',
+    ]) {
+      expect(find.textContaining(term), findsNothing, reason: term);
+    }
   });
 
   test('UI de recepcao nao chama T00/T02 ou rotas legadas diretamente', () {
@@ -341,4 +425,11 @@ Future<void> _waitAttachments(EntryFormState form) async {
     if (form.attachments.every((a) => a.status != 'processing')) return;
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
+}
+
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
 }

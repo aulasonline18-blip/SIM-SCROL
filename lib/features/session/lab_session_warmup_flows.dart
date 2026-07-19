@@ -94,13 +94,56 @@ extension LabSessionWarmupFlowExtensions on LabSession {
       if (controller != null) {
         controller.chooseFindMyPoint();
         unawaited(controller.startTest());
+      } else {
+        _writePlacementChoiceFallback(
+          status: 'requested',
+          choice: 'find_my_point',
+          source: 'adaptive_t02',
+          reason: 'Nivelamento escolhido antes do controlador ativo.',
+        );
       }
     } else {
-      controller?.skip();
+      if (controller != null) {
+        controller.skip();
+      } else {
+        _writePlacementChoiceFallback(
+          status: 'skipped',
+          choice: 'start_from_zero',
+          source: 'choice_gate',
+          reason: 'Aluno escolheu começar do início.',
+          finished: true,
+        );
+      }
     }
     unawaited(launchExperience());
     navigationState.openRoute('/cyber/warmup');
     _notifyFromChild();
+  }
+
+  void _writePlacementChoiceFallback({
+    required String status,
+    required String choice,
+    required String source,
+    required String reason,
+    bool finished = false,
+  }) {
+    final id = lessonLocalId;
+    if (id == null || id.trim().isEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    canonicalStore?.patchState(id, (state) {
+      return state.copyWith(
+        placement: {
+          ...?state.placement,
+          'status': status,
+          'choice': choice,
+          'source': source,
+          'reason': reason,
+          'updated_at': now,
+          if (finished) 'finished_at': now,
+          if (!finished) 'started_at': now,
+        },
+      );
+    }, allowLocalHousekeeping: true);
   }
 
   Future<void> continueFromWarmupToAula() async {
@@ -130,6 +173,11 @@ extension LabSessionWarmupFlowExtensions on LabSession {
     warmupWaitingForOfficialLesson = false;
     final controller = activePlacementController;
     if (controller == null) {
+      if (_placementChoiceRequiresGate()) {
+        navigationState.openRoute('/cyber/placement');
+        _notifyFromChild();
+        return;
+      }
       _warmupCoordinator.markAulaNavigationStarted();
       _syncEntryCoordinatorFields();
       debugPrint('[SIM] ENTRY_NAVIGATE_AULA source=$source placement=false');
@@ -141,6 +189,7 @@ extension LabSessionWarmupFlowExtensions on LabSession {
     if (placement.choice == 'find_my_point' &&
         controller.destination != '/cyber/aula') {
       navigationState.openRoute('/cyber/placement');
+      unawaited(_startPlacementAfterOfficialLesson(controller));
       _notifyFromChild();
       return;
     }
@@ -149,6 +198,23 @@ extension LabSessionWarmupFlowExtensions on LabSession {
     _syncEntryCoordinatorFields();
     debugPrint('[SIM] ENTRY_NAVIGATE_AULA source=$source placement=true');
     await openAulaAfterPlacementIfReady();
+  }
+
+  bool _placementChoiceRequiresGate() {
+    final id = lessonLocalId;
+    if (id == null || id.trim().isEmpty) return false;
+    final placement = canonicalStore?.readState(id).placement;
+    if (placement == null) return false;
+    return placement['choice'] == 'find_my_point' &&
+        placement['status'] != 'done' &&
+        placement['status'] != 'skipped';
+  }
+
+  Future<void> _startPlacementAfterOfficialLesson(
+    PlacementRouteController controller,
+  ) async {
+    await controller.startTest();
+    _notifyFromChild();
   }
 
   bool _hasLocalOfficialAulaState() {

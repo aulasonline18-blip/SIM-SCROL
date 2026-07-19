@@ -108,6 +108,11 @@ void main() {
         expect(session.saveObjectiveEntry(), isTrue);
         expect(session.route, '/cyber/placement');
         session.skipPlacement();
+        final placement = session.canonicalStore!.readState(
+          session.lessonLocalId!,
+        );
+        expect(placement.placement?['status'], 'skipped');
+        expect(placement.placement?['choice'], 'start_from_zero');
         final launch = session.launchExperience();
         await Future<void>.delayed(Duration.zero);
 
@@ -127,6 +132,56 @@ void main() {
         expect(session.aulaSnapshot, isNotNull);
         await session.continueFromWarmupToAula();
         expect(session.route, '/cyber/aula');
+      },
+    );
+
+    test(
+      'escolha encontrar ponto vai para warmup e volta ao nivelamento com teste',
+      () async {
+        final officialReady = Completer<void>();
+        final session =
+            LabSession(
+                warmupBridgeService: WarmupBridgeService(
+                  t02Client: _RecordingWarmupT02(),
+                ),
+                experiencePreparerOverride: (args) async {
+                  args.onStage?.call(StudentExperienceRouteStage.curriculum);
+                  args.onStage?.call(StudentExperienceRouteStage.lesson);
+                  await officialReady.future;
+                  args.onStage?.call(StudentExperienceRouteStage.ready);
+                  return _result();
+                },
+              )
+              ..selectedLanguageCode = 'pt'
+              ..stableLang = 'pt-BR'
+              ..freeText =
+                  'Quero aprender deslocamento em física começando do zero.';
+
+        expect(session.saveObjectiveEntry(), isTrue);
+        final launch = session.launchExperience();
+        await Future<void>.delayed(Duration.zero);
+
+        session.openWarmupBridge(preparePlacement: true);
+        expect(session.route, '/cyber/warmup');
+        expect(
+          session.canonicalStore!
+              .readState(session.lessonLocalId!)
+              .placement?['choice'],
+          'find_my_point',
+        );
+
+        await session.continueFromWarmupToAula();
+        expect(session.route, '/cyber/warmup');
+
+        officialReady.complete();
+        await launch;
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+
+        final state = session.canonicalStore!.readState(session.lessonLocalId!);
+        expect(session.route, '/cyber/placement');
+        expect(state.placement?['status'], 'requested');
+        expect(state.placement?['choice'], 'find_my_point');
       },
     );
 

@@ -251,7 +251,12 @@ class PedagogicalReceptionController extends ChangeNotifier {
         if (form.attachments.isEmpty) {
           return 'Sem anexo; vou usar sua descrição.';
         }
-        return '$ready de ${form.attachments.length} anexo(s) lido(s).';
+        final names = form.attachments
+            .map((attachment) => attachment.name.trim())
+            .where((name) => name.isNotEmpty)
+            .join(', ');
+        final status = '$ready de ${form.attachments.length} anexo(s) lido(s).';
+        return names.isEmpty ? status : '$status\n$names';
       case 'profile':
         return [
           form.preferredName.trim(),

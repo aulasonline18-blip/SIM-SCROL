@@ -684,7 +684,16 @@ class _PlacementQuestion extends StatelessWidget {
   Widget build(BuildContext context) {
     final screen = controller.questionScreen();
     if (screen == null) {
-      return const Center(child: CircularProgressIndicator());
+      return OnboardingChatFlow(
+        semanticLabel: t('onboarding_chat_region'),
+        children: [
+          SimChatBubble(
+            text: t('placement_waiting_h1'),
+            supportingText: t('placement_waiting_body'),
+          ),
+          const Center(child: CircularProgressIndicator()),
+        ],
+      );
     }
     return OnboardingChatFlow(
       semanticLabel: t('onboarding_chat_region'),

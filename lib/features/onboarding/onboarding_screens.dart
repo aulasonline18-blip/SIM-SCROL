@@ -156,7 +156,9 @@ class _EntryScreenState extends State<_EntryScreen> {
       return;
     }
     final ok = session.saveObjectiveEntry();
-    setState(() => error = ok ? null : 'objeto_required');
+    setState(
+      () => error = ok ? null : 'Escreva um objetivo um pouco mais completo.',
+    );
   }
 
   @override
@@ -181,6 +183,9 @@ class _EntryScreenState extends State<_EntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final visibleSteps = reception.steps
+        .take(reception.activeIndex + 1)
+        .toList(growable: false);
     return Scaffold(
       body: SafeArea(
         child: ListView(
@@ -190,22 +195,27 @@ class _EntryScreenState extends State<_EntryScreen> {
           children: [
             StepHeader(
               title: 'Recepção pedagógica',
-              subtitle: 'Vou entender seu objetivo antes de preparar a aula.',
+              subtitle: 'Vamos montar uma aula que nasça no ponto certo.',
             ),
             const SizedBox(height: 16),
-            for (var i = 0; i < reception.steps.length; i++) ...[
+            _SimIntroBubble(
+              text:
+                  'Antes de preparar sua aula, preciso entender como você quer começar.',
+            ),
+            const SizedBox(height: 12),
+            for (var i = 0; i < visibleSteps.length; i++) ...[
               _ReceptionBlock(
                 key: blockKeys.putIfAbsent(
-                  reception.steps[i].id,
+                  visibleSteps[i].id,
                   () => GlobalKey(),
                 ),
-                step: reception.steps[i],
+                step: visibleSteps[i],
                 active: i == reception.activeIndex,
                 complete: i < reception.activeIndex,
-                summary: reception.summaryFor(reception.steps[i].id),
+                summary: reception.summaryFor(visibleSteps[i].id),
                 error: i == reception.activeIndex ? error : null,
-                onEdit: () => reception.edit(reception.steps[i].id),
-                child: _stepBody(reception.steps[i].id),
+                onEdit: () => reception.edit(visibleSteps[i].id),
+                child: _stepBody(visibleSteps[i].id),
               ),
               const SizedBox(height: 12),
             ],
@@ -488,63 +498,211 @@ class _ReceptionBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = active ? Colors.white : const Color(0xFFF8FAFC);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: active ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+    return Column(
+      key: Key('reception-turn-${step.id}'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SimQuestionBubble(
+          key: Key('reception-question-${step.id}'),
+          active: active,
+          title: step.title,
+          help: step.help,
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        if (complete && summary.trim().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _StudentSummaryBubble(
+            key: Key('reception-answer-${step.id}'),
+            text: summary,
+            onEdit: onEdit,
+          ),
+        ],
+        if (active) ...[
+          const SizedBox(height: 10),
+          _ActiveReplyBubble(
+            key: Key('reception-active-${step.id}'),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        step.title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        step.help,
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (complete)
-                  TextButton(onPressed: onEdit, child: const Text('Editar')),
+                child,
+                if (error != null) SimChatError(text: error!),
               ],
             ),
-            if (complete && summary.trim().isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(summary, maxLines: 3, overflow: TextOverflow.ellipsis),
-            ],
-            if (active) ...[
-              const SizedBox(height: 14),
-              child,
-              if (error != null) SimChatError(text: error!),
-            ],
-          ],
-        ),
-      ),
+          ),
+        ],
+      ],
     );
   }
+}
+
+class _SimIntroBubble extends StatelessWidget {
+  const _SimIntroBubble({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 620),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF6FF),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(4),
+            topRight: Radius.circular(16),
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(16),
+          ),
+          border: Border.all(color: const Color(0xFFD8E2F0)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Text(text, style: const TextStyle(height: 1.35)),
+        ),
+      ),
+    ),
+  );
+}
+
+class _SimQuestionBubble extends StatelessWidget {
+  const _SimQuestionBubble({
+    required this.active,
+    required this.title,
+    required this.help,
+    super.key,
+  });
+
+  final bool active;
+  final String title;
+  final String help;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 640),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(4),
+            topRight: Radius.circular(16),
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(16),
+          ),
+          border: Border.all(
+            color: active ? const Color(0xFF93C5FD) : const Color(0xFFE5E7EB),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                help,
+                style: const TextStyle(color: Color(0xFF475569), height: 1.35),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _StudentSummaryBubble extends StatelessWidget {
+  const _StudentSummaryBubble({
+    required this.text,
+    required this.onEdit,
+    super.key,
+  });
+
+  final String text;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerRight,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 620),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFEEFDF4),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(4),
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(16),
+          ),
+          border: Border.all(color: const Color(0xFFBBF7D0)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  text,
+                  maxLines: 5,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                key: const Key('reception-edit-answer'),
+                onPressed: onEdit,
+                child: const Text('Editar'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _ActiveReplyBubble extends StatelessWidget {
+  const _ActiveReplyBubble({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 700),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0F000000),
+              blurRadius: 16,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Padding(padding: const EdgeInsets.all(14), child: child),
+      ),
+    ),
+  );
 }
 
 class _BigChoiceButton extends StatelessWidget {
