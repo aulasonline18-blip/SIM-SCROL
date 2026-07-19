@@ -8,8 +8,8 @@ import 'lesson_content_validator.dart';
 import 'lesson_models.dart';
 import 'lesson_orchestrator.dart';
 
-const int localLessonTraySize = 4;
 const int offlineWarmCacheSize = 15;
+const int localLessonTraySize = offlineWarmCacheSize;
 
 class DopamineWindowItem {
   const DopamineWindowItem({
@@ -413,12 +413,7 @@ class DopamineReadyWindowEngine {
     ].join('|');
   }
 
-  bool _isHotSlot(DopamineReadySlot slot) {
-    return slot.slot == 'A' ||
-        slot.slot == 'B' ||
-        slot.slot == 'C' ||
-        slot.slot == 'D';
-  }
+  bool _isHotSlot(DopamineReadySlot slot) => true;
 
   ({int itemIdx, LessonLayer layer})? _nextSlot(
     int itemIdx,

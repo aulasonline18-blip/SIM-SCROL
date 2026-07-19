@@ -174,74 +174,43 @@ class ReadyWindowWorker {
           );
         });
       } catch (error) {
-        // F3.3: retry exponencial em vez de break
         final attempts = (job['attempts'] as num?)?.toInt() ?? 0;
-        final maxAttempts = (job['max_attempts'] as num?)?.toInt() ?? 3;
         final newAttempts = attempts + 1;
         final now = DateTime.now().millisecondsSinceEpoch;
-
-        if (newAttempts >= maxAttempts) {
-          service.mutate(lessonLocalId, (current) {
-            return current.copyWith(
-              queuedActions: current.queuedActions.map((cur) {
-                if (cur['job_id'] != jobId) return cur;
-                return {
-                  ...cur,
-                  'status': 'failed',
-                  'finished_at': now,
-                  'error_code': 'READY_WINDOW_JOB_FAILED',
-                  'attempts': newAttempts,
-                };
-              }).toList(),
-            );
-          });
-          service.appendEvent(
-            lessonLocalId,
-            StudentLearningEvent(
-              type: 'READY_WINDOW_JOB_FAILED',
-              ts: now,
-              payload: {
-                'job_id': jobId,
-                'error_code': 'READY_WINDOW_JOB_FAILED',
+        final retryDelayMs = _retryDelayMs(newAttempts);
+        final retryAt = now + retryDelayMs;
+        service.mutate(lessonLocalId, (current) {
+          return current.copyWith(
+            queuedActions: current.queuedActions.map((cur) {
+              if (cur['job_id'] != jobId) return cur;
+              return {
+                ...cur,
+                'status': 'queued',
+                'finished_at': null,
                 'attempts': newAttempts,
-              },
-            ),
+                'max_attempts': null,
+                'next_retry_at': retryAt,
+                'error_code': 'READY_WINDOW_JOB_RETRYABLE',
+              };
+            }).toList(),
           );
-        } else {
-          final retryDelayMs = _retryDelayMs(newAttempts);
-          final retryAt = now + retryDelayMs;
-          service.mutate(lessonLocalId, (current) {
-            return current.copyWith(
-              queuedActions: current.queuedActions.map((cur) {
-                if (cur['job_id'] != jobId) return cur;
-                return {
-                  ...cur,
-                  'status': 'queued',
-                  'attempts': newAttempts,
-                  'max_attempts': maxAttempts,
-                  'next_retry_at': retryAt,
-                  'error_code': 'READY_WINDOW_JOB_RETRYABLE',
-                };
-              }).toList(),
-            );
-          });
-          service.appendEvent(
-            lessonLocalId,
-            StudentLearningEvent(
-              type: 'READY_WINDOW_JOB_RETRY_SCHEDULED',
-              ts: now,
-              payload: {
-                'job_id': jobId,
-                'attempt': newAttempts,
-                'retry_at': retryAt,
-                'delay_ms': retryDelayMs,
-              },
-            ),
-          );
-          Timer(Duration(milliseconds: retryDelayMs), () {
-            drainReadyWindowJobs(lessonLocalId);
-          });
-        }
+        });
+        service.appendEvent(
+          lessonLocalId,
+          StudentLearningEvent(
+            type: 'READY_WINDOW_JOB_RETRY_SCHEDULED',
+            ts: now,
+            payload: {
+              'job_id': jobId,
+              'attempt': newAttempts,
+              'retry_at': retryAt,
+              'delay_ms': retryDelayMs,
+            },
+          ),
+        );
+        Timer(Duration(milliseconds: retryDelayMs), () {
+          drainReadyWindowJobs(lessonLocalId);
+        });
       }
     }
     return all;

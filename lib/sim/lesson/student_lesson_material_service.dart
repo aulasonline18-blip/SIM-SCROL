@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../experience/curriculum_utils.dart';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
@@ -73,15 +74,18 @@ class StudentLessonMaterialService {
     };
     final previousOnImageStarted = orchestrator.onImageStarted;
     orchestrator.onImageStarted = (params, lesson) {
-      previousOnImageStarted?.call(params, lesson); _markImageStarted(params, lesson);
+      previousOnImageStarted?.call(params, lesson);
+      _markImageStarted(params, lesson);
     };
     final previousOnImageFailed = orchestrator.onImageFailed;
     orchestrator.onImageFailed = (params, lesson) {
-      previousOnImageFailed?.call(params, lesson); _markImageFailed(params, lesson);
+      previousOnImageFailed?.call(params, lesson);
+      _markImageFailed(params, lesson);
     };
     final previousOnNoImage = orchestrator.onNoImage;
     orchestrator.onNoImage = (params, lesson) {
-      previousOnNoImage?.call(params, lesson); _markNoImage(params, lesson);
+      previousOnNoImage?.call(params, lesson);
+      _markNoImage(params, lesson);
     };
   }
 
@@ -392,6 +396,14 @@ class StudentLessonMaterialService {
             );
           })
           .catchError((Object _) {
+            _queueReadyWindowRetryFromState(
+              lessonLocalId: lessonLocalId,
+              topic: topic,
+              itemIdx: itemIdx,
+              layer: layer,
+              marker: marker,
+              source: '$source.retry',
+            );
             stateService.appendEvent(
               lessonLocalId,
               StudentLearningEvent(
@@ -456,7 +468,7 @@ class StudentLessonMaterialService {
           'finished_at': null,
           'error': null,
           'attempts': 0,
-          'max_attempts': 3,
+          'max_attempts': null,
           'next_retry_at': null,
         });
       } else if (priority == 'hot-local' &&
@@ -474,45 +486,6 @@ class StudentLessonMaterialService {
           },
           'next_retry_at': null,
         };
-      }
-      final warmIdempotencyKey = [
-        'warm-ready-window',
-        lessonLocalId,
-        itemIdx,
-        marker ?? '',
-        'L${layer.value}',
-        'slots-$offlineWarmCacheSize',
-      ].join(':');
-      final hasWarmDuplicate = jobs.any(
-        (job) =>
-            job['type'] == 'PREPARE_READY_WINDOW' &&
-            job['idempotency_key'] == warmIdempotencyKey &&
-            (job['status'] == 'queued' || job['status'] == 'running'),
-      );
-      if (!hasWarmDuplicate) {
-        jobs.add({
-          'job_id': 'PREPARE_READY_WINDOW:$warmIdempotencyKey:$now',
-          'type': 'PREPARE_READY_WINDOW',
-          'status': 'queued',
-          'idempotency_key': warmIdempotencyKey,
-          'priority': 'background',
-          'source': '$source.warm-offline-cache',
-          'payload': {
-            'maxSlots': offlineWarmCacheSize,
-            'reason': 'warm_offline_cache_fill',
-            'itemIdx': itemIdx,
-            'layer': layer.value,
-            'marker': marker,
-            'topic': topic,
-          },
-          'created_at': now,
-          'started_at': null,
-          'finished_at': null,
-          'error': null,
-          'attempts': 0,
-          'max_attempts': 3,
-          'next_retry_at': null,
-        });
       }
       final hotKeys = {
         for (final slot in window)
@@ -550,6 +523,42 @@ class StudentLessonMaterialService {
         ],
       );
     }, allowLocalHousekeeping: true);
+  }
+
+  void _queueReadyWindowRetryFromState({
+    required String lessonLocalId,
+    required String? topic,
+    required int itemIdx,
+    required LessonLayer layer,
+    required String? marker,
+    required String source,
+  }) {
+    final state = stateService.read(lessonLocalId);
+    final curriculumItems =
+        state?.curriculum?.items ?? const <CurriculumItem>[];
+    final items = curriculumItems
+        .map(
+          (item) =>
+              DopamineWindowItem(text: itemText(item), marker: item.marker),
+        )
+        .where((item) => item.text.trim().isNotEmpty)
+        .toList(growable: false);
+    if (items.isEmpty) return;
+    final markerIdx = marker == null
+        ? -1
+        : items.indexWhere((item) => item.marker == marker);
+    final effectiveIdx = markerIdx >= 0
+        ? markerIdx
+        : itemIdx.clamp(0, items.length - 1);
+    maintainLessonReadyWindow(
+      lessonLocalId: lessonLocalId,
+      topic: topic,
+      itemIdx: effectiveIdx,
+      layer: layer,
+      source: source,
+      reason: 'background_ready_window_retry',
+      items: items,
+    );
   }
 
   List<({int offset, int idx, DopamineWindowItem item, LessonLayer layer})>
@@ -805,21 +814,41 @@ class StudentLessonMaterialService {
     );
   }
 
-  LessonMediaPosition _mediaPositionFor(CompleteLessonParams params, {ResolveLessonMaterialInput? input}) =>
-      LessonMediaPosition(lessonLocalId: params.lessonLocalId, itemMarker: input?.marker ?? params.marker,
-          itemIdx: input?.itemIdx ?? params.itemIdx, layer: input?.layer ?? params.layer);
+  LessonMediaPosition _mediaPositionFor(
+    CompleteLessonParams params, {
+    ResolveLessonMaterialInput? input,
+  }) => LessonMediaPosition(
+    lessonLocalId: params.lessonLocalId,
+    itemMarker: input?.marker ?? params.marker,
+    itemIdx: input?.itemIdx ?? params.itemIdx,
+    layer: input?.layer ?? params.layer,
+  );
 
-  ResolveLessonMaterialInput? _inputFor(CompleteLessonParams params) => _inputsByLessonKey[lessonKeyFor(params)];
+  ResolveLessonMaterialInput? _inputFor(CompleteLessonParams params) =>
+      _inputsByLessonKey[lessonKeyFor(params)];
 
-  void _markImageReady(CompleteLessonParams params, CompleteLesson lesson) => mediaService?.markLessonImageReady(
-      _mediaPositionFor(params, input: _inputFor(params)), cacheKey: lessonKeyFor(params), imageUrl: lesson.imagem);
+  void _markImageReady(CompleteLessonParams params, CompleteLesson lesson) =>
+      mediaService?.markLessonImageReady(
+        _mediaPositionFor(params, input: _inputFor(params)),
+        cacheKey: lessonKeyFor(params),
+        imageUrl: lesson.imagem,
+      );
 
-  void _markImageStarted(CompleteLessonParams params, CompleteLesson lesson) => mediaService?.markLessonImageStarted(
-      _mediaPositionFor(params, input: _inputFor(params)), cacheKey: lessonKeyFor(params));
+  void _markImageStarted(CompleteLessonParams params, CompleteLesson lesson) =>
+      mediaService?.markLessonImageStarted(
+        _mediaPositionFor(params, input: _inputFor(params)),
+        cacheKey: lessonKeyFor(params),
+      );
 
-  void _markImageFailed(CompleteLessonParams params, CompleteLesson lesson) => mediaService?.markLessonImageFailed(
-      _mediaPositionFor(params, input: _inputFor(params)), error: lesson.imageMetadata?.n3Reason ?? 'VISUAL_ROUTE_FAILED');
+  void _markImageFailed(CompleteLessonParams params, CompleteLesson lesson) =>
+      mediaService?.markLessonImageFailed(
+        _mediaPositionFor(params, input: _inputFor(params)),
+        error: lesson.imageMetadata?.n3Reason ?? 'VISUAL_ROUTE_FAILED',
+      );
 
-  void _markNoImage(CompleteLessonParams params, CompleteLesson lesson) => mediaService?.markLessonNoImage(
-      _mediaPositionFor(params, input: _inputFor(params)), reason: lesson.imageMetadata?.n2Reason);
+  void _markNoImage(CompleteLessonParams params, CompleteLesson lesson) =>
+      mediaService?.markLessonNoImage(
+        _mediaPositionFor(params, input: _inputFor(params)),
+        reason: lesson.imageMetadata?.n2Reason,
+      );
 }

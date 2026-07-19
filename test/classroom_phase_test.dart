@@ -1367,7 +1367,7 @@ void main() {
       expect(metric.payload['textReadyMs'], 0);
       expect(metric.payload['source'], LessonMaterialSource.studentState.name);
       expect(window.payload['currentLayer'], LessonLayer.l2.value);
-      expect(window.payload['windowSize'], 4);
+      expect(window.payload['windowSize'], 5);
       expect(state.current?.layer, LessonLayer.l2);
       expect(state.progress?.layer, LessonLayer.l2);
       expect(
@@ -1689,7 +1689,7 @@ void main() {
     expect(t02.calls, 0);
   });
 
-  test('M-EXP4 avanco dispara janela viva atual mais proximas tres', () async {
+  test('M-EXP4 avanco dispara janela viva ate o fim do curriculo', () async {
     final service = StudentLearningStateService(
       seed: {'cyber-class': _classroomState()},
     );
@@ -1708,7 +1708,7 @@ void main() {
         .lastWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
     expect(event.payload['currentItemIdx'], 0);
     expect(event.payload['currentLayer'], LessonLayer.l2.value);
-    expect(event.payload['windowSize'], 4);
+    expect(event.payload['windowSize'], 5);
   });
 
   test('M-EXP5 mede tempo ate primeiro texto em caminho preparado', () async {

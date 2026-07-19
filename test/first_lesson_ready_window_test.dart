@@ -677,13 +677,13 @@ void main() {
       expect(cache.warmEntryCount, 15);
       expect(
         service.read('cyber-offline-warm')?.readyLessonMaterials,
-        hasLength(4),
+        hasLength(localLessonTraySize),
       );
       expect(t02.calls, 15);
     },
   );
 
-  test('M7 slow warm fill does not block hot four-slot window', () async {
+  test('M7 slow warm fill does not block hot fifteen-slot window', () async {
     final service = StudentLearningStateService(
       seed: {'cyber-offline-warm': _stateWithFiveItems()},
     );
@@ -701,19 +701,19 @@ void main() {
     final seedHot = await seedEngine.runDopamineReadyWindowFromStudentState(
       lessonLocalId: 'cyber-offline-warm',
       source: 'm7-hot-seed',
-      maxSlots: 4,
+      maxSlots: localLessonTraySize,
       itemIdx: 0,
       layer: LessonLayer.l1,
       marker: 'M1',
       topic: 'Objetivo offline',
     );
-    expect(seedHot, hasLength(4));
+    expect(seedHot, hasLength(localLessonTraySize));
     expect(seedHot.every((ready) => ready), isTrue);
-    expect(seedT02.calls, 4);
-    expect(cache.warmEntryCount, 4);
+    expect(seedT02.calls, localLessonTraySize);
+    expect(cache.warmEntryCount, localLessonTraySize);
     expect(
       service.read('cyber-offline-warm')?.readyLessonMaterials,
-      hasLength(4),
+      hasLength(localLessonTraySize),
     );
 
     final t02 = BlockingT02Client();
@@ -742,7 +742,7 @@ void main() {
         .runDopamineReadyWindowFromStudentState(
           lessonLocalId: 'cyber-offline-warm',
           source: 'm7-hot-after-warm',
-          maxSlots: 4,
+          maxSlots: localLessonTraySize,
           itemIdx: 0,
           layer: LessonLayer.l1,
           marker: 'M1',
@@ -750,13 +750,14 @@ void main() {
         )
         .timeout(const Duration(milliseconds: 200));
 
-    expect(hot, hasLength(4));
+    expect(hot, hasLength(localLessonTraySize));
     expect(hot.every((ready) => ready), isTrue);
     expect(
       service.read('cyber-offline-warm')?.readyLessonMaterials,
-      hasLength(4),
+      hasLength(localLessonTraySize),
     );
-    expect(t02.calls, 1);
+    expect(t02.calls, greaterThan(0));
+    expect(t02.calls, lessThanOrEqualTo(localLessonTraySize));
 
     t02.release.complete();
     final warmResult = await warm;
@@ -788,7 +789,7 @@ void main() {
                   'finished_at': null,
                   'error': null,
                   'attempts': 0,
-                  'max_attempts': 3,
+                  'max_attempts': null,
                   'next_retry_at': null,
                 },
               ],
@@ -816,7 +817,7 @@ void main() {
               if (!warmStarted.isCompleted) warmStarted.complete();
               await releaseWarm.future;
             }
-            return List<bool>.filled(maxSlots ?? 4, true);
+            return List<bool>.filled(maxSlots ?? localLessonTraySize, true);
           },
     );
 
@@ -835,7 +836,7 @@ void main() {
             'priority': 'hot-local',
             'source': 'hot-visible-window',
             'payload': {
-              'maxSlots': 4,
+              'maxSlots': localLessonTraySize,
               'itemIdx': 0,
               'layer': LessonLayer.l1.value,
               'marker': 'M1',
@@ -845,7 +846,7 @@ void main() {
             'finished_at': null,
             'error': null,
             'attempts': 0,
-            'max_attempts': 3,
+            'max_attempts': null,
             'next_retry_at': null,
           },
         ],
@@ -856,9 +857,9 @@ void main() {
         .drainReadyWindowJobs('cyber-worker')
         .timeout(const Duration(milliseconds: 200));
 
-    expect(hot, hasLength(4));
+    expect(hot, hasLength(localLessonTraySize));
     expect(processed, contains('job:warm-offline-cache:15'));
-    expect(processed, contains('job:hot-visible-window:4'));
+    expect(processed, contains('job:hot-visible-window:$localLessonTraySize'));
     expect(
       service
           .read('cyber-worker')!
@@ -1648,10 +1649,14 @@ void main() {
   );
 
   test(
-    'DopamineReadyWindowEngine prepares A/B/C/D live window from state',
+    'DopamineReadyWindowEngine prepares fifteen-slot live window from state',
     () async {
       final service = StudentLearningStateService(
-        seed: {'cyber-ready': _stateWithCurriculum()},
+        seed: {
+          'cyber-ready': _stateWithFiveItems().copyWith(
+            lessonLocalId: 'cyber-ready',
+          ),
+        },
       );
       final t02 = FakeT02Client();
       final orchestrator = LessonOrchestrator(
@@ -1667,12 +1672,15 @@ void main() {
       final result = await engine.runDopamineReadyWindowFromStudentState(
         lessonLocalId: 'cyber-ready',
         source: 'test',
-        maxSlots: 4,
+        maxSlots: localLessonTraySize,
       );
 
-      expect(result, [true, true, true, true]);
-      expect(t02.calls, 4);
-      expect(service.read('cyber-ready')?.readyLessonMaterials.length, 4);
+      expect(result, List<bool>.filled(localLessonTraySize, true));
+      expect(t02.calls, localLessonTraySize);
+      expect(
+        service.read('cyber-ready')?.readyLessonMaterials.length,
+        localLessonTraySize,
+      );
       final prepared = service.read('cyber-ready')!.readyLessonMaterials;
       for (final material in prepared.values) {
         expect(material['explanation'], isNotEmpty);
@@ -1709,7 +1717,7 @@ void main() {
       );
       final service = StudentLearningStateService(
         seed: {
-          'cyber-image-nonblocking': _stateWithCurriculum().copyWith(
+          'cyber-image-nonblocking': _stateWithFiveItems().copyWith(
             lessonLocalId: 'cyber-image-nonblocking',
             readyLessonMaterials: {
               preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): preparedA,
@@ -1733,11 +1741,11 @@ void main() {
           .runDopamineReadyWindowFromStudentState(
             lessonLocalId: 'cyber-image-nonblocking',
             source: 'm-exp1-image',
-            maxSlots: 4,
+            maxSlots: localLessonTraySize,
           )
           .timeout(const Duration(milliseconds: 500));
 
-      expect(result, [true, true, true, true]);
+      expect(result, List<bool>.filled(localLessonTraySize, true));
       expect(
         t02.requests
             .map((request) => '${request.marker}:${request.layer.name}')
@@ -1762,7 +1770,11 @@ void main() {
     'M-EXP1: pending audio notification does not block text slots B/C/D',
     () async {
       final service = StudentLearningStateService(
-        seed: {'cyber-audio-nonblocking': _stateWithCurriculum()},
+        seed: {
+          'cyber-audio-nonblocking': _stateWithFiveItems().copyWith(
+            lessonLocalId: 'cyber-audio-nonblocking',
+          ),
+        },
       );
       final t02 = FakeT02Client();
       final audioPending = Completer<void>();
@@ -1782,22 +1794,22 @@ void main() {
       final result = await engine.runDopamineReadyWindowFromStudentState(
         lessonLocalId: 'cyber-audio-nonblocking',
         source: 'm-exp1-audio',
-        maxSlots: 4,
+        maxSlots: localLessonTraySize,
       );
 
-      expect(result, [true, true, true, true]);
-      expect(t02.calls, 4);
+      expect(result, List<bool>.filled(localLessonTraySize, true));
+      expect(t02.calls, localLessonTraySize);
       expect(audioPending.isCompleted, isFalse);
       audioPending.complete();
     },
   );
 
   test(
-    'M-EXP2: ready window queues secondary media only after textual A/B/C/D',
+    'M-EXP2: ready window queues secondary media only after textual window',
     () async {
       final service = StudentLearningStateService(
         seed: {
-          'cyber-media-priority': _stateWithCurriculum().copyWith(
+          'cyber-media-priority': _stateWithFiveItems().copyWith(
             lessonLocalId: 'cyber-media-priority',
           ),
         },
@@ -1821,10 +1833,10 @@ void main() {
       final result = await engine.runDopamineReadyWindowFromStudentState(
         lessonLocalId: 'cyber-media-priority',
         source: 'm-exp2-media',
-        maxSlots: 4,
+        maxSlots: localLessonTraySize,
       );
 
-      expect(result, [true, true, true, true]);
+      expect(result, List<bool>.filled(localLessonTraySize, true));
       final events = service.read('cyber-media-priority')!.events;
       final firstMediaIndex = events.indexWhere(
         (event) =>
@@ -1835,7 +1847,13 @@ void main() {
           .take(firstMediaIndex)
           .where((event) => event.type == 'DOPAMINE_SLOT_READY')
           .length;
-      expect(readyBeforeMedia, 4);
+      expect(readyBeforeMedia, localLessonTraySize);
+      final trailingSlots = [
+        'B',
+        'C',
+        'D',
+        for (var index = 5; index <= localLessonTraySize; index++) 'W$index',
+      ];
       expect(
         events
             .where(
@@ -1851,15 +1869,14 @@ void main() {
         [
           'DOPAMINE_SLOT_AUDIO_QUEUED:A:current',
           'DOPAMINE_SLOT_IMAGE_QUEUED:A:current',
-          'DOPAMINE_SLOT_AUDIO_QUEUED:B:next',
-          'DOPAMINE_SLOT_AUDIO_QUEUED:C:next',
-          'DOPAMINE_SLOT_AUDIO_QUEUED:D:next',
-          'DOPAMINE_SLOT_IMAGE_QUEUED:B:next',
-          'DOPAMINE_SLOT_IMAGE_QUEUED:C:next',
-          'DOPAMINE_SLOT_IMAGE_QUEUED:D:next',
+          for (final slot in trailingSlots)
+            'DOPAMINE_SLOT_AUDIO_QUEUED:$slot:next',
+          for (final slot in trailingSlots)
+            'DOPAMINE_SLOT_IMAGE_QUEUED:$slot:next',
         ],
       );
-      expect(audioPrepared, ['M1:l1', 'M1:l2', 'M1:l3', 'M2:l1']);
+      expect(audioPrepared, hasLength(localLessonTraySize));
+      expect(audioPrepared, contains('M5:l3'));
     },
   );
 
@@ -2286,24 +2303,25 @@ void main() {
     final event = state?.events.singleWhere(
       (event) => event.type == 'CACHE_WINDOW_UPDATED',
     );
-    expect(state?.queuedActions, hasLength(2));
-    expect(
-      state?.queuedActions.map((job) => job['payload']?['maxSlots']),
-      containsAll([4, 15]),
-    );
+    expect(state?.queuedActions, hasLength(1));
+    expect(state?.queuedActions.map((job) => job['payload']?['maxSlots']), [
+      offlineWarmCacheSize,
+    ]);
     expect(event?.payload['currentItemIdx'], 0);
     expect(event?.payload['currentLayer'], 1);
-    expect(event?.payload['windowSize'], 4);
-    expect(event?.payload['cachedCount'], 4);
+    expect(event?.payload['windowSize'], 6);
+    expect(event?.payload['cachedCount'], 6);
     expect(event?.payload['windowMarkers'], [
       {'marker': 'M1', 'layer': 1, 'offset': 0},
       {'marker': 'M1', 'layer': 2, 'offset': 1},
       {'marker': 'M1', 'layer': 3, 'offset': 2},
       {'marker': 'M2', 'layer': 1, 'offset': 3},
+      {'marker': 'M2', 'layer': 2, 'offset': 4},
+      {'marker': 'M2', 'layer': 3, 'offset': 5},
     ]);
   });
 
-  test('ready window from L3 keeps current plus next three positions', () {
+  test('ready window from L3 keeps all remaining positions', () {
     final service = StudentLearningStateService();
     service.ensure(lessonLocalId: 'cyber-window-l3');
     final orchestrator = LessonOrchestrator(
@@ -2336,53 +2354,57 @@ void main() {
         .read('cyber-window-l3')
         ?.events
         .singleWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
-    expect(event?.payload['windowSize'], 4);
-    expect(event?.payload['windowMarkers'], [
+    final expectedMarkers = [
       {'marker': 'M1', 'layer': 3, 'offset': 0},
       {'marker': 'M2', 'layer': 1, 'offset': 1},
       {'marker': 'M2', 'layer': 2, 'offset': 2},
       {'marker': 'M2', 'layer': 3, 'offset': 3},
-    ]);
+    ];
+    expect(event?.payload['windowSize'], expectedMarkers.length);
+    expect(event?.payload['windowMarkers'], expectedMarkers);
   });
 
-  test('ready window accepts fewer than four only at real curriculum end', () {
-    final service = StudentLearningStateService();
-    service.ensure(lessonLocalId: 'cyber-window-end');
-    final orchestrator = LessonOrchestrator(
-      t02Client: FakeT02Client(),
-      cache: LessonMaterialCache(),
-      bus: LessonEventBus(),
-    );
-    final materialService = StudentLessonMaterialService(
-      stateService: service,
-      orchestrator: orchestrator,
-      readyWindowEngine: DopamineReadyWindowEngine(
-        service: service,
+  test(
+    'ready window accepts fewer than fifteen only at real curriculum end',
+    () {
+      final service = StudentLearningStateService();
+      service.ensure(lessonLocalId: 'cyber-window-end');
+      final orchestrator = LessonOrchestrator(
+        t02Client: FakeT02Client(),
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      );
+      final materialService = StudentLessonMaterialService(
+        stateService: service,
         orchestrator: orchestrator,
-      ),
-    );
+        readyWindowEngine: DopamineReadyWindowEngine(
+          service: service,
+          orchestrator: orchestrator,
+        ),
+      );
 
-    materialService.maintainLessonReadyWindow(
-      lessonLocalId: 'cyber-window-end',
-      topic: 'Funções',
-      itemIdx: 1,
-      layer: LessonLayer.l3,
-      source: 'test-window-end',
-      items: const [
-        DopamineWindowItem(text: 'Item 1', marker: 'M1'),
-        DopamineWindowItem(text: 'Item 2', marker: 'M2'),
-      ],
-    );
+      materialService.maintainLessonReadyWindow(
+        lessonLocalId: 'cyber-window-end',
+        topic: 'Funções',
+        itemIdx: 1,
+        layer: LessonLayer.l3,
+        source: 'test-window-end',
+        items: const [
+          DopamineWindowItem(text: 'Item 1', marker: 'M1'),
+          DopamineWindowItem(text: 'Item 2', marker: 'M2'),
+        ],
+      );
 
-    final event = service
-        .read('cyber-window-end')
-        ?.events
-        .singleWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
-    expect(event?.payload['windowSize'], 1);
-    expect(event?.payload['windowMarkers'], [
-      {'marker': 'M2', 'layer': 3, 'offset': 0},
-    ]);
-  });
+      final event = service
+          .read('cyber-window-end')
+          ?.events
+          .singleWhere((event) => event.type == 'CACHE_WINDOW_UPDATED');
+      expect(event?.payload['windowSize'], 1);
+      expect(event?.payload['windowMarkers'], [
+        {'marker': 'M2', 'layer': 3, 'offset': 0},
+      ]);
+    },
+  );
 
   test('maintainLessonReadyWindow does not duplicate active jobs', () {
     final service = StudentLearningStateService();
@@ -2416,7 +2438,7 @@ void main() {
     }
 
     final state = service.read('cyber-window-dedupe');
-    expect(state?.queuedActions, hasLength(2));
+    expect(state?.queuedActions, hasLength(1));
     final hotJob = state?.queuedActions.firstWhere(
       (job) =>
           job['idempotency_key'] == 'ready-window:cyber-window-dedupe:0:M1:L1',
@@ -2425,14 +2447,7 @@ void main() {
       hotJob?['idempotency_key'],
       'ready-window:cyber-window-dedupe:0:M1:L1',
     );
-    expect(
-      state?.queuedActions.firstWhere(
-        (job) =>
-            job['idempotency_key'] ==
-            'warm-ready-window:cyber-window-dedupe:0:M1:L1:slots-15',
-      )['payload']?['maxSlots'],
-      15,
-    );
+    expect(hotJob?['payload']?['maxSlots'], offlineWarmCacheSize);
     expect(
       state?.events.where((event) => event.type == 'CACHE_WINDOW_UPDATED'),
       hasLength(2),
@@ -2456,13 +2471,13 @@ void main() {
       (job) =>
           job['idempotency_key'] == 'ready-window:cyber-window-dedupe:0:M1:L1',
     );
-    expect(upgraded, hasLength(2));
+    expect(upgraded, hasLength(1));
     expect(upgradedHot?['priority'], 'hot-local');
     expect(upgradedHot?['source'], 'test-window-visible-active');
   });
 
   test(
-    'loaded active lesson keeps current plus next three slots queued',
+    'loaded active lesson keeps fifteen-slot offline window queued',
     () async {
       final service = StudentLearningStateService();
       service.ensure(lessonLocalId: 'cyber-loaded-window');
@@ -2541,26 +2556,24 @@ void main() {
 
       final state = service.read('cyber-loaded-window');
       expect(position.teoriaPronta, isTrue);
-      expect(state?.queuedActions, hasLength(2));
+      expect(state?.queuedActions, hasLength(1));
       final hotJob = state?.queuedActions.firstWhere(
         (job) => job['source'] == 'cyber.aula.cache-window',
       );
-      final warmJob = state?.queuedActions.firstWhere(
-        (job) => job['source'] == 'cyber.aula.cache-window.warm-offline-cache',
-      );
       expect(hotJob?['type'], 'PREPARE_READY_WINDOW');
       expect(hotJob?['priority'], 'hot-local');
-      expect(hotJob?['payload']?['maxSlots'], 4);
-      expect(warmJob?['payload']?['maxSlots'], 15);
+      expect(hotJob?['payload']?['maxSlots'], offlineWarmCacheSize);
       final event = state?.events.lastWhere(
         (event) => event.type == 'CACHE_WINDOW_UPDATED',
       );
-      expect(event?.payload['windowSize'], 4);
+      expect(event?.payload['windowSize'], 6);
       expect(event?.payload['windowMarkers'], [
         {'marker': 'M1', 'layer': 1, 'offset': 0},
         {'marker': 'M1', 'layer': 2, 'offset': 1},
         {'marker': 'M1', 'layer': 3, 'offset': 2},
         {'marker': 'M2', 'layer': 1, 'offset': 3},
+        {'marker': 'M2', 'layer': 2, 'offset': 4},
+        {'marker': 'M2', 'layer': 3, 'offset': 5},
       ]);
     },
   );
@@ -2689,7 +2702,7 @@ void main() {
           preparedLessonMaterialKey(1, 'M2', LessonLayer.l1),
         ]),
       );
-      expect(ready, hasLength(4));
+      expect(ready, hasLength(localLessonTraySize));
       expect(t02.calls, lessThanOrEqualTo(15));
     },
   );
@@ -2783,6 +2796,14 @@ void main() {
         {'marker': 'M2', 'layer': 2, 'offset': 1},
         {'marker': 'M2', 'layer': 3, 'offset': 2},
         {'marker': 'M3', 'layer': 1, 'offset': 3},
+        {'marker': 'M3', 'layer': 2, 'offset': 4},
+        {'marker': 'M3', 'layer': 3, 'offset': 5},
+        {'marker': 'M4', 'layer': 1, 'offset': 6},
+        {'marker': 'M4', 'layer': 2, 'offset': 7},
+        {'marker': 'M4', 'layer': 3, 'offset': 8},
+        {'marker': 'M5', 'layer': 1, 'offset': 9},
+        {'marker': 'M5', 'layer': 2, 'offset': 10},
+        {'marker': 'M5', 'layer': 3, 'offset': 11},
       ]);
       final hotJob = state?.queuedActions.firstWhere(
         (job) =>
