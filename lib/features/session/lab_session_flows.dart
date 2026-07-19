@@ -68,7 +68,7 @@ extension LabSessionFlowExtensions on LabSession {
     final local = _readExistingLocalState(lessonLocalId);
     if (local != null && !_stateDeleted(local)) {
       _prepareDrawerLessonOpen(lessonLocalId);
-      unawaited(openAulaRuntime());
+      unawaited(_openDrawerLessonRuntimeWithHotText(lessonLocalId));
       return true;
     }
     return openDrawerCloudLesson(lessonLocalId);
@@ -593,7 +593,7 @@ extension LabSessionFlowExtensions on LabSession {
     final local = _readExistingLocalState(lessonLocalId);
     if (local != null && !_stateDeleted(local)) {
       _prepareDrawerLessonOpen(lessonLocalId);
-      unawaited(openAulaRuntime());
+      unawaited(_openDrawerLessonRuntimeWithHotText(lessonLocalId));
       unawaited(_reconcileDrawerCloudLessonInBackground(lessonLocalId));
       return true;
     }
@@ -612,10 +612,7 @@ extension LabSessionFlowExtensions on LabSession {
     final hydrated = state.copyWith(
       lessonLocalId: hydratedLessonLocalId,
       profile: state.profile.copyWith(
-        extra: {
-          ...state.profile.extra,
-          'lessonLocalId': hydratedLessonLocalId,
-        },
+        extra: {...state.profile.extra, 'lessonLocalId': hydratedLessonLocalId},
       ),
       extra: {
         ...state.extra,
@@ -627,12 +624,83 @@ extension LabSessionFlowExtensions on LabSession {
             state.readyLessonMaterials.isEmpty,
       },
     );
-    canonicalStore?.writeState(
-      hydrated,
-    );
+    canonicalStore?.writeState(hydrated);
     _prepareDrawerLessonOpen(hydrated.lessonLocalId);
-    unawaited(openAulaRuntime());
+    unawaited(_openDrawerLessonRuntimeWithHotText(hydrated.lessonLocalId));
     return true;
+  }
+
+  Future<void> _openDrawerLessonRuntimeWithHotText(String lessonLocalId) async {
+    await openAulaRuntime();
+    if (lessonLocalId != this.lessonLocalId) return;
+    if (prefs == null) return;
+
+    final organism = _organismForActiveLesson();
+    final state = organism.stateService.read(lessonLocalId);
+    final current = state?.current;
+    final progress = state?.progress;
+    final curriculum = state?.curriculum;
+    if (state == null || curriculum?.items.isNotEmpty != true) return;
+
+    final itemIdx = (current?.itemIdx ?? progress?.itemIdx ?? 0).clamp(
+      0,
+      curriculum!.items.length - 1,
+    );
+    final item = curriculum.items[itemIdx];
+    final layer = current?.layer ?? progress?.layer ?? LessonLayer.l1;
+    final marker = current?.marker ?? item.marker;
+    final topic = curriculum.topic.trim().isNotEmpty
+        ? curriculum.topic
+        : state.profile.objetivo;
+
+    void keepOfflineWindowWarm() {
+      organism.materialService.prepareReadyWindowInBackground(
+        lessonLocalId: lessonLocalId,
+        topic: topic,
+        itemIdx: itemIdx,
+        layer: layer,
+        marker: marker,
+        source: 'drawer.aula.offline-window',
+      );
+    }
+
+    if (_drawerAulaTextReady(aulaSnapshot)) {
+      keepOfflineWindowWarm();
+      return;
+    }
+
+    try {
+      await organism.readyWindowEngine.runDopamineReadyWindowFromStudentState(
+        lessonLocalId: lessonLocalId,
+        source: 'drawer.aula.hot-current',
+        maxSlots: 1,
+        itemIdx: itemIdx,
+        layer: layer,
+        marker: marker,
+        topic: topic,
+      );
+      if (lessonLocalId != this.lessonLocalId) return;
+      await openAulaRuntime();
+    } catch (_) {
+      if (lessonLocalId == this.lessonLocalId &&
+          !_drawerAulaTextReady(aulaSnapshot)) {
+        aulaRuntimeError = 'Nao consegui preparar esta aula agora.';
+        _notifyFromChild();
+      }
+    } finally {
+      if (lessonLocalId == this.lessonLocalId) keepOfflineWindowWarm();
+    }
+  }
+
+  bool _drawerAulaTextReady(LessonRuntimeSnapshot? snapshot) {
+    final content = snapshot?.conteudo;
+    if (snapshot?.hasCurriculum != true || content == null) return false;
+    final optionsReady = content.options.values
+        .where((option) => option.trim().isNotEmpty)
+        .length;
+    return content.explanation.trim().isNotEmpty &&
+        content.question.trim().isNotEmpty &&
+        optionsReady >= 3;
   }
 
   List<StudentStateSummaryRow> _listDrawerLocalLessonSummaries() {
@@ -996,6 +1064,10 @@ extension LabSessionFlowExtensions on LabSession {
       _bindActiveLessonMedia(organism);
       _reavaliarAvancoPendenteSePossivel(organism);
       _syncImageStateFromSnapshot();
+      _keepActiveAulaOfflineWindowWarm(
+        organism,
+        source: 'cyber.aula.runtime-open',
+      );
       if (aulaSnapshot?.hasCurriculum != true) {
         aulaRuntimeError = 'Aula sem curriculo no Estado do aluno.';
       }
@@ -1013,6 +1085,39 @@ extension LabSessionFlowExtensions on LabSession {
   bool _isCurrentAulaRuntime(String lessonLocalId, int generation) {
     return this.lessonLocalId == lessonLocalId &&
         _aulaRuntimeGeneration == generation;
+  }
+
+  void _keepActiveAulaOfflineWindowWarm(
+    SimOrganism organism, {
+    required String source,
+  }) {
+    if (prefs == null) return;
+    final id = organism.lessonLocalId;
+    if (lessonLocalId != id) return;
+    final state = organism.stateService.read(id);
+    final curriculum = state?.curriculum;
+    if (state == null || curriculum?.items.isNotEmpty != true) return;
+    final current = state.current;
+    final progress = state.progress;
+    final itemIdx = (current?.itemIdx ?? progress?.itemIdx ?? 0).clamp(
+      0,
+      curriculum!.items.length - 1,
+    );
+    final item = curriculum.items[itemIdx];
+    final layer = current?.layer ?? progress?.layer ?? LessonLayer.l1;
+    final marker = current?.marker ?? item.marker;
+    final topic = curriculum.topic.trim().isNotEmpty
+        ? curriculum.topic
+        : state.profile.objetivo;
+    organism.materialService.prepareReadyWindowInBackground(
+      lessonLocalId: id,
+      topic: topic,
+      itemIdx: itemIdx,
+      layer: layer,
+      marker: marker,
+      source: source,
+    );
+    unawaited(organism.readyWindowWorker.drainReadyWindowJobs(id));
   }
 
   void _bindActiveLessonState(SimOrganism organism) {
@@ -1290,6 +1395,7 @@ extension LabSessionFlowExtensions on LabSession {
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
+      _keepActiveAulaOfflineWindowWarm(organism, source: 'cyber.aula.signal');
       _scheduleAutoAdvanceAfterFeedback(organism);
     } catch (error) {
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
@@ -1378,6 +1484,7 @@ extension LabSessionFlowExtensions on LabSession {
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
+      _keepActiveAulaOfflineWindowWarm(organism, source: 'cyber.aula.advance');
       final currentId = lessonLocalId;
       if (aulaSnapshot?.isDone == true &&
           currentId != null &&
