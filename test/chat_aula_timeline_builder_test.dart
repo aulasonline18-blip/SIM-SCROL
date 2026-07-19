@@ -521,6 +521,40 @@ void main() {
     );
   });
 
+  test('first lesson pending without content still shows preparation message', () {
+    final messages = buildChatLessonMessages(
+      const ChatLessonTimelineInput(
+        snapshot: LessonRuntimeSnapshot(
+          authReady: true,
+          authed: true,
+          hasCurriculum: true,
+          isDone: false,
+          viewModel: LessonMainViewModel(
+            progress: 0,
+            headerLabel: 'aula_item_of:1/1:aula_layer_1',
+            options: [],
+            locked: true,
+            nextLabel: '',
+          ),
+          phase: ClassroomPhase.advancePending(
+            message: 'aula_advance_preparing',
+          ),
+          history: [],
+          conteudo: null,
+          imagem: null,
+          itemMarker: 'M1',
+          itemText: 'Frações',
+        ),
+      ),
+    );
+
+    expect(messages, hasLength(1));
+    expect(messages.single.kind, ChatLessonMessageKind.processing);
+    expect(messages.single.text, t('aula_advance_preparing'));
+    expect(messages.single.deliveryStatus, ChatLessonDeliveryStatus.processing);
+    expect(messages.single.actionKey, isNull);
+  });
+
   test('technical runtime errors are controlled and do not leak raw keys', () {
     final feedbackKeyError = buildChatLessonMessages(
       ChatLessonTimelineInput(

@@ -110,6 +110,23 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     );
   }
 
+  if (content == null && phase?.type == ClassroomPhaseType.avancoPendente) {
+    messages.add(
+      ChatLessonMessage(
+        id: 'local-advance-preparing-${marker ?? 'active'}',
+        role: ChatLessonMessageRole.system,
+        kind: ChatLessonMessageKind.processing,
+        text: t(phase?.message ?? 'aula_advance_pending'),
+        lessonLocalId: input.lessonLocalId,
+        marker: marker,
+        itemIdx: itemIdx,
+        layer: layer,
+        isActionable: false,
+        deliveryStatus: ChatLessonDeliveryStatus.processing,
+      ),
+    );
+  }
+
   if (content != null) {
     final activeId = _activeMessageId(snapshot, content);
     messages.add(

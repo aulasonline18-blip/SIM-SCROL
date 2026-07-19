@@ -11,6 +11,8 @@ import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/auxiliary/doubt_input_sheet.dart';
+import 'package:sim_mobile/sim/cloud/cloud_functions.dart';
+import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
 import 'package:sim_mobile/sim/config/sim_environment.dart';
 import 'package:sim_mobile/sim/experience/student_experience_types.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
@@ -343,6 +345,64 @@ void main() {
     },
   );
 
+  test('drawer cloud lesson normalizes missing state lessonLocalId', () async {
+    final remoteState = StudentLearningState.empty(
+      lessonLocalId: '',
+    ).copyWith(
+      profile: const StudentProfile(objetivo: 'Aula remota'),
+      curriculum: const StudentCurriculum(
+        topic: 'Aula remota',
+        totalItems: 1,
+        generatedAt: null,
+        provisional: false,
+        items: [CurriculumItem(marker: 'M1', text: 'Frações')],
+      ),
+      current: const LessonCurrent(
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l1,
+        amparoLvl: 0,
+      ),
+      progress: const LessonProgress(
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        erros: 0,
+        amparoLvl: 0,
+        historia: [],
+        mainAdvances: 0,
+        concluidos: [],
+        pendentesMarkers: [],
+        totalItems: 1,
+        pctAvanco: 0,
+      ),
+    );
+    final session =
+        LabSession(
+            drawerSessionProvider: const _TestSessionProvider(),
+            drawerCloudFunctions: _SingleLessonCloud(
+              StudentStateRow(
+                lessonLocalId: 'remote-lesson-1',
+                state: remoteState,
+                highWaterMark: 10,
+                schemaVersion: 1,
+              ),
+            ),
+          )
+          ..authReady = true
+          ..authed = true;
+
+    final opened = await session.openDrawerCloudLesson('remote-lesson-1');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(opened, isTrue);
+    expect(session.lessonLocalId, 'remote-lesson-1');
+    expect(session.route, '/cyber/aula');
+    final hydrated = session.canonicalStore!.readState('remote-lesson-1');
+    expect(hydrated.lessonLocalId, 'remote-lesson-1');
+    expect(hydrated.profile.extra['lessonLocalId'], 'remote-lesson-1');
+    expect(hydrated.extra['remoteHydratedSource'], 'drawer_cloud_lesson');
+  });
+
   testWidgets('warmup bridge renders welcome T02 microlesson safely', (
     tester,
   ) async {
@@ -635,4 +695,62 @@ void main() {
     expect(updated.itemMarker, isNull);
     expect(updated.itemText, isNull);
   });
+}
+
+class _TestSessionProvider implements SupabaseSessionProvider {
+  const _TestSessionProvider();
+
+  @override
+  Future<SupabaseSession?> currentSession() async =>
+      const SupabaseSession(accessToken: 'token', userId: 'user-1');
+}
+
+class _SingleLessonCloud implements StudentStateCloudFunctions {
+  _SingleLessonCloud(this.row);
+
+  final StudentStateRow row;
+
+  @override
+  Future<PersistStudentStateResult> persistStudentState(
+    PersistStudentStateInput input,
+    SupabaseSession session,
+  ) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<StudentStateRow>> listStudentStates(
+    SupabaseSession session,
+  ) async => [row];
+
+  @override
+  Future<List<StudentStateSummaryRow>> listStudentStateSummaries(
+    SupabaseSession session,
+  ) async => [
+    StudentStateSummaryRow(
+      lessonLocalId: row.lessonLocalId,
+      tema: 'Aula remota',
+      idioma: 'pt-BR',
+      nivel: 'fundamental',
+      totalItens: 1,
+      itemIdx: 0,
+      layer: 1,
+      concluidos: 0,
+      finalizada: false,
+      deleted: false,
+    ),
+  ];
+
+  @override
+  Future<StudentStateRow?> getStudentStateByLesson(
+    String lessonLocalId,
+    SupabaseSession session,
+  ) async =>
+      lessonLocalId == row.lessonLocalId ? row : null;
+
+  @override
+  Future<void> deleteStudentStateByLesson(
+    String lessonLocalId,
+    SupabaseSession session,
+  ) async {}
 }

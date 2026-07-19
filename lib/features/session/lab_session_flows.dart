@@ -603,21 +603,34 @@ extension LabSessionFlowExtensions on LabSession {
       lessonLocalId,
       session,
     );
+    final rowLessonLocalId = row?.lessonLocalId.trim() ?? '';
+    final hydratedLessonLocalId = rowLessonLocalId.isNotEmpty
+        ? rowLessonLocalId
+        : lessonLocalId.trim();
     final state = row?.state;
     if (state == null || _stateDeleted(state)) return false;
-    canonicalStore?.writeState(
-      state.copyWith(
+    final hydrated = state.copyWith(
+      lessonLocalId: hydratedLessonLocalId,
+      profile: state.profile.copyWith(
         extra: {
-          ...state.extra,
-          'remoteHydratedAt': DateTime.now().millisecondsSinceEpoch,
-          'remoteHydratedSource': 'drawer_cloud_lesson',
-          'remoteHydratedWithoutMaterial':
-              state.currentLessonMaterial == null &&
-              state.readyLessonMaterials.isEmpty,
+          ...state.profile.extra,
+          'lessonLocalId': hydratedLessonLocalId,
         },
       ),
+      extra: {
+        ...state.extra,
+        'lessonLocalId': hydratedLessonLocalId,
+        'remoteHydratedAt': DateTime.now().millisecondsSinceEpoch,
+        'remoteHydratedSource': 'drawer_cloud_lesson',
+        'remoteHydratedWithoutMaterial':
+            state.currentLessonMaterial == null &&
+            state.readyLessonMaterials.isEmpty,
+      },
     );
-    _prepareDrawerLessonOpen(state.lessonLocalId);
+    canonicalStore?.writeState(
+      hydrated,
+    );
+    _prepareDrawerLessonOpen(hydrated.lessonLocalId);
     unawaited(openAulaRuntime());
     return true;
   }
