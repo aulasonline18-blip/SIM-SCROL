@@ -45,6 +45,14 @@ class ChatAulaTimeline extends StatefulWidget {
 }
 
 class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
+  static const double _renderedElementAnchor = 0.75;
+  static const int _scrollMillisecondsPerScreen = 420;
+  static const Duration _minimumScrollDuration = Duration(milliseconds: 220);
+  static const Duration _maximumScrollDuration = Duration(milliseconds: 680);
+  static const Duration _settledElementScrollDuration = Duration(
+    milliseconds: 420,
+  );
+
   late final ScrollController _ownedScrollController;
   final Map<String, GlobalKey> _messageKeys = <String, GlobalKey>{};
   String? _lastScrollSignature;
@@ -121,7 +129,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
           if (!mounted) return;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            final retryContext = key?.currentContext;
+            final retryKey = _messageKeys[target.message.id];
+            final retryContext = retryKey?.currentContext;
             if (retryContext != null) {
               _ensureTargetVisible(retryContext, target);
             }
@@ -136,16 +145,24 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     Scrollable.ensureVisible(
       targetContext,
       alignment: target.alignment,
-      duration: target.duration,
+      duration: _settledElementScrollDuration,
       curve: Curves.easeOutCubic,
       alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
     );
   }
 
   Duration _scrollDurationForDistance(double distance) {
-    if (distance < 160) return const Duration(milliseconds: 180);
-    if (distance < 520) return const Duration(milliseconds: 280);
-    return const Duration(milliseconds: 380);
+    final viewport = _effectiveScrollController.hasClients
+        ? _effectiveScrollController.position.viewportDimension
+        : 600.0;
+    final screens = viewport <= 0 ? 1.0 : distance / viewport;
+    final milliseconds = (_scrollMillisecondsPerScreen * screens)
+        .clamp(
+          _minimumScrollDuration.inMilliseconds,
+          _maximumScrollDuration.inMilliseconds,
+        )
+        .round();
+    return Duration(milliseconds: milliseconds);
   }
 
   GlobalKey _keyForMessage(ChatLessonMessage message) {
@@ -190,13 +207,11 @@ class _PedagogicalScrollTarget {
     required this.message,
     required this.index,
     required this.alignment,
-    required this.duration,
   });
 
   final ChatLessonMessage message;
   final int index;
   final double alignment;
-  final Duration duration;
 
   String get signaturePart {
     final selected = message.selectedAnswer?.name ?? '';
@@ -217,7 +232,7 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
         message.kind == ChatLessonMessageKind.processing,
   );
   if (stateIndex != null) {
-    return _target(messages, stateIndex, alignment: 0.72);
+    return _target(messages, stateIndex);
   }
 
   final feedbackIndex = _lastIndexWhere(
@@ -225,7 +240,7 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
     (message) => message.kind == ChatLessonMessageKind.feedback,
   );
   if (feedbackIndex != null) {
-    return _target(messages, feedbackIndex, alignment: 0.62);
+    return _target(messages, feedbackIndex);
   }
 
   final expandedOptionsIndex = _lastIndexWhere(
@@ -235,7 +250,7 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
         message.signals.isNotEmpty,
   );
   if (expandedOptionsIndex != null) {
-    return _target(messages, expandedOptionsIndex, alignment: 0.50);
+    return _target(messages, expandedOptionsIndex);
   }
 
   final explanationIndex = _lastIndexWhere(
@@ -243,7 +258,7 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
     (message) => message.kind == ChatLessonMessageKind.explanation,
   );
   if (explanationIndex != null) {
-    return _target(messages, explanationIndex, alignment: 0.06);
+    return _target(messages, explanationIndex);
   }
 
   final questionIndex = _lastIndexWhere(
@@ -251,7 +266,7 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
     (message) => message.kind == ChatLessonMessageKind.question,
   );
   if (questionIndex != null) {
-    return _target(messages, questionIndex, alignment: 0.18);
+    return _target(messages, questionIndex);
   }
 
   final actionIndex = _lastIndexWhere(
@@ -259,22 +274,17 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
     (message) => message.isActionable && !message.isHistorical,
   );
   if (actionIndex != null) {
-    return _target(messages, actionIndex, alignment: 0.58);
+    return _target(messages, actionIndex);
   }
 
-  return _target(messages, messages.length - 1, alignment: 0.72);
+  return _target(messages, messages.length - 1);
 }
 
-_PedagogicalScrollTarget _target(
-  List<ChatLessonMessage> messages,
-  int index, {
-  required double alignment,
-}) {
+_PedagogicalScrollTarget _target(List<ChatLessonMessage> messages, int index) {
   return _PedagogicalScrollTarget(
     message: messages[index],
     index: index,
-    alignment: alignment,
-    duration: const Duration(milliseconds: 320),
+    alignment: _ChatAulaTimelineState._renderedElementAnchor,
   );
 }
 

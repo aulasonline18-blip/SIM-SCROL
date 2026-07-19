@@ -288,4 +288,69 @@ void main() {
     expect(find.byKey(const Key('signal-button-1')), findsOneWidget);
     expect(controller.offset, greaterThan(0));
   });
+
+  testWidgets('timeline lands new rendered question near three quarters', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 400,
+            child: ChatAulaTimeline(
+              scrollController: controller,
+              initialScrollToCurrent: true,
+              initialScrollKey: 'lesson-scroll-question-anchor',
+              padding: EdgeInsets.zero,
+              messages: [
+                for (var i = 0; i < 16; i++)
+                  ChatLessonMessage(
+                    id: 'history-anchor-$i',
+                    role: ChatLessonMessageRole.sim,
+                    kind: ChatLessonMessageKind.historyQuestion,
+                    text: 'Histórico $i\nlinha\nlinha\nlinha',
+                    isHistorical: true,
+                  ),
+                const ChatLessonMessage(
+                  id: 'active-question-anchor',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.question,
+                  text: 'Pergunta nova ancorada perto de três quartos?',
+                ),
+                for (var i = 0; i < 24; i++)
+                  ChatLessonMessage(
+                    id: 'tail-anchor-$i',
+                    role: ChatLessonMessageRole.sim,
+                    kind: ChatLessonMessageKind.historyAnswer,
+                    text: 'Espaço posterior $i\nlinha\nlinha',
+                    isHistorical: true,
+                  ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final viewport = tester.getRect(
+      find.byKey(const Key('chat-aula-timeline')),
+    );
+    final questionTop = tester
+        .getTopLeft(find.text('Pergunta nova ancorada perto de três quartos?'))
+        .dy;
+    final expected = viewport.top + (viewport.height * 0.75);
+
+    expect(controller.offset, greaterThan(0));
+    expect(questionTop, closeTo(expected, 48));
+  });
 }
