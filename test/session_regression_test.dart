@@ -66,6 +66,14 @@ void main() {
       expect(session.entryStatus, 'primeira_aula_pronta');
       expect(session.entryError, isNull);
       expect(session.route, '/cyber/curriculo');
+      expect(session.aulaSnapshot?.conteudo?.explanation.trim(), isNotEmpty);
+      expect(session.aulaSnapshot?.conteudo?.question.trim(), isNotEmpty);
+      expect(
+        session.aulaSnapshot?.conteudo?.options.values
+            .where((option) => option.trim().isNotEmpty)
+            .length,
+        greaterThanOrEqualTo(3),
+      );
 
       await session.continueFromPreparationToAula();
 
@@ -201,6 +209,14 @@ void main() {
       expect(session.entryStatus, 'primeira_aula_pronta');
       expect(session.entryError, isNull);
       expect(session.route, '/cyber/curriculo');
+      expect(session.aulaSnapshot?.conteudo?.explanation.trim(), isNotEmpty);
+      expect(session.aulaSnapshot?.conteudo?.question.trim(), isNotEmpty);
+      expect(
+        session.aulaSnapshot?.conteudo?.options.values
+            .where((option) => option.trim().isNotEmpty)
+            .length,
+        greaterThanOrEqualTo(3),
+      );
 
       await session.continueFromPreparationToAula();
 
@@ -553,6 +569,14 @@ void main() {
 
     expect(called, isTrue);
     expect(session.route, '/cyber/curriculo');
+    expect(session.aulaSnapshot?.conteudo?.explanation.trim(), isNotEmpty);
+    expect(session.aulaSnapshot?.conteudo?.question.trim(), isNotEmpty);
+    expect(
+      session.aulaSnapshot?.conteudo?.options.values
+          .where((option) => option.trim().isNotEmpty)
+          .length,
+      greaterThanOrEqualTo(3),
+    );
     expect(find.text('Continuar'), findsOneWidget);
 
     await tester.tap(find.text('Continuar'));

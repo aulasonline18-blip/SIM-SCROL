@@ -127,7 +127,7 @@ extension LabSessionEntryFlows on LabSession {
           final next = switch (stage) {
             StudentExperienceRouteStage.curriculum => 't00_running',
             StudentExperienceRouteStage.lesson => 't02_running',
-            StudentExperienceRouteStage.ready => 'primeira_aula_pronta',
+            StudentExperienceRouteStage.ready => 't02_running',
             StudentExperienceRouteStage.placement => 'placement',
             _ => entryStatus,
           };
@@ -152,6 +152,11 @@ extension LabSessionEntryFlows on LabSession {
         prepareOverride: prepareOverride,
       );
 
+      if (!_isCurrentExperience(id, generation)) return;
+      await _ensureFirstAulaRenderedBeforeRelease(
+        id: id,
+        generation: generation,
+      );
       if (!_isCurrentExperience(id, generation)) return;
       _entryOfficialLessonReady = true;
       entryStatus = 'primeira_aula_pronta';
@@ -249,7 +254,58 @@ extension LabSessionEntryFlows on LabSession {
       await launchExperience();
       return;
     }
+    final id = lessonLocalId;
+    if (id == null || id.trim().isEmpty) return;
+    if (!_isFirstAulaTextRendered(aulaSnapshot)) {
+      entryStatus = 't02_running';
+      _notifyFromChild();
+      await _ensureFirstAulaRenderedBeforeRelease(
+        id: id,
+        generation: _experienceGeneration,
+      );
+      if (!_isFirstAulaTextRendered(aulaSnapshot)) return;
+      entryStatus = 'primeira_aula_pronta';
+      _notifyFromChild();
+    }
     await _tryOpenOfficialAula(source: 'preparation_continue');
+  }
+
+  Future<void> _ensureFirstAulaRenderedBeforeRelease({
+    required String id,
+    required int generation,
+  }) async {
+    final startedAt = DateTime.now().millisecondsSinceEpoch;
+    var lastRuntimeError = aulaRuntimeError;
+    while (_isCurrentExperience(id, generation)) {
+      await openAulaRuntime();
+      if (!_isCurrentExperience(id, generation)) return;
+      if (_isFirstAulaTextRendered(aulaSnapshot)) {
+        debugPrint('[SIM] FIRST_AULA_RENDER_READY');
+        return;
+      }
+      lastRuntimeError = aulaRuntimeError;
+      final elapsed = DateTime.now().millisecondsSinceEpoch - startedAt;
+      if (elapsed >= 45000) break;
+      await Future<void>.delayed(
+        Duration(milliseconds: elapsed < 3000 ? 250 : 750),
+      );
+    }
+    throw StateError(
+      lastRuntimeError ??
+          'A primeira aula ainda nao carregou explicacao, questao e alternativas.',
+    );
+  }
+
+  bool _isFirstAulaTextRendered(LessonRuntimeSnapshot? snapshot) {
+    if (snapshot == null || snapshot.hasCurriculum != true) return false;
+    final content = snapshot.conteudo;
+    if (content == null) return false;
+    final hasExplanation = content.explanation.trim().isNotEmpty;
+    final hasQuestion = content.question.trim().isNotEmpty;
+    final optionCount = content.options.values
+        .where((option) => option.trim().isNotEmpty)
+        .length;
+    return hasExplanation && hasQuestion && optionCount >= 3;
   }
 
   void _resetEntryCoordinator({required bool warmupExpected}) {
