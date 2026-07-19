@@ -247,21 +247,28 @@ extension LabSessionFlowExtensions on LabSession {
     JsonMap guided = const {},
   }) {
     canonicalStore?.patchState(id, (state) {
-      return state.copyWith(
+      final base = _stateDeleted(state)
+          ? StudentLearningState.empty(
+              lessonLocalId: id,
+              userId: userId,
+              now: DateTime.now().millisecondsSinceEpoch,
+            )
+          : state;
+      return base.copyWith(
         userId: userId,
-        profile: state.profile.copyWith(
+        profile: base.profile.copyWith(
           preferredName: preferredName.trim().isEmpty
-              ? state.profile.preferredName
+              ? base.profile.preferredName
               : preferredName.trim(),
           language: locale.learningLocale,
           stableLang: locale.explanationLanguage,
           objetivo: objective,
           targetTopic: objective,
           sessionGoal: objective,
-          extra: {...state.profile.extra, ...guided, ...locale.toJson()},
+          extra: {...base.profile.extra, ...guided, ...locale.toJson()},
         ),
       );
-    });
+    }, allowLocalHousekeeping: true);
     canonicalStore?.appendEvent(
       lessonLocalId: id,
       type: 'STUDENT_FORM_SUBMITTED',
@@ -474,7 +481,10 @@ extension LabSessionFlowExtensions on LabSession {
     return ids;
   }
 
-  void openSupport(String path) { navigationState.openRoute(path); _notifyFromChild(); }
+  void openSupport(String path) {
+    navigationState.openRoute(path);
+    _notifyFromChild();
+  }
 
   void openExternalDoor(String url) => navigationState.openExternalDoor(url);
 
@@ -1296,7 +1306,8 @@ extension LabSessionFlowExtensions on LabSession {
     });
   }
 
-  void setDeleteConfirmation(String value) => lessonUiState.setDeleteConfirmation(value);
+  void setDeleteConfirmation(String value) =>
+      lessonUiState.setDeleteConfirmation(value);
 
   void requestAccountDeletion() {
     unawaited(_requestAccountDeletion());

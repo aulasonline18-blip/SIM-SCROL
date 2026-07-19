@@ -29,6 +29,7 @@ extension LabSessionEntryFlows on LabSession {
       locale: localeContract,
       guided: guided,
     );
+    _enqueueLessonForRemoteVaultSync(id, reason: 'new_lesson_started');
     entryStatus = 'pedido_recebido';
     entryError = null;
     _experienceGeneration += 1;

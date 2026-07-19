@@ -182,8 +182,13 @@ class CloudQueue with WidgetsBindingObserver {
         await _scheduleRetry(entry, 'SYNC_LOCAL_STATE_MISSING');
         return;
       }
-      if (entry.operation == StudentLearningSyncOperation.tombstone ||
-          snap.extra['deletedAt'] != null) {
+      final deleted = _stateDeleted(snap);
+      if (entry.operation == StudentLearningSyncOperation.tombstone &&
+          !deleted) {
+        await enqueueStudentStateSync(lessonLocalId: lessonLocalId);
+        return;
+      }
+      if (deleted) {
         await cloudFunctions.deleteStudentStateByLesson(lessonLocalId, session);
         await _writeLastHash(lessonLocalId, 'tombstone:${snap.updatedAt}');
         await _remove(lessonLocalId);
@@ -249,6 +254,12 @@ class CloudQueue with WidgetsBindingObserver {
     for (final entry in storage.readQueue().values)
       entry.stableId: entry.toRedactedDebugJson(),
   };
+
+  bool _stateDeleted(StudentLearningState state) {
+    return state.extra['deletedAt'] != null ||
+        (state.extra['syncInfo'] is Map &&
+            (state.extra['syncInfo'] as Map)['deletedAt'] != null);
+  }
 
   void wireCloudQueueLifecycle() {
     WidgetsBinding.instance.addObserver(this);

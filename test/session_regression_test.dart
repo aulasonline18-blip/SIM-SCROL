@@ -67,6 +67,32 @@ void main() {
     },
   );
 
+  test('nova aula com mesmo objetivo nao herda tombstone antigo', () {
+    final session = LabSession()
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'pt-BR'
+      ..freeText = 'Quero estudar sistema digestivo no quinto ano.';
+
+    expect(session.saveObjectiveEntry(), isTrue);
+    final id = session.lessonLocalId!;
+    session.canonicalStore!.tombstoneLesson(id);
+    expect(session.canonicalStore!.listLocalStates(), isEmpty);
+
+    session.freeText = 'Quero estudar sistema digestivo no quinto ano.';
+    expect(session.saveObjectiveEntry(), isTrue);
+
+    final state = session.canonicalStore!.readState(id);
+    expect(state.extra['deletedAt'], isNull);
+    expect(
+      state.extra['syncInfo'],
+      anyOf(isNull, isNot(containsPair('operation', 'tombstone'))),
+    );
+    expect(
+      session.canonicalStore!.listLocalStates().map((s) => s.lessonLocalId),
+      contains(id),
+    );
+  });
+
   test(
     'preparacao real sem sessao nao chama servidor protegido e manda para login',
     () async {

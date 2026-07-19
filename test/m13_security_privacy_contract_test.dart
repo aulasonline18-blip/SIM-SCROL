@@ -310,6 +310,69 @@ void main() {
   );
 
   test(
+    'student-state get hydrates full remote lesson selected from drawer',
+    () async {
+      final remote =
+          StudentLearningState.empty(
+            lessonLocalId: 'lesson-remote-drawer',
+            userId: 'u1',
+            now: 10,
+          ).copyWith(
+            profile: const StudentProfile(
+              objetivo: 'Sistema digestivo',
+              stableLang: 'pt-BR',
+            ),
+            curriculum: const StudentCurriculum(
+              topic: 'Sistema digestivo',
+              totalItems: 40,
+              generatedAt: 10,
+              provisional: false,
+              items: [CurriculumItem(marker: 'DIG01', text: 'Boca e digestao')],
+            ),
+            current: const LessonCurrent(
+              itemIdx: 0,
+              marker: 'DIG01',
+              layer: LessonLayer.l1,
+              amparoLvl: 0,
+            ),
+            progress: const LessonProgress(
+              itemIdx: 0,
+              layer: LessonLayer.l1,
+              erros: 0,
+              amparoLvl: 0,
+              historia: [],
+              mainAdvances: 0,
+              concluidos: [],
+              pendentesMarkers: [],
+              totalItems: 40,
+              pctAvanco: 0,
+            ),
+          );
+      final client = SimServerCloudFunctions(
+        config: _config(),
+        transport: _FakeTransport(
+          statusCode: 200,
+          body: jsonEncode({
+            'lessonLocalId': 'lesson-remote-drawer',
+            'state': remote.toJson(),
+            'highWaterMark': 1,
+            'schemaVersion': 1,
+          }),
+        ),
+      );
+
+      final row = await client.getStudentStateByLesson(
+        'lesson-remote-drawer',
+        const SupabaseSession(accessToken: 'token', userId: 'u1'),
+      );
+
+      expect(row?.state?.lessonLocalId, 'lesson-remote-drawer');
+      expect(row?.state?.curriculum?.items.single.marker, 'DIG01');
+      expect(row?.state?.progress?.totalItems, 40);
+    },
+  );
+
+  test(
     'P3 T02 bridge hides raw server body and UI instructions from errors',
     () async {
       final transport = _FakeTransport(

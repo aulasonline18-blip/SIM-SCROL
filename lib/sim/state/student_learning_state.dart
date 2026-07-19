@@ -1387,6 +1387,10 @@ StudentLearningState mergeStudentLearningStateFromCloud(
   StudentLearningState local,
   StudentLearningState remote,
 ) {
+  if (_stateMarkedDeleted(local)) return local;
+  if (_stateMarkedDeleted(remote) && _hasActiveLearningState(local)) {
+    return local;
+  }
   final mergedAttempts = mergeAttempts(local.attempts, remote.attempts);
   final mergedEvents = mergeEvents(local.events, remote.events);
   final lp = local.progress;
@@ -1448,6 +1452,21 @@ StudentLearningState mergeStudentLearningStateFromCloud(
         ? local.updatedAt
         : remote.updatedAt,
   );
+}
+
+bool _stateMarkedDeleted(StudentLearningState state) {
+  return state.extra['deletedAt'] != null ||
+      (state.extra['syncInfo'] is Map &&
+          (state.extra['syncInfo'] as Map)['deletedAt'] != null);
+}
+
+bool _hasActiveLearningState(StudentLearningState state) {
+  return (state.profile.objetivo ?? '').trim().isNotEmpty ||
+      state.curriculum?.items.isNotEmpty == true ||
+      state.current != null ||
+      state.progress != null ||
+      state.currentLessonMaterial != null ||
+      state.readyLessonMaterials.isNotEmpty;
 }
 
 bool _hasServerMasteryTruth(StudentMasteryTruth truth) =>
