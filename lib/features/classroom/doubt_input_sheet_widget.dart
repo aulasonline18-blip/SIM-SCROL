@@ -187,33 +187,23 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                       children: [
                         Text(
                           'Enviar dúvida',
-                          style: TextStyle(
+                          style: SimTypography.title.copyWith(
                             color: palette.text,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
                           ),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           'Escreva sua dúvida ou envie uma foto do exercício, resolução, fórmula, gráfico ou tabela.',
-                          style: TextStyle(
+                          style: SimTypography.caption.copyWith(
                             color: palette.muted,
-                            fontSize: 13,
-                            height: 1.4,
                           ),
                         ),
                         const SizedBox(height: 14),
                         if (_image != null) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: palette.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: palette.border),
-                            ),
+                          SimStatusSurface(
+                            tone: SimSurfaceTone.selected,
+                            icon: Icons.image_outlined,
                             child: Row(
                               children: [
                                 Expanded(
@@ -240,8 +230,8 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                         Container(
                           key: _textFieldKey,
                           decoration: BoxDecoration(
-                            color: palette.surface,
-                            borderRadius: BorderRadius.circular(12),
+                            color: palette.surfaceSoft,
+                            borderRadius: BorderRadius.circular(SimRadius.lg),
                             border: Border.all(color: palette.border),
                           ),
                           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -341,11 +331,14 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                         ),
                         if (_error != null) ...[
                           const SizedBox(height: 8),
-                          Text(
-                            _error!,
-                            style: const TextStyle(
-                              color: simDestructive,
-                              fontSize: 13,
+                          SimStatusSurface(
+                            tone: SimSurfaceTone.danger,
+                            icon: Icons.info_outline,
+                            child: Text(
+                              _error!,
+                              style: SimTypography.caption.copyWith(
+                                color: palette.danger,
+                              ),
                             ),
                           ),
                         ],
@@ -360,28 +353,12 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                     horizontalPadding,
                     16 + media.padding.bottom,
                   ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        minHeight: SimTouch.min,
-                      ),
-                      child: OutlinedButton(
-                        key: const Key('doubt-input-submit-button'),
-                        onPressed: widget.busy ? null : _submit,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: palette.text,
-                          side: BorderSide(color: palette.border),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          widget.busy ? 'Enviando...' : 'Enviar dúvida',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
+                  child: KeyedSubtree(
+                    key: const Key('doubt-input-submit-button'),
+                    child: SimActionButton(
+                      label: widget.busy ? 'Enviando...' : 'Enviar dúvida',
+                      onPressed: widget.busy ? null : _submit,
+                      tone: SimActionTone.primary,
                     ),
                   ),
                 ),

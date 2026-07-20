@@ -33,50 +33,89 @@ class AulaTopBar extends StatelessWidget {
   final VoidCallback? onFontScaleTap;
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    bottom: false,
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      child: Row(
-        children: [
-          SimAulaMenuButton(
-            onTap: () => showAulaMenu(context, session, textScale: textScale),
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final progressValue = progress == null
+        ? null
+        : (progress! / 100).clamp(0.0, 1.0);
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.elevatedSurface.withValues(
+              alpha: palette.dark ? 0.96 : 0.94,
+            ),
+            borderRadius: BorderRadius.circular(SimRadius.xl),
+            border: Border.all(color: palette.border),
+            boxShadow: [
+              BoxShadow(
+                color: palette.shadow.withValues(alpha: 0.10),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
               children: [
-                Text(
-                  headerLabel ?? t('lesson'),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall,
+                SimAulaMenuButton(
+                  onTap: () =>
+                      showAulaMenu(context, session, textScale: textScale),
                 ),
-                if (progress != null)
-                  LinearProgressIndicator(value: (progress! / 100).clamp(0, 1)),
+                const SizedBox(width: SimSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        headerLabel ?? t('lesson'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: SimTypography.label.copyWith(
+                          color: palette.text,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      if (progressValue != null)
+                        SimProgressRail(
+                          value: progressValue,
+                          height: 6,
+                          semanticLabel: t('progress'),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: SimSpacing.sm),
+                if (onFontScaleTap != null)
+                  SimIconAction(
+                    icon: Icons.format_size,
+                    semanticLabel: t('aula_font_scale_label', {
+                      'level': fontScaleLevel ?? 1,
+                    }),
+                    onPressed: onFontScaleTap,
+                    size: 40,
+                    iconSize: 18,
+                  ),
+                _ClassroomDarkModeButton(),
+                if (showReviewButton)
+                  SimIconAction(
+                    icon: Icons.history_edu,
+                    semanticLabel: t('aula_open_review'),
+                    onPressed: session.openReviewRoom,
+                    size: 40,
+                    iconSize: 18,
+                  ),
               ],
             ),
           ),
-          if (onFontScaleTap != null)
-            IconButton(
-              tooltip: t('aula_font_scale_label', {
-                'level': fontScaleLevel ?? 1,
-              }),
-              onPressed: onFontScaleTap,
-              icon: const Icon(Icons.format_size),
-            ),
-          _ClassroomDarkModeButton(),
-          if (showReviewButton)
-            IconButton(
-              tooltip: t('aula_open_review'),
-              onPressed: session.openReviewRoom,
-              icon: const Icon(Icons.history_edu),
-            ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _ClassroomDarkModeButton extends StatelessWidget {
@@ -116,7 +155,7 @@ class LessonImagePanel extends StatelessWidget {
     final data = session.aulaSnapshot?.imagem?.trim();
     if (data != null && data.isNotEmpty) {
       return Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: SimSpacing.sm),
         child: LessonImageStudySurface(
           data: data,
           width: 420,
@@ -158,37 +197,58 @@ class LessonImageStudySurface extends StatelessWidget {
   final VoidCallback? onImageSettled;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    image: true,
-    label: caption,
-    child: AspectRatio(
-      aspectRatio: width / height,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            LessonMediaImageView(data: data, onImageSettled: onImageSettled),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: ColoredBox(
-                color: Colors.black54,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(
-                    caption,
-                    style: const TextStyle(color: Colors.white),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      image: true,
+      label: caption,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 260),
+        child: AspectRatio(
+          aspectRatio: width / height,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: palette.surfaceSoft,
+              borderRadius: BorderRadius.circular(SimRadius.lg),
+              border: Border.all(color: palette.border),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(SimRadius.lg),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(SimSpacing.xs),
+                    child: LessonMediaImageView(
+                      data: data,
+                      onImageSettled: onImageSettled,
+                    ),
                   ),
-                ),
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: ColoredBox(
+                      color: palette.surface.withValues(alpha: 0.92),
+                      child: Padding(
+                        padding: const EdgeInsets.all(SimSpacing.xs),
+                        child: Text(
+                          caption,
+                          style: SimTypography.caption.copyWith(
+                            color: palette.muted,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class LessonMediaImageView extends StatefulWidget {
@@ -261,16 +321,19 @@ class StatusLine extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    dense: true,
-    leading: loading
-        ? const SizedBox.square(
-            dimension: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-        : Icon(icon),
-    title: Text(text),
-    onTap: onTap,
+  Widget build(BuildContext context) => SimStatusSurface(
+    tone: SimSurfaceTone.soft,
+    icon: loading ? Icons.auto_awesome : icon,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(text, style: SimTypography.caption),
+        if (loading) ...[
+          const SizedBox(height: SimSpacing.xs),
+          const LinearProgressIndicator(minHeight: 3),
+        ],
+      ],
+    ),
   );
 }
 

@@ -7,6 +7,7 @@ import '../../sim/auxiliary/doubt_input_sheet.dart';
 import '../../sim/classroom/classroom_text_scale.dart';
 import '../../sim/classroom/pedagogical_slot_visibility.dart';
 import '../../sim/state/student_learning_state.dart';
+import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/fixed_bubble.dart';
 import '../../session/chat_conversation_store.dart';
@@ -298,6 +299,11 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         ),
       ),
     );
+    final width = MediaQuery.sizeOf(context).width;
+    final topBarHeight = MediaQuery.paddingOf(context).top + 94;
+    final timelinePadding = SimBreakpoints.classroomScrollPadding(
+      width,
+    ).copyWith(top: SimSpacing.md, bottom: 132);
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -310,11 +316,11 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
           fit: StackFit.expand,
           children: [
             Positioned.fill(
-              top: MediaQuery.paddingOf(context).top + 82,
+              top: topBarHeight,
               child: ChatAulaTimeline(
                 messages: messages,
                 session: session,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
+                padding: timelinePadding,
                 pendingActionKeys: _pendingConversationActions,
                 initialScrollToCurrent: true,
                 initialScrollKey: _conversationKeyFor(session),
@@ -330,7 +336,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
               left: 0,
               right: 0,
               child: SizedBox(
-                height: MediaQuery.paddingOf(context).top + 82,
+                height: topBarHeight,
                 child: AulaTopBar(
                   session: session,
                   showReviewButton: true,

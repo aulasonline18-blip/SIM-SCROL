@@ -1,36 +1,53 @@
 import 'package:flutter/material.dart';
 
 import '../../features/session/lab_session.dart';
+import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
-
-const _primary = Color(0xFF2563EB);
-const _border = Color(0xFFE5E7EB);
-const _surface = Color(0xFFFFFFFF);
-const _ink = Color(0xFF111827);
+import '../../sim/ui/sim_theme.dart';
 
 BoxDecoration glassDecoration({double radius = 12}) => BoxDecoration(
   color: Colors.white.withValues(alpha: 0.92),
   borderRadius: BorderRadius.circular(radius),
-  border: Border.all(color: _border),
+  border: Border.all(color: SimPalette.light.border),
   boxShadow: const [
     BoxShadow(color: Color(0x14000000), blurRadius: 18, offset: Offset(0, 8)),
   ],
 );
 
-BoxDecoration glassDecorationFor(BuildContext context, {double radius = 12}) =>
-    glassDecoration(radius: radius);
+BoxDecoration glassDecorationFor(BuildContext context, {double radius = 12}) {
+  final palette = SimThemeScope.paletteOf(context);
+  return BoxDecoration(
+    color: palette.elevatedSurface.withValues(
+      alpha: palette.dark ? 0.96 : 0.94,
+    ),
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: palette.border),
+    boxShadow: [
+      BoxShadow(
+        color: palette.shadow.withValues(alpha: palette.dark ? 0.28 : 0.08),
+        blurRadius: 18,
+        offset: const Offset(0, 8),
+      ),
+    ],
+  );
+}
 
 BoxDecoration primaryButtonDecorationFor(
   BuildContext context, {
   double radius = 12,
-}) =>
-    BoxDecoration(color: _primary, borderRadius: BorderRadius.circular(radius));
-
-BoxDecoration pillDecorationFor(BuildContext context) => BoxDecoration(
-  color: const Color(0xFFF8FAFC),
-  borderRadius: BorderRadius.circular(999),
-  border: Border.all(color: _border),
+}) => BoxDecoration(
+  color: SimThemeScope.paletteOf(context).primary,
+  borderRadius: BorderRadius.circular(radius),
 );
+
+BoxDecoration pillDecorationFor(BuildContext context) {
+  final palette = SimThemeScope.paletteOf(context);
+  return BoxDecoration(
+    color: palette.surfaceSoft,
+    borderRadius: BorderRadius.circular(SimRadius.pill),
+    border: Border.all(color: palette.border),
+  );
+}
 
 class PrimaryWideButton extends StatelessWidget {
   const PrimaryWideButton({
@@ -45,10 +62,8 @@ class PrimaryWideButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: double.infinity,
-    child: FilledButton(onPressed: onPressed ?? onTap, child: Text(label)),
-  );
+  Widget build(BuildContext context) =>
+      SimActionButton(label: label, onPressed: onPressed ?? onTap);
 }
 
 class SecondaryWideButton extends StatelessWidget {
@@ -62,9 +77,10 @@ class SecondaryWideButton extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: double.infinity,
-    child: OutlinedButton(onPressed: onTap, child: Text(label)),
+  Widget build(BuildContext context) => SimActionButton(
+    label: label,
+    onPressed: onTap,
+    tone: SimActionTone.secondary,
   );
 }
 
@@ -75,6 +91,7 @@ class AnswerButton extends StatelessWidget {
     required this.onTap,
     this.selected = false,
     this.enabled = true,
+    this.resultCorrect,
     super.key,
   });
 
@@ -83,34 +100,107 @@ class AnswerButton extends StatelessWidget {
   final VoidCallback? onTap;
   final bool selected;
   final bool enabled;
+  final bool? resultCorrect;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: OutlinedButton(
-      onPressed: enabled ? onTap : null,
-      style: OutlinedButton.styleFrom(
-        alignment: Alignment.centerLeft,
-        backgroundColor: selected ? const Color(0xFFEFF6FF) : _surface,
-        side: BorderSide(color: selected ? _primary : _border),
-        padding: const EdgeInsets.all(14),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: selected ? _primary : const Color(0xFFF3F4F6),
-            child: Text(
-              letter,
-              style: TextStyle(color: selected ? Colors.white : _ink),
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final accent = resultCorrect == true
+        ? palette.success
+        : resultCorrect == false
+        ? palette.danger
+        : selected
+        ? palette.primary
+        : palette.border;
+    final background = resultCorrect == true
+        ? palette.successSurface
+        : resultCorrect == false
+        ? palette.dangerSurface
+        : selected
+        ? palette.selectedSurface
+        : palette.surface;
+    final letterColor = selected || resultCorrect != null
+        ? palette.onPrimary
+        : palette.text;
+    final letterBg = selected || resultCorrect != null
+        ? accent
+        : palette.surfaceSoft;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SimSpacing.sm),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        enabled: enabled && onTap != null,
+        label: '$letter. $text',
+        child: Material(
+          color: background,
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            borderRadius: BorderRadius.circular(SimRadius.lg),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              constraints: const BoxConstraints(minHeight: 58),
+              padding: const EdgeInsets.symmetric(
+                horizontal: SimSpacing.md,
+                vertical: SimSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(SimRadius.lg),
+                border: Border.all(color: accent, width: selected ? 1.5 : 1),
+                boxShadow: [
+                  if (enabled)
+                    BoxShadow(
+                      color: palette.shadow.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: letterBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      letter,
+                      style: TextStyle(
+                        color: letterColor,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: SimSpacing.md),
+                  Expanded(
+                    child: Text(
+                      text,
+                      style: SimTypography.option.copyWith(
+                        color: enabled ? palette.text : palette.muted,
+                      ),
+                    ),
+                  ),
+                  if (resultCorrect != null) ...[
+                    const SizedBox(width: SimSpacing.sm),
+                    Icon(
+                      resultCorrect! ? Icons.check_circle : Icons.cancel,
+                      color: accent,
+                      size: 20,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text)),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class SimAulaMenuButton extends StatelessWidget {
@@ -120,13 +210,12 @@ class SimAulaMenuButton extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) => SizedBox.square(
-    dimension: size,
-    child: IconButton(
-      tooltip: t('menu'),
-      icon: const Icon(Icons.menu_rounded),
-      onPressed: onTap,
-    ),
+  Widget build(BuildContext context) => SimIconAction(
+    icon: Icons.menu_rounded,
+    semanticLabel: t('menu'),
+    onPressed: onTap,
+    size: size,
+    iconSize: 21,
   );
 }
 
@@ -250,10 +339,7 @@ void showAulaMenu(
   );
 }
 
-Future<String?> _askLessonName(
-  BuildContext context,
-  dynamic lesson,
-) {
+Future<String?> _askLessonName(BuildContext context, dynamic lesson) {
   final controller = TextEditingController(
     text: lesson.tema.isEmpty ? t('lesson') : lesson.tema,
   );
@@ -282,10 +368,7 @@ Future<String?> _askLessonName(
   ).whenComplete(controller.dispose);
 }
 
-Future<bool?> _confirmDeleteLesson(
-  BuildContext context,
-  dynamic lesson,
-) {
+Future<bool?> _confirmDeleteLesson(BuildContext context, dynamic lesson) {
   final title = lesson.tema.isEmpty ? t('lesson') : lesson.tema;
   return showDialog<bool>(
     context: context,
@@ -326,20 +409,24 @@ class _DrawerLessonTile extends StatelessWidget {
       dense: true,
       leading: const Icon(Icons.school_outlined),
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text('${lesson.nivel} - ${lesson.concluidos}/${lesson.totalItens}'),
+      subtitle: Text(
+        '${lesson.nivel} - ${lesson.concluidos}/${lesson.totalItens}',
+      ),
       onTap: onOpen,
       trailing: Wrap(
         spacing: 4,
         children: [
-          IconButton(
-            tooltip: t('rename_lesson'),
-            icon: const Icon(Icons.edit_outlined),
+          SimIconAction(
+            icon: Icons.edit_outlined,
+            semanticLabel: t('rename_lesson'),
             onPressed: onRename,
+            size: 40,
           ),
-          IconButton(
-            tooltip: t('delete_lesson'),
-            icon: const Icon(Icons.delete_outline),
+          SimIconAction(
+            icon: Icons.delete_outline,
+            semanticLabel: t('delete_lesson'),
             onPressed: onDelete,
+            size: 40,
           ),
         ],
       ),
@@ -402,11 +489,51 @@ class LanguageButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => ChoiceChip(
-    selected: selected,
-    label: Text('${language.flag} ${language.native}'),
-    onSelected: (_) => onTap(),
-  );
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: language.native,
+      child: Material(
+        color: selected ? palette.selectedSurface : palette.surface,
+        borderRadius: BorderRadius.circular(SimRadius.lg),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            constraints: const BoxConstraints(minHeight: 56, minWidth: 132),
+            padding: const EdgeInsets.symmetric(
+              horizontal: SimSpacing.md,
+              vertical: SimSpacing.sm,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(SimRadius.lg),
+              border: Border.all(
+                color: selected ? palette.primary : palette.border,
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  language.flag,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(width: SimSpacing.sm),
+                Text(
+                  language.native,
+                  style: SimTypography.label.copyWith(color: palette.text),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class StepHeader extends StatelessWidget {
@@ -416,16 +543,22 @@ class StepHeader extends StatelessWidget {
   final String? subtitle;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(title, style: Theme.of(context).textTheme.headlineSmall),
-      if (subtitle != null) ...[
-        const SizedBox(height: 6),
-        Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium),
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: SimTypography.title.copyWith(color: palette.text)),
+        if (subtitle != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            subtitle!,
+            style: SimTypography.subtitle.copyWith(color: palette.muted),
+          ),
+        ],
       ],
-    ],
-  );
+    );
+  }
 }
 
 class SimInput extends StatelessWidget {
@@ -449,18 +582,34 @@ class SimInput extends StatelessWidget {
   final ValueChanged<String>? onChanged;
 
   @override
-  Widget build(BuildContext context) => TextField(
-    controller: controller,
-    maxLines: obscureText ? 1 : maxLines,
-    keyboardType: keyboardType,
-    obscureText: obscureText,
-    onChanged: onChanged,
-    decoration: InputDecoration(
-      labelText: label,
-      hintText: hint,
-      border: const OutlineInputBorder(),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return TextField(
+      controller: controller,
+      maxLines: obscureText ? 1 : maxLines,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      onChanged: onChanged,
+      style: SimTypography.body.copyWith(color: palette.text),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        filled: true,
+        fillColor: palette.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          borderSide: BorderSide(color: palette.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          borderSide: BorderSide(color: palette.primary, width: 1.4),
+        ),
+      ),
+    );
+  }
 }
 
 class SimCard extends StatelessWidget {
@@ -469,14 +618,8 @@ class SimCard extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Card(
-    elevation: 0,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(8),
-      side: const BorderSide(color: _border),
-    ),
-    child: Padding(padding: const EdgeInsets.all(16), child: child),
-  );
+  Widget build(BuildContext context) =>
+      SimLearningSurface(padding: const EdgeInsets.all(16), child: child);
 }
 
 class CardTitle extends StatelessWidget {
@@ -504,14 +647,17 @@ class CircleIcon extends StatelessWidget {
   final double top;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(top: top),
-    child: CircleAvatar(
-      radius: 18,
-      backgroundColor: const Color(0xFFEFF6FF),
-      child: Icon(icon, color: _primary, size: 20),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Padding(
+      padding: EdgeInsets.only(top: top),
+      child: CircleAvatar(
+        radius: 18,
+        backgroundColor: palette.selectedSurface,
+        child: Icon(icon, color: palette.primary, size: 20),
+      ),
+    );
+  }
 }
 
 class RoundIconButton extends StatelessWidget {
@@ -527,9 +673,9 @@ class RoundIconButton extends StatelessWidget {
   final String? tooltip;
 
   @override
-  Widget build(BuildContext context) => IconButton.filledTonal(
-    tooltip: tooltip,
-    icon: Icon(icon),
+  Widget build(BuildContext context) => SimIconAction(
+    icon: icon,
+    semanticLabel: tooltip ?? t('menu'),
     onPressed: onTap,
   );
 }

@@ -4,6 +4,7 @@ import '../../features/session/lab_session.dart';
 import '../../session/entry_form_state.dart';
 import '../../shared/widgets/shared_widgets.dart';
 import '../../sim/reception/pedagogical_reception_controller.dart';
+import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
 import '../../sim/ui/sim_theme.dart';
 
@@ -184,43 +185,55 @@ class _EntryScreenState extends State<_EntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final palette = SimThemeScope.paletteOf(context);
     final visibleSteps = reception.steps
         .take(reception.activeIndex + 1)
         .toList(growable: false);
     return Scaffold(
+      backgroundColor: palette.background,
       body: SafeArea(
-        child: ListView(
-          key: const Key('pedagogical-reception-scroll'),
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
-          children: [
-            StepHeader(
-              title: 'Recepção pedagógica',
-              subtitle: 'Vou entender seu caso antes de preparar a aula.',
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: SimBreakpoints.learningMaxWidth(width),
             ),
-            const SizedBox(height: 16),
-            _SimIntroBubble(
-              text:
-                  'Me diga primeiro se você quer aprender um tema ou se trouxe um material específico.',
-            ),
-            const SizedBox(height: 12),
-            for (var i = 0; i < visibleSteps.length; i++) ...[
-              _ReceptionBlock(
-                key: blockKeys.putIfAbsent(
-                  visibleSteps[i].id,
-                  () => GlobalKey(),
+            child: ListView(
+              key: const Key('pedagogical-reception-scroll'),
+              controller: scrollController,
+              padding: SimBreakpoints.pagePadding(
+                width,
+              ).copyWith(top: 20, bottom: 28),
+              children: [
+                StepHeader(
+                  title: 'Recepção pedagógica',
+                  subtitle: 'Vou entender seu caso antes de preparar a aula.',
                 ),
-                step: visibleSteps[i],
-                active: i == reception.activeIndex,
-                complete: i < reception.activeIndex,
-                summary: reception.summaryFor(visibleSteps[i].id),
-                error: i == reception.activeIndex ? error : null,
-                onEdit: () => reception.edit(visibleSteps[i].id),
-                child: _stepBody(visibleSteps[i].id),
-              ),
-              const SizedBox(height: 12),
-            ],
-          ],
+                const SizedBox(height: 16),
+                _SimIntroBubble(
+                  text:
+                      'Me diga primeiro se você quer aprender um tema ou se trouxe um material específico.',
+                ),
+                const SizedBox(height: 12),
+                for (var i = 0; i < visibleSteps.length; i++) ...[
+                  _ReceptionBlock(
+                    key: blockKeys.putIfAbsent(
+                      visibleSteps[i].id,
+                      () => GlobalKey(),
+                    ),
+                    step: visibleSteps[i],
+                    active: i == reception.activeIndex,
+                    complete: i < reception.activeIndex,
+                    summary: reception.summaryFor(visibleSteps[i].id),
+                    error: i == reception.activeIndex ? error : null,
+                    onEdit: () => reception.edit(visibleSteps[i].id),
+                    child: _stepBody(visibleSteps[i].id),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -581,23 +594,21 @@ class _SimIntroBubble extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: palette.dark ? palette.surfaceSoft : const Color(0xFFEFF6FF),
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(4),
-              topRight: Radius.circular(16),
-              bottomLeft: Radius.circular(16),
-              bottomRight: Radius.circular(16),
-            ),
-            border: Border.all(color: palette.border),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Text(
-              text,
-              style: TextStyle(color: palette.text, height: 1.35),
-            ),
+        child: SimLearningSurface(
+          tone: SimSurfaceTone.selected,
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.auto_awesome, color: palette.primary, size: 18),
+              const SizedBox(width: SimSpacing.sm),
+              Expanded(
+                child: Text(
+                  text,
+                  style: TextStyle(color: palette.text, height: 1.35),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -624,39 +635,25 @@ class _SimQuestionBubble extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: active
-                ? (palette.dark ? palette.surface : const Color(0xFFEFF6FF))
-                : palette.surfaceSoft,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(4),
-              topRight: Radius.circular(16),
-              bottomLeft: Radius.circular(16),
-              bottomRight: Radius.circular(16),
-            ),
-            border: Border.all(color: active ? palette.focus : palette.border),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
+        child: SimLearningSurface(
+          tone: active ? SimSurfaceTone.selected : SimSurfaceTone.soft,
+          borderWidth: active ? 1.4 : 1,
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: SimTypography.lessonQuestion.copyWith(
+                  color: palette.text,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  help,
-                  style: TextStyle(color: palette.muted, height: 1.35),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                help,
+                style: SimTypography.muted.copyWith(color: palette.muted),
+              ),
+            ],
           ),
         ),
       ),
@@ -681,45 +678,32 @@ class _StudentSummaryBubble extends StatelessWidget {
       alignment: Alignment.centerRight,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: palette.dark ? palette.surface : const Color(0xFFEEFDF4),
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(16),
-              topRight: Radius.circular(4),
-              bottomLeft: Radius.circular(16),
-              bottomRight: Radius.circular(16),
-            ),
-            border: Border.all(
-              color: palette.dark ? palette.border : const Color(0xFFBBF7D0),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    text,
-                    maxLines: 5,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: palette.text,
-                      fontWeight: FontWeight.w700,
-                      height: 1.35,
-                    ),
+        child: SimLearningSurface(
+          tone: SimSurfaceTone.success,
+          padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  text,
+                  maxLines: 5,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
                   ),
                 ),
-                const SizedBox(width: 8),
-                TextButton(
-                  key: const Key('reception-edit-answer'),
-                  onPressed: onEdit,
-                  child: const Text('Editar'),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              SimTextAction(
+                key: const Key('reception-edit-answer'),
+                label: 'Editar',
+                onPressed: onEdit,
+              ),
+            ],
           ),
         ),
       ),
@@ -734,27 +718,14 @@ class _ActiveReplyBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = SimThemeScope.paletteOf(context);
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 700),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: palette.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: palette.border),
-            boxShadow: [
-              BoxShadow(
-                color: palette.shadow.withValues(
-                  alpha: palette.dark ? 0.25 : 0.06,
-                ),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Padding(padding: const EdgeInsets.all(14), child: child),
+        child: SimLearningSurface(
+          tone: SimSurfaceTone.elevated,
+          padding: const EdgeInsets.all(14),
+          child: child,
         ),
       ),
     );
@@ -778,31 +749,65 @@ class _BigChoiceButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: double.infinity,
-    child: OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon),
-      label: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            Text(body, style: const TextStyle(fontSize: 13)),
-          ],
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? palette.selectedSurface : palette.surface,
+        borderRadius: BorderRadius.circular(SimRadius.lg),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            constraints: const BoxConstraints(minHeight: 72),
+            padding: const EdgeInsets.all(SimSpacing.md),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(SimRadius.lg),
+              border: Border.all(
+                color: selected ? palette.primary : palette.border,
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: selected
+                      ? palette.primary
+                      : palette.surfaceSoft,
+                  child: Icon(
+                    icon,
+                    color: selected ? palette.onPrimary : palette.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: SimSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: SimTypography.action),
+                      const SizedBox(height: 4),
+                      Text(
+                        body,
+                        style: SimTypography.caption.copyWith(
+                          color: palette.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-      style: OutlinedButton.styleFrom(
-        alignment: Alignment.centerLeft,
-        side: BorderSide(
-          color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
-        ),
-        minimumSize: const Size.fromHeight(58),
-      ),
-    ),
-  );
+    );
+  }
 }
 
 class _TextStep extends StatelessWidget {
@@ -978,62 +983,80 @@ class _LanguageScreenState extends State<_LanguageScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: ListView(
-        key: const Key('language-screen'),
-        padding: const EdgeInsets.all(20),
-        children: [
-          StepHeader(
-            title: t('language_title'),
-            subtitle: t('language_subtitle'),
-          ),
-          const SizedBox(height: 16),
-          SimChatInputCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final palette = SimThemeScope.paletteOf(context);
+    return Scaffold(
+      backgroundColor: palette.background,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: SimBreakpoints.learningMaxWidth(width),
+            ),
+            child: ListView(
+              key: const Key('language-screen'),
+              padding: SimBreakpoints.pagePadding(
+                width,
+              ).copyWith(top: 20, bottom: 28),
               children: [
-                SimChatFieldLabel(t('language_choose_label')),
-                const SizedBox(height: 10),
-                SimChatChoiceWrap(
-                  children: [
-                    for (final language in supportedLangs)
-                      LanguageButton(
-                        language: language,
-                        selected: session.selectedLanguageCode == language.code,
-                        onTap: () => session.chooseLanguage(
-                          language.code,
-                          language.name,
-                        ),
-                      ),
-                  ],
+                StepHeader(
+                  title: t('language_title'),
+                  subtitle: t('language_subtitle'),
                 ),
-                const SizedBox(height: 18),
-                SimChatFieldLabel(t('language_other_label')),
-                const SizedBox(height: 8),
-                SimInput(
-                  key: const Key('language-other-input'),
-                  controller: otherController,
-                  hint: t('language_other_placeholder'),
-                  onChanged: session.setOtherLanguage,
+                const SizedBox(height: 16),
+                SimChatBubble(
+                  text: t('language_choose_label'),
+                  supportingText: t('language_subtitle'),
                 ),
                 const SizedBox(height: 12),
-                PrimaryWideButton(
-                  label: t('continue'),
-                  onPressed: session.otherLanguage.trim().isEmpty
-                      ? null
-                      : () => session.chooseLanguage(
-                          'other',
-                          session.otherLanguage,
-                        ),
+                SimChatInputCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SimChatChoiceWrap(
+                        children: [
+                          for (final language in supportedLangs)
+                            LanguageButton(
+                              language: language,
+                              selected:
+                                  session.selectedLanguageCode == language.code,
+                              onTap: () => session.chooseLanguage(
+                                language.code,
+                                language.name,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      SimChatFieldLabel(t('language_other_label')),
+                      const SizedBox(height: 8),
+                      SimInput(
+                        key: const Key('language-other-input'),
+                        controller: otherController,
+                        hint: t('language_other_placeholder'),
+                        onChanged: session.setOtherLanguage,
+                      ),
+                      const SizedBox(height: 12),
+                      PrimaryWideButton(
+                        label: t('continue'),
+                        onPressed: session.otherLanguage.trim().isEmpty
+                            ? null
+                            : () => session.chooseLanguage(
+                                'other',
+                                session.otherLanguage,
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class OnboardingChatFlow extends StatelessWidget {
@@ -1050,8 +1073,11 @@ class OnboardingChatFlow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
     final content = Padding(
-      padding: const EdgeInsets.all(20),
+      padding: SimBreakpoints.pagePadding(
+        width,
+      ).copyWith(top: SimSpacing.lg, bottom: SimSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
@@ -1087,26 +1113,29 @@ class SimChatBubble extends StatelessWidget {
   final String? supportingText;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: const Color(0xFFEFF6FF),
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: const Color(0xFFD8E2F0)),
-    ),
-    child: Padding(
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return SimLearningSurface(
+      tone: SimSurfaceTone.selected,
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(
+            text,
+            style: SimTypography.lessonQuestion.copyWith(color: palette.text),
+          ),
           if (supportingText != null) ...[
             const SizedBox(height: 6),
-            Text(supportingText!),
+            Text(
+              supportingText!,
+              style: SimTypography.muted.copyWith(color: palette.muted),
+            ),
           ],
         ],
       ),
-    ),
-  );
+    );
+  }
 }
 
 class SimChatInputCard extends StatelessWidget {
@@ -1129,8 +1158,11 @@ class SimChatChoiceWrap extends StatelessWidget {
   final bool staggered;
 
   @override
-  Widget build(BuildContext context) =>
-      Wrap(spacing: 8, runSpacing: 8, children: children);
+  Widget build(BuildContext context) => Wrap(
+    spacing: SimSpacing.sm,
+    runSpacing: SimSpacing.sm,
+    children: children,
+  );
 }
 
 class SimChatSendButton extends StatelessWidget {
@@ -1144,12 +1176,10 @@ class SimChatSendButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: semanticLabel,
-    child: IconButton.filled(
-      onPressed: onPressed,
-      icon: const Icon(Icons.arrow_forward),
-    ),
+  Widget build(BuildContext context) => SimIconAction(
+    icon: Icons.arrow_forward,
+    semanticLabel: semanticLabel,
+    onPressed: onPressed,
   );
 }
 
@@ -1166,11 +1196,44 @@ class SimChatChoiceChip extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => FilterChip(
-    label: Text(label),
-    selected: selected,
-    onSelected: (_) => onTap(),
-  );
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: selected ? palette.selectedSurface : palette.surface,
+        borderRadius: BorderRadius.circular(SimRadius.lg),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            constraints: const BoxConstraints(minHeight: SimTouch.min),
+            padding: const EdgeInsets.symmetric(
+              horizontal: SimSpacing.md,
+              vertical: SimSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(SimRadius.lg),
+              border: Border.all(
+                color: selected ? palette.primary : palette.border,
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Text(
+              label,
+              style: SimTypography.label.copyWith(
+                color: palette.text,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class SimChatFieldLabel extends StatelessWidget {
@@ -1179,8 +1242,10 @@ class SimChatFieldLabel extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) =>
-      Text(text, style: const TextStyle(fontWeight: FontWeight.w700));
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Text(text, style: SimTypography.label.copyWith(color: palette.text));
+  }
 }
 
 class SimChatError extends StatelessWidget {
@@ -1191,7 +1256,11 @@ class SimChatError extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 8),
-    child: Text(text, style: const TextStyle(color: Colors.red)),
+    child: SimStatusSurface(
+      tone: SimSurfaceTone.danger,
+      icon: Icons.error_outline,
+      child: Text(text),
+    ),
   );
 }
 
@@ -1277,9 +1346,12 @@ class AttachmentPreviewList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      for (var i = 0; i < attachments.length; i++)
+      for (var i = 0; i < attachments.length; i++) ...[
         AttachmentChip(attachment: attachments[i], onRemove: () => onRemove(i)),
+        const SizedBox(height: SimSpacing.sm),
+      ],
     ],
   );
 }
@@ -1295,18 +1367,62 @@ class AttachmentChip extends StatelessWidget {
   final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    dense: true,
-    contentPadding: EdgeInsets.zero,
-    leading: const Icon(Icons.attach_file),
-    title: Text(attachment.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-    subtitle: Text(_attachmentStatusText(attachment)),
-    trailing: IconButton(
-      tooltip: t('remove'),
-      onPressed: onRemove,
-      icon: const Icon(Icons.close),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final statusTone = switch (attachment.status) {
+      'ready' => SimSurfaceTone.success,
+      'error' => SimSurfaceTone.danger,
+      'processing' => SimSurfaceTone.warning,
+      _ => SimSurfaceTone.soft,
+    };
+    final statusIcon = switch (attachment.status) {
+      'ready' => Icons.check_circle_outline,
+      'error' => Icons.error_outline,
+      'processing' => Icons.hourglass_top,
+      _ => Icons.description_outlined,
+    };
+    return SimLearningSurface(
+      tone: statusTone,
+      padding: const EdgeInsets.all(SimSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 19,
+            backgroundColor: palette.surface,
+            child: Icon(statusIcon, color: palette.text, size: 20),
+          ),
+          const SizedBox(width: SimSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  attachment.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: SimTypography.label.copyWith(color: palette.text),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _attachmentStatusText(attachment),
+                  style: SimTypography.caption.copyWith(color: palette.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: SimSpacing.xs),
+          SimIconAction(
+            icon: Icons.close,
+            semanticLabel: t('remove'),
+            onPressed: onRemove,
+            size: 40,
+            iconSize: 18,
+          ),
+        ],
+      ),
+    );
+  }
 
   String _attachmentStatusText(AttachmentDraft attachment) {
     return switch (attachment.status) {
@@ -1327,23 +1443,47 @@ class AttachmentMenu extends StatelessWidget {
   final ValueChanged<String> onPick;
 
   @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: 8,
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      MenuLine(label: t('attach_file'), onTap: () => onPick('document')),
-      MenuLine(label: t('attach_camera'), onTap: () => onPick('camera')),
-      MenuLine(label: t('attach_image'), onTap: () => onPick('gallery')),
+      MenuLine(
+        icon: Icons.description_outlined,
+        label: t('attach_file'),
+        onTap: () => onPick('document'),
+      ),
+      const SizedBox(height: SimSpacing.sm),
+      MenuLine(
+        icon: Icons.photo_camera_outlined,
+        label: t('attach_camera'),
+        onTap: () => onPick('camera'),
+      ),
+      const SizedBox(height: SimSpacing.sm),
+      MenuLine(
+        icon: Icons.image_outlined,
+        label: t('attach_image'),
+        onTap: () => onPick('gallery'),
+      ),
     ],
   );
 }
 
 class MenuLine extends StatelessWidget {
-  const MenuLine({required this.label, required this.onTap, super.key});
+  const MenuLine({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    super.key,
+  });
 
+  final IconData icon;
   final String label;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) =>
-      OutlinedButton(onPressed: onTap, child: Text(label));
+  Widget build(BuildContext context) => SimActionButton(
+    label: label,
+    icon: icon,
+    onPressed: onTap,
+    tone: SimActionTone.secondary,
+  );
 }

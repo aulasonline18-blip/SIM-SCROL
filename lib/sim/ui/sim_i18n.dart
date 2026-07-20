@@ -181,6 +181,7 @@ const _strings = <String, String>{
   'aula_back_curr': 'Voltar ao objetivo',
   'aux_review_button': 'Revisão',
   'aux_review_done_msg': 'Revisão concluída',
+  'aux_recovery_title': 'Recuperação',
   'aux_recovery_intro_msg': 'Preparando recuperação',
   'aux_recovery_done_msg': 'Recuperação concluída',
   'back_to_lesson': 'Voltar para aula',

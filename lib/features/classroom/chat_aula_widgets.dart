@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../shared/widgets/shared_widgets.dart';
+import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/widgets/doubt_progress_bar.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_i18n.dart';
+import '../../sim/ui/sim_theme.dart';
 import '../session/lab_session.dart';
 import 'aula_widgets.dart';
 import 'chat_aula_messages.dart';
@@ -178,7 +180,14 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     if (widget.messages.isEmpty) {
       return Center(
         key: const Key('chat-empty-state'),
-        child: Text(t('aula_choose_goal')),
+        child: Padding(
+          padding: const EdgeInsets.all(SimSpacing.lg),
+          child: SimStatusSurface(
+            tone: SimSurfaceTone.soft,
+            icon: Icons.auto_awesome,
+            child: Text(t('aula_choose_goal')),
+          ),
+        ),
       );
     }
     return ListView.builder(
@@ -403,24 +412,37 @@ class ChatAulaMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isStudent = message.role == ChatLessonMessageRole.student;
+    final palette = SimThemeScope.paletteOf(context);
+    final tone = _surfaceToneFor(message, isStudent);
     return Align(
       alignment: isStudent ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
-        child: Card(
-          color: isStudent ? const Color(0xFFEFF6FF) : Colors.white,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: AulaConversationBlockRenderer(
-              block: AulaConversationBlock.fromMessage(message),
-              pendingActionKeys: pendingActionKeys,
-              onImageSettled: onImageSettled,
-              actions: AulaConversationActions(
-                chooseAnswer: onChooseAnswer,
-                submitSignal: onSignal,
-                advance: onNext,
-                retry: onRetry,
-                openDoubt: onOpenDoubt,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: SimSpacing.sm),
+          child: SimLearningSurface(
+            tone: tone,
+            borderWidth: message.kind == ChatLessonMessageKind.question
+                ? 1.5
+                : 1,
+            padding: EdgeInsets.all(
+              message.kind == ChatLessonMessageKind.options
+                  ? SimSpacing.sm
+                  : SimSpacing.md,
+            ),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(color: palette.text),
+              child: AulaConversationBlockRenderer(
+                block: AulaConversationBlock.fromMessage(message),
+                pendingActionKeys: pendingActionKeys,
+                onImageSettled: onImageSettled,
+                actions: AulaConversationActions(
+                  chooseAnswer: onChooseAnswer,
+                  submitSignal: onSignal,
+                  advance: onNext,
+                  retry: onRetry,
+                  openDoubt: onOpenDoubt,
+                ),
               ),
             ),
           ),
@@ -468,37 +490,35 @@ class AulaConversationBlockRenderer extends StatelessWidget {
       AulaConversationBlockType.recoverableError => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(message.text ?? t('aula_gen_fail')),
-          const SizedBox(height: 8),
+          _StatusText(
+            icon: Icons.info_outline,
+            text: message.text ?? t('aula_gen_fail'),
+            tone: SimSurfaceTone.danger,
+          ),
+          const SizedBox(height: SimSpacing.sm),
           _ActionButton(label: t('retry'), onPressed: actions.retry),
         ],
       ),
-      AulaConversationBlockType.loading => Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 2),
-            child: SizedBox.square(
-              dimension: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child:
-                message.id == 'doubt-processing' && (message.progress ?? 0) > 0
-                ? DoubtProgressBar(
-                    progress: message.progress!,
-                    label: message.text ?? t('aula_doubt_processing'),
-                  )
-                : Text(message.text ?? t('loading')),
-          ),
-        ],
-      ),
+      AulaConversationBlockType.loading => _LiveLoadingBlock(message: message),
       _ => _TextBlock(message: message),
     };
   }
+}
+
+SimSurfaceTone _surfaceToneFor(ChatLessonMessage message, bool isStudent) {
+  if (isStudent) return SimSurfaceTone.selected;
+  return switch (message.kind) {
+    ChatLessonMessageKind.question => SimSurfaceTone.elevated,
+    ChatLessonMessageKind.feedback =>
+      message.isCorrect == false
+          ? SimSurfaceTone.warning
+          : SimSurfaceTone.success,
+    ChatLessonMessageKind.error => SimSurfaceTone.danger,
+    ChatLessonMessageKind.loading ||
+    ChatLessonMessageKind.processing => SimSurfaceTone.soft,
+    ChatLessonMessageKind.options => SimSurfaceTone.soft,
+    _ => SimSurfaceTone.normal,
+  };
 }
 
 class ChatImageBubble extends StatefulWidget {
@@ -528,20 +548,48 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
   Widget build(BuildContext context) {
     final data = widget.message.imageData?.trim();
     if (widget.message.imageStatus.toLowerCase() == 'failed') {
-      return Text(widget.message.text ?? t('aula_image_unavailable_short'));
+      return _StatusText(
+        icon: Icons.image_not_supported_outlined,
+        text: widget.message.text ?? t('aula_image_unavailable_short'),
+        tone: SimSurfaceTone.warning,
+      );
     }
-    if (data == null || data.isEmpty) return Text(t('aula_image_loading'));
+    if (data == null || data.isEmpty) {
+      return _StatusText(
+        icon: Icons.image_outlined,
+        text: t('aula_image_loading'),
+        tone: SimSurfaceTone.soft,
+        loading: true,
+      );
+    }
+    final palette = SimThemeScope.paletteOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LessonMediaImageView(data: data, compact: true),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 240),
+          child: AspectRatio(
+            aspectRatio: 16 / 10,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: palette.surfaceSoft,
+                borderRadius: BorderRadius.circular(SimRadius.lg),
+                border: Border.all(color: palette.border),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(SimRadius.lg),
+                child: Padding(
+                  padding: const EdgeInsets.all(SimSpacing.xs),
+                  child: LessonMediaImageView(data: data, compact: true),
+                ),
+              ),
+            ),
+          ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: SimSpacing.xs),
         Text(
           widget.message.text ?? t('aula_image_alt'),
-          style: Theme.of(context).textTheme.bodySmall,
+          style: SimTypography.caption.copyWith(color: palette.muted),
         ),
       ],
     );
@@ -555,10 +603,29 @@ class _TextBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = DefaultTextStyle.of(context).style;
+    final palette = SimThemeScope.paletteOf(context);
+    final style = switch (message.kind) {
+      ChatLessonMessageKind.explanation => SimTypography.lessonBody.copyWith(
+        color: palette.text,
+      ),
+      ChatLessonMessageKind.question => SimTypography.lessonQuestion.copyWith(
+        color: palette.text,
+        fontSize: 18,
+      ),
+      ChatLessonMessageKind.feedback => SimTypography.feedback.copyWith(
+        color: message.isCorrect == false ? palette.warning : palette.success,
+      ),
+      _ => DefaultTextStyle.of(context).style.copyWith(color: palette.text),
+    };
     final chunks = <Widget>[
       if ((message.title ?? '').isNotEmpty)
-        Text(message.title!, style: Theme.of(context).textTheme.titleSmall),
+        Padding(
+          padding: const EdgeInsets.only(bottom: SimSpacing.xs),
+          child: Text(
+            message.title!,
+            style: SimTypography.meta.copyWith(color: palette.muted),
+          ),
+        ),
       if ((message.text ?? '').isNotEmpty) Text(message.text!, style: style),
       if (message.selectedAnswer != null)
         Text(message.selectedAnswer!.name, textAlign: TextAlign.right),
@@ -585,6 +652,7 @@ class _ChatOptions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       for (final option in message.options)
         AnswerButton(
@@ -614,11 +682,12 @@ class _ChatSignals extends StatelessWidget {
     runSpacing: 8,
     children: [
       for (final signal in message.signals)
-        FilterChip(
+        _SignalChoice(
           key: Key('signal-button-${signal.value}'),
-          label: Text(t(signal.labelKey)),
-          selected: false,
-          onSelected: signal.enabled ? (_) => onSignal(signal.value) : null,
+          value: signal.value,
+          label: t(signal.labelKey),
+          enabled: signal.enabled,
+          onTap: () => onSignal(signal.value),
         ),
     ],
   );
@@ -632,5 +701,129 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      FilledButton(onPressed: onPressed, child: Text(label));
+      SimActionButton(label: label, onPressed: onPressed);
+}
+
+class _SignalChoice extends StatelessWidget {
+  const _SignalChoice({
+    required this.value,
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+    super.key,
+  });
+
+  final int value;
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      child: Material(
+        color: enabled ? palette.surface : palette.surfaceSoft,
+        borderRadius: BorderRadius.circular(SimRadius.pill),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(SimRadius.pill),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: SimTouch.min),
+            padding: const EdgeInsets.symmetric(
+              horizontal: SimSpacing.md,
+              vertical: SimSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(SimRadius.pill),
+              border: Border.all(color: palette.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircleAvatar(
+                  radius: 13,
+                  backgroundColor: palette.warningSurface,
+                  child: Text(
+                    '$value',
+                    style: TextStyle(
+                      color: palette.warning,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: SimSpacing.xs),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: SimTypography.label.copyWith(
+                      color: enabled ? palette.text : palette.muted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveLoadingBlock extends StatelessWidget {
+  const _LiveLoadingBlock({required this.message});
+
+  final ChatLessonMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    if (message.id == 'doubt-processing' && (message.progress ?? 0) > 0) {
+      return DoubtProgressBar(
+        progress: message.progress!,
+        label: message.text ?? t('aula_doubt_processing'),
+      );
+    }
+    return _StatusText(
+      icon: Icons.auto_awesome,
+      text: message.text ?? t('loading'),
+      tone: SimSurfaceTone.soft,
+      loading: true,
+    );
+  }
+}
+
+class _StatusText extends StatelessWidget {
+  const _StatusText({
+    required this.icon,
+    required this.text,
+    required this.tone,
+    this.loading = false,
+  });
+
+  final IconData icon;
+  final String text;
+  final SimSurfaceTone tone;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) => SimStatusSurface(
+    tone: tone,
+    icon: icon,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(text, style: SimTypography.caption),
+        if (loading) ...[
+          const SizedBox(height: SimSpacing.xs),
+          const LinearProgressIndicator(minHeight: 3),
+        ],
+      ],
+    ),
+  );
 }

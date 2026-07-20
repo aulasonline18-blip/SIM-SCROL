@@ -243,7 +243,7 @@ class _PortalHeroCardState extends State<PortalHeroCard>
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
-        decoration: glassDecorationFor(context, radius: 44),
+        decoration: glassDecorationFor(context, radius: SimRadius.xl),
         child: Column(
           children: [
             SizedBox(
@@ -294,7 +294,7 @@ class _PortalHeroCardState extends State<PortalHeroCard>
                 fontSize: 68,
                 height: 1,
                 fontWeight: FontWeight.w900,
-                letterSpacing: -1.36,
+                letterSpacing: 0,
               ),
             ),
             const SizedBox(height: 12),
@@ -360,57 +360,13 @@ class _PortalHeroCardState extends State<PortalHeroCard>
               ),
             ),
             const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
+            SimActionButton(
               height: 64,
-              child: DecoratedBox(
-                decoration: primaryButtonDecorationFor(context, radius: 18),
-                child: TextButton(
-                  onPressed: widget.session.start,
-                  style: TextButton.styleFrom(
-                    foregroundColor: palette.onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: palette.dark
-                              ? palette.onPrimary
-                              : Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: palette.border),
-                        ),
-                        child: Icon(
-                          Icons.play_arrow,
-                          size: 16,
-                          color: palette.dark ? palette.primary : simDark,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          widget.session.authed
-                              ? t('portal_btn_start')
-                              : t('portal_btn_signin'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: palette.dark ? palette.onPrimary : simDark,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              icon: Icons.play_arrow,
+              label: widget.session.authed
+                  ? t('portal_btn_start')
+                  : t('portal_btn_signin'),
+              onPressed: widget.session.start,
             ),
           ],
         ),

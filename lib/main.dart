@@ -26,6 +26,7 @@ import 'sim/organism/sim_organism.dart';
 import 'sim/state/drift_student_state_storage.dart';
 import 'sim/state/shared_prefs_state_storage.dart';
 import 'sim/state/student_state_store.dart';
+import 'sim/ui/sim_design_system.dart';
 import 'sim/ui/sim_i18n.dart';
 import 'sim/ui/sim_theme.dart';
 
@@ -488,14 +489,23 @@ class _RouteGuardScreen extends StatelessWidget {
 }
 
 ThemeData _buildSimTheme(SimPalette palette, Brightness brightness) {
+  final colorScheme = ColorScheme(
+    brightness: brightness,
+    primary: palette.primary,
+    onPrimary: palette.onPrimary,
+    secondary: palette.warning,
+    onSecondary: brightness == Brightness.dark
+        ? const Color(0xFF1F1603)
+        : Colors.white,
+    error: palette.danger,
+    onError: palette.onPrimary,
+    surface: palette.surface,
+    onSurface: palette.text,
+  );
   final base = ThemeData(
     useMaterial3: true,
     brightness: brightness,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: palette.primary,
-      brightness: brightness,
-      surface: palette.surface,
-    ),
+    colorScheme: colorScheme,
   );
   final textTheme = GoogleFonts.interTextTheme(
     base.textTheme,
@@ -506,8 +516,25 @@ ThemeData _buildSimTheme(SimPalette palette, Brightness brightness) {
     canvasColor: palette.background,
     cardColor: palette.surface,
     dividerColor: palette.border,
+    focusColor: palette.focus.withValues(alpha: 0.18),
+    highlightColor: palette.primary.withValues(alpha: 0.08),
+    splashColor: palette.primary.withValues(alpha: 0.10),
+    cardTheme: CardThemeData(
+      color: palette.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      margin: const EdgeInsets.all(SimSpacing.sm),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(SimRadius.xl),
+        side: BorderSide(color: palette.border),
+      ),
+    ),
     dialogTheme: DialogThemeData(
       backgroundColor: palette.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(SimRadius.xl),
+      ),
       titleTextStyle: textTheme.titleLarge?.copyWith(
         color: palette.text,
         fontWeight: FontWeight.w700,
@@ -518,23 +545,51 @@ ThemeData _buildSimTheme(SimPalette palette, Brightness brightness) {
       backgroundColor: palette.surface,
       modalBackgroundColor: palette.surface,
       surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(SimRadius.xl)),
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: palette.surfaceSoft,
       hintStyle: TextStyle(color: palette.muted),
       labelStyle: TextStyle(color: palette.muted),
+      helperStyle: TextStyle(color: palette.muted),
+      errorStyle: TextStyle(color: palette.danger, fontWeight: FontWeight.w600),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: SimSpacing.md,
+        vertical: SimSpacing.md,
+      ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(SimRadius.lg),
         borderSide: BorderSide(color: palette.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: palette.primary),
+        borderRadius: BorderRadius.circular(SimRadius.lg),
+        borderSide: BorderSide(color: palette.focus, width: 1.6),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(SimRadius.lg),
+        borderSide: BorderSide(color: palette.danger),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(SimRadius.lg),
+        borderSide: BorderSide(color: palette.danger, width: 1.6),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(foregroundColor: palette.text),
+      style: TextButton.styleFrom(
+        foregroundColor: palette.primary,
+        minimumSize: const Size(SimTouch.min, SimTouch.min),
+        padding: const EdgeInsets.symmetric(
+          horizontal: SimSpacing.sm,
+          vertical: SimSpacing.xs,
+        ),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(SimRadius.md),
+        ),
+      ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
@@ -542,12 +597,61 @@ ThemeData _buildSimTheme(SimPalette palette, Brightness brightness) {
         foregroundColor: palette.onPrimary,
         disabledBackgroundColor: palette.surfaceSoft,
         disabledForegroundColor: palette.muted,
+        minimumSize: const Size(SimTouch.min, SimTouch.min),
+        padding: const EdgeInsets.symmetric(
+          horizontal: SimSpacing.md,
+          vertical: SimSpacing.sm,
+        ),
+        textStyle: SimTypography.action,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+        ),
+        shadowColor: palette.shadow,
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: palette.text,
+        backgroundColor: palette.surface,
+        disabledForegroundColor: palette.muted,
         side: BorderSide(color: palette.border),
+        minimumSize: const Size(SimTouch.min, SimTouch.min),
+        padding: const EdgeInsets.symmetric(
+          horizontal: SimSpacing.md,
+          vertical: SimSpacing.sm,
+        ),
+        textStyle: SimTypography.action,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+        ),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        foregroundColor: palette.text,
+        disabledForegroundColor: palette.disabled,
+        minimumSize: const Size(SimTouch.icon, SimTouch.icon),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(SimRadius.md),
+        ),
+      ),
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: palette.primary,
+      linearTrackColor: palette.surfaceSoft,
+      circularTrackColor: palette.surfaceSoft,
+    ),
+    dividerTheme: DividerThemeData(
+      color: palette.border,
+      thickness: 1,
+      space: SimSpacing.lg,
+    ),
+    listTileTheme: ListTileThemeData(
+      iconColor: palette.muted,
+      textColor: palette.text,
+      tileColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(SimRadius.lg),
       ),
     ),
   );

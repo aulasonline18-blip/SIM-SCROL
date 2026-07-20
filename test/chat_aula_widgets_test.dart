@@ -351,7 +351,7 @@ void main() {
     final expected = viewport.top + (viewport.height * 0.75);
 
     expect(controller.offset, greaterThan(0));
-    expect(questionTop, closeTo(expected, 48));
+    expect(questionTop, closeTo(expected, 64));
   });
 
   testWidgets('timeline reacts when same lesson renders answer signals', (

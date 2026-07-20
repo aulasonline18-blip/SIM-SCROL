@@ -78,26 +78,11 @@ class SimResponsiveSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final palette = SimThemeScope.paletteOf(context);
     return SimConstrainedContent(
       maxWidth: maxWidth ?? SimResponsive.cardMaxWidthFor(width),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: palette.surface,
-          borderRadius: BorderRadius.circular(SimRadius.lg),
-          border: Border.all(color: palette.border),
-          boxShadow: [
-            BoxShadow(
-              color: palette.shadow,
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: padding ?? SimResponsive.cardPaddingFor(width),
-          child: child,
-        ),
+      child: SimLearningSurface(
+        padding: padding ?? SimResponsive.cardPaddingFor(width),
+        child: child,
       ),
     );
   }
@@ -108,7 +93,10 @@ class SimResponsiveButtonStyle {
 
   static ButtonStyle filled(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
+    final palette = SimThemeScope.paletteOf(context);
     return FilledButton.styleFrom(
+      backgroundColor: palette.primary,
+      foregroundColor: palette.onPrimary,
       minimumSize: SimResponsive.buttonMinimumSizeFor(width),
       padding: SimResponsive.buttonPaddingFor(width),
       textStyle: SimTypography.action,
@@ -120,7 +108,11 @@ class SimResponsiveButtonStyle {
 
   static ButtonStyle outlined(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
+    final palette = SimThemeScope.paletteOf(context);
     return OutlinedButton.styleFrom(
+      foregroundColor: palette.text,
+      backgroundColor: palette.surface,
+      side: BorderSide(color: palette.border),
       minimumSize: SimResponsive.buttonMinimumSizeFor(width),
       padding: SimResponsive.buttonPaddingFor(width),
       textStyle: SimTypography.action,

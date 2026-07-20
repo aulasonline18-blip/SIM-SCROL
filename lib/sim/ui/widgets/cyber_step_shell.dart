@@ -53,35 +53,17 @@ class CyberStepShell extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Stack(
-                        children: [
-                          // Trilha
-                          Container(
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: palette.surface,
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: palette.border),
-                            ),
-                          ),
-                          // Preenchimento animado
-                          AnimatedFractionallySizedBox(
-                            widthFactor: step / total,
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOut,
-                            child: Container(
-                              height: 6,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                  colors: [palette.primary, palette.muted],
-                                ),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween<double>(end: step / total),
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOut,
+                        builder: (context, value, _) => SimProgressRail(
+                          value: value,
+                          semanticLabel: t('step_of', {
+                            'n': step,
+                            'total': total,
+                          }),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),

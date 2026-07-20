@@ -279,233 +279,140 @@ class _WarmupRoomCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
     final item = lesson;
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(18),
+    return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 560),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: palette.border.withValues(alpha: 0.7)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: item == null
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (loading) ...[
-                  SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: palette.primary,
+      child: SimLearningSurface(
+        tone: SimSurfaceTone.elevated,
+        margin: const EdgeInsets.only(top: 16),
+        padding: const EdgeInsets.all(18),
+        child: item == null
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (loading) ...[
+                    SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: palette.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Preparando uma ponte de boas-vindas...',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: simDark,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'A aula oficial continua sendo preparada.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                    ),
+                  ] else ...[
+                    const Text(
+                      'A ponte de boas-vindas ainda não chegou.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: simDark,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                  if (error?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'A aula principal continua sendo preparada.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Boas-vindas enquanto preparo sua aula',
+                    style: SimTypography.title.copyWith(
+                      color: palette.text,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    item.explanation,
+                    style: SimTypography.body.copyWith(color: palette.text),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    item.question,
+                    style: SimTypography.lessonQuestion.copyWith(
+                      color: palette.text,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Preparando uma ponte de boas-vindas...',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: simDark,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'A aula oficial continua sendo preparada.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 12,
-                      height: 1.3,
-                    ),
-                  ),
-                ] else ...[
-                  const Text(
-                    'A ponte de boas-vindas ainda não chegou.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: simDark,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-                if (error?.trim().isNotEmpty == true) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'A aula principal continua sendo preparada.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: palette.muted,
-                      fontSize: 12,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Boas-vindas enquanto preparo sua aula',
-                  style: TextStyle(
-                    color: simDark,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  item.explanation,
-                  style: const TextStyle(
-                    color: simDark,
-                    fontSize: 14,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  item.question,
-                  style: const TextStyle(
-                    color: simDark,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                for (final entry in item.options.entries)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _WarmupOptionButton(
+                  for (final entry in item.options.entries)
+                    AnswerButton(
                       letter: entry.key,
                       text: entry.value,
                       selected: selectedAnswer == entry.key,
-                      correct: item.correctAnswer == entry.key,
-                      answered: selectedAnswer != null,
+                      enabled: selectedAnswer == null,
+                      resultCorrect: selectedAnswer == null
+                          ? null
+                          : item.correctAnswer == entry.key,
                       onTap: () => onAnswer(entry.key),
                     ),
-                  ),
-                if (selectedAnswer != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    selectedAnswer == item.correctAnswer
-                        ? (item.whyCorrect?.trim().isNotEmpty == true
-                              ? item.whyCorrect!.trim()
-                              : 'Certo. A aula principal continua sendo preparada.')
-                        : (item.whyWrong[selectedAnswer]?.trim().isNotEmpty ==
-                                  true
-                              ? item.whyWrong[selectedAnswer]!.trim()
-                              : 'Boa tentativa. A aula principal vai explicar melhor.'),
-                    style: TextStyle(
-                      color: selectedAnswer == item.correctAnswer
-                          ? const Color(0xFF047857)
-                          : const Color(0xFFB45309),
-                      fontSize: 13,
-                      height: 1.35,
-                      fontWeight: FontWeight.w700,
+                  if (selectedAnswer != null) ...[
+                    const SizedBox(height: 4),
+                    SimStatusSurface(
+                      tone: selectedAnswer == item.correctAnswer
+                          ? SimSurfaceTone.success
+                          : SimSurfaceTone.warning,
+                      icon: selectedAnswer == item.correctAnswer
+                          ? Icons.check_circle_outline
+                          : Icons.lightbulb_outline,
+                      child: Text(
+                        selectedAnswer == item.correctAnswer
+                            ? (item.whyCorrect?.trim().isNotEmpty == true
+                                  ? item.whyCorrect!.trim()
+                                  : 'Certo. A aula principal continua sendo preparada.')
+                            : (item.whyWrong[selectedAnswer]
+                                          ?.trim()
+                                          .isNotEmpty ==
+                                      true
+                                  ? item.whyWrong[selectedAnswer]!.trim()
+                                  : 'Boa tentativa. A aula principal vai explicar melhor.'),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: waitingForOfficial ? null : onContinue,
-                    icon: waitingForOfficial
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.arrow_forward),
-                    label: Text(
-                      waitingForOfficial
+                    const SizedBox(height: 16),
+                    SimActionButton(
+                      onPressed: waitingForOfficial ? null : onContinue,
+                      label: waitingForOfficial
                           ? 'Preparando a aula oficial...'
                           : 'Continuar para a aula',
+                      icon: waitingForOfficial
+                          ? Icons.hourglass_top
+                          : Icons.arrow_forward,
                     ),
-                  ),
+                  ],
                 ],
-              ],
-            ),
-    );
-  }
-}
-
-class _WarmupOptionButton extends StatelessWidget {
-  const _WarmupOptionButton({
-    required this.letter,
-    required this.text,
-    required this.selected,
-    required this.correct,
-    required this.answered,
-    required this.onTap,
-  });
-
-  final String letter;
-  final String text;
-  final bool selected;
-  final bool correct;
-  final bool answered;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final borderColor = answered && correct
-        ? const Color(0xFF10B981)
-        : selected
-        ? const Color(0xFF111827)
-        : const Color(0xFFD1D5DB);
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: answered ? null : onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFF3F4F6) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: borderColor),
               ),
-              child: Text(
-                letter,
-                style: const TextStyle(
-                  color: simDark,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  color: simDark,
-                  fontSize: 14,
-                  height: 1.3,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -590,7 +497,17 @@ class _PlacementLabScreenState extends State<PlacementLabScreen> {
         );
       case PlacementLocalStage.redirectToAula:
         _redirectToAulaAfterFrame();
-        return const Center(child: CircularProgressIndicator());
+        return OnboardingChatFlow(
+          semanticLabel: t('onboarding_chat_region'),
+          scrollable: false,
+          children: const [
+            SimStatusSurface(
+              tone: SimSurfaceTone.selected,
+              icon: Icons.arrow_forward,
+              child: Text('Abrindo sua aula no ponto certo...'),
+            ),
+          ],
+        );
     }
   }
 
@@ -612,6 +529,7 @@ class _PlacementChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
     return OnboardingChatFlow(
       semanticLabel: t('onboarding_chat_region'),
       scrollable: false,
@@ -620,21 +538,103 @@ class _PlacementChoice extends StatelessWidget {
           text: t('placement_choice_h1'),
           supportingText: t('placement_choice_body'),
         ),
-        SimChatChoiceWrap(
-          children: [
-            SimChatChoiceChip(
-              label: t('placement_start_beginning'),
-              selected: false,
-              onTap: onBeginning,
-            ),
-            SimChatChoiceChip(
-              label: t('placement_take_quick'),
-              selected: false,
-              onTap: onQuick,
-            ),
-          ],
+        const SizedBox(height: SimSpacing.sm),
+        _PlacementDoor(
+          icon: Icons.flag_outlined,
+          title: t('placement_start_beginning'),
+          body: 'Entrar com segurança pelo primeiro passo da trilha.',
+          accent: palette.success,
+          onTap: onBeginning,
+        ),
+        const SizedBox(height: SimSpacing.sm),
+        _PlacementDoor(
+          icon: Icons.explore_outlined,
+          title: t('placement_take_quick'),
+          body: 'Fazer um diagnóstico leve para encontrar seu ponto.',
+          accent: palette.primary,
+          onTap: onQuick,
         ),
       ],
+    );
+  }
+}
+
+class _PlacementDoor extends StatelessWidget {
+  const _PlacementDoor({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Semantics(
+      button: true,
+      label: title,
+      child: Material(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(SimRadius.lg),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(SimRadius.lg),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 86),
+            padding: const EdgeInsets.all(SimSpacing.md),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(SimRadius.lg),
+              border: Border.all(color: palette.border),
+              boxShadow: [
+                BoxShadow(
+                  color: palette.shadow.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: accent.withValues(alpha: 0.12),
+                  child: Icon(icon, color: accent, size: 22),
+                ),
+                const SizedBox(width: SimSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: SimTypography.action.copyWith(
+                          color: palette.text,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        body,
+                        style: SimTypography.caption.copyWith(
+                          color: palette.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: palette.muted),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -655,18 +655,10 @@ class _PlacementIntro extends StatelessWidget {
           text: t('placement_intro_h1'),
           supportingText: t('placement_intro_body'),
         ),
-        FilledButton.icon(
+        SimActionButton(
           onPressed: onStart,
-          icon: preparing
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.play_arrow),
-          label: Text(
-            preparing ? t('placement_preparing') : t('placement_start'),
-          ),
+          icon: preparing ? Icons.hourglass_top : Icons.play_arrow,
+          label: preparing ? t('placement_preparing') : t('placement_start'),
         ),
       ],
     );
@@ -695,7 +687,11 @@ class _PlacementQuestion extends StatelessWidget {
             text: t('placement_waiting_h1'),
             supportingText: t('placement_waiting_body'),
           ),
-          const Center(child: CircularProgressIndicator()),
+          const SimStatusSurface(
+            tone: SimSurfaceTone.selected,
+            icon: Icons.auto_awesome,
+            child: Text('Preparando uma pergunta segura para você.'),
+          ),
         ],
       );
     }
@@ -710,18 +706,13 @@ class _PlacementQuestion extends StatelessWidget {
             'total': '${controller.blocks.length}',
           }),
         ),
-        SimChatChoiceWrap(
-          children: [
-            for (final entry
-                in controller.blocks[controller.index].choices.asMap().entries)
-              SimChatChoiceChip(
-                label:
-                    '${String.fromCharCode(65 + entry.key)}. ${t(entry.value.label)}',
-                selected: false,
-                onTap: () => onAnswered(entry.value.id),
-              ),
-          ],
-        ),
+        for (final entry
+            in controller.blocks[controller.index].choices.asMap().entries)
+          AnswerButton(
+            letter: String.fromCharCode(65 + entry.key),
+            text: t(entry.value.label),
+            onTap: () => onAnswered(entry.value.id),
+          ),
       ],
     );
   }
@@ -744,10 +735,10 @@ class _PlacementResult extends StatelessWidget {
           text: t('placement_result_h1'),
           supportingText: t('placement_result_body'),
         ),
-        FilledButton.icon(
+        SimActionButton(
           onPressed: onContinue,
-          icon: const Icon(Icons.arrow_forward),
-          label: Text(t('continue')),
+          icon: Icons.arrow_forward,
+          label: t('continue'),
         ),
       ],
     );

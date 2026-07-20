@@ -7,6 +7,7 @@ class SimPalette {
     required this.frame,
     required this.surface,
     required this.surfaceSoft,
+    required this.elevatedSurface,
     required this.text,
     required this.muted,
     required this.border,
@@ -18,6 +19,10 @@ class SimPalette {
     required this.disabled,
     required this.focus,
     required this.shadow,
+    required this.selectedSurface,
+    required this.successSurface,
+    required this.warningSurface,
+    required this.dangerSurface,
   });
 
   final bool dark;
@@ -25,6 +30,7 @@ class SimPalette {
   final Color frame;
   final Color surface;
   final Color surfaceSoft;
+  final Color elevatedSurface;
   final Color text;
   final Color muted;
   final Color border;
@@ -36,43 +42,57 @@ class SimPalette {
   final Color disabled;
   final Color focus;
   final Color shadow;
+  final Color selectedSurface;
+  final Color successSurface;
+  final Color warningSurface;
+  final Color dangerSurface;
 
   static const light = SimPalette(
     dark: false,
-    background: Colors.white,
-    frame: Color(0xFF111827),
+    background: Color(0xFFFCFBF7),
+    frame: Color(0xFFF4F7FB),
     surface: Colors.white,
-    surfaceSoft: Color(0xFFF9FAFB),
-    text: Color(0xFF111827),
-    muted: Color(0xFF6B7280),
-    border: Color(0xFFD1D5DB),
-    primary: Color(0xFF111827),
+    surfaceSoft: Color(0xFFF6F8FB),
+    elevatedSurface: Color(0xFFFFFFFF),
+    text: Color(0xFF111820),
+    muted: Color(0xFF647084),
+    border: Color(0xFFDCE3EC),
+    primary: Color(0xFF2563EB),
     onPrimary: Colors.white,
-    success: Color(0xFF166534),
-    warning: Color(0xFF854D0E),
-    danger: Color(0xFFB91C1C),
-    disabled: Color(0xFF6B7280),
-    focus: Color(0xFF2563EB),
-    shadow: Color(0x2E111827),
+    success: Color(0xFF15803D),
+    warning: Color(0xFFA16207),
+    danger: Color(0xFFDC4A3D),
+    disabled: Color(0xFF94A3B8),
+    focus: Color(0xFF1D4ED8),
+    shadow: Color(0x1A0F172A),
+    selectedSurface: Color(0xFFEFF6FF),
+    successSurface: Color(0xFFEAFBF0),
+    warningSurface: Color(0xFFFFF7DF),
+    dangerSurface: Color(0xFFFFF0ED),
   );
 
   static const darkMode = SimPalette(
     dark: true,
-    background: Color(0xFF05070D),
-    frame: Color(0xFF000000),
-    surface: Color(0xFF0F172A),
-    surfaceSoft: Color(0xFF111827),
+    background: Color(0xFF0D1117),
+    frame: Color(0xFF111827),
+    surface: Color(0xFF151C27),
+    surfaceSoft: Color(0xFF1B2431),
+    elevatedSurface: Color(0xFF202B3A),
     text: Color(0xFFF8FAFC),
-    muted: Color(0xFFCBD5E1),
+    muted: Color(0xFFB7C4D6),
     border: Color(0xFF334155),
-    primary: Color(0xFFE5E7EB),
-    onPrimary: Color(0xFF020617),
+    primary: Color(0xFF60A5FA),
+    onPrimary: Color(0xFF07111F),
     success: Color(0xFF86EFAC),
-    warning: Color(0xFFFDE68A),
+    warning: Color(0xFFFCD34D),
     danger: Color(0xFFFCA5A5),
-    disabled: Color(0xFF94A3B8),
+    disabled: Color(0xFF78869A),
     focus: Color(0xFF93C5FD),
-    shadow: Color(0x99000000),
+    shadow: Color(0x73000000),
+    selectedSurface: Color(0xFF172A46),
+    successSurface: Color(0xFF123224),
+    warningSurface: Color(0xFF342A13),
+    dangerSurface: Color(0xFF3A1C1C),
   );
 }
 

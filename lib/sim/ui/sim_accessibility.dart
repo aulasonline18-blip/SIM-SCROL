@@ -70,7 +70,7 @@ class SimAccessibility {
       SimVisualState.success => SimStateVisualToken(
         state: state,
         foreground: palette.success,
-        background: palette.surface,
+        background: palette.successSurface,
         border: palette.success,
         icon: Icons.check_circle_outline,
         semanticLabel: 'sucesso',
@@ -78,7 +78,7 @@ class SimAccessibility {
       SimVisualState.warning => SimStateVisualToken(
         state: state,
         foreground: palette.warning,
-        background: palette.surface,
+        background: palette.warningSurface,
         border: palette.warning,
         icon: Icons.warning_amber_rounded,
         semanticLabel: 'alerta',
@@ -86,7 +86,7 @@ class SimAccessibility {
       SimVisualState.danger => SimStateVisualToken(
         state: state,
         foreground: palette.danger,
-        background: palette.surface,
+        background: palette.dangerSurface,
         border: palette.danger,
         icon: Icons.error_outline,
         semanticLabel: 'erro',
@@ -102,7 +102,7 @@ class SimAccessibility {
       SimVisualState.focus => SimStateVisualToken(
         state: state,
         foreground: palette.focus,
-        background: palette.surface,
+        background: palette.selectedSurface,
         border: palette.focus,
         icon: Icons.radio_button_checked,
         semanticLabel: 'foco',

@@ -43,6 +43,7 @@ class SimSpacing {
   static const double lg = 20;
   static const double xl = 24;
   static const double xxl = 32;
+  static const double xxxl = 40;
   static const double touchGap = SimResponsiveDensity.touchGap;
 }
 
@@ -50,9 +51,10 @@ class SimRadius {
   const SimRadius._();
 
   static const double sm = 8;
-  static const double md = 12;
-  static const double lg = 14;
-  static const double xl = 18;
+  static const double md = 10;
+  static const double lg = 12;
+  static const double xl = 16;
+  static const double pill = 999;
 }
 
 class SimTouch {
@@ -76,9 +78,16 @@ class SimTypography {
 
   static const TextStyle title = TextStyle(
     color: simDark,
-    fontSize: 20,
-    height: 1.3,
+    fontSize: 22,
+    height: 1.22,
     fontWeight: FontWeight.w800,
+  );
+
+  static const TextStyle subtitle = TextStyle(
+    color: simMuted,
+    fontSize: 15,
+    height: 1.38,
+    fontWeight: FontWeight.w600,
   );
 
   static const TextStyle body = lessonBody;
@@ -96,6 +105,20 @@ class SimTypography {
     fontWeight: FontWeight.w700,
   );
 
+  static const TextStyle option = TextStyle(
+    color: simDark,
+    fontSize: 16,
+    height: 1.35,
+    fontWeight: FontWeight.w600,
+  );
+
+  static const TextStyle feedback = TextStyle(
+    color: simDark,
+    fontSize: 16,
+    height: 1.38,
+    fontWeight: FontWeight.w800,
+  );
+
   static const TextStyle label = TextStyle(
     color: simDark,
     fontSize: 14,
@@ -108,7 +131,7 @@ class SimTypography {
     fontFamily: kMono,
     fontSize: 11,
     fontWeight: FontWeight.w700,
-    letterSpacing: 1.2,
+    letterSpacing: 0,
   );
 
   static const TextStyle caption = TextStyle(
@@ -183,16 +206,18 @@ class SimActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
     final enabled = onPressed != null;
-    final foreground = tone == SimActionTone.danger
-        ? palette.onPrimary
-        : palette.text;
+    final foreground = switch (tone) {
+      SimActionTone.primary => palette.onPrimary,
+      SimActionTone.secondary => palette.text,
+      SimActionTone.danger => palette.onPrimary,
+    };
     final background = switch (tone) {
-      SimActionTone.primary => palette.surface,
+      SimActionTone.primary => palette.primary,
       SimActionTone.secondary => palette.surface,
-      SimActionTone.danger => palette.primary,
+      SimActionTone.danger => palette.danger,
     };
     final side = tone == SimActionTone.primary
-        ? BorderSide(color: palette.primary, width: 1.1)
+        ? BorderSide(color: palette.primary)
         : BorderSide(color: palette.border);
 
     final child = icon == null
@@ -213,7 +238,7 @@ class SimActionButton extends StatelessWidget {
       child: FilledButton(
         onPressed: onPressed,
         style: FilledButton.styleFrom(
-          elevation: 0,
+          elevation: enabled && tone == SimActionTone.primary ? 1 : 0,
           backgroundColor: enabled ? background : palette.surfaceSoft,
           foregroundColor: enabled ? foreground : simMuted,
           disabledBackgroundColor: palette.surfaceSoft,
@@ -223,6 +248,7 @@ class SimActionButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(SimRadius.lg),
           ),
           textStyle: SimTypography.action,
+          shadowColor: palette.shadow,
         ),
         child: child,
       ),
@@ -319,4 +345,264 @@ class SimTextAction extends StatelessWidget {
       ),
     );
   }
+}
+
+enum SimSurfaceTone {
+  normal,
+  soft,
+  elevated,
+  selected,
+  success,
+  warning,
+  danger,
+}
+
+class SimLearningSurface extends StatelessWidget {
+  const SimLearningSurface({
+    required this.child,
+    this.tone = SimSurfaceTone.normal,
+    this.padding,
+    this.margin,
+    this.width,
+    this.borderWidth = 1,
+    super.key,
+  });
+
+  final Widget child;
+  final SimSurfaceTone tone;
+  final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
+  final double? width;
+  final double borderWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final colors = _surfaceColors(palette, tone);
+    return Container(
+      width: width,
+      margin: margin,
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(SimRadius.xl),
+        border: Border.all(color: colors.border, width: borderWidth),
+        boxShadow: [
+          BoxShadow(
+            color: palette.shadow.withValues(alpha: palette.dark ? 0.28 : 0.08),
+            blurRadius: tone == SimSurfaceTone.elevated ? 18 : 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: padding ?? const EdgeInsets.all(SimSpacing.lg),
+        child: child,
+      ),
+    );
+  }
+}
+
+class SimElevatedSurface extends SimLearningSurface {
+  const SimElevatedSurface({
+    required super.child,
+    super.padding,
+    super.margin,
+    super.width,
+    super.key,
+  }) : super(tone: SimSurfaceTone.elevated);
+}
+
+class SimStatusSurface extends StatelessWidget {
+  const SimStatusSurface({
+    required this.child,
+    required this.tone,
+    this.icon,
+    this.padding,
+    super.key,
+  });
+
+  final Widget child;
+  final SimSurfaceTone tone;
+  final IconData? icon;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final colors = _surfaceColors(palette, tone);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(SimRadius.lg),
+        border: Border.all(color: colors.border),
+      ),
+      child: Padding(
+        padding:
+            padding ??
+            const EdgeInsets.symmetric(
+              horizontal: SimSpacing.md,
+              vertical: SimSpacing.sm,
+            ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 18, color: colors.foreground),
+              const SizedBox(width: SimSpacing.xs),
+            ],
+            Flexible(
+              child: DefaultTextStyle.merge(
+                style: TextStyle(color: colors.foreground, height: 1.35),
+                child: child,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SimProgressRail extends StatelessWidget {
+  const SimProgressRail({
+    required this.value,
+    this.height = 7,
+    this.semanticLabel,
+    super.key,
+  });
+
+  final double value;
+  final double height;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final clamped = value.clamp(0.0, 1.0);
+    final rail = ClipRRect(
+      borderRadius: BorderRadius.circular(SimRadius.pill),
+      child: ColoredBox(
+        color: palette.surfaceSoft,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: FractionallySizedBox(
+            widthFactor: clamped,
+            child: SizedBox(
+              height: height,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: palette.primary,
+                  borderRadius: BorderRadius.circular(SimRadius.pill),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return Semantics(
+      label: semanticLabel,
+      value: '${(clamped * 100).round()}%',
+      child: SizedBox(height: height, width: double.infinity, child: rail),
+    );
+  }
+}
+
+class SimSectionHeader extends StatelessWidget {
+  const SimSectionHeader({
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    super.key,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: SimTypography.title.copyWith(color: palette.text),
+              ),
+              if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                const SizedBox(height: SimSpacing.xs),
+                Text(
+                  subtitle!,
+                  style: SimTypography.subtitle.copyWith(color: palette.muted),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: SimSpacing.md),
+          trailing!,
+        ],
+      ],
+    );
+  }
+}
+
+class _SimSurfaceColors {
+  const _SimSurfaceColors({
+    required this.background,
+    required this.border,
+    required this.foreground,
+  });
+
+  final Color background;
+  final Color border;
+  final Color foreground;
+}
+
+_SimSurfaceColors _surfaceColors(SimPalette palette, SimSurfaceTone tone) {
+  return switch (tone) {
+    SimSurfaceTone.normal => _SimSurfaceColors(
+      background: palette.surface,
+      border: palette.border,
+      foreground: palette.text,
+    ),
+    SimSurfaceTone.soft => _SimSurfaceColors(
+      background: palette.surfaceSoft,
+      border: palette.border,
+      foreground: palette.text,
+    ),
+    SimSurfaceTone.elevated => _SimSurfaceColors(
+      background: palette.elevatedSurface,
+      border: palette.border,
+      foreground: palette.text,
+    ),
+    SimSurfaceTone.selected => _SimSurfaceColors(
+      background: palette.selectedSurface,
+      border: palette.primary,
+      foreground: palette.text,
+    ),
+    SimSurfaceTone.success => _SimSurfaceColors(
+      background: palette.successSurface,
+      border: palette.success,
+      foreground: palette.success,
+    ),
+    SimSurfaceTone.warning => _SimSurfaceColors(
+      background: palette.warningSurface,
+      border: palette.warning,
+      foreground: palette.warning,
+    ),
+    SimSurfaceTone.danger => _SimSurfaceColors(
+      background: palette.dangerSurface,
+      border: palette.danger,
+      foreground: palette.danger,
+    ),
+  };
 }

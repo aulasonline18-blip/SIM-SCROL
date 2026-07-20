@@ -11,6 +11,7 @@ import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/external_ai/sim_http_transport.dart';
 import 'package:sim_mobile/sim/external_ai/sim_server_attachment_client.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
+import 'package:sim_mobile/sim/ui/sim_design_system.dart';
 
 void main() {
   setUp(() {
@@ -336,7 +337,7 @@ void main() {
     expect(find.textContaining('Uso: Prova'), findsOneWidget);
     expect(find.text('Preparar minha aula'), findsOneWidget);
 
-    final editButton = tester.widget<TextButton>(
+    final editButton = tester.widget<SimTextAction>(
       find.byKey(const Key('reception-edit-answer'), skipOffstage: false).first,
     );
     editButton.onPressed!();

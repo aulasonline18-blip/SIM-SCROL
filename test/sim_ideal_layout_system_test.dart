@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/features/portal/portal_flow.dart';
 import 'package:sim_mobile/shared/widgets/shared_widgets.dart';
 import 'package:sim_mobile/sim/classroom/classroom_text_scale.dart';
+import 'package:sim_mobile/sim/ui/sim_accessibility.dart';
+import 'package:sim_mobile/sim/ui/sim_components.dart';
 import 'package:sim_mobile/sim/ui/sim_design_system.dart';
 import 'package:sim_mobile/sim/ui/sim_theme.dart';
 import 'package:sim_mobile/sim/ui/widgets/cyber_step_shell.dart';
@@ -51,6 +53,68 @@ void main() {
       tester.getSize(find.byType(FilledButton).last).height,
       greaterThanOrEqualTo(SimTouch.min),
     );
+  });
+
+  test('constitutional palette keeps readable light and dark contrast', () {
+    for (final palette in const [SimPalette.light, SimPalette.darkMode]) {
+      expect(SimContrast.meets(palette.text, palette.background), isTrue);
+      expect(SimContrast.meets(palette.text, palette.surface), isTrue);
+      expect(SimContrast.meets(palette.onPrimary, palette.primary), isTrue);
+      expect(palette.primary, isNot(palette.success));
+      expect(palette.warning, isNot(palette.danger));
+    }
+  });
+
+  testWidgets('global surfaces and status states fit a phone viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      SimThemeScope(
+        darkMode: false,
+        onToggleDarkMode: _noop,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SimResponsiveContainer(
+              includeSafeArea: true,
+              child: Column(
+                children: const [
+                  SimLearningSurface(
+                    child: Text(
+                      'Uma superfície pedagógica respira sem cortar texto.',
+                    ),
+                  ),
+                  SizedBox(height: SimSpacing.sm),
+                  SimStatusSurface(
+                    tone: SimSurfaceTone.success,
+                    icon: Icons.check_circle_outline,
+                    child: Text('Acerto claro com ícone e texto.'),
+                  ),
+                  SizedBox(height: SimSpacing.sm),
+                  SimStatusSurface(
+                    tone: SimSurfaceTone.warning,
+                    icon: Icons.warning_amber_rounded,
+                    child: Text('Atenção clara sem depender só da cor.'),
+                  ),
+                  SizedBox(height: SimSpacing.sm),
+                  SimStatusSurface(
+                    tone: SimSurfaceTone.danger,
+                    icon: Icons.error_outline,
+                    child: Text('Erro humano com contraste e borda.'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SimLearningSurface), findsOneWidget);
+    expect(find.byType(SimStatusSurface), findsNWidgets(3));
   });
 
   testWidgets('CyberStepShell widens learning column on tablet', (
