@@ -18,7 +18,7 @@ class LessonMaterialController {
   final StudentLearningStateService stateService;
   final StudentLessonMaterialService materialService;
   final SimConstitutionalContract constitutionalContract;
-  static const int _hotAdvanceWaitAfterOrderMs = 120000;
+  static const int _hotAdvanceWaitAfterOrderMs = 0;
   static const int _hotAdvanceCachePolls = 40;
   static const Duration _hotAdvanceCachePollInterval = Duration(
     milliseconds: 5,

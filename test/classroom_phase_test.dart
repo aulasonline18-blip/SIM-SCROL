@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'support/memory_test_stores.dart';
 import 'dart:io';
@@ -70,6 +71,29 @@ class FailingClassroomT02 implements T02LessonClient {
   Future<T02LessonMaterial> completeLesson(T02LessonRequest request) {
     calls += 1;
     throw StateError('offline');
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
+}
+
+class BlockingClassroomT02 implements T02LessonClient {
+  int calls = 0;
+  final pending = Completer<T02LessonMaterial>();
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) {
+    calls += 1;
+    return pending.future;
   }
 
   @override
@@ -453,6 +477,75 @@ void main() {
         local.queuedActions.map((action) => action['type']),
         contains('PREPARE_READY_WINDOW'),
       );
+    },
+  );
+
+  test(
+    'M7.2 avanco nao fica preso em espera longa quando proxima aula demora',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': _classroomState()},
+      );
+      final t02 = BlockingClassroomT02();
+      addTearDown(() {
+        if (!t02.pending.isCompleted) {
+          t02.pending.complete(
+            T02LessonMaterial(
+              explanation: 'Texto tardio M1 L2.',
+              question: 'Pergunta tardia M1 L2?',
+              options: const {
+                AnswerLetter.A: 'A',
+                AnswerLetter.B: 'B',
+                AnswerLetter.C: 'C',
+              },
+              correctAnswer: AnswerLetter.A,
+              whyCorrect: 'A esta correta.',
+              whyWrong: null,
+              generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
+              source: 'blocking-cleanup',
+            ),
+          );
+        }
+      });
+      final runtime = _runtime(service, t02);
+      await runtime.open(lessonLocalId: 'cyber-class');
+
+      runtime.select(AnswerLetter.A);
+      await runtime.signal(DecisionSignal.two);
+      final startedAt = DateTime.now();
+      await runtime.advance().timeout(const Duration(seconds: 1));
+
+      expect(
+        DateTime.now().difference(startedAt).inMilliseconds,
+        lessThan(1000),
+      );
+      expect(runtime.snapshot().phase.type, ClassroomPhaseType.avancoPendente);
+      expect(t02.calls, 1);
+
+      t02.pending.complete(
+        T02LessonMaterial(
+          explanation: 'Texto tardio M1 L2.',
+          question: 'Pergunta tardia M1 L2?',
+          options: const {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+          whyCorrect: 'A esta correta.',
+          whyWrong: null,
+          generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
+          source: 'blocking-test',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(runtime.reavaliarAvancoPendente(), isTrue);
+      final snapshot = runtime.snapshot();
+      expect(snapshot.phase.type, ClassroomPhaseType.lendo);
+      expect(snapshot.conteudo?.question, 'Pergunta tardia M1 L2?');
+      expect(service.read('cyber-class')?.extra['advancePending'], isNull);
     },
   );
 
