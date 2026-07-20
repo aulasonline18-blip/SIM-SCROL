@@ -236,7 +236,7 @@ void main() {
     expect(feedback.isActionable, isFalse);
   });
 
-  test('completed phase shows immediate next-topic loading feedback', () {
+  test('completed phase keeps feedback clean during next-topic handoff', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(
         snapshot: _snapshot(
@@ -252,15 +252,18 @@ void main() {
 
     expect(
       messages.map((message) => message.kind),
-      containsAllInOrder([
-        ChatLessonMessageKind.feedback,
-        ChatLessonMessageKind.loading,
-      ]),
+      contains(ChatLessonMessageKind.feedback),
     );
-    final loading = messages.last;
-    expect(loading.id, startsWith('runtime-advance-loading-'));
-    expect(loading.text, t('preparing_next_lesson'));
-    expect(loading.deliveryStatus, ChatLessonDeliveryStatus.processing);
+    expect(
+      messages.where(
+        (message) => message.id.startsWith('runtime-advance-loading-'),
+      ),
+      isEmpty,
+    );
+    expect(
+      messages.map((message) => message.text),
+      isNot(contains(t('preparing_next_lesson'))),
+    );
   });
 
   test('processing phase does not add student signal echo', () {
@@ -494,7 +497,7 @@ void main() {
     },
   );
 
-  test('advance pending without content is preparation state, not error', () {
+  test('post-answer advance pending stays silent while handoff resolves', () {
     final messages = buildChatLessonMessages(
       const ChatLessonTimelineInput(
         snapshot: LessonRuntimeSnapshot(
@@ -523,17 +526,15 @@ void main() {
       ),
     );
 
-    final pending = messages.singleWhere(
-      (message) => message.id.startsWith('local-advance-preparing-'),
-    );
-
-    expect(pending.kind, ChatLessonMessageKind.processing);
-    expect(pending.deliveryStatus, ChatLessonDeliveryStatus.processing);
-    expect(pending.actionKey, isNull);
-    expect(pending.isActionable, isFalse);
     expect(
-      AulaConversationBlock.fromMessage(pending).type,
-      isNot(AulaConversationBlockType.recoverableError),
+      messages.where(
+        (message) => message.id.startsWith('local-advance-preparing-'),
+      ),
+      isEmpty,
+    );
+    expect(
+      messages.map((message) => message.text),
+      isNot(contains(t('aula_advance_preparing'))),
     );
   });
 

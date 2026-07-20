@@ -110,7 +110,12 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     );
   }
 
-  if (content == null && phase?.type == ClassroomPhaseType.avancoPendente) {
+  final postAnswerAdvancePending =
+      phase?.type == ClassroomPhaseType.avancoPendente &&
+      (phase?.letter != null || phase?.signal != null);
+  if (content == null &&
+      phase?.type == ClassroomPhaseType.avancoPendente &&
+      !postAnswerAdvancePending) {
     messages.add(
       ChatLessonMessage(
         id: 'local-advance-preparing-${marker ?? 'active'}',
@@ -289,22 +294,6 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
           deliveryStatus: ChatLessonDeliveryStatus.delivered,
         ),
       );
-      if (input.runtimeLoading) {
-        messages.add(
-          ChatLessonMessage(
-            id: 'runtime-advance-loading-$activeId',
-            role: ChatLessonMessageRole.system,
-            kind: ChatLessonMessageKind.loading,
-            text: t('preparing_next_lesson'),
-            lessonLocalId: input.lessonLocalId,
-            marker: marker,
-            itemIdx: itemIdx,
-            layer: layer,
-            isActionable: false,
-            deliveryStatus: ChatLessonDeliveryStatus.processing,
-          ),
-        );
-      }
     }
   }
 
