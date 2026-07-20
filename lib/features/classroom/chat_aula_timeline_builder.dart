@@ -20,6 +20,7 @@ class ChatLessonTimelineInput {
     this.doubtResponse,
     this.doubtError,
     this.lessonLocalId,
+    this.menuLessonWaiting = false,
   });
 
   final LessonRuntimeSnapshot? snapshot;
@@ -33,6 +34,7 @@ class ChatLessonTimelineInput {
   final String? doubtResponse;
   final String? doubtError;
   final String? lessonLocalId;
+  final bool menuLessonWaiting;
 }
 
 List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
@@ -103,7 +105,25 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     snapshot: snapshot,
     runtimeLoading: input.runtimeLoading,
   );
+  if (input.menuLessonWaiting && content == null) {
+    messages.add(
+      ChatLessonMessage(
+        id: 'menu-lesson-arriving-${marker ?? input.lessonLocalId ?? 'active'}',
+        role: ChatLessonMessageRole.system,
+        kind: ChatLessonMessageKind.loading,
+        text: t('aula_menu_lesson_arriving'),
+        actionKey: 'retry-menu-lesson',
+        lessonLocalId: input.lessonLocalId,
+        marker: marker,
+        itemIdx: itemIdx,
+        layer: layer,
+        isActionable: false,
+        deliveryStatus: ChatLessonDeliveryStatus.processing,
+      ),
+    );
+  }
   if (showPreparation &&
+      !input.menuLessonWaiting &&
       input.runtimeLoading &&
       content == null &&
       phase?.type != ClassroomPhaseType.avancoPendente) {
@@ -122,6 +142,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
       phase?.type == ClassroomPhaseType.avancoPendente &&
       (phase?.letter != null || phase?.signal != null);
   if (showPreparation &&
+      !input.menuLessonWaiting &&
       content == null &&
       phase?.type == ClassroomPhaseType.avancoPendente &&
       !postAnswerAdvancePending) {

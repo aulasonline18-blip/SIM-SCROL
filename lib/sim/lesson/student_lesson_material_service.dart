@@ -28,6 +28,7 @@ class ResolveLessonMaterialInput {
     this.waitBeforeOrderMs = 2000,
     this.waitAfterOrderMs = 12000,
     this.allowRemoteOrder = false,
+    this.remoteOrderPriority = 'background',
   });
 
   final String lessonLocalId;
@@ -40,6 +41,7 @@ class ResolveLessonMaterialInput {
   final int waitBeforeOrderMs;
   final int waitAfterOrderMs;
   final bool allowRemoteOrder;
+  final String remoteOrderPriority;
 }
 
 class ResolveLessonMaterialResult {
@@ -207,7 +209,7 @@ class StudentLessonMaterialService {
     if (!input.allowRemoteOrder) return null;
     final lessonFuture = orchestrator.prefetchCompleteLesson(
       input.params,
-      priority: 'background',
+      priority: input.remoteOrderPriority,
     );
     if (input.waitAfterOrderMs <= 0) {
       unawaited(

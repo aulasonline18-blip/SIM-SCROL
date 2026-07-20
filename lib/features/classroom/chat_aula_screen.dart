@@ -296,6 +296,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
           doubtResponse: session.doubt.response?.explanation,
           doubtError: session.doubt.error,
           lessonLocalId: session.lessonLocalId,
+          menuLessonWaiting: session.aulaMenuLessonWaiting,
         ),
       ),
     );
@@ -326,7 +327,14 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
                 initialScrollKey: _conversationKeyFor(session),
                 onChooseAnswer: _chooseAnswer,
                 onSignal: _submitSignal,
-                onRetry: () {},
+                onRetry: () {
+                  unawaited(
+                    session.openAulaRuntime(
+                      menuOpenPriority: true,
+                      suppressReadyWindowUntilVisibleLessonReady: true,
+                    ),
+                  );
+                },
                 onNext: () {},
                 onOpenDoubt: _openDoubtFromAction,
               ),

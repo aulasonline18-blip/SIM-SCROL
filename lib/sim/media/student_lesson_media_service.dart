@@ -236,6 +236,7 @@ class StudentLessonMediaService {
             payload: {
               ...payload,
               'itemMarker': position.itemMarker,
+              'itemIdx': position.itemIdx,
               'layer': position.layer?.value,
             },
           ),

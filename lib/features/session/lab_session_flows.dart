@@ -81,6 +81,7 @@ extension LabSessionFlowExtensions on LabSession {
     stopActiveAudio(notify: false);
     _resetActiveLessonMedia(clearSnapshot: true, clearSubscriptions: true);
     aulaRuntimeLoading = false;
+    aulaMenuLessonWaiting = false;
     aulaRuntimeError = null;
     this.lessonLocalId = lessonLocalId;
     navigationState.openRoute('/cyber/aula');
@@ -505,7 +506,10 @@ extension LabSessionFlowExtensions on LabSession {
   }
 
   Future<void> _openDrawerLessonRuntimeWithHotText(String lessonLocalId) async {
-    await openAulaRuntime();
+    await openAulaRuntime(
+      menuOpenPriority: true,
+      suppressReadyWindowUntilVisibleLessonReady: true,
+    );
     if (lessonLocalId != this.lessonLocalId) return;
     if (prefs == null) return;
 
@@ -540,29 +544,6 @@ extension LabSessionFlowExtensions on LabSession {
 
     if (_drawerAulaTextReady(aulaSnapshot)) {
       keepOfflineWindowWarm();
-      return;
-    }
-
-    try {
-      await organism.readyWindowEngine.runDopamineReadyWindowFromStudentState(
-        lessonLocalId: lessonLocalId,
-        source: 'drawer.aula.hot-current',
-        maxSlots: 1,
-        itemIdx: itemIdx,
-        layer: layer,
-        marker: marker,
-        topic: topic,
-      );
-      if (lessonLocalId != this.lessonLocalId) return;
-      await openAulaRuntime();
-    } catch (_) {
-      if (lessonLocalId == this.lessonLocalId &&
-          !_drawerAulaTextReady(aulaSnapshot)) {
-        aulaRuntimeError = 'Nao consegui preparar esta aula agora.';
-        _notifyFromChild();
-      }
-    } finally {
-      if (lessonLocalId == this.lessonLocalId) keepOfflineWindowWarm();
     }
   }
 
@@ -901,12 +882,16 @@ extension LabSessionFlowExtensions on LabSession {
     );
   }
 
-  Future<void> openAulaRuntime() async {
+  Future<void> openAulaRuntime({
+    bool menuOpenPriority = false,
+    bool suppressReadyWindowUntilVisibleLessonReady = false,
+  }) async {
     if (aulaRuntimeLoading) return;
     final id = lessonLocalId;
     if (id == null || id.trim().isEmpty) {
       aulaSnapshot = null;
       aulaRuntimeError = null;
+      aulaMenuLessonWaiting = false;
       navigationState.openRoute('/cyber/objeto');
       _notifyFromChild();
       return;
@@ -917,6 +902,9 @@ extension LabSessionFlowExtensions on LabSession {
       return;
     }
     aulaRuntimeLoading = true;
+    if (menuOpenPriority && suppressReadyWindowUntilVisibleLessonReady) {
+      aulaMenuLessonWaiting = true;
+    }
     aulaRuntimeError = null;
     _notifyFromChild();
     try {
@@ -932,17 +920,26 @@ extension LabSessionFlowExtensions on LabSession {
         lessonLocalId: organism.lessonLocalId,
         authReady: authReady,
         authed: authed,
+        menuOpenPriority: menuOpenPriority,
+        suppressReadyWindowUntilVisibleLessonReady:
+            suppressReadyWindowUntilVisibleLessonReady,
       );
       if (!_isCurrentAulaRuntime(id, runtimeGeneration)) return;
       aulaSnapshot = snapshot;
+      if (_drawerAulaTextReady(snapshot)) aulaMenuLessonWaiting = false;
       _bindActiveLessonState(organism);
       _bindActiveLessonMedia(organism);
       _reavaliarAvancoPendenteSePossivel(organism);
       _syncImageStateFromSnapshot();
-      _keepActiveAulaOfflineWindowWarm(
-        organism,
-        source: 'cyber.aula.runtime-open',
-      );
+      if (!suppressReadyWindowUntilVisibleLessonReady ||
+          _drawerAulaTextReady(snapshot)) {
+        _keepActiveAulaOfflineWindowWarm(
+          organism,
+          source: menuOpenPriority
+              ? 'drawer.aula.visible-ready-window'
+              : 'cyber.aula.runtime-open',
+        );
+      }
       if (aulaSnapshot?.hasCurriculum != true) {
         aulaRuntimeError = 'Aula sem curriculo no Estado do aluno.';
       }
@@ -956,11 +953,9 @@ extension LabSessionFlowExtensions on LabSession {
       }
     }
   }
-
-  bool _isCurrentAulaRuntime(String lessonLocalId, int generation) {
-    return this.lessonLocalId == lessonLocalId &&
-        _aulaRuntimeGeneration == generation;
-  }
+  bool _isCurrentAulaRuntime(String lessonLocalId, int generation) =>
+      this.lessonLocalId == lessonLocalId &&
+      _aulaRuntimeGeneration == generation;
 
   void _keepActiveAulaOfflineWindowWarm(
     SimOrganism organism, {
@@ -1029,6 +1024,7 @@ extension LabSessionFlowExtensions on LabSession {
     final changed = organism.lessonRuntimeEngine.reavaliarAvancoPendente();
     if (!changed) return;
     aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+    if (_drawerAulaTextReady(aulaSnapshot)) aulaMenuLessonWaiting = false;
     _bindActiveLessonMedia(organism);
     _syncImageStateFromSnapshot();
     _notifyFromChild();
@@ -1212,6 +1208,7 @@ extension LabSessionFlowExtensions on LabSession {
       unawaited(openAulaRuntime());
     }
   }
+
   void chooseAulaAnswer(String letter) {
     if (aulaRuntimeLoading &&
         !hasValidPedagogicalContent(aulaSnapshot?.conteudo)) {
@@ -1242,6 +1239,7 @@ extension LabSessionFlowExtensions on LabSession {
     );
     _notifyFromChild();
   }
+
   Future<void> submitAulaSignal(int value) async {
     if (aulaRuntimeLoading &&
         !hasValidPedagogicalContent(aulaSnapshot?.conteudo)) {
@@ -1274,6 +1272,7 @@ extension LabSessionFlowExtensions on LabSession {
     final organism = _activeOrganism ?? _organismForActiveLesson();
     await _doSignal(organism, signal);
   }
+
   Future<void> _doSignal(SimOrganism organism, DecisionSignal signal) async {
     aulaRuntimeError = null;
     _notifyFromChild();
@@ -1293,6 +1292,7 @@ extension LabSessionFlowExtensions on LabSession {
       _notifyFromChild();
     }
   }
+
   void _scheduleAutoAdvanceAfterFeedback(SimOrganism organism) {
     final phase = aulaSnapshot?.phase;
     if (phase?.type != ClassroomPhaseType.concluido ||

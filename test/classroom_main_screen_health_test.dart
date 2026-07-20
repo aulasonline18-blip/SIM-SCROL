@@ -106,6 +106,35 @@ void main() {
     expect(find.text(t('loading')), findsNothing);
   });
 
+  testWidgets('aula do menu sem cache mostra espera viva com retry', (
+    tester,
+  ) async {
+    final session = _snapshotSession()
+      ..aulaRuntimeLoading = true
+      ..aulaMenuLessonWaiting = true
+      ..aulaSnapshot = _snapshot(
+        phase: const ClassroomPhase.advancePending(
+          message: 'aula_menu_lesson_arriving',
+        ),
+        content: null,
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump();
+
+    expect(find.text(t('aula_menu_lesson_arriving')), findsOneWidget);
+    expect(find.text('Localizando este ponto.'), findsOneWidget);
+    expect(find.text(t('aula_advance_preparing')), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump();
+
+    expect(find.text(t('aula_try_again_2')), findsOneWidget);
+  });
+
   test('advance pending vira preparo, não retry manual', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(

@@ -147,6 +147,7 @@ class LabSession extends ChangeNotifier {
   SimOrganism? _activeOrganism;
   LessonRuntimeSnapshot? aulaSnapshot;
   bool aulaRuntimeLoading = false;
+  bool aulaMenuLessonWaiting = false;
   String? aulaRuntimeError;
   SimWarmupLesson? warmupLesson;
   bool warmupLoading = false;

@@ -177,6 +177,8 @@ class LessonRuntimeEngine {
     required String lessonLocalId,
     bool authReady = true,
     bool authed = true,
+    bool menuOpenPriority = false,
+    bool suppressReadyWindowUntilVisibleLessonReady = false,
   }) async {
     _lastAuthReady = authReady;
     _lastAuthed = authed;
@@ -224,6 +226,18 @@ class LessonRuntimeEngine {
         academic: session.academic,
         mode: LessonMode.session,
         baseItems: session.baseItems,
+        allowRemoteOrder: menuOpenPriority,
+        waitAfterOrderMs: menuOpenPriority ? 12000 : 0,
+        missingSource: menuOpenPriority
+            ? 'drawer.aula.visible-request'
+            : 'cyber.aula.local-preparation',
+        missingPriority: menuOpenPriority ? 'hot-local' : 'background',
+        missingReason: menuOpenPriority
+            ? 'drawer_visible_lesson_not_ready_yet'
+            : 'material_missing_prepare_without_fallback',
+        remoteOrderPriority: menuOpenPriority ? 'hot-local' : 'background',
+        suppressReadyWindowUntilVisibleLessonReady:
+            suppressReadyWindowUntilVisibleLessonReady,
       );
     }
     return snapshot();

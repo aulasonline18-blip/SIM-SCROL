@@ -1922,6 +1922,101 @@ void main() {
   );
 
   test(
+    'M-EXP2: ready window does not queue secondary media twice for same slot',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {
+          'cyber-media-dedupe': _stateWithFiveItems().copyWith(
+            lessonLocalId: 'cyber-media-dedupe',
+          ),
+        },
+      );
+      final t02 = FakeT02Client(imageStatus: 'processing');
+      final audioPrepared = <String>[];
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+        imageRefreshDelays: const [],
+        onAudioTextReady: (params, _) {
+          audioPrepared.add('${params.marker}:${params.layer.name}');
+        },
+      );
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      );
+
+      await engine.runDopamineReadyWindowFromStudentState(
+        lessonLocalId: 'cyber-media-dedupe',
+        source: 'm-exp2-media',
+        maxSlots: localLessonTraySize,
+      );
+      await engine.runDopamineReadyWindowFromStudentState(
+        lessonLocalId: 'cyber-media-dedupe',
+        source: 'm-exp2-media',
+        maxSlots: localLessonTraySize,
+      );
+
+      final events = service.read('cyber-media-dedupe')!.events;
+      final queued = events
+          .where(
+            (event) =>
+                event.type == 'DOPAMINE_SLOT_AUDIO_QUEUED' ||
+                event.type == 'DOPAMINE_SLOT_IMAGE_QUEUED',
+          )
+          .toList(growable: false);
+      expect(queued, hasLength(localLessonTraySize * 2));
+      expect(
+        queued.map((event) => event.payload['mediaKey']).toSet(),
+        hasLength(localLessonTraySize * 2),
+      );
+      expect(audioPrepared, hasLength(localLessonTraySize));
+      expect(t02.calls, localLessonTraySize);
+    },
+  );
+
+  test(
+    'M-EXP2: ready window caps oversized requests at constitutional tray size',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {
+          'cyber-window-cap': _stateWithFiveItems().copyWith(
+            lessonLocalId: 'cyber-window-cap',
+          ),
+        },
+      );
+      final t02 = FakeT02Client();
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: LessonOrchestrator(
+          t02Client: t02,
+          cache: LessonMaterialCache(),
+          bus: LessonEventBus(),
+        ),
+      );
+
+      final result = await engine.runDopamineReadyWindowFromStudentState(
+        lessonLocalId: 'cyber-window-cap',
+        source: 'm-exp2-cap',
+        maxSlots: 50,
+      );
+
+      expect(result, hasLength(localLessonTraySize));
+      expect(t02.calls, localLessonTraySize);
+      expect(
+        service
+            .read('cyber-window-cap')!
+            .events
+            .where((event) => event.type == 'DOPAMINE_WINDOW_REQUEST_CAPPED')
+            .single
+            .payload,
+        containsPair('accepted', localLessonTraySize),
+      );
+    },
+  );
+
+  test(
     'M-EXP1: CG-1 boundary metadata is sent with current textual slot',
     () async {
       const items = [
@@ -2618,6 +2713,175 @@ void main() {
       ]);
     },
   );
+
+  test(
+    'drawer lesson priority asks visible lesson before ready window',
+    () async {
+      const lessonId = 'drawer-visible-first';
+      final service = StudentLearningStateService(
+        seed: {
+          lessonId: _stateWithFiveItems().copyWith(lessonLocalId: lessonId),
+        },
+      );
+      final t02 = BlockingT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      );
+      final materialService = StudentLessonMaterialService(
+        stateService: service,
+        orchestrator: orchestrator,
+        readyWindowEngine: DopamineReadyWindowEngine(
+          service: service,
+          orchestrator: orchestrator,
+        ),
+      );
+      final controller = LessonMaterialController(
+        stateService: service,
+        materialService: materialService,
+      );
+      final items = List<PlannedItem>.generate(
+        5,
+        (index) =>
+            PlannedItem(marker: 'M${index + 1}', text: 'Item ${index + 1}'),
+      );
+      final position = LessonPositionState(
+        itemIdx: 0,
+        layer: LessonLayer.l1,
+        erros: 0,
+        historia: const [],
+        history: const [],
+        mainAdvances: 0,
+        loadingLayer: LessonLayer.l1,
+        conteudo: null,
+        phase: const ClassroomPhase.loading(),
+        imagem: null,
+        teoriaPronta: false,
+        items: items,
+      );
+
+      final load = controller.carregar(
+        lessonLocalId: lessonId,
+        topic: 'Menu',
+        position: position,
+        idioma: 'pt-BR',
+        academic: 'fundamental',
+        mode: LessonMode.session,
+        baseItems: items,
+        allowRemoteOrder: true,
+        remoteOrderPriority: 'hot-local',
+        missingSource: 'drawer.aula.visible-request',
+        missingPriority: 'hot-local',
+        suppressReadyWindowUntilVisibleLessonReady: true,
+      );
+      await t02.firstCallStarted.future;
+
+      final waitingState = service.read(lessonId)!;
+      expect(t02.calls, 1);
+      expect(t02.requests.single.marker, 'M1');
+      expect(t02.requests.single.layer, LessonLayer.l1);
+      expect(waitingState.queuedActions, isEmpty);
+      expect(
+        waitingState.events.where(
+          (event) => event.type == 'CACHE_WINDOW_UPDATED',
+        ),
+        isEmpty,
+      );
+
+      t02.release.complete();
+      await load;
+
+      final readyState = service.read(lessonId)!;
+      expect(position.teoriaPronta, isTrue);
+      expect(position.conteudo?.explanation, contains('Item 1'));
+      expect(readyState.queuedActions, hasLength(1));
+      expect(readyState.queuedActions.single['priority'], 'hot-local');
+      expect(readyState.queuedActions.single['type'], 'PREPARE_READY_WINDOW');
+      expect(
+        readyState.events.where(
+          (event) => event.type == 'CACHE_WINDOW_UPDATED',
+        ),
+        isNotEmpty,
+      );
+    },
+  );
+
+  test('drawer visible lesson failure does not start window retries', () async {
+    const lessonId = 'drawer-visible-fails';
+    final service = StudentLearningStateService(
+      seed: {lessonId: _stateWithFiveItems().copyWith(lessonLocalId: lessonId)},
+    );
+    final t02 = FailingT02Client('rate limited');
+    final orchestrator = LessonOrchestrator(
+      t02Client: t02,
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      ),
+    );
+    final controller = LessonMaterialController(
+      stateService: service,
+      materialService: materialService,
+    );
+    final items = List<PlannedItem>.generate(
+      5,
+      (index) =>
+          PlannedItem(marker: 'M${index + 1}', text: 'Item ${index + 1}'),
+    );
+    final position = LessonPositionState(
+      itemIdx: 0,
+      layer: LessonLayer.l1,
+      erros: 0,
+      historia: const [],
+      history: const [],
+      mainAdvances: 0,
+      loadingLayer: LessonLayer.l1,
+      conteudo: null,
+      phase: const ClassroomPhase.loading(),
+      imagem: null,
+      teoriaPronta: false,
+      items: items,
+    );
+
+    await controller.carregar(
+      lessonLocalId: lessonId,
+      topic: 'Menu',
+      position: position,
+      idioma: 'pt-BR',
+      academic: 'fundamental',
+      mode: LessonMode.session,
+      baseItems: items,
+      allowRemoteOrder: true,
+      waitAfterOrderMs: 100,
+      remoteOrderPriority: 'hot-local',
+      missingSource: 'drawer.aula.visible-request',
+      missingPriority: 'hot-local',
+      suppressReadyWindowUntilVisibleLessonReady: true,
+    );
+
+    final state = service.read(lessonId)!;
+    expect(t02.calls, 1);
+    expect(position.teoriaPronta, isFalse);
+    expect(position.phase.type, ClassroomPhaseType.avancoPendente);
+    expect(state.queuedActions, isEmpty);
+    expect(
+      state.events.where(
+        (event) => event.type == 'VISIBLE_REQUESTED_LESSON_WAITING',
+      ),
+      hasLength(1),
+    );
+    expect(
+      state.events.where((event) => event.type == 'CACHE_WINDOW_UPDATED'),
+      isEmpty,
+    );
+  });
 
   test(
     'visible lesson proactively prepares L2 L3 and next item before answer',

@@ -499,7 +499,10 @@ class AulaConversationBlockRenderer extends StatelessWidget {
           _ActionButton(label: t('retry'), onPressed: actions.retry),
         ],
       ),
-      AulaConversationBlockType.loading => _LiveLoadingBlock(message: message),
+      AulaConversationBlockType.loading => _LiveLoadingBlock(
+        message: message,
+        onRetry: actions.retry,
+      ),
       _ => _TextBlock(message: message),
     };
   }
@@ -562,36 +565,11 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
         loading: true,
       );
     }
-    final palette = SimThemeScope.paletteOf(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 240),
-          child: AspectRatio(
-            aspectRatio: 16 / 10,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: palette.surfaceSoft,
-                borderRadius: BorderRadius.circular(SimRadius.lg),
-                border: Border.all(color: palette.border),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(SimRadius.lg),
-                child: Padding(
-                  padding: const EdgeInsets.all(SimSpacing.xs),
-                  child: LessonMediaImageView(data: data, compact: true),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: SimSpacing.xs),
-        Text(
-          widget.message.text ?? t('aula_image_alt'),
-          style: SimTypography.caption.copyWith(color: palette.muted),
-        ),
-      ],
+    final caption = widget.message.text ?? t('aula_image_alt');
+    return LessonVisualBoard(
+      data: data,
+      caption: caption,
+      onImageSettled: widget.onImageSettled,
     );
   }
 }
@@ -777,9 +755,10 @@ class _SignalChoice extends StatelessWidget {
 }
 
 class _LiveLoadingBlock extends StatelessWidget {
-  const _LiveLoadingBlock({required this.message});
+  const _LiveLoadingBlock({required this.message, required this.onRetry});
 
   final ChatLessonMessage message;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -789,11 +768,95 @@ class _LiveLoadingBlock extends StatelessWidget {
         label: message.text ?? t('aula_doubt_processing'),
       );
     }
+    if (message.actionKey == 'retry-menu-lesson') {
+      return _MenuLessonArrivalBlock(message: message, onRetry: onRetry);
+    }
     return _StatusText(
       icon: Icons.auto_awesome,
       text: message.text ?? t('loading'),
       tone: SimSurfaceTone.soft,
       loading: true,
+    );
+  }
+}
+
+class _MenuLessonArrivalBlock extends StatefulWidget {
+  const _MenuLessonArrivalBlock({required this.message, required this.onRetry});
+
+  final ChatLessonMessage message;
+  final VoidCallback onRetry;
+
+  @override
+  State<_MenuLessonArrivalBlock> createState() =>
+      _MenuLessonArrivalBlockState();
+}
+
+class _MenuLessonArrivalBlockState extends State<_MenuLessonArrivalBlock> {
+  int _tick = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleTick();
+  }
+
+  void _scheduleTick() {
+    Future<void>.delayed(const Duration(seconds: 1), () {
+      if (!mounted) return;
+      setState(() => _tick = (_tick + 1).clamp(0, 6));
+      if (_tick < 6) _scheduleTick();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    final progress = ((_tick + 1) / 6).clamp(0.18, 0.92);
+    final detail = _tick < 2
+        ? 'Localizando este ponto.'
+        : _tick < 4
+        ? 'Chamando o professor.'
+        : 'Quase lá. A aula entra aqui.';
+    return SimStatusSurface(
+      tone: SimSurfaceTone.soft,
+      icon: Icons.auto_awesome,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.message.text ?? t('aula_menu_lesson_arriving'),
+            style: SimTypography.label.copyWith(color: palette.text),
+          ),
+          const SizedBox(height: SimSpacing.xs),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: Text(
+              detail,
+              key: ValueKey(detail),
+              style: SimTypography.caption.copyWith(color: palette.muted),
+            ),
+          ),
+          const SizedBox(height: SimSpacing.sm),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.12, end: progress.toDouble()),
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, _) => LinearProgressIndicator(
+              minHeight: 4,
+              value: value,
+              backgroundColor: palette.border,
+            ),
+          ),
+          if (_tick >= 5) ...[
+            const SizedBox(height: SimSpacing.sm),
+            SimActionButton(
+              label: t('aula_try_again_2'),
+              icon: Icons.refresh,
+              onPressed: widget.onRetry,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

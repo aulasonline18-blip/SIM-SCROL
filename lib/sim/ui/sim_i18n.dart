@@ -3,7 +3,6 @@ import 'package:flutter/widgets.dart';
 String _activeLanguageCode = 'pt';
 
 String get simActiveLanguageCode => _activeLanguageCode;
-
 Locale get simActiveLocale => switch (_activeLanguageCode) {
   'pt' => const Locale('pt', 'BR'),
   'es' => const Locale('es'),
@@ -12,7 +11,6 @@ Locale get simActiveLocale => switch (_activeLanguageCode) {
   'ko' => const Locale('ko'),
   _ => const Locale('en'),
 };
-
 String normalizeSimLanguageCode(String? codeOrName) {
   final raw = (codeOrName ?? '').trim().toLowerCase();
   if (raw == 'pt' || raw == 'pt-br' || raw.contains('portugu')) return 'pt';
@@ -151,6 +149,7 @@ const _strings = <String, String>{
   'preparing_next_lesson': 'Preparando próxima aula',
   'aula_advance_pending': 'Preparando próximo passo',
   'aula_advance_preparing': 'Preparando próximo passo',
+  'aula_menu_lesson_arriving': 'Você escolheu esta aula. Estou buscando.',
   'aula_registering': 'Registrando sua resposta',
   'aula_next': 'Próximo',
   'aula_try_again_2': 'Tentar novamente',
@@ -176,6 +175,9 @@ const _strings = <String, String>{
   'aula_image_unavailable': 'Imagem indisponível',
   'aula_image_unavailable_short': 'Imagem indisponível',
   'aula_image_alt': 'Imagem pedagógica da aula',
+  'aula_image_expand': 'Ampliar imagem',
+  'aula_image_expand_lesson': 'Ampliar imagem da aula',
+  'aula_image_close': 'Fechar imagem',
   'aula_no_curr_h1': 'Aula sem currículo',
   'aula_no_curr_body': 'Volte ao objetivo para preparar a trilha.',
   'aula_back_curr': 'Voltar ao objetivo',

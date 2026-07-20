@@ -53,7 +53,9 @@ void main() {
       isNot(contains('A primeira aula foi liberada, mas a tela nao encontrou')),
     );
     expect(materialService, contains('this.allowRemoteOrder = false'));
-    expect(materialService, contains('priority: \'background\''));
+    expect(materialService, contains("this.remoteOrderPriority = 'background'"));
+    expect(materialService, contains('priority: input.remoteOrderPriority'));
+    expect(materialController, contains("remoteOrderPriority: 'hot-local'"));
     expect(experienceEngine, isNot(contains('T02 obrigatorio')));
 
     expect(auxService, contains("'requiresServerDecision': false"));

@@ -99,6 +99,8 @@ class LessonMaterialController {
     String missingSource = 'cyber.aula.local-preparation',
     String missingPriority = 'background',
     String missingReason = 'material_missing_prepare_without_fallback',
+    String remoteOrderPriority = 'background',
+    bool suppressReadyWindowUntilVisibleLessonReady = false,
   }) async {
     final item = position.itemAtivo;
     if (item == null) {
@@ -176,6 +178,7 @@ class LessonMaterialController {
           waitBeforeOrderMs: 0,
           waitAfterOrderMs: waitAfterOrderMs,
           allowRemoteOrder: allowRemoteOrder,
+          remoteOrderPriority: remoteOrderPriority,
         ),
       );
     } catch (_) {
@@ -194,24 +197,44 @@ class LessonMaterialController {
         );
         if (hotRecovered) return;
       }
-      position.phase = const ClassroomPhase.advancePending(
-        message: 'aula_advance_preparing',
+      position.phase = ClassroomPhase.advancePending(
+        message: suppressReadyWindowUntilVisibleLessonReady
+            ? 'aula_menu_lesson_arriving'
+            : 'aula_advance_preparing',
       );
-      materialService.maintainLessonReadyWindow(
-        lessonLocalId: lessonLocalId,
-        topic: topic,
-        itemIdx: position.itemIdx,
-        layer: position.layer,
-        items: baseItems
-            .map(
-              (item) =>
-                  DopamineWindowItem(text: item.text, marker: item.marker),
-            )
-            .toList(),
-        source: missingSource,
-        priority: missingPriority,
-        reason: missingReason,
-      );
+      if (suppressReadyWindowUntilVisibleLessonReady) {
+        stateService.appendEvent(
+          lessonLocalId,
+          StudentLearningEvent(
+            type: 'VISIBLE_REQUESTED_LESSON_WAITING',
+            ts: DateTime.now().millisecondsSinceEpoch,
+            payload: {
+              'lessonLocalId': lessonLocalId,
+              'itemIdx': position.itemIdx,
+              'marker': item.marker,
+              'layer': position.layer.value,
+              'source': missingSource,
+              'readyWindowSuppressed': true,
+            },
+          ),
+        );
+      } else {
+        materialService.maintainLessonReadyWindow(
+          lessonLocalId: lessonLocalId,
+          topic: topic,
+          itemIdx: position.itemIdx,
+          layer: position.layer,
+          items: baseItems
+              .map(
+                (item) =>
+                    DopamineWindowItem(text: item.text, marker: item.marker),
+              )
+              .toList(),
+          source: missingSource,
+          priority: missingPriority,
+          reason: missingReason,
+        );
+      }
       return;
     }
     _applyMaterial(position, resolved);
@@ -257,6 +280,7 @@ class LessonMaterialController {
       baseItems: baseItems,
       allowRemoteOrder: true,
       waitAfterOrderMs: _hotAdvanceWaitAfterOrderMs,
+      remoteOrderPriority: 'hot-local',
       missingSource: 'cyber.aula.advance-hot-miss',
       missingPriority: 'hot-local',
       missingReason: 'advance_hot_path_fetch_failed',

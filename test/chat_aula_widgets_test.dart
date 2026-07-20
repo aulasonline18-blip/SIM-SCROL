@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/features/classroom/aula_widgets.dart';
@@ -8,6 +10,9 @@ import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
 void main() {
   setUp(() => setSimActiveLanguage('pt-BR'));
+
+  const tinyPng =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3QMgAAAABJRU5ErkJggg==';
 
   testWidgets('chat timeline renders compact lesson messages and answer taps', (
     tester,
@@ -125,6 +130,108 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byType(LessonImageErrorView), findsOneWidget);
+  });
+
+  testWidgets('LessonImageStudySurface usa proporção 3:4 e abre zoom', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: LessonImageStudySurface(
+              data: 'data:image/png;base64,$tinyPng',
+              caption: 'Apoio visual da aula',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final aspect = tester.widget<AspectRatio>(find.byType(AspectRatio).first);
+    expect(aspect.aspectRatio, lessonImageStudyAspectRatio);
+    expect(find.byTooltip(t('aula_image_expand')), findsOneWidget);
+
+    await tester.tap(find.byTooltip(t('aula_image_expand')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+    expect(find.text(t('aula_image_alt')), findsOneWidget);
+    expect(find.text('Apoio visual da aula'), findsWidgets);
+
+    await tester.tap(find.byTooltip(t('aula_image_close')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(InteractiveViewer), findsNothing);
+  });
+
+  testWidgets('chat image bubble usa proporção 3:4 e abre inspector', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: ChatImageBubble(
+            message: ChatLessonMessage(
+              id: 'image-ready',
+              role: ChatLessonMessageRole.sim,
+              kind: ChatLessonMessageKind.image,
+              imageData: 'data:image/png;base64,$tinyPng',
+              text: 'Diagrama da aula',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final aspect = tester.widget<AspectRatio>(find.byType(AspectRatio).first);
+    expect(aspect.aspectRatio, lessonImageStudyAspectRatio);
+    expect(find.byTooltip(t('aula_image_expand')), findsOneWidget);
+
+    await tester.tap(find.byTooltip(t('aula_image_expand')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+
+    await tester.tap(find.byTooltip(t('aula_image_close')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(InteractiveViewer), findsNothing);
+  });
+
+  test('imagem pedagógica da aula não usa cover nem 16/10', () {
+    final aulaSource = File(
+      'lib/features/classroom/aula_widgets.dart',
+    ).readAsStringSync();
+    final chatSource = File(
+      'lib/features/classroom/chat_aula_widgets.dart',
+    ).readAsStringSync();
+    final studySurface = RegExp(
+      r'class LessonImageStudySurface[\s\S]*?class LessonMediaImageView',
+    ).firstMatch(aulaSource)?.group(0);
+    final mediaImageView = RegExp(
+      r'class LessonMediaImageView[\s\S]*?class LessonImageErrorView',
+    ).firstMatch(aulaSource)?.group(0);
+    final visualBoard = RegExp(
+      r'class LessonVisualBoard[\s\S]*?class LessonImageStudySurface',
+    ).firstMatch(aulaSource)?.group(0);
+    final chatImageBubble = RegExp(
+      r'class ChatImageBubble[\s\S]*?class _TextBlock',
+    ).firstMatch(chatSource)?.group(0);
+
+    expect(studySurface, isNotNull);
+    expect(visualBoard, isNotNull);
+    expect(mediaImageView, isNotNull);
+    expect(chatImageBubble, isNotNull);
+    expect(studySurface, isNot(contains('BoxFit.cover')));
+    expect(visualBoard, isNot(contains('BoxFit.cover')));
+    expect(mediaImageView, isNot(contains('BoxFit.cover')));
+    expect(chatImageBubble, isNot(contains('BoxFit.cover')));
+    expect(chatImageBubble, isNot(contains('16 / 10')));
+    expect(chatImageBubble, contains('LessonVisualBoard'));
+    expect(visualBoard, contains('lessonImageStudyAspectRatio'));
   });
 
   testWidgets('empty timeline has explicit controlled state', (tester) async {

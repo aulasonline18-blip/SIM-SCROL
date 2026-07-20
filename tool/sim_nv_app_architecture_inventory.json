@@ -4027,9 +4027,12 @@
         "estado de audio"
       ],
       "tests": [
-        "test/sim_app_architecture_shape_test.dart"
+        "test/sim_app_architecture_shape_test.dart",
+        "test/lesson_visual_support_contract_test.dart",
+        "test/lesson_visual_type_selector_contract_test.dart",
+        "test/lesson_visual_local_templates_contract_test.dart"
       ],
-      "decision": "manter",
+      "decision": "manter; contem a autoridade constitucional de apoio visual pedagogico vivo, seletor local de tipo visual e templates locais seguros, que validam utilidade, seguranca, leveza, acessibilidade, fallback e nao bloqueio sem decidir progresso",
       "engines": [],
       "contentEngines": [],
       "contracts": [
@@ -4062,9 +4065,10 @@
         "estado de audio"
       ],
       "tests": [
-        "test/sim_app_architecture_shape_test.dart"
+        "test/sim_app_architecture_shape_test.dart",
+        "test/lesson_visual_type_selector_contract_test.dart"
       ],
-      "decision": "manter",
+      "decision": "manter; envia somente contexto pedagogico e identidade idempotente para `/api/visual-route`; chave API, limite de custo, auditoria diaria e dedupe pertencem ao servidor",
       "engines": [],
       "contentEngines": [],
       "contracts": [

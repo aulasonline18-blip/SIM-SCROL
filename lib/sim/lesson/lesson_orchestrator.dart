@@ -258,6 +258,10 @@ class LessonOrchestrator {
                   params.learningLocale ??
                   params.explanationLanguage ??
                   params.lang,
+              subject: params.topic,
+              explanation: material.explanation,
+              question: material.question,
+              options: material.options.values,
             ),
           )
         : null;
@@ -412,6 +416,10 @@ class LessonOrchestrator {
         layer: params.layer,
         idioma:
             params.learningLocale ?? params.explanationLanguage ?? params.lang,
+        subject: params.topic,
+        explanation: current.conteudo.explanation,
+        question: current.conteudo.question,
+        options: current.conteudo.options.values,
       ),
     );
     final metadata = LessonImageGenerationMetadata(
@@ -419,13 +427,17 @@ class LessonOrchestrator {
       mimeType: result.mimeType ?? current.imageMetadata?.mimeType,
       charged: false,
       cacheHit: result.isReady,
-      retryable: false,
+      retryable: result.status == 'processing',
       lessonLocalId: params.lessonLocalId,
       marker: params.marker,
       itemIdx: params.itemIdx,
       layer: params.layer.value,
       mediaType: 'image',
-      status: result.isReady ? 'ready' : 'failed',
+      status: result.isReady
+          ? 'ready'
+          : result.status == 'processing'
+          ? 'processing'
+          : 'failed',
       source: 's12-n3',
       n2Reason: result.n2Reason,
       n3Reason: result.n3Reason,
@@ -438,6 +450,8 @@ class LessonOrchestrator {
     bus.notify(key, next);
     if (result.isReady) {
       _notifyReadyImage(params, next);
+    } else if (result.status == 'processing') {
+      onImageStarted?.call(params, next);
     } else {
       onImageFailed?.call(params, next);
     }

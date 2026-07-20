@@ -12,6 +12,8 @@ import '../../sim/ui/sim_i18n.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../session/lab_session.dart';
 
+const double lessonImageStudyAspectRatio = 3 / 4;
+
 class AulaTopBar extends StatelessWidget {
   const AulaTopBar({
     required this.session,
@@ -158,8 +160,6 @@ class LessonImagePanel extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: SimSpacing.sm),
         child: LessonImageStudySurface(
           data: data,
-          width: 420,
-          height: 560,
           caption: lessonImageCaption(session),
           onImageSettled: onImageSettled,
         ),
@@ -180,75 +180,457 @@ class LessonImagePanel extends StatelessWidget {
 
 String lessonImageCaption(LabSession session) => t('aula_image_alt');
 
-class LessonImageStudySurface extends StatelessWidget {
-  const LessonImageStudySurface({
+class LessonVisualBoard extends StatefulWidget {
+  const LessonVisualBoard({
     required this.data,
-    required this.width,
-    required this.height,
     required this.caption,
     this.onImageSettled,
     super.key,
   });
 
   final String data;
-  final double width;
-  final double height;
   final String caption;
   final VoidCallback? onImageSettled;
 
   @override
+  State<LessonVisualBoard> createState() => _LessonVisualBoardState();
+}
+
+class _LessonVisualBoardState extends State<LessonVisualBoard> {
+  int _stepIndex = 0;
+  int _highlightIndex = -1;
+  bool _descriptionExpanded = false;
+
+  _LessonBoardVisualKind get _kind => _kindForVisualData(widget.data);
+
+  int get _stepCount => _kind == _LessonBoardVisualKind.stepByStep ? 4 : 0;
+
+  void _advanceStep(int delta) {
+    final count = _stepCount;
+    if (count <= 0) return;
+    setState(() => _stepIndex = (_stepIndex + delta).clamp(0, count - 1));
+  }
+
+  void _cycleHighlight() {
+    final count = switch (_kind) {
+      _LessonBoardVisualKind.comparison => 2,
+      _LessonBoardVisualKind.table => 3,
+      _LessonBoardVisualKind.conceptMap => 3,
+      _ => 0,
+    };
+    if (count <= 0) return;
+    setState(() => _highlightIndex = (_highlightIndex + 1) % count);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
+    final kind = _kind;
     return Semantics(
+      container: true,
       image: true,
-      label: caption,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 260),
-        child: AspectRatio(
-          aspectRatio: width / height,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: palette.surfaceSoft,
-              borderRadius: BorderRadius.circular(SimRadius.lg),
-              border: Border.all(color: palette.border),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(SimRadius.lg),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(SimSpacing.xs),
-                    child: LessonMediaImageView(
-                      data: data,
-                      onImageSettled: onImageSettled,
-                    ),
+      label: widget.caption,
+      child: SimLearningSurface(
+        tone: SimSurfaceTone.soft,
+        padding: const EdgeInsets.all(SimSpacing.sm),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _titleForVisualKind(kind),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: SimTypography.label.copyWith(color: palette.text),
                   ),
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: ColoredBox(
-                      color: palette.surface.withValues(alpha: 0.92),
-                      child: Padding(
-                        padding: const EdgeInsets.all(SimSpacing.xs),
-                        child: Text(
-                          caption,
-                          style: SimTypography.caption.copyWith(
-                            color: palette.muted,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                ),
+                Tooltip(
+                  message: t('aula_image_expand'),
+                  child: SimIconAction(
+                    icon: Icons.open_in_full_rounded,
+                    semanticLabel: t('aula_image_expand_lesson'),
+                    onPressed: () => showLessonImageInspector(
+                      context,
+                      data: widget.data,
+                      caption: widget.caption,
+                    ),
+                    size: 40,
+                    iconSize: 18,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: SimSpacing.xs),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 260),
+              child: AspectRatio(
+                aspectRatio: lessonImageStudyAspectRatio,
+                child: Material(
+                  color: palette.surface,
+                  borderRadius: BorderRadius.circular(SimRadius.lg),
+                  child: InkWell(
+                    onTap: kind == _LessonBoardVisualKind.staticImage
+                        ? () => showLessonImageInspector(
+                            context,
+                            data: widget.data,
+                            caption: widget.caption,
+                          )
+                        : _cycleHighlight,
+                    borderRadius: BorderRadius.circular(SimRadius.lg),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(SimRadius.lg),
+                        border: Border.all(color: palette.border),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(SimRadius.lg),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(SimSpacing.xs),
+                              child: LessonMediaImageView(
+                                data: widget.data,
+                                onImageSettled: widget.onImageSettled,
+                              ),
+                            ),
+                            if (kind != _LessonBoardVisualKind.staticImage)
+                              _VisualBoardOverlay(
+                                kind: kind,
+                                stepIndex: _stepIndex,
+                                highlightIndex: _highlightIndex,
+                              ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
+            if (kind == _LessonBoardVisualKind.stepByStep) ...[
+              const SizedBox(height: SimSpacing.sm),
+              Row(
+                children: [
+                  SimIconAction(
+                    icon: Icons.chevron_left,
+                    semanticLabel: 'Voltar etapa do quadro visual',
+                    onPressed: _stepIndex == 0 ? null : () => _advanceStep(-1),
+                    size: 40,
+                  ),
+                  const SizedBox(width: SimSpacing.sm),
+                  Expanded(
+                    child: SimProgressRail(
+                      value: (_stepIndex + 1) / _stepCount,
+                      semanticLabel: 'Progresso do quadro visual',
+                    ),
+                  ),
+                  const SizedBox(width: SimSpacing.sm),
+                  SimIconAction(
+                    icon: Icons.chevron_right,
+                    semanticLabel: 'Avançar etapa do quadro visual',
+                    onPressed: _stepIndex >= _stepCount - 1
+                        ? null
+                        : () => _advanceStep(1),
+                    size: 40,
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: SimSpacing.xs),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.caption,
+                    style: SimTypography.caption.copyWith(color: palette.muted),
+                    maxLines: _descriptionExpanded ? 5 : 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: SimSpacing.xs),
+                Tooltip(
+                  message: 'Descrição do quadro visual',
+                  child: SimIconAction(
+                    icon: _descriptionExpanded
+                        ? Icons.unfold_less
+                        : Icons.notes_outlined,
+                    semanticLabel: 'Mostrar descrição do quadro visual',
+                    onPressed: () => setState(
+                      () => _descriptionExpanded = !_descriptionExpanded,
+                    ),
+                    size: 40,
+                    iconSize: 18,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+class LessonImageStudySurface extends StatelessWidget {
+  const LessonImageStudySurface({
+    required this.data,
+    required this.caption,
+    this.onImageSettled,
+    super.key,
+  });
+
+  final String data;
+  final String caption;
+  final VoidCallback? onImageSettled;
+
+  @override
+  Widget build(BuildContext context) => LessonVisualBoard(
+    data: data,
+    caption: caption,
+    onImageSettled: onImageSettled,
+  );
+}
+
+enum _LessonBoardVisualKind {
+  staticImage,
+  comparison,
+  table,
+  stepByStep,
+  conceptMap,
+}
+
+_LessonBoardVisualKind _kindForVisualData(String data) {
+  final lower = data.toLowerCase();
+  if (lower.contains('passo') || lower.contains('step')) {
+    return _LessonBoardVisualKind.stepByStep;
+  }
+  if (lower.contains('compar') || lower.contains('versus')) {
+    return _LessonBoardVisualKind.comparison;
+  }
+  if (lower.contains('tabela') || lower.contains('linha')) {
+    return _LessonBoardVisualKind.table;
+  }
+  if (lower.contains('conceit') || lower.contains('mapa')) {
+    return _LessonBoardVisualKind.conceptMap;
+  }
+  return _LessonBoardVisualKind.staticImage;
+}
+
+String _titleForVisualKind(_LessonBoardVisualKind kind) => switch (kind) {
+  _LessonBoardVisualKind.comparison => 'Quadro de comparação',
+  _LessonBoardVisualKind.table => 'Quadro em tabela',
+  _LessonBoardVisualKind.stepByStep => 'Quadro passo a passo',
+  _LessonBoardVisualKind.conceptMap => 'Mapa de ideias',
+  _ => 'Quadro visual da aula',
+};
+
+class _VisualBoardOverlay extends StatelessWidget {
+  const _VisualBoardOverlay({
+    required this.kind,
+    required this.stepIndex,
+    required this.highlightIndex,
+  });
+
+  final _LessonBoardVisualKind kind;
+  final int stepIndex;
+  final int highlightIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return IgnorePointer(
+      child: CustomPaint(
+        painter: _VisualBoardOverlayPainter(
+          kind: kind,
+          stepIndex: stepIndex,
+          highlightIndex: highlightIndex,
+          color: palette.primary,
+          warning: palette.warning,
+        ),
+      ),
+    );
+  }
+}
+
+class _VisualBoardOverlayPainter extends CustomPainter {
+  const _VisualBoardOverlayPainter({
+    required this.kind,
+    required this.stepIndex,
+    required this.highlightIndex,
+    required this.color,
+    required this.warning,
+  });
+
+  final _LessonBoardVisualKind kind;
+  final int stepIndex;
+  final int highlightIndex;
+  final Color color;
+  final Color warning;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..color = color.withValues(alpha: 0.72);
+    final fill = Paint()
+      ..style = PaintingStyle.fill
+      ..color = warning.withValues(alpha: 0.10);
+
+    Rect rect;
+    switch (kind) {
+      case _LessonBoardVisualKind.comparison:
+        final left = highlightIndex <= 0;
+        rect = Rect.fromLTWH(
+          left ? size.width * 0.05 : size.width * 0.52,
+          size.height * 0.16,
+          size.width * 0.43,
+          size.height * 0.66,
+        );
+      case _LessonBoardVisualKind.table:
+        final row = highlightIndex < 0 ? 0 : highlightIndex.clamp(0, 2);
+        rect = Rect.fromLTWH(
+          size.width * 0.08,
+          size.height * (0.24 + row * 0.17),
+          size.width * 0.84,
+          size.height * 0.14,
+        );
+      case _LessonBoardVisualKind.stepByStep:
+        rect = Rect.fromLTWH(
+          size.width * 0.10,
+          size.height * (0.18 + stepIndex.clamp(0, 3) * 0.16),
+          size.width * 0.80,
+          size.height * 0.13,
+        );
+      case _LessonBoardVisualKind.conceptMap:
+        final i = highlightIndex < 0 ? 0 : highlightIndex.clamp(0, 2);
+        final centers = [
+          Offset(size.width * 0.50, size.height * 0.25),
+          Offset(size.width * 0.30, size.height * 0.58),
+          Offset(size.width * 0.70, size.height * 0.58),
+        ];
+        final center = centers[i];
+        rect = Rect.fromCenter(
+          center: center,
+          width: size.width * 0.32,
+          height: size.height * 0.14,
+        );
+      case _LessonBoardVisualKind.staticImage:
+        return;
+    }
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(14));
+    canvas.drawRRect(rrect, fill);
+    canvas.drawRRect(rrect, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _VisualBoardOverlayPainter oldDelegate) {
+    return kind != oldDelegate.kind ||
+        stepIndex != oldDelegate.stepIndex ||
+        highlightIndex != oldDelegate.highlightIndex ||
+        color != oldDelegate.color ||
+        warning != oldDelegate.warning;
+  }
+}
+
+Future<void> showLessonImageInspector(
+  BuildContext context, {
+  required String data,
+  required String caption,
+}) {
+  final palette = SimThemeScope.paletteOf(context);
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return Dialog.fullscreen(
+        backgroundColor: palette.background,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  SimSpacing.md,
+                  SimSpacing.xs,
+                  SimSpacing.xs,
+                  SimSpacing.xs,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        t('aula_image_alt'),
+                        style: SimTypography.title.copyWith(
+                          color: palette.text,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                    Tooltip(
+                      message: t('aula_image_close'),
+                      child: SimIconAction(
+                        icon: Icons.close_rounded,
+                        semanticLabel: t('aula_image_close'),
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: SimSpacing.sm,
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: palette.surface,
+                      borderRadius: BorderRadius.circular(SimRadius.lg),
+                      border: Border.all(color: palette.border),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(SimRadius.lg),
+                      child: Semantics(
+                        image: true,
+                        label: caption,
+                        child: InteractiveViewer(
+                          minScale: 0.8,
+                          maxScale: 5,
+                          child: Center(
+                            child: LessonMediaImageView(data: data),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  SimSpacing.lg,
+                  SimSpacing.sm,
+                  SimSpacing.lg,
+                  SimSpacing.lg,
+                ),
+                child: Text(
+                  caption,
+                  textAlign: TextAlign.center,
+                  style: SimTypography.caption.copyWith(
+                    color: palette.muted,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class LessonMediaImageView extends StatefulWidget {
