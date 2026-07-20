@@ -45,97 +45,98 @@ class PedagogicalReceptionController extends ChangeNotifier {
       const PedagogicalReceptionStep(
         id: 'path',
         title: 'Como vamos começar?',
-        help:
-            'Escolha se quer um caminho montado pelo SIM ou ajuda com um material que você trouxe.',
+        help: 'Escolha o jeito mais parecido com o que você precisa agora.',
         required: true,
       ),
       if (selected == PedagogicalReceptionPath.guided) ...const [
         PedagogicalReceptionStep(
           id: 'objective',
           title: 'O que você quer aprender?',
-          help: 'Escreva o tema ou habilidade principal.',
+          help: 'Conte do jeito que você falaria para um professor.',
           required: true,
         ),
         PedagogicalReceptionStep(
           id: 'level',
           title: 'Qual nível ou contexto devo considerar?',
-          help: 'Pode ser série, prova, faculdade, trabalho ou começo do zero.',
+          help: 'Isso ajusta a linguagem, os exemplos e o ponto de partida.',
           required: true,
         ),
         PedagogicalReceptionStep(
           id: 'purpose',
           title: 'Para que você está estudando isso?',
-          help: 'Isso muda exemplos, ritmo e tipo de cobrança.',
+          help:
+              'Prova, tarefa, trabalho ou curiosidade pedem conduções diferentes.',
           required: true,
         ),
         PedagogicalReceptionStep(
           id: 'deadline',
           title: 'Tem prazo?',
-          help: 'Se não tiver, pode marcar sem prazo.',
+          help: 'Se não tiver, seguimos com calma.',
           required: false,
         ),
         PedagogicalReceptionStep(
           id: 'result',
           title: 'O que você quer conseguir fazer no final?',
-          help: 'Descreva o resultado prático esperado.',
+          help: 'Uma meta clara ajuda a aula a mirar no uso real.',
           required: false,
         ),
         PedagogicalReceptionStep(
           id: 'blocker',
           title: 'Onde costuma travar?',
-          help: 'Conte dúvidas, dificuldades ou pontos que geram insegurança.',
+          help:
+              'Diga o ponto que costuma confundir, atrasar ou dar insegurança.',
           required: false,
         ),
         PedagogicalReceptionStep(
           id: 'style',
           title: 'Como prefere ser conduzido?',
-          help:
-              'Exemplos, passo a passo, exercícios, revisão ou direto ao ponto.',
+          help: 'Escolha o ritmo que mais ajuda você a continuar.',
           required: false,
         ),
       ] else if (selected == PedagogicalReceptionPath.material) ...const [
         PedagogicalReceptionStep(
           id: 'material_type',
           title: 'Que tipo de material você trouxe?',
-          help: 'Foto, PDF, prova, lista, livro, caderno ou uma resposta sua.',
+          help: 'Pode ser foto, PDF, lista, prova, questão ou caderno.',
           required: true,
         ),
         PedagogicalReceptionStep(
           id: 'attachments',
           title: 'Envie o material',
-          help: 'Até 3 arquivos, 10 MB cada. PDF, texto, CSV e imagem.',
+          help: 'Até 3 arquivos. Use PDF, texto, CSV, foto ou imagem.',
           required: false,
         ),
         PedagogicalReceptionStep(
           id: 'material_goal',
           title: 'O que você quer que o SIM faça com esse material?',
-          help: 'Resolver, explicar, corrigir, montar aula ou revisar.',
+          help: 'Explique o pedido principal em uma frase ou duas.',
           required: true,
         ),
         PedagogicalReceptionStep(
           id: 'material_blocker',
           title: 'Onde você travou?',
           help:
-              'Se o anexo não ficar legível, essa descrição ajuda a aula nascer certa.',
+              'Se o arquivo não ficar claro, sua descrição ainda guia a aula.',
           required: false,
         ),
         PedagogicalReceptionStep(
           id: 'material_purpose',
           title: 'Isso é para quê?',
-          help: 'Prova, tarefa, lista, revisão ou entender um exercício.',
+          help: 'Isso muda a profundidade e o tipo de ajuda.',
           required: true,
         ),
       ],
       const PedagogicalReceptionStep(
         id: 'profile',
         title: 'Algum cuidado para adaptar a aula?',
-        help: 'Nome, idade e observações são opcionais.',
+        help:
+            'Nome, idade e observações são opcionais, mas ajudam o tom da aula.',
         required: false,
       ),
       const PedagogicalReceptionStep(
         id: 'finish',
-        title: 'Tudo certo?',
-        help: 'Confira o resumo e continue.',
+        title: 'Foi isso que eu entendi.',
+        help: 'Confira rápido. Se algo estiver errado, toque em editar.',
         required: true,
       ),
     ];
@@ -185,8 +186,8 @@ class PedagogicalReceptionController extends ChangeNotifier {
       case 'path':
         return path == null ? 'Escolha um caminho para começar.' : null;
       case 'objective':
-        return form.freeText.trim().length < 3
-            ? 'Escreva o que você quer aprender.'
+        return form.freeText.trim().length < 10
+            ? 'Escreva um pouco mais sobre o que você quer aprender.'
             : null;
       case 'level':
         return form.academicLevel.trim().isEmpty
@@ -205,16 +206,27 @@ class PedagogicalReceptionController extends ChangeNotifier {
             ? 'Estou lendo seu material. Aguarde terminar para continuar.'
             : null;
       case 'material_goal':
-        return form.freeText.trim().length < 3
-            ? 'Escreva o que você quer fazer com o material.'
+        return form.freeText.trim().length < 10
+            ? 'Escreva um pouco mais sobre o que você quer fazer com o material.'
             : null;
       case 'material_purpose':
         return form.traversalGoal.trim().isEmpty
             ? 'Escolha ou descreva para que é esse material.'
             : null;
+      case 'finish':
+        return validateAll();
       default:
         return null;
     }
+  }
+
+  String? validateAll() {
+    for (final step in steps) {
+      if (step.id == 'finish') continue;
+      final validation = validateStep(step.id);
+      if (validation != null) return validation;
+    }
+    return null;
   }
 
   String summaryFor(String id) {
@@ -255,7 +267,8 @@ class PedagogicalReceptionController extends ChangeNotifier {
             .map((attachment) => attachment.name.trim())
             .where((name) => name.isNotEmpty)
             .join(', ');
-        final status = '$ready de ${form.attachments.length} anexo(s) lido(s).';
+        final status =
+            '$ready de ${form.attachments.length} material(is) lido(s).';
         return names.isEmpty ? status : '$status\n$names';
       case 'profile':
         return [
@@ -264,11 +277,42 @@ class PedagogicalReceptionController extends ChangeNotifier {
           form.profileObservation.trim(),
         ].where((value) => value.isNotEmpty).join(' · ');
       case 'finish':
-        return form.buildAttachmentsText().trim().isEmpty
-            ? form.freeText.trim()
-            : '${form.freeText.trim()}\nMaterial anexado lido.';
+        return finalSummaryLines().join('\n');
       default:
         return '';
     }
+  }
+
+  List<String> finalSummaryLines() {
+    final lines = <String>[
+      path == PedagogicalReceptionPath.material
+          ? 'Vou usar seu material como ponto de partida.'
+          : 'Vou montar um caminho e encontrar o ponto certo para começar.',
+      if (form.freeText.trim().isNotEmpty) 'Objetivo: ${form.freeText.trim()}',
+      if (form.materialType.trim().isNotEmpty)
+        'Material: ${form.materialType.trim()}',
+      if (form.attachments.isNotEmpty) summaryFor('attachments'),
+      if (form.academicLevel.trim().isNotEmpty)
+        'Contexto: ${form.academicLevel.trim()}',
+      if (form.traversalGoal.trim().isNotEmpty)
+        'Uso: ${form.traversalGoal.trim()}',
+      if (_effectiveDeadline().isNotEmpty) 'Prazo: ${_effectiveDeadline()}',
+      if (form.expectedResult.trim().isNotEmpty)
+        'Meta: ${form.expectedResult.trim()}',
+      if (form.difficulties.trim().isNotEmpty)
+        'Atenção: ${form.difficulties.trim()}',
+      if (form.learningPreference.trim().isNotEmpty)
+        'Condução: ${form.learningPreference.trim()}',
+      if (summaryFor('profile').trim().isNotEmpty)
+        'Cuidado: ${summaryFor('profile').trim()}',
+    ];
+    return lines
+        .where((line) => line.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
+  String _effectiveDeadline() {
+    final custom = form.deadlineCustom.trim();
+    return custom.isNotEmpty ? custom : form.deadline.trim();
   }
 }

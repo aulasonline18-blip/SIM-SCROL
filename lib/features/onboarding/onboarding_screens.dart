@@ -5,6 +5,7 @@ import '../../session/entry_form_state.dart';
 import '../../shared/widgets/shared_widgets.dart';
 import '../../sim/reception/pedagogical_reception_controller.dart';
 import '../../sim/ui/sim_i18n.dart';
+import '../../sim/ui/sim_theme.dart';
 
 class ConversationalEntryScreen extends StatelessWidget {
   const ConversationalEntryScreen({required this.session, super.key});
@@ -195,12 +196,12 @@ class _EntryScreenState extends State<_EntryScreen> {
           children: [
             StepHeader(
               title: 'Recepção pedagógica',
-              subtitle: 'Vamos montar uma aula que nasça no ponto certo.',
+              subtitle: 'Vou entender seu caso antes de preparar a aula.',
             ),
             const SizedBox(height: 16),
             _SimIntroBubble(
               text:
-                  'Antes de preparar sua aula, preciso entender como você quer começar.',
+                  'Me diga primeiro se você quer aprender um tema ou se trouxe um material específico.',
             ),
             const SizedBox(height: 12),
             for (var i = 0; i < visibleSteps.length; i++) ...[
@@ -234,7 +235,7 @@ class _EntryScreenState extends State<_EntryScreen> {
               key: const Key('reception-guided-path'),
               icon: Icons.route_outlined,
               title: 'Quero que o SIM monte meu caminho',
-              body: 'Bom para aprender um tema e encontrar o ponto certo.',
+              body: 'Para aprender um tema sem trazer arquivo ou exercício.',
               selected: reception.path == PedagogicalReceptionPath.guided,
               onTap: () =>
                   reception.choosePath(PedagogicalReceptionPath.guided),
@@ -244,7 +245,7 @@ class _EntryScreenState extends State<_EntryScreen> {
               key: const Key('reception-material-path'),
               icon: Icons.attach_file,
               title: 'Tenho um material e quero ajuda',
-              body: 'Use foto, PDF, lista, prova, questão ou caderno.',
+              body: 'Para foto, PDF, lista, prova, questão ou caderno.',
               selected: reception.path == PedagogicalReceptionPath.material,
               onTap: () =>
                   reception.choosePath(PedagogicalReceptionPath.material),
@@ -255,8 +256,8 @@ class _EntryScreenState extends State<_EntryScreen> {
         return _TextStep(
           key: const Key('reception-objective-input'),
           controller: objectiveController,
-          label: 'Tema ou habilidade',
-          help: 'Exemplo: frações, redação do ENEM, cinemática.',
+          label: 'O que você quer aprender?',
+          help: 'Exemplo: frações, redação do ENEM ou cinemática.',
           minLines: 3,
           onChanged: session.setFreeText,
           onNext: _next,
@@ -305,7 +306,8 @@ class _EntryScreenState extends State<_EntryScreen> {
         return _TextStep(
           controller: resultController,
           label: 'Resultado esperado',
-          help: 'O que você quer conseguir fazer ao final?',
+          help:
+              'Exemplo: resolver sozinho, explicar melhor ou passar na prova.',
           onChanged: (value) =>
               session.setPedagogicalEntryField('expected_result', value),
           onNext: _next,
@@ -316,7 +318,8 @@ class _EntryScreenState extends State<_EntryScreen> {
         return _TextStep(
           controller: blockerController,
           label: 'Onde trava',
-          help: 'Pode ser uma dúvida específica ou uma sensação geral.',
+          help:
+              'Pode ser uma dúvida específica ou uma parte que sempre confunde.',
           onChanged: (value) =>
               session.setPedagogicalEntryField('difficulties', value),
           onNext: _next,
@@ -341,7 +344,7 @@ class _EntryScreenState extends State<_EntryScreen> {
       case 'material_type':
         return _ChoiceTextStep(
           controller: materialTypeController,
-          label: 'Tipo de material',
+          label: 'Material',
           options: const [
             'Foto do caderno',
             'PDF',
@@ -363,7 +366,7 @@ class _EntryScreenState extends State<_EntryScreen> {
               onRemove: session.removeAttachment,
             ),
             if (session.attachments.isEmpty)
-              const Text('Você pode anexar agora ou seguir só com texto.'),
+              const Text('Você pode anexar agora ou descrever com texto.'),
             if (session.attachments.any((a) => a.status == 'processing'))
               const Padding(
                 padding: EdgeInsets.only(top: 8),
@@ -393,7 +396,7 @@ class _EntryScreenState extends State<_EntryScreen> {
         return _TextStep(
           key: const Key('reception-material-goal-input'),
           controller: objectiveController,
-          label: 'Pedido para o material',
+          label: 'O que devo fazer com o material?',
           help: 'Exemplo: explique a questão 3 e monte uma aula curta.',
           minLines: 3,
           onChanged: session.setFreeText,
@@ -402,7 +405,7 @@ class _EntryScreenState extends State<_EntryScreen> {
       case 'material_purpose':
         return _ChoiceTextStep(
           controller: purposeController,
-          label: 'Uso do material',
+          label: 'Para que você vai usar isso?',
           options: const [
             'Prova',
             'Tarefa',
@@ -447,7 +450,7 @@ class _EntryScreenState extends State<_EntryScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_finishSummary(), style: const TextStyle(height: 1.4)),
+            _FinishSummary(lines: reception.finalSummaryLines()),
             const SizedBox(height: 14),
             PrimaryWideButton(
               key: const Key('reception-submit'),
@@ -460,19 +463,51 @@ class _EntryScreenState extends State<_EntryScreen> {
         return const SizedBox.shrink();
     }
   }
+}
 
-  String _finishSummary() {
-    final lines = [
-      reception.summaryFor('path'),
-      if (session.freeText.trim().isNotEmpty) session.freeText.trim(),
-      if (session.academicLevel.trim().isNotEmpty)
-        'Nível: ${session.academicLevel.trim()}',
-      if (session.traversalGoal.trim().isNotEmpty)
-        'Finalidade: ${session.traversalGoal.trim()}',
-      if (session.attachments.isNotEmpty)
-        'Anexos: ${session.attachments.length}',
-    ];
-    return lines.where((line) => line.trim().isNotEmpty).join('\n');
+class _FinishSummary extends StatelessWidget {
+  const _FinishSummary({required this.lines});
+
+  final List<String> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Column(
+      key: const Key('reception-final-summary'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Com isso, consigo preparar uma aula mais certeira para você.',
+          style: TextStyle(
+            color: palette.text,
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 10),
+        for (final line in lines) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.check_circle_outline,
+                size: 18,
+                color: palette.success,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  line,
+                  style: TextStyle(color: palette.text, height: 1.35),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
   }
 }
 
@@ -540,28 +575,34 @@ class _SimIntroBubble extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 620),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xFFEFF6FF),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(16),
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.dark ? palette.surfaceSoft : const Color(0xFFEFF6FF),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(4),
+              topRight: Radius.circular(16),
+              bottomLeft: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+            ),
+            border: Border.all(color: palette.border),
           ),
-          border: Border.all(color: const Color(0xFFD8E2F0)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Text(text, style: const TextStyle(height: 1.35)),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Text(
+              text,
+              style: TextStyle(color: palette.text, height: 1.35),
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _SimQuestionBubble extends StatelessWidget {
@@ -577,46 +618,50 @@ class _SimQuestionBubble extends StatelessWidget {
   final String help;
 
   @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 640),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(16),
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: active
+                ? (palette.dark ? palette.surface : const Color(0xFFEFF6FF))
+                : palette.surfaceSoft,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(4),
+              topRight: Radius.circular(16),
+              bottomLeft: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+            ),
+            border: Border.all(color: active ? palette.focus : palette.border),
           ),
-          border: Border.all(
-            color: active ? const Color(0xFF93C5FD) : const Color(0xFFE5E7EB),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                help,
-                style: const TextStyle(color: Color(0xFF475569), height: 1.35),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  help,
+                  style: TextStyle(color: palette.muted, height: 1.35),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _StudentSummaryBubble extends StatelessWidget {
@@ -630,50 +675,56 @@ class _StudentSummaryBubble extends StatelessWidget {
   final VoidCallback onEdit;
 
   @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerRight,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 620),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xFFEEFDF4),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(4),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(16),
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.dark ? palette.surface : const Color(0xFFEEFDF4),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(4),
+              bottomLeft: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+            ),
+            border: Border.all(
+              color: palette.dark ? palette.border : const Color(0xFFBBF7D0),
+            ),
           ),
-          border: Border.all(color: const Color(0xFFBBF7D0)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  text,
-                  maxLines: 5,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    height: 1.35,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    text,
+                    maxLines: 5,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontWeight: FontWeight.w700,
+                      height: 1.35,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                key: const Key('reception-edit-answer'),
-                onPressed: onEdit,
-                child: const Text('Editar'),
-              ),
-            ],
+                const SizedBox(width: 8),
+                TextButton(
+                  key: const Key('reception-edit-answer'),
+                  onPressed: onEdit,
+                  child: const Text('Editar'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _ActiveReplyBubble extends StatelessWidget {
@@ -682,27 +733,32 @@ class _ActiveReplyBubble extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 700),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0F000000),
-              blurRadius: 16,
-              offset: Offset(0, 8),
-            ),
-          ],
+  Widget build(BuildContext context) {
+    final palette = SimThemeScope.paletteOf(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 700),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: palette.border),
+            boxShadow: [
+              BoxShadow(
+                color: palette.shadow.withValues(
+                  alpha: palette.dark ? 0.25 : 0.06,
+                ),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Padding(padding: const EdgeInsets.all(14), child: child),
         ),
-        child: Padding(padding: const EdgeInsets.all(14), child: child),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _BigChoiceButton extends StatelessWidget {
@@ -1243,14 +1299,26 @@ class AttachmentChip extends StatelessWidget {
     dense: true,
     contentPadding: EdgeInsets.zero,
     leading: const Icon(Icons.attach_file),
-    title: Text(attachment.name),
-    subtitle: Text(attachment.status),
+    title: Text(attachment.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+    subtitle: Text(_attachmentStatusText(attachment)),
     trailing: IconButton(
       tooltip: t('remove'),
       onPressed: onRemove,
       icon: const Icon(Icons.close),
     ),
   );
+
+  String _attachmentStatusText(AttachmentDraft attachment) {
+    return switch (attachment.status) {
+      'processing' => 'Estou lendo seu material...',
+      'ready' => 'Consegui extrair o conteúdo.',
+      'error' =>
+        attachment.error?.trim().isNotEmpty == true
+            ? attachment.error!.trim()
+            : 'Não consegui ler bem. Você pode descrever com texto.',
+      _ => 'Material recebido.',
+    };
+  }
 }
 
 class AttachmentMenu extends StatelessWidget {

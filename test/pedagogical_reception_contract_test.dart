@@ -271,7 +271,7 @@ void main() {
     expect(find.text('Tudo certo?'), findsNothing);
 
     await _tapVisible(tester, find.byKey(const Key('reception-guided-path')));
-    expect(find.text('O que você quer aprender?'), findsOneWidget);
+    expect(find.text('O que você quer aprender?'), findsAtLeastNWidgets(1));
     expect(find.text('Editar'), findsWidgets);
     expect(find.byKey(const Key('reception-answer-path')), findsOneWidget);
     expect(
@@ -280,7 +280,10 @@ void main() {
     );
 
     await _tapVisible(tester, find.text('Salvar e continuar').first);
-    expect(find.text('Escreva o que você quer aprender.'), findsOneWidget);
+    expect(
+      find.text('Escreva um pouco mais sobre o que você quer aprender.'),
+      findsOneWidget,
+    );
 
     await tester.enterText(
       find.byType(TextField).first,
@@ -306,6 +309,44 @@ void main() {
     );
     expect(find.byKey(const Key('reception-active-objective')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('resumo final confirma entendimento e edicao preserva dados', (
+    tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true;
+
+    await tester.pumpWidget(MaterialApp(home: ObjetoScreen(session: session)));
+    await tester.pumpAndSettle();
+
+    await _finishGuidedReception(tester);
+
+    expect(find.byKey(const Key('reception-final-summary')), findsOneWidget);
+    expect(
+      find.textContaining('Vou montar um caminho e encontrar o ponto certo'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Objetivo: Quero aprender porcentagem para prova'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Contexto: Ensino médio'), findsOneWidget);
+    expect(find.textContaining('Uso: Prova'), findsOneWidget);
+    expect(find.text('Preparar minha aula'), findsOneWidget);
+
+    final editButton = tester.widget<TextButton>(
+      find.byKey(const Key('reception-edit-answer'), skipOffstage: false).first,
+    );
+    editButton.onPressed!();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('reception-final-summary')), findsNothing);
+    expect(find.text('Preparar minha aula'), findsNothing);
+    expect(session.academicLevel, 'Ensino médio');
+    expect(session.traversalGoal, 'Prova');
+    expect(session.freeText, 'Quero aprender porcentagem para prova');
   });
 
   testWidgets('material aparece como item da conversa e pula nivelamento', (
@@ -336,7 +377,8 @@ void main() {
 
     expect(find.text('Envie o material'), findsOneWidget);
     expect(find.text('lista.pdf'), findsOneWidget);
-    expect(find.text('Consegui extrair o conteúdo.'), findsOneWidget);
+    expect(find.text('Consegui extrair o conteúdo.'), findsWidgets);
+    expect(find.text('ready'), findsNothing);
 
     session
       ..freeText = 'Explique esta lista e monte uma aula curta pelo material.'
@@ -433,6 +475,38 @@ Future<void> _waitAttachments(EntryFormState form) async {
     if (form.attachments.every((a) => a.status != 'processing')) return;
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
+}
+
+Future<void> _finishGuidedReception(WidgetTester tester) async {
+  await _tapVisible(tester, find.byKey(const Key('reception-guided-path')));
+  await tester.enterText(
+    find.byType(TextField).first,
+    'Quero aprender porcentagem para prova',
+  );
+  await _tapVisible(tester, find.text('Salvar e continuar').first);
+
+  await _tapVisible(tester, find.text('Ensino médio'));
+  await _tapVisible(tester, find.text('Salvar e continuar').first);
+
+  await _tapVisible(tester, find.text('Prova'));
+  await _tapVisible(tester, find.text('Salvar e continuar').first);
+
+  await _tapVisible(tester, find.text('Sem prazo'));
+  await _tapVisible(tester, find.text('Continuar').last);
+
+  await tester.enterText(
+    find.byType(TextField).first,
+    'Resolver questões sem depender de fórmula decorada',
+  );
+  await _tapVisible(tester, find.text('Continuar').last);
+
+  await tester.enterText(find.byType(TextField).first, 'Regra de três');
+  await _tapVisible(tester, find.text('Continuar').last);
+
+  await _tapVisible(tester, find.text('Com exemplos'));
+  await _tapVisible(tester, find.text('Continuar').last);
+
+  await _tapVisible(tester, find.text('Continuar').last);
 }
 
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
