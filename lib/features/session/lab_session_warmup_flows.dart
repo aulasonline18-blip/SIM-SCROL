@@ -44,9 +44,6 @@ extension LabSessionWarmupFlowExtensions on LabSession {
           extra: {...state.extra, 'warmup': lesson.toJson()},
         );
       });
-      if (route == '/cyber/curriculo') {
-        navigationState.openRoute('/cyber/warmup');
-      }
       _notifyFromChild();
       unawaited(_tryOpenOfficialAula(source: 'warmup_ready'));
     } catch (error) {
@@ -118,6 +115,81 @@ extension LabSessionWarmupFlowExtensions on LabSession {
     unawaited(launchExperience());
     navigationState.openRoute('/cyber/warmup');
     _notifyFromChild();
+  }
+
+  void choosePlacementStartFromZeroThenPreparation() {
+    final controller = activePlacementController;
+    if (controller != null) {
+      controller.skip();
+    } else {
+      _writePlacementChoiceFallback(
+        status: 'skipped',
+        choice: 'start_from_zero',
+        source: 'choice_gate',
+        reason: 'Aluno escolheu começar do início.',
+        finished: true,
+      );
+    }
+    unawaited(launchExperience());
+    navigationState.openRoute('/cyber/curriculo');
+    _notifyFromChild();
+  }
+
+  void choosePlacementFindMyPointThenPreparation() {
+    final controller = activePlacementController;
+    if (controller != null) {
+      controller.chooseFindMyPoint();
+    } else {
+      _writePlacementChoiceFallback(
+        status: 'requested',
+        choice: 'find_my_point',
+        source: 'adaptive_t02',
+        reason: 'Aluno pediu para encontrar o ponto inicial.',
+      );
+    }
+    unawaited(launchExperience());
+    navigationState.openRoute('/cyber/curriculo');
+    _notifyFromChild();
+  }
+
+  bool get canContinueFromPreparationGate {
+    if (warmupLesson != null) return true;
+    if (entryStatus != 'primeira_aula_pronta') return false;
+    return !_warmupCoordinator.warmupExpected ||
+        _warmupCoordinator.warmupUnavailableAfterExpected ||
+        warmupError != null;
+  }
+
+  Future<void> continueFromPreparationToWarmup() async {
+    if (warmupLesson != null) {
+      navigationState.openRoute('/cyber/warmup');
+      _notifyFromChild();
+      return;
+    }
+    if (entryStatus != 'primeira_aula_pronta') {
+      await launchExperience();
+      return;
+    }
+    final id = lessonLocalId;
+    if (id == null || id.trim().isEmpty) return;
+    if (!_isFirstAulaTextRendered(aulaSnapshot)) {
+      entryStatus = 't02_running';
+      _notifyFromChild();
+      await _ensureFirstAulaRenderedBeforeRelease(
+        id: id,
+        generation: _experienceGeneration,
+      );
+      if (!_isFirstAulaTextRendered(aulaSnapshot)) return;
+      entryStatus = 'primeira_aula_pronta';
+      _notifyFromChild();
+    }
+    if (_warmupCoordinator.warmupUnavailableAfterExpected) {
+      await _tryOpenOfficialAula(source: 'preparation_continue');
+      return;
+    }
+    if (!_warmupCoordinator.warmupExpected) {
+      await _tryOpenOfficialAula(source: 'preparation_continue');
+    }
   }
 
   void _writePlacementChoiceFallback({

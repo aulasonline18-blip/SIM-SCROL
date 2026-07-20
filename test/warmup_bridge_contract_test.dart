@@ -116,8 +116,10 @@ void main() {
         final launch = session.launchExperience();
         await Future<void>.delayed(Duration.zero);
 
-        expect(session.route, '/cyber/warmup');
+        expect(session.route, '/cyber/curriculo');
         expect(session.warmupLesson, isNotNull);
+        await session.continueFromPreparationToWarmup();
+        expect(session.route, '/cyber/warmup');
         await session.continueFromWarmupToAula();
         expect(session.route, '/cyber/warmup');
         expect(session.warmupWaitingForOfficialLesson, isTrue);
@@ -136,7 +138,7 @@ void main() {
     );
 
     test(
-      'escolha encontrar ponto vai para warmup e volta ao nivelamento com teste',
+      'escolha encontrar ponto vai para curriculo, depois warmup e volta ao nivelamento com teste',
       () async {
         final officialReady = Completer<void>();
         final session =
@@ -161,8 +163,8 @@ void main() {
         final launch = session.launchExperience();
         await Future<void>.delayed(Duration.zero);
 
-        session.openWarmupBridge(preparePlacement: true);
-        expect(session.route, '/cyber/warmup');
+        session.choosePlacementFindMyPointThenPreparation();
+        expect(session.route, '/cyber/curriculo');
         expect(
           session.canonicalStore!
               .readState(session.lessonLocalId!)
@@ -170,6 +172,9 @@ void main() {
           'find_my_point',
         );
 
+        expect(session.warmupLesson, isNotNull);
+        await session.continueFromPreparationToWarmup();
+        expect(session.route, '/cyber/warmup');
         await session.continueFromWarmupToAula();
         expect(session.route, '/cyber/warmup');
 
@@ -206,6 +211,7 @@ void main() {
       expect(session.saveObjectiveEntry(), isTrue);
       expect(session.route, '/cyber/placement');
       session.skipPlacement();
+      expect(session.route, '/cyber/curriculo');
       await session.launchExperience();
       await Future<void>.delayed(Duration.zero);
 

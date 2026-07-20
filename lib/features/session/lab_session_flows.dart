@@ -1166,7 +1166,7 @@ extension LabSessionFlowExtensions on LabSession {
   }
 
   void skipPlacement() {
-    openWarmupBridge();
+    choosePlacementStartFromZeroThenPreparation();
   }
 
   Future<void> startPlacementTest() async {

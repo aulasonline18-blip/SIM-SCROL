@@ -115,7 +115,7 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
         error?.toLowerCase().contains('crédito') == true ||
         error?.toLowerCase().contains('credit') == true;
     final simStage = _toSimStage(status);
-    final isReady = status == 'primeira_aula_pronta';
+    final isReady = widget.session.canContinueFromPreparationGate;
 
     return Scaffold(
       backgroundColor: SimThemeScope.paletteOf(context).background,
@@ -208,7 +208,8 @@ class _PhaseBoundaryScreenState extends State<PhaseBoundaryScreen> {
                               stage: simStage,
                               ready: isReady,
                               onContinue: () => unawaited(
-                                widget.session.continueFromPreparationToAula(),
+                                widget.session
+                                    .continueFromPreparationToWarmup(),
                               ),
                             ),
                           ),
@@ -529,7 +530,7 @@ class _PlacementLabScreenState extends State<PlacementLabScreen> {
       widget.session.activePlacementController;
 
   void _goToIntro() {
-    widget.session.openWarmupBridge(preparePlacement: true);
+    widget.session.choosePlacementFindMyPointThenPreparation();
   }
 
   void _goToQuestion() async {

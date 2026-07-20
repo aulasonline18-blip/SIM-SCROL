@@ -227,7 +227,7 @@ void main() {
     },
   );
 
-  test('escolha de nivelamento abre warmup antes da aula oficial', () async {
+  test('escolha de nivelamento abre curriculo antes do warmup', () async {
     final session = LabSession()
       ..selectedLanguageCode = 'pt'
       ..stableLang = 'pt-BR'
@@ -238,8 +238,17 @@ void main() {
 
     session.skipPlacement();
 
-    expect(session.route, '/cyber/warmup');
+    expect(session.route, '/cyber/curriculo');
     expect(session.entryStatus, 't02_running');
+
+    session.warmupLesson = const SimWarmupLesson(
+      explanation: 'Welcome bridge.',
+      question: 'What should happen first?',
+      options: {'A': 'Begin gently', 'B': 'Grade now', 'C': 'Block'},
+      correctAnswer: 'A',
+    );
+    await session.continueFromPreparationToWarmup();
+    expect(session.route, '/cyber/warmup');
 
     session.chooseWarmupAnswer('A');
     await session.continueFromWarmupToAula();
@@ -349,7 +358,7 @@ void main() {
   );
 
   test(
-    'warmup T02 pronto abre ponte diretamente enquanto aula oficial prepara',
+    'warmup T02 pronto abre ponte somente pelo continuar do curriculo',
     () async {
       final session = LabSession()
         ..selectedLanguageCode = 'pt'
@@ -366,7 +375,7 @@ void main() {
       );
       session.route = '/cyber/curriculo';
 
-      session.openWarmupBridge();
+      await session.continueFromPreparationToWarmup();
 
       expect(session.route, '/cyber/warmup');
       expect(session.warmupLesson?.toJson()['officialCurriculum'], isFalse);
