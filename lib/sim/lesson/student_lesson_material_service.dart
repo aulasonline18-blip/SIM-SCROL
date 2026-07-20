@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import '../experience/curriculum_utils.dart';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';
@@ -97,7 +96,6 @@ class StudentLessonMaterialService {
   final Map<String, void Function()> _imageUnsubscribersByLessonKey = {};
   final LessonReadinessResolver _readinessResolver =
       const LessonReadinessResolver();
-
   ResolveLessonMaterialResult? resolveFastLessonMaterialFromStateOrCache(
     ResolveLessonMaterialInput input,
   ) {
@@ -182,7 +180,6 @@ class StudentLessonMaterialService {
         ? null
         : resolveFastLessonMaterialFromStateOrCache(input);
     if (fast != null) return fast;
-
     if (!input.forceRefresh &&
         input.waitBeforeOrderMs > 0 &&
         orchestrator.isLessonBusy) {
@@ -207,9 +204,7 @@ class StudentLessonMaterialService {
         resolved: false,
       );
     }
-
     if (!input.allowRemoteOrder) return null;
-
     final lessonFuture = orchestrator.prefetchCompleteLesson(
       input.params,
       priority: 'background',
@@ -466,6 +461,7 @@ class StudentLessonMaterialService {
             job['idempotency_key'] == idempotencyKey &&
             (job['status'] == 'queued' || job['status'] == 'running'),
       );
+      var promotedHot = false;
       if (duplicateIndex < 0) {
         jobs.add({
           'job_id': 'PREPARE_READY_WINDOW:$idempotencyKey:$now',
@@ -493,6 +489,7 @@ class StudentLessonMaterialService {
       } else if (priority == 'hot-local' &&
           jobs[duplicateIndex]['priority'] != 'hot-local' &&
           jobs[duplicateIndex]['status'] == 'queued') {
+        promotedHot = true;
         jobs[duplicateIndex] = {
           ...jobs[duplicateIndex],
           'priority': 'hot-local',
@@ -519,25 +516,18 @@ class StudentLessonMaterialService {
         queuedActions: jobs,
         events: [
           ...state.events,
-          StudentLearningEvent(
-            type: 'CACHE_WINDOW_UPDATED',
+          ...dopamineWindowServiceEvents(
             ts: now,
-            payload: {
-              'lessonLocalId': lessonLocalId,
-              'currentItemIdx': itemIdx,
-              'currentLayer': layer.value,
-              'windowMarkers': window
-                  .map(
-                    (slot) => {
-                      'marker': slot.item.marker,
-                      'layer': slot.layer.value,
-                      'offset': slot.offset,
-                    },
-                  )
-                  .toList(growable: false),
-              'windowSize': window.length,
-              'cachedCount': window.length,
-            },
+            lessonLocalId: lessonLocalId,
+            source: source,
+            reason: reason ?? 'lesson_window_visible',
+            currentItemIdx: itemIdx,
+            currentLayer: layer,
+            window: window,
+            readyMaterials: hotReadyMaterials,
+            promotedHot: promotedHot,
+            idempotencyKey: idempotencyKey,
+            marker: marker,
           ),
         ],
       );

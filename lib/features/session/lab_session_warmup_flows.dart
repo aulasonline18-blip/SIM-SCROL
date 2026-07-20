@@ -39,6 +39,10 @@ extension LabSessionWarmupFlowExtensions on LabSession {
       warmupLesson = lesson;
       warmupLoading = false;
       warmupError = null;
+      _recordOnboardingFlowEvent(
+        'PREPARATION_GATE_WARMUP_READY',
+        payload: const {'route': '/cyber/curriculo'},
+      );
       canonicalStore?.patchState(lessonLocalId, (state) {
         return state.copyWith(
           extra: {...state.extra, 'warmup': lesson.toJson()},
@@ -90,7 +94,7 @@ extension LabSessionWarmupFlowExtensions on LabSession {
     if (preparePlacement) {
       if (controller != null) {
         controller.chooseFindMyPoint();
-        unawaited(controller.startTest());
+        _prefetchPlacementTest(controller);
       } else {
         _writePlacementChoiceFallback(
           status: 'requested',
@@ -112,8 +116,26 @@ extension LabSessionWarmupFlowExtensions on LabSession {
         );
       }
     }
+    _recordOnboardingFlowEvent(
+      preparePlacement
+          ? 'PLACEMENT_CHOICE_FIND_MY_POINT_IMMEDIATE'
+          : 'PLACEMENT_CHOICE_START_FROM_ZERO_IMMEDIATE',
+      payload: const {'route': '/cyber/curriculo'},
+    );
     unawaited(launchExperience());
-    navigationState.openRoute('/cyber/warmup');
+    if (warmupLesson != null) {
+      _recordOnboardingFlowEvent(
+        'WARMUP_OPENED_WITH_READY_LESSON',
+        payload: const {'source': 'legacy_bridge'},
+      );
+      navigationState.openRoute('/cyber/warmup');
+    } else {
+      _recordOnboardingFlowEvent(
+        'PREPARATION_GATE_WAITING_FOR_WARMUP',
+        payload: const {'source': 'legacy_bridge'},
+      );
+      navigationState.openRoute('/cyber/curriculo');
+    }
     _notifyFromChild();
   }
 
@@ -130,6 +152,10 @@ extension LabSessionWarmupFlowExtensions on LabSession {
         finished: true,
       );
     }
+    _recordOnboardingFlowEvent(
+      'PLACEMENT_CHOICE_START_FROM_ZERO_IMMEDIATE',
+      payload: const {'route': '/cyber/curriculo'},
+    );
     unawaited(launchExperience());
     navigationState.openRoute('/cyber/curriculo');
     _notifyFromChild();
@@ -139,6 +165,7 @@ extension LabSessionWarmupFlowExtensions on LabSession {
     final controller = activePlacementController;
     if (controller != null) {
       controller.chooseFindMyPoint();
+      _prefetchPlacementTest(controller);
     } else {
       _writePlacementChoiceFallback(
         status: 'requested',
@@ -147,6 +174,10 @@ extension LabSessionWarmupFlowExtensions on LabSession {
         reason: 'Aluno pediu para encontrar o ponto inicial.',
       );
     }
+    _recordOnboardingFlowEvent(
+      'PLACEMENT_CHOICE_FIND_MY_POINT_IMMEDIATE',
+      payload: const {'route': '/cyber/curriculo'},
+    );
     unawaited(launchExperience());
     navigationState.openRoute('/cyber/curriculo');
     _notifyFromChild();
@@ -162,12 +193,25 @@ extension LabSessionWarmupFlowExtensions on LabSession {
 
   Future<void> continueFromPreparationToWarmup() async {
     if (warmupLesson != null) {
+      _recordOnboardingFlowEvent(
+        'PREPARATION_GATE_RELEASED_TO_WARMUP',
+        payload: const {'route': '/cyber/warmup'},
+      );
+      _recordOnboardingFlowEvent(
+        'WARMUP_OPENED_WITH_READY_LESSON',
+        payload: const {'source': 'preparation_gate'},
+      );
       navigationState.openRoute('/cyber/warmup');
       _notifyFromChild();
       return;
     }
     if (entryStatus != 'primeira_aula_pronta') {
-      await launchExperience();
+      _recordOnboardingFlowEvent(
+        'PREPARATION_GATE_WAITING_FOR_WARMUP',
+        payload: {'entry_status': entryStatus},
+      );
+      unawaited(launchExperience());
+      _notifyFromChild();
       return;
     }
     final id = lessonLocalId;
@@ -184,12 +228,41 @@ extension LabSessionWarmupFlowExtensions on LabSession {
       _notifyFromChild();
     }
     if (_warmupCoordinator.warmupUnavailableAfterExpected) {
+      _recordOnboardingFlowEvent(
+        'PREPARATION_GATE_OFFICIAL_READY',
+        payload: const {'warmup': 'unavailable'},
+      );
       await _tryOpenOfficialAula(source: 'preparation_continue');
       return;
     }
     if (!_warmupCoordinator.warmupExpected) {
+      _recordOnboardingFlowEvent(
+        'PREPARATION_GATE_OFFICIAL_READY',
+        payload: const {'warmup': 'not_expected'},
+      );
       await _tryOpenOfficialAula(source: 'preparation_continue');
     }
+  }
+
+  void _prefetchPlacementTest(PlacementRouteController controller) {
+    _recordOnboardingFlowEvent(
+      'PLACEMENT_PRETEST_PREFETCH_STARTED',
+      payload: const {'route': '/cyber/curriculo'},
+    );
+    unawaited(
+      controller.startTest().then((_) {
+        if (controller.questionScreen() != null ||
+            controller.resultScreen() != null) {
+          _recordOnboardingFlowEvent(
+            'PLACEMENT_PRETEST_READY_BEFORE_OPEN',
+            payload: const {'route': '/cyber/placement'},
+          );
+        }
+        _notifyFromChild();
+      }).catchError((Object _) {
+        _notifyFromChild();
+      }),
+    );
   }
 
   void _writePlacementChoiceFallback({
@@ -301,6 +374,20 @@ extension LabSessionWarmupFlowExtensions on LabSession {
       return false;
     }
   }
+
+  void _recordOnboardingFlowEvent(String type, {JsonMap payload = const {}}) {
+    final id = lessonLocalId;
+    if (id == null || id.trim().isEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    canonicalStore?.patchState(id, (state) {
+      return state.copyWith(
+        events: [
+          ...state.events,
+          StudentLearningEvent(type: type, ts: now, payload: payload),
+        ],
+      );
+    }, allowLocalHousekeeping: true);
+  }
 }
 
 extension LabSessionDoubtFlowExtensions on LabSession {
@@ -337,6 +424,7 @@ extension LabSessionDoubtFlowExtensions on LabSession {
     );
     if (submittedPayload != null) {
       _recordDoubtEvent('DOUBT_SUBMITTED', submittedPayload);
+      _recordDoubtEvent('DOUBT_SUBMITTED_IMMEDIATE', submittedPayload);
     }
     if (prefs == null || _runningUnderFlutterTest) {
       _failDoubt(submittedPayload);
@@ -378,6 +466,14 @@ extension LabSessionDoubtFlowExtensions on LabSession {
       marker: snapshot?.itemMarker ?? state?.current?.marker,
       input: input,
       isScopeStillCurrent: _isDoubtScopeStillCurrent,
+      onStaleIgnored: (scope) {
+        final payload = submittedPayload;
+        if (payload == null) return;
+        _recordDoubtEvent('DOUBT_ANSWER_STALE_IGNORED', {
+          ...payload,
+          'scopeKey': scope.key,
+        });
+      },
     );
     setDoubt(controller.state);
     if (controller.state.status == DoubtStatus.explaining) {
@@ -421,6 +517,7 @@ extension LabSessionDoubtFlowExtensions on LabSession {
     );
     if (readyPayload != null) {
       _recordDoubtEvent('DOUBT_ANSWER_READY', readyPayload);
+      _recordDoubtEvent('DOUBT_ANSWER_APPLIED', readyPayload);
     }
     final text = response?.explanation;
     if (text != null && text.trim().isNotEmpty) {

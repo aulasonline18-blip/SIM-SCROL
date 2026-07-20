@@ -1,7 +1,6 @@
 part of 'lab_session.dart';
 
 const Duration _autoAdvanceAfterFeedbackDelay = Duration(milliseconds: 900);
-
 String humanErrorMessage(
   Object? error, {
   String fallback =
@@ -1213,9 +1212,11 @@ extension LabSessionFlowExtensions on LabSession {
       unawaited(openAulaRuntime());
     }
   }
-
   void chooseAulaAnswer(String letter) {
-    if (aulaRuntimeLoading) return;
+    if (aulaRuntimeLoading &&
+        !hasValidPedagogicalContent(aulaSnapshot?.conteudo)) {
+      return;
+    }
     stopActiveAudio();
     final answer = AnswerLetter.values.firstWhere(
       (value) => value.name == letter,
@@ -1241,9 +1242,11 @@ extension LabSessionFlowExtensions on LabSession {
     );
     _notifyFromChild();
   }
-
   Future<void> submitAulaSignal(int value) async {
-    if (aulaRuntimeLoading) return;
+    if (aulaRuntimeLoading &&
+        !hasValidPedagogicalContent(aulaSnapshot?.conteudo)) {
+      return;
+    }
     if (aulaSnapshot?.phase.type == ClassroomPhaseType.avancoPendente) return;
     stopActiveAudio();
     final signal = switch (value) {
@@ -1271,7 +1274,6 @@ extension LabSessionFlowExtensions on LabSession {
     final organism = _activeOrganism ?? _organismForActiveLesson();
     await _doSignal(organism, signal);
   }
-
   Future<void> _doSignal(SimOrganism organism, DecisionSignal signal) async {
     aulaRuntimeError = null;
     _notifyFromChild();
@@ -1281,6 +1283,7 @@ extension LabSessionFlowExtensions on LabSession {
       _bindActiveLessonMedia(organism);
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
       _keepActiveAulaOfflineWindowWarm(organism, source: 'cyber.aula.signal');
+      prefetchAuxRoomsAfterMainEvidence(organism);
       await _openTriggeredAmparoIfNeeded(organism);
       _scheduleAutoAdvanceAfterFeedback(organism);
     } catch (error) {
@@ -1290,7 +1293,6 @@ extension LabSessionFlowExtensions on LabSession {
       _notifyFromChild();
     }
   }
-
   void _scheduleAutoAdvanceAfterFeedback(SimOrganism organism) {
     final phase = aulaSnapshot?.phase;
     if (phase?.type != ClassroomPhaseType.concluido ||
@@ -1299,12 +1301,17 @@ extension LabSessionFlowExtensions on LabSession {
     }
     final generation = ++_autoAdvanceAulaGeneration;
     Future<void>.delayed(_autoAdvanceAfterFeedbackDelay, () async {
-      if (_disposed ||
-          generation != _autoAdvanceAulaGeneration ||
-          _activeOrganism != organism ||
-          aulaRuntimeLoading ||
-          aulaSnapshot?.phase.type != ClassroomPhaseType.concluido ||
-          aulaSnapshot?.phase.wasCorrect != true) {
+      final canAdvance =
+          !_disposed &&
+          generation == _autoAdvanceAulaGeneration &&
+          _activeOrganism == organism &&
+          aulaSnapshot?.phase.type == ClassroomPhaseType.concluido &&
+          aulaSnapshot?.phase.wasCorrect == true;
+      if (!canAdvance) return;
+      if (aulaRuntimeLoading) {
+        Future<void>.delayed(const Duration(milliseconds: 1000), () async {
+          if (!aulaRuntimeLoading) await advanceAula();
+        });
         return;
       }
       await advanceAula();

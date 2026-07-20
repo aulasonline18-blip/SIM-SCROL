@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -162,6 +163,56 @@ void main() {
         expect(event.payload['auxiliary'], isTrue);
         expect(auxAttempts.single['source'], 'review:0');
         expect(auxAttempts.single['authoritative'], isFalse);
+      },
+    );
+
+    test(
+      'abrir revisao com questao pre-preparada nao mostra spinner',
+      () async {
+        final states = {
+          'L1': _state(auxRooms: _pendingAux(['M2'])),
+        };
+        final client = _FakeT02();
+        final service = _service(states, client);
+        final review = ReviewRoomService(service);
+        final context = _context('L1');
+
+        review.prefetchLikelyReviewQuestion(context);
+        await Future<void>.delayed(Duration.zero);
+        final view = review.openReviewRoomInstant(context, 5);
+
+        expect(view.status, ReviewRoomStatus.ready);
+        expect(view.conteudo, isNotNull);
+        expect(view.status, isNot(ReviewRoomStatus.preparing));
+        expect(
+          states['L1']!.events.map((event) => event.type),
+          containsAll([
+            'REVIEW_PREFETCH_STARTED',
+            'REVIEW_PREFETCH_READY',
+            'REVIEW_OPENED_WITH_READY_CONTENT',
+          ]),
+        );
+      },
+    );
+
+    test(
+      'abrir revisao sem questao pronta mostra intro viva imediatamente',
+      () {
+        final states = {
+          'L1': _state(auxRooms: _pendingAux(['M2'])),
+        };
+        final client = _DelayedT02();
+        final review = ReviewRoomService(_service(states, client));
+
+        final view = review.openReviewRoomInstant(_context('L1'), 5);
+
+        expect(view.status, ReviewRoomStatus.intro);
+        expect(view.conteudo, isNull);
+        expect(client.auxCalls, 1);
+        expect(
+          states['L1']!.events.map((event) => event.type),
+          contains('REVIEW_OPENED_WITH_INTRO'),
+        );
       },
     );
 
@@ -351,4 +402,15 @@ class _FakeT02 implements T02LessonClient {
   @override
   Future<T02LessonMaterial> placement(T02LessonRequest request) =>
       auxiliaryRoom(request);
+}
+
+class _DelayedT02 extends _FakeT02 {
+  final _completer = Completer<T02LessonMaterial>();
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) {
+    auxCalls += 1;
+    lastRequest = request;
+    return _completer.future;
+  }
 }

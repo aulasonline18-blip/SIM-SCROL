@@ -29,6 +29,7 @@ import '../../sim/external_ai/sim_server_attachment_client.dart';
 import '../../sim/classroom/classroom_models.dart';
 import '../../sim/classroom/lesson_runtime_engine.dart';
 import '../../sim/classroom/lesson_main_view_model.dart';
+import '../../sim/classroom/pedagogical_slot_visibility.dart';
 import '../../sim/experience/student_experience_types.dart';
 import '../../sim/experience/curriculum_utils.dart';
 import '../../sim/experience/warmup_bridge_coordinator.dart';

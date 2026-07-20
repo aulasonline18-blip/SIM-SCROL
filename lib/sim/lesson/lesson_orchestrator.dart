@@ -166,8 +166,10 @@ class LessonOrchestrator {
 
     Future<CompleteLesson> fetchFn() => _fetchText(params);
     final queued = _bgText.run(() async {
-      final gate = _lastLessonFullyComplete;
-      await gate;
+      if (priority != 'hot-local') {
+        final gate = _lastLessonFullyComplete;
+        await gate;
+      }
       return fetchFn();
     });
 
@@ -187,7 +189,9 @@ class LessonOrchestrator {
           throw error;
         });
     _textInflight[key] = future;
-    _lastLessonFullyComplete = future.then((_) {}).catchError((_) {});
+    if (priority != 'hot-local') {
+      _lastLessonFullyComplete = future.then((_) {}).catchError((_) {});
+    }
     return future;
   }
 

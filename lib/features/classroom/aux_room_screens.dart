@@ -64,6 +64,15 @@ class ReviewRoomScreen extends StatelessWidget {
     if (review.status == ReviewRoomStatus.preparing) {
       return _Preparing(stage: 'review', onClose: session.closeReviewRoom);
     }
+    if (review.status == ReviewRoomStatus.intro) {
+      return _LiveIntro(
+        title: t('aux_review_button'),
+        body:
+            'Vamos revisitar um ponto importante com calma. A aula principal continua preservada enquanto preparo a pergunta.',
+        statusText: '${review.idx + 1}/${review.count}',
+        onClose: session.closeReviewRoom,
+      );
+    }
     return _AuxQuestionScaffold(
       title: t('aux_review_button'),
       statusText: '${review.idx + 1}/${review.count}',
@@ -91,15 +100,19 @@ class RecoveryRoomScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final recovery = session.recoveryRoom;
     if (recovery == null) return const SizedBox.shrink();
-    if (recovery.status == RecoveryRoomStatus.preparing ||
-        recovery.status == RecoveryRoomStatus.intro) {
-      return _Preparing(
-        stage: 'recovery',
+    if (recovery.status == RecoveryRoomStatus.intro) {
+      return _LiveIntro(
+        title: t('aux_recovery_intro_msg'),
+        body:
+            'Vamos recuperar este ponto antes de concluir. A pendencia continua guardada e sua aula principal nao foi alterada.',
+        statusText: recovery.queue.isEmpty
+            ? 'Recuperacao'
+            : '${recovery.idx + 1}/${recovery.queue.length}',
         onClose: session.closeRecoveryRoom,
-        onContinue: recovery.status == RecoveryRoomStatus.intro
-            ? session.recoveryContinue
-            : null,
       );
+    }
+    if (recovery.status == RecoveryRoomStatus.preparing) {
+      return _Preparing(stage: 'recovery', onClose: session.closeRecoveryRoom);
     }
     return _AuxQuestionScaffold(
       title: t('aux_recovery_intro_msg'),
@@ -128,6 +141,17 @@ class AmparoRoomScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final amparo = session.amparoRoom;
     if (amparo == null) return const SizedBox.shrink();
+    if (amparo.status == AmparoRoomStatus.intro) {
+      return _LiveIntro(
+        title: 'Amparo',
+        body:
+            'Vamos retomar juntos. Primeiro eu organizo o ponto de travamento; depois seguimos com uma pergunta curta.',
+        statusText: amparo.stations.isEmpty
+            ? 'Amparo'
+            : '${amparo.idx + 1}/${amparo.stations.length} - nivel ${amparo.amparoLvl}',
+        onClose: session.closeAmparoRoom,
+      );
+    }
     if (amparo.status == AmparoRoomStatus.preparing) {
       return _Preparing(stage: 'amparo', onClose: session.closeAmparoRoom);
     }
@@ -153,16 +177,49 @@ class AmparoRoomScreen extends StatelessWidget {
   }
 }
 
-class _Preparing extends StatelessWidget {
-  const _Preparing({
-    required this.stage,
+class _LiveIntro extends StatelessWidget {
+  const _LiveIntro({
+    required this.title,
+    required this.body,
+    required this.statusText,
     required this.onClose,
-    this.onContinue,
   });
+
+  final String title;
+  final String body;
+  final String statusText;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(title),
+      leading: BackButton(onPressed: onClose),
+      actions: [
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(statusText),
+          ),
+        ),
+      ],
+    ),
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        AuxRoomCard(title: title, body: body),
+        const SizedBox(height: 14),
+        const LinearProgressIndicator(),
+      ],
+    ),
+  );
+}
+
+class _Preparing extends StatelessWidget {
+  const _Preparing({required this.stage, required this.onClose});
 
   final String stage;
   final VoidCallback onClose;
-  final VoidCallback? onContinue;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -170,8 +227,8 @@ class _Preparing extends StatelessWidget {
     body: Center(
       child: SimPreparationExperience(
         stage: stage,
-        ready: onContinue != null,
-        onContinue: onContinue ?? onClose,
+        ready: false,
+        onContinue: onClose,
       ),
     ),
   );

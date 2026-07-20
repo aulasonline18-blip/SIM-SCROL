@@ -31,6 +31,8 @@ class StudentAuxRoomService {
   final AuxRoomT02Caller t02Caller;
   final bool auxRoomsEnabled;
   final bool recoveryRoomEnabled;
+  final Map<String, Future<PreparedAuxRoomQuestion>> _questionInflight = {};
+  final Map<String, PreparedAuxRoomQuestion> _questionReady = {};
 
   List<AuxRoomItem> normalizeItems(List<AuxRoomItem> items) {
     return items
@@ -259,6 +261,71 @@ class StudentAuxRoomService {
     return PreparedAuxRoomQuestion.ok(AuxRoomContent.fromLesson(content));
   }
 
+  String auxQuestionKey({
+    required String lessonLocalId,
+    required AuxRoomMode mode,
+    required String? marker,
+  }) => '$lessonLocalId|${mode.name}|${marker ?? ''}';
+
+  PreparedAuxRoomQuestion? cachedAuxRoomQuestion({
+    required String lessonLocalId,
+    required AuxRoomMode mode,
+    required String? marker,
+  }) {
+    return _questionReady[auxQuestionKey(
+      lessonLocalId: lessonLocalId,
+      mode: mode,
+      marker: marker,
+    )];
+  }
+
+  Future<PreparedAuxRoomQuestion> prefetchAuxRoomQuestion({
+    required String lessonLocalId,
+    required AuxRoomMode mode,
+    required AuxRoomProfile profile,
+    required List<AuxRoomItem> items,
+    required String? marker,
+    required DecisionSignal signal,
+  }) {
+    final key = auxQuestionKey(
+      lessonLocalId: lessonLocalId,
+      mode: mode,
+      marker: marker,
+    );
+    final ready = _questionReady[key];
+    if (ready != null) return Future.value(ready);
+    final inflight = _questionInflight[key];
+    if (inflight != null) return inflight;
+    _appendAuxEvent(lessonLocalId, _prefetchStartedEvent(mode), {
+      'marker': marker,
+      'signal': signal.value,
+    });
+    final future =
+        prepareAuxRoomQuestion(
+              lessonLocalId: lessonLocalId,
+              mode: mode,
+              profile: profile,
+              items: items,
+              marker: marker,
+              signal: signal,
+            )
+            .then((prepared) {
+              if (prepared.ok) {
+                _questionReady[key] = prepared;
+                _appendAuxEvent(lessonLocalId, _prefetchReadyEvent(mode), {
+                  'marker': marker,
+                  'signal': signal.value,
+                });
+              }
+              return prepared;
+            })
+            .whenComplete(() {
+              _questionInflight.remove(key);
+            });
+    _questionInflight[key] = future;
+    return future;
+  }
+
   Future<PreparedAuxRoomQuestion> prepareAmparoRoomStep({
     required AmparoRoomContext context,
     required AmparoStation station,
@@ -278,6 +345,13 @@ class StudentAuxRoomService {
             .map((entry) => JsonMap.from(entry))
             .toList();
     try {
+      _appendAuxEvent(context.lessonLocalId, 'AMPARO_T02_STARTED', {
+        'marker': picked.marker,
+        'itemIdx': picked.itemIdx,
+        'layer': station.layer.value,
+        'amparoLvl': amparoLevel,
+        'amparoStepMarker': station.marker,
+      });
       final result = await t02Caller.call(
         lessonLocalId: context.lessonLocalId,
         mode: AuxRoomMode.amparo,
@@ -323,9 +397,16 @@ class StudentAuxRoomService {
         'amparoStepMarker': station.marker,
         'amparoType': station.amparoType,
       });
+      _appendAuxEvent(context.lessonLocalId, 'AMPARO_T02_READY', {
+        'marker': picked.marker,
+        'itemIdx': picked.itemIdx,
+        'layer': station.layer.value,
+        'amparoLvl': amparoLevel,
+        'amparoStepMarker': station.marker,
+      });
       return PreparedAuxRoomQuestion.ok(AuxRoomContent.fromLesson(content));
     } catch (_) {
-      _appendAuxEvent(context.lessonLocalId, 'AMPARO_FAILED', {
+      _appendAuxEvent(context.lessonLocalId, 'AMPARO_T02_FAILED', {
         'marker': context.marker,
         'itemIdx': context.itemIdx,
         'layer': context.layer.value,
@@ -586,6 +667,10 @@ class StudentAuxRoomService {
     );
   }
 
+  void recordAuxEvent(String lessonLocalId, String type, JsonMap payload) {
+    _appendAuxEvent(lessonLocalId, type, payload);
+  }
+
   void _appendAuxEvent(String lessonLocalId, String type, JsonMap payload) {
     final state = readState(lessonLocalId);
     writeState(
@@ -602,6 +687,20 @@ class StudentAuxRoomService {
     );
   }
 }
+
+String _prefetchStartedEvent(AuxRoomMode mode) => switch (mode) {
+  AuxRoomMode.review => 'REVIEW_PREFETCH_STARTED',
+  AuxRoomMode.recovery => 'RECOVERY_PREFETCH_STARTED',
+  AuxRoomMode.amparo => 'AMPARO_T02_STARTED',
+  AuxRoomMode.doubt => 'DOUBT_T02_STARTED',
+};
+
+String _prefetchReadyEvent(AuxRoomMode mode) => switch (mode) {
+  AuxRoomMode.review => 'REVIEW_PREFETCH_READY',
+  AuxRoomMode.recovery => 'RECOVERY_PREFETCH_READY',
+  AuxRoomMode.amparo => 'AMPARO_T02_READY',
+  AuxRoomMode.doubt => 'DOUBT_T02_READY',
+};
 
 JsonMap _optionsPayload(Map<AnswerLetter, String> options) => {
   'A': options[AnswerLetter.A] ?? '',

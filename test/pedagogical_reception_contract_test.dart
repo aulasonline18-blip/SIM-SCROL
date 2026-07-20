@@ -39,6 +39,10 @@ void main() {
     final state = session.canonicalStore!.readState(id);
     expect(session.route, '/cyber/placement');
     expect(state.placement, isNull);
+    expect(
+      state.events.map((event) => event.type),
+      contains('ONBOARDING_OBJECTIVE_SAVED_IMMEDIATE'),
+    );
     expect(state.profile.extra['entry_path'], 'guided_path');
     expect(state.profile.extra['pedagogical_entry_ficha'], isA<Map>());
     expect(state.current, before.current);
@@ -77,6 +81,10 @@ void main() {
       expect(session.route, '/cyber/curriculo');
       expect(state.placement?['status'], 'skipped');
       expect(state.placement?['choice'], 'material_based');
+      expect(
+        state.events.map((event) => event.type),
+        contains('ONBOARDING_OBJECTIVE_SAVED_IMMEDIATE'),
+      );
       expect(state.profile.extra['material_based'], isTrue);
       expect(state.profile.extra['attachments_text'], contains('Questao 1'));
       expect(

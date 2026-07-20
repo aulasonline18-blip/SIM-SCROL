@@ -156,6 +156,8 @@ void main() {
         expect(event.payload['writesProgress'], isFalse);
         expect(event.payload['writesTruth'], isFalse);
         expect(event.payload['writesMastery'], isFalse);
+        expect(event.payload['requiresServerDecision'], isFalse);
+        expect(event.payload['decisionSource'], 'sim_app_local_aux_evidence');
         expect(event.payload['auxiliary'], isTrue);
         expect(history.single['eventType'], 'DOUBT_ANSWER_READY');
         expect(history.single['nextAction'], 'return_to_lesson');
@@ -200,6 +202,7 @@ void main() {
       final controller = LessonDoubtController(
         caller: DoubtT02Caller(client: client),
       );
+      var staleIgnored = false;
 
       final pending = controller.submitDoubt(
         lessonLocalId: 'L1',
@@ -211,6 +214,7 @@ void main() {
         marker: 'M1',
         input: const DoubtInputDraft(text: 'Duvida'),
         isScopeStillCurrent: (scope) => scope.key == currentKey,
+        onStaleIgnored: (_) => staleIgnored = true,
       );
       await Future<void>.delayed(Duration.zero);
       currentKey = 'L1|M2|1|1';
@@ -219,6 +223,7 @@ void main() {
 
       expect(controller.state.status, DoubtStatus.processing);
       expect(controller.state.response, isNull);
+      expect(staleIgnored, isTrue);
     });
 
     test('falha T02 nao cria resposta fake', () async {

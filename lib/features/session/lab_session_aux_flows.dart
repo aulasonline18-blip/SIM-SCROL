@@ -1,6 +1,13 @@
 part of 'lab_session.dart';
 
 extension LabSessionAuxFlowExtensions on LabSession {
+  void prefetchAuxRoomsAfterMainEvidence(SimOrganism organism) {
+    try {
+      final reviewContext = _reviewRoomContext(organism);
+      organism.auxRoomsController.prefetchReview(reviewContext);
+      organism.auxRoomsController.prefetchRecovery(RecoveryRoomContext(lessonLocalId: reviewContext.lessonLocalId, topic: reviewContext.topic, items: reviewContext.items, layer: reviewContext.layer, profile: reviewContext.profile));
+    } catch (_) {}
+  }
   ReviewRoomContext _reviewRoomContext(SimOrganism organism) {
     final state = organism.stateService.ensure(
       lessonLocalId: organism.lessonLocalId,
@@ -35,37 +42,33 @@ extension LabSessionAuxFlowExtensions on LabSession {
       ),
     );
   }
-
   RecoveryRoomContext _recoveryRoomContext(SimOrganism organism) {
     final reviewContext = _reviewRoomContext(organism);
-    return RecoveryRoomContext(
-      lessonLocalId: reviewContext.lessonLocalId,
-      topic: reviewContext.topic,
-      items: reviewContext.items,
-      layer: reviewContext.layer,
-      profile: reviewContext.profile,
-    );
+    return RecoveryRoomContext(lessonLocalId: reviewContext.lessonLocalId, topic: reviewContext.topic, items: reviewContext.items, layer: reviewContext.layer, profile: reviewContext.profile);
   }
-
   Future<void> startReviewRoom(int count) async {
     ReviewRoomView? previous;
     try {
       final organism = _activeOrganism ?? _organismForActiveLesson();
       if (recoveryRoom != null) return;
       previous = lessonUiState.reviewRoom;
-      setReviewRoom(
-        ReviewRoomView(
-          status: ReviewRoomStatus.preparing,
-          count: count == 10 ? 10 : 5,
-          queue: previous?.queue ?? const [],
-          idx: previous?.idx ?? 0,
-        ),
-      );
-      await organism.auxRoomsController.startReview(
-        _reviewRoomContext(organism),
-        count,
-      );
+      final context = _reviewRoomContext(organism);
+      organism.auxRoomsController.openReviewInstant(context, count);
       setReviewRoom(organism.auxRoomsController.review);
+      unawaited(organism.auxRoomsController.resolveReview(context).then((_) {
+        final current = reviewRoom;
+        final resolved = organism.auxRoomsController.review;
+        if (current == null || current.idx != resolved.idx) return;
+        if (current.status == ReviewRoomStatus.intro ||
+            current.status == ReviewRoomStatus.preparing) {
+          setReviewRoom(resolved);
+        }
+      }).catchError((_) {
+        final current = reviewRoom;
+        if (current != null) {
+          setReviewRoom(current.copyWith(status: ReviewRoomStatus.failed, errMsg: 'Nao consegui preparar a revisao agora. Sua aula foi preservada.'));
+        }
+      }));
     } catch (error) {
       setReviewRoom(
         ReviewRoomView(
@@ -79,19 +82,16 @@ extension LabSessionAuxFlowExtensions on LabSession {
       );
     }
   }
-
   void reviewSelecionar(AnswerLetter letter) {
     final organism = _activeOrganism ?? _organismForActiveLesson();
     organism.auxRoomsController.reviewSelecionar(letter);
     setReviewRoom(organism.auxRoomsController.review);
   }
-
   void reviewContinue() {
     final current = reviewRoom;
     if (current == null) return;
     setReviewRoom(current.copyWith(status: ReviewRoomStatus.answering));
   }
-
   Future<void> reviewSignal(DecisionSignal signal) async {
     try {
       final organism = _activeOrganism ?? _organismForActiveLesson();
@@ -119,7 +119,6 @@ extension LabSessionAuxFlowExtensions on LabSession {
       );
     }
   }
-
   Future<void> reviewNext() async {
     try {
       final organism = _activeOrganism ?? _organismForActiveLesson();
@@ -145,21 +144,27 @@ extension LabSessionAuxFlowExtensions on LabSession {
       );
     }
   }
-
   Future<void> startRecoveryRoom() async {
     try {
       final organism = _activeOrganism ?? _organismForActiveLesson();
-      setRecoveryRoom(
-        const RecoveryRoomView(
-          status: RecoveryRoomStatus.preparing,
-          queue: [],
-          idx: 0,
-        ),
-      );
-      await organism.auxRoomsController.startRecovery(
-        _recoveryRoomContext(organism),
-      );
-      setRecoveryRoom(organism.auxRoomsController.recovery!);
+      final context = _recoveryRoomContext(organism);
+      organism.auxRoomsController.openRecoveryInstant(context);
+      final opened = organism.auxRoomsController.recovery;
+      if (opened != null) setRecoveryRoom(opened);
+      unawaited(organism.auxRoomsController.resolveRecovery(context).then((_) {
+        final current = recoveryRoom;
+        final resolved = organism.auxRoomsController.recovery;
+        if (current == null || resolved == null || current.idx != resolved.idx) return;
+        if (current.status == RecoveryRoomStatus.intro ||
+            current.status == RecoveryRoomStatus.preparing) {
+          setRecoveryRoom(resolved);
+        }
+      }).catchError((_) {
+        final current = recoveryRoom;
+        if (current != null) {
+          setRecoveryRoom(current.copyWith(status: RecoveryRoomStatus.failed, errMsg: 'Nao consegui preparar a recuperacao agora. Sua aula foi preservada.'));
+        }
+      }));
     } catch (error) {
       setRecoveryRoom(
         const RecoveryRoomView(
@@ -172,21 +177,18 @@ extension LabSessionAuxFlowExtensions on LabSession {
       );
     }
   }
-
   void recoverySelecionar(AnswerLetter letter) {
     final organism = _activeOrganism ?? _organismForActiveLesson();
     organism.auxRoomsController.recoverySelecionar(letter);
     final view = organism.auxRoomsController.recovery;
     if (view != null) setRecoveryRoom(view);
   }
-
   void recoveryContinue() {
     final organism = _activeOrganism ?? _organismForActiveLesson();
     organism.auxRoomsController.continueRecovery();
     final view = organism.auxRoomsController.recovery;
     if (view != null) setRecoveryRoom(view);
   }
-
   Future<void> recoverySignal(DecisionSignal signal) async {
     try {
       final organism = _activeOrganism ?? _organismForActiveLesson();
@@ -214,7 +216,6 @@ extension LabSessionAuxFlowExtensions on LabSession {
       );
     }
   }
-
   Future<void> recoveryNext() async {
     try {
       final organism = _activeOrganism ?? _organismForActiveLesson();
@@ -240,7 +241,6 @@ extension LabSessionAuxFlowExtensions on LabSession {
       );
     }
   }
-
   void finishRecovery() {
     final organism = _activeOrganism ?? _organismForActiveLesson();
     organism.auxRoomsController.finishRecovery(organism.lessonLocalId);

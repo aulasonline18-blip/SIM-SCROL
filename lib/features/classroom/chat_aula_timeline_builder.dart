@@ -1,5 +1,6 @@
 import '../../sim/classroom/classroom_models.dart';
 import '../../sim/classroom/lesson_runtime_engine.dart';
+import '../../sim/classroom/pedagogical_slot_visibility.dart';
 import '../../sim/lesson/lesson_models.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_i18n.dart';
@@ -98,7 +99,14 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
       );
   }
 
-  if (input.runtimeLoading && content == null) {
+  final showPreparation = shouldShowPreparationForCurrentPedagogicalSlot(
+    snapshot: snapshot,
+    runtimeLoading: input.runtimeLoading,
+  );
+  if (showPreparation &&
+      input.runtimeLoading &&
+      content == null &&
+      phase?.type != ClassroomPhaseType.avancoPendente) {
     messages.add(
       const ChatLessonMessage(
         id: 'runtime-loading',
@@ -113,7 +121,8 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
   final postAnswerAdvancePending =
       phase?.type == ClassroomPhaseType.avancoPendente &&
       (phase?.letter != null || phase?.signal != null);
-  if (content == null &&
+  if (showPreparation &&
+      content == null &&
       phase?.type == ClassroomPhaseType.avancoPendente &&
       !postAnswerAdvancePending) {
     messages.add(

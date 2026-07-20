@@ -4,8 +4,8 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 
 ## Resumo
 
-- Arquivos Dart classificados: 157
-- Linhas Dart em lib: 40106
+- Arquivos Dart classificados: 158
+- Linhas Dart em lib: 40492
 - UI: 34
 - Assistente local: 23
 - Motores pedagogicos: 33
@@ -85,6 +85,7 @@ Este inventario classifica todos os arquivos Dart vivos de `lib/` contra a Plant
 | `lib/sim/billing/sim_server_billing_clients.dart` | Ponte com servidor | billing | sim-billing | erro/falha | falha/retry | objetivo do aluno ate T00, aula/pergunta | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/classroom/classroom_models.dart` | Motores pedagogicos | motor-aula-local | sim-classroom | sessao/aula, item/camada/questao, avanco/advance-gate, erro/falha | sessao/aula, item, camada, questao, avanco, falha/retry | aula/pergunta, resposta do aluno, proxima camada ou proximo item | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/classroom/classroom_text_scale.dart` | Motores pedagogicos | motor-aula-local | sim-classroom | sessao/aula, item/camada/questao, avanco/advance-gate, erro/falha | sessao/aula, item, camada, questao, avanco, falha/retry | aula/pergunta, resposta do aluno, proxima camada ou proximo item | test/sim_app_architecture_shape_test.dart | manter |
+| `lib/sim/classroom/pedagogical_slot_visibility.dart` | Motores pedagogicos | autoridade-visual-aula | sim-classroom | sessao/aula, item/camada/questao, visual/imagem, erro/falha | sessao/aula, item, camada, questao, falha/retry | aula/pergunta, proxima camada ou proximo item, imagem | test/chat_aula_timeline_builder_test.dart, test/classroom_main_screen_health_test.dart, test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/classroom/lesson_answer_feedback.dart` | Motores pedagogicos | motor-aula-local | sim-classroom | sessao/aula, item/camada/questao, avanco/advance-gate, erro/falha | sessao/aula, item, camada, questao, avanco, falha/retry | aula/pergunta, resposta do aluno, proxima camada ou proximo item | test/sim_app_architecture_shape_test.dart | manter |
 | `lib/sim/classroom/lesson_answer_progress_controller.dart` | Motores pedagogicos | motor-aula-local | sim-classroom | sessao/aula, item/camada/questao, avanco/advance-gate, erro/falha | sessao/aula, item, camada, questao, avanco, falha/retry | aula/pergunta, resposta do aluno, proxima camada ou proximo item | test/m1_answer_signal_contract_test.dart, test/classroom_phase_test.dart | manter |
 | `lib/sim/classroom/lesson_hydration_engine.dart` | Motores pedagogicos | motor-aula-local | sim-classroom | sessao/aula, item/camada/questao, avanco/advance-gate, erro/falha | sessao/aula, item, camada, questao, avanco, falha/retry | aula/pergunta, resposta do aluno, proxima camada ou proximo item | test/sim_app_architecture_shape_test.dart | manter |

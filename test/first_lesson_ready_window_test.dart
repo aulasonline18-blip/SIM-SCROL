@@ -443,6 +443,47 @@ class BlockingVisualRefreshT02Client implements T02LessonClient {
   );
 }
 
+class BackgroundGateT02Client implements T02LessonClient {
+  final requests = <T02LessonRequest>[];
+  final backgroundStarted = Completer<void>();
+  final releaseBackground = Completer<void>();
+
+  @override
+  Future<T02LessonMaterial> completeLesson(T02LessonRequest request) async {
+    requests.add(request);
+    if (request.layer == LessonLayer.l1) {
+      if (!backgroundStarted.isCompleted) backgroundStarted.complete();
+      await releaseBackground.future;
+    }
+    return T02LessonMaterial(
+      explanation: 'Explicacao ${request.marker}/${request.layer.name}',
+      question: 'Pergunta ${request.marker}/${request.layer.name}?',
+      options: const {
+        AnswerLetter.A: 'A certa',
+        AnswerLetter.B: 'B errada',
+        AnswerLetter.C: 'C errada',
+      },
+      correctAnswer: AnswerLetter.A,
+      whyCorrect: 'Porque sim.',
+      whyWrong: const {'B': 'nao', 'C': 'nao'},
+      generatedAt: DateTime.fromMillisecondsSinceEpoch(1),
+      source: 'background-gate-t02',
+    );
+  }
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> doubt(T02LessonRequest request) =>
+      completeLesson(request);
+
+  @override
+  Future<T02LessonMaterial> placement(T02LessonRequest request) =>
+      completeLesson(request);
+}
+
 StudentLearningState _stateWithCurriculum() {
   const items = [
     CurriculumItem(marker: 'M1', text: 'Item 1'),
@@ -3592,4 +3633,253 @@ void main() {
     );
     releaseFinal.complete();
   });
+
+  test('M-EXP3: health reports fifteen textual slots and media pending', () {
+    const lessonId = 'cyber-window-health';
+    final prepared = preparedMaterialFromLesson(
+      lesson: const CompleteLesson(
+        conteudo: LessonContent(
+          explanation: 'Texto pronto sem imagem.',
+          question: 'Pergunta pronta?',
+          options: {
+            AnswerLetter.A: 'A',
+            AnswerLetter.B: 'B',
+            AnswerLetter.C: 'C',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+        imagem: null,
+        audioText: 'Texto pronto sem imagem. Pergunta pronta?',
+      ),
+      itemIdx: 0,
+      marker: 'M1',
+      layer: LessonLayer.l1,
+    );
+    final service = StudentLearningStateService(
+      seed: {
+        lessonId: _stateWithFiveItems().copyWith(
+          lessonLocalId: lessonId,
+          readyLessonMaterials: {
+            preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): prepared,
+          },
+        ),
+      },
+    );
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final engine = DopamineReadyWindowEngine(
+      service: service,
+      orchestrator: orchestrator,
+    );
+    final items = List<DopamineWindowItem>.generate(
+      5,
+      (index) => DopamineWindowItem(
+        text: 'Item ${index + 1}',
+        marker: 'M${index + 1}',
+      ),
+    );
+    final slots = engine.buildDopamineReadySlots(
+      lessonLocalId: lessonId,
+      source: 'health-test',
+      items: items,
+      currentItemIdx: 0,
+      currentLayer: LessonLayer.l1,
+      buildParams: (item, layer) => CompleteLessonParams(
+        lessonLocalId: lessonId,
+        item: item.text,
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: layer,
+        mode: LessonMode.session,
+        marker: item.marker,
+        itemIdx: items.indexOf(item),
+      ),
+    );
+
+    final health = engine.inspectDopamineReadyWindow(
+      lessonLocalId: lessonId,
+      slots: slots,
+      source: 'health-test',
+    );
+
+    expect(health.expectedCount, localLessonTraySize);
+    expect(health.readyCount, 1);
+    expect(health.hotTextReadyCount, 1);
+    expect(health.mediaPendingCount, 1);
+    expect(health.missingSlots, hasLength(localLessonTraySize - 1));
+    expect(health.windowStart?['marker'], 'M1');
+    expect(health.windowStart?['layer'], LessonLayer.l1.value);
+  });
+
+  test('M-EXP3: one-item curriculum expects only three real slots', () {
+    const lessonId = 'cyber-small-window-health';
+    final service = StudentLearningStateService();
+    service.ensure(lessonLocalId: lessonId);
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final engine = DopamineReadyWindowEngine(
+      service: service,
+      orchestrator: orchestrator,
+    );
+    final slots = engine.buildDopamineReadySlots(
+      lessonLocalId: lessonId,
+      source: 'small-health',
+      items: const [DopamineWindowItem(text: 'Item unico', marker: 'M1')],
+      currentItemIdx: 0,
+      currentLayer: LessonLayer.l1,
+      buildParams: (item, layer) => CompleteLessonParams(
+        lessonLocalId: lessonId,
+        item: item.text,
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: layer,
+        mode: LessonMode.session,
+        marker: item.marker,
+        itemIdx: 0,
+      ),
+    );
+
+    final health = engine.inspectDopamineReadyWindow(
+      lessonLocalId: lessonId,
+      slots: slots,
+      source: 'small-health',
+    );
+
+    expect(slots.map((slot) => slot.layer), [
+      LessonLayer.l1,
+      LessonLayer.l2,
+      LessonLayer.l3,
+    ]);
+    expect(health.expectedCount, 3);
+    expect(health.missingSlots, hasLength(3));
+  });
+
+  test(
+    'M-EXP3: stale wrong slot is discarded through readiness resolver',
+    () async {
+      const lessonId = 'cyber-stale-window';
+      final wrong = preparedMaterialFromLesson(
+        lesson: const CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto errado.',
+            question: 'Pergunta errada?',
+            options: {
+              AnswerLetter.A: 'A',
+              AnswerLetter.B: 'B',
+              AnswerLetter.C: 'C',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText: 'Texto errado.',
+        ),
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l2,
+      );
+      final service = StudentLearningStateService(
+        seed: {
+          lessonId: _stateWithFiveItems().copyWith(
+            lessonLocalId: lessonId,
+            readyLessonMaterials: {
+              preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): wrong,
+            },
+          ),
+        },
+      );
+      final t02 = FakeT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      );
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      );
+
+      final result = await engine.runDopamineReadyWindowFromStudentState(
+        lessonLocalId: lessonId,
+        source: 'stale-test',
+        maxSlots: 1,
+      );
+
+      expect(result, [true]);
+      expect(t02.calls, 1);
+      final key = preparedLessonMaterialKey(0, 'M1', LessonLayer.l1);
+      expect(
+        service.read(lessonId)!.readyLessonMaterials[key]?['for_layer'],
+        'l1',
+      );
+      expect(
+        service
+            .read(lessonId)!
+            .events
+            .where(
+              (event) => event.type == 'DOPAMINE_WINDOW_SLOT_STALE_DISCARDED',
+            ),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'M-EXP3: hot-local textual request is not blocked by old background',
+    () async {
+      final t02 = BackgroundGateT02Client();
+      final orchestrator = LessonOrchestrator(
+        t02Client: t02,
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      );
+      const backgroundParams = CompleteLessonParams(
+        lessonLocalId: 'cyber-hot-bypass',
+        item: 'Item 1',
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: LessonLayer.l1,
+        mode: LessonMode.session,
+        marker: 'M1',
+        itemIdx: 0,
+      );
+      const hotParams = CompleteLessonParams(
+        lessonLocalId: 'cyber-hot-bypass',
+        item: 'Item 1',
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: LessonLayer.l2,
+        mode: LessonMode.session,
+        marker: 'M1',
+        itemIdx: 0,
+      );
+
+      final background = orchestrator.prefetchCompleteLesson(
+        backgroundParams,
+        priority: 'background',
+        deferMedia: true,
+      );
+      await t02.backgroundStarted.future;
+      final hot = await orchestrator
+          .prefetchCompleteLesson(
+            hotParams,
+            priority: 'hot-local',
+            deferMedia: true,
+          )
+          .timeout(const Duration(milliseconds: 300));
+
+      expect(hot.conteudo.question, contains('l2'));
+      expect(
+        t02.requests.map((request) => request.layer).toList(),
+        containsAllInOrder([LessonLayer.l1, LessonLayer.l2]),
+      );
+      t02.releaseBackground.complete();
+      await background;
+    },
+  );
 }

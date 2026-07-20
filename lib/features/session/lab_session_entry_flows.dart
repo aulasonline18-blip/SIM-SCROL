@@ -32,6 +32,13 @@ extension LabSessionEntryFlows on LabSession {
       locale: localeContract,
       guided: guided,
     );
+    _recordOnboardingFlowEvent(
+      'ONBOARDING_OBJECTIVE_SAVED_IMMEDIATE',
+      payload: {
+        'entry_path': materialEntryPath ? 'material_help' : 'guided_path',
+        'route': materialEntryPath ? '/cyber/curriculo' : '/cyber/placement',
+      },
+    );
     _enqueueLessonForRemoteVaultSync(id, reason: 'new_lesson_started');
     entryStatus = 'pedido_recebido';
     entryError = null;

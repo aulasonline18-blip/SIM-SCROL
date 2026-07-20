@@ -42,6 +42,58 @@ class AmparoRoomService {
     return _prepare(context: context, stations: stations, idx: 0, level: level);
   }
 
+  AmparoRoomView openAmparoRoomInstant(AmparoRoomContext context) {
+    if (!shouldStartAmparoRoom(context.lessonLocalId)) {
+      return const AmparoRoomView(
+        status: AmparoRoomStatus.done,
+        stations: [],
+        idx: 0,
+        amparoLvl: 0,
+      );
+    }
+    final state = service.readState(context.lessonLocalId);
+    final amparo = ensureAuxRooms(state)['amparo'] as Map;
+    final level = ((amparo['amparoLvl'] as num?)?.toInt() ?? 1).clamp(
+      1,
+      AmparoGate.maxCycles,
+    );
+    final stations = planEngine.buildStations();
+    service.registerAmparoStarted(context.lessonLocalId, stations, level);
+    service.recordAuxEvent(
+      context.lessonLocalId,
+      'AMPARO_OPENED_WITH_LOCAL_SUPPORT',
+      {
+        'marker': context.marker,
+        'itemIdx': context.itemIdx,
+        'layer': context.layer.value,
+        'amparoLvl': level,
+      },
+    );
+    return AmparoRoomView(
+      status: AmparoRoomStatus.intro,
+      stations: stations,
+      idx: 0,
+      amparoLvl: level,
+    );
+  }
+
+  Future<AmparoRoomView> resolveAmparoRoomStep(
+    AmparoRoomContext context,
+    AmparoRoomView view,
+  ) {
+    if (view.status == AmparoRoomStatus.ready ||
+        view.status == AmparoRoomStatus.result ||
+        view.status == AmparoRoomStatus.done) {
+      return Future.value(view);
+    }
+    return _prepare(
+      context: context,
+      stations: view.stations,
+      idx: view.idx,
+      level: view.amparoLvl,
+    );
+  }
+
   Future<AmparoRoomView> _prepare({
     required AmparoRoomContext context,
     required List<AmparoStation> stations,

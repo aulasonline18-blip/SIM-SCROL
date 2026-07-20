@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -146,6 +147,59 @@ void main() {
       expect(client.lastRequest?.profile['amparo_step_marker'], 'AMPARO_001');
       expect(client.lastRequest?.profile['amparo_type'], 'reestablishment');
       expect(client.lastRequest?.profile['current_question'], isNotEmpty);
+    });
+
+    test('amparo abre em menos de 100ms com acolhimento local', () {
+      final states = {'L1': _triggeredState()};
+      final room = AmparoRoomService(_service(states, _DelayedT02()));
+
+      final watch = Stopwatch()..start();
+      final view = room.openAmparoRoomInstant(_context());
+      watch.stop();
+
+      expect(watch.elapsedMilliseconds, lessThan(100));
+      expect(view.status, AmparoRoomStatus.intro);
+      expect(view.conteudo, isNull);
+      expect(
+        states['L1']!.events.map((event) => event.type),
+        contains('AMPARO_OPENED_WITH_LOCAL_SUPPORT'),
+      );
+    });
+
+    test('T02 chegando troca amparo para estacao pronta', () async {
+      final states = {'L1': _triggeredState()};
+      final room = AmparoRoomService(_service(states, _FakeT02()));
+      final opened = room.openAmparoRoomInstant(_context());
+
+      final resolved = await room.resolveAmparoRoomStep(_context(), opened);
+
+      expect(opened.status, AmparoRoomStatus.intro);
+      expect(resolved.status, AmparoRoomStatus.ready);
+      expect(resolved.conteudo, isNotNull);
+      expect(
+        states['L1']!.events.map((event) => event.type),
+        containsAll(['AMPARO_T02_STARTED', 'AMPARO_T02_READY']),
+      );
+    });
+
+    test('T02 falhando apos acolhimento preserva aula principal', () async {
+      final states = {'L1': _triggeredState()};
+      final before = states['L1']!;
+      final room = AmparoRoomService(_service(states, _FakeT02(fail: true)));
+      final opened = room.openAmparoRoomInstant(_context());
+
+      final resolved = await room.resolveAmparoRoomStep(_context(), opened);
+      final after = states['L1']!;
+
+      expect(resolved.status, AmparoRoomStatus.failed);
+      expect(resolved.errMsg, contains('preservada'));
+      expect(after.current?.marker, before.current?.marker);
+      expect(after.progress?.itemIdx, before.progress?.itemIdx);
+      expect(after.attempts, before.attempts);
+      expect(
+        after.events.map((event) => event.type),
+        contains('AMPARO_T02_FAILED'),
+      );
     });
 
     test(
@@ -389,4 +443,15 @@ class _FakeT02 implements T02LessonClient {
   @override
   Future<T02LessonMaterial> placement(T02LessonRequest request) =>
       auxiliaryRoom(request);
+}
+
+class _DelayedT02 extends _FakeT02 {
+  final _completer = Completer<T02LessonMaterial>();
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) {
+    auxCalls += 1;
+    lastRequest = request;
+    return _completer.future;
+  }
 }

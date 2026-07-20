@@ -169,6 +169,7 @@ void main() {
     expect(drawer, contains('Icons.delete_outline'));
     expect(billing, contains('SimEnvironment.useGooglePlayBilling'));
     expect(billing, contains('pay_google_play_provider'));
+    expect(onboarding, isNot(contains('openWarmupBridge')));
   });
 
   testWidgets('curriculum preparation keeps animated robot screen alive', (

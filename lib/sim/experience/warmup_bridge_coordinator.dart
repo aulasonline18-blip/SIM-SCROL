@@ -35,6 +35,12 @@ class WarmupBridgeCoordinator {
     if (!officialLessonReady) {
       return !warmupExpected && hasLocalOfficialAulaState;
     }
+    if (warmupExpected &&
+        !warmupUnavailableAfterExpected &&
+        route != '/cyber/warmup' &&
+        !continueRequested) {
+      return false;
+    }
     return true;
   }
 

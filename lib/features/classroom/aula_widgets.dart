@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../shared/widgets/shared_widgets.dart';
+import '../../sim/classroom/pedagogical_slot_visibility.dart';
 import '../../sim/media/visual_router_n2.dart';
 import '../../sim/ui/sim_design_system.dart';
 import '../../sim/ui/sim_i18n.dart';
@@ -125,7 +126,8 @@ class LessonImagePanel extends StatelessWidget {
         ),
       );
     }
-    if (session.aulaRuntimeLoading || session.imageStatus == 'loading') {
+    if (session.imageStatus == 'loading' &&
+        !hasValidPedagogicalContent(session.aulaSnapshot?.conteudo)) {
       return StatusLine(
         icon: Icons.image,
         text: t('aula_image_loading'),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/auxiliary/doubt_input_sheet.dart';
 import '../../sim/classroom/classroom_text_scale.dart';
+import '../../sim/classroom/pedagogical_slot_visibility.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/ui/sim_theme.dart';
 import '../../sim/ui/widgets/fixed_bubble.dart';
@@ -200,10 +201,12 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   bool _hasLessonImagePanel() {
     final imageData = widget.session.aulaSnapshot?.imagem;
     final hasImage = imageData != null && imageData.trim().isNotEmpty;
+    final hasPedagogicalContent = hasValidPedagogicalContent(
+      widget.session.aulaSnapshot?.conteudo,
+    );
     return hasImage ||
         widget.session.imageError != null ||
-        widget.session.imageStatus == 'loading' ||
-        (widget.session.aulaRuntimeLoading && imageData == null);
+        (!hasPedagogicalContent && widget.session.imageStatus == 'loading');
   }
 
   void _appendStudentDoubtMessage(DoubtInputDraft draft) {
@@ -268,10 +271,14 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       MediaQuery.sizeOf(context).width,
     );
     final snapshotImage = snapshot?.imagem;
+    final hasPedagogicalContent = hasValidPedagogicalContent(
+      snapshot?.conteudo,
+    );
     final chatImageStatus =
-        session.aulaRuntimeLoading &&
-            (snapshotImage == null || snapshotImage.trim().isEmpty)
-        ? 'loading'
+        hasPedagogicalContent &&
+            (snapshotImage == null || snapshotImage.trim().isEmpty) &&
+            session.imageStatus == 'loading'
+        ? 'idle'
         : session.imageStatus;
     final messages = _mergeConversationMessages(
       session,

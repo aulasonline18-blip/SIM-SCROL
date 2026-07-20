@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -191,6 +192,50 @@ void main() {
         expect(auxAttempts.single['writesProgress'], isFalse);
       },
     );
+
+    test('recovery pronto abre questao imediatamente', () async {
+      final states = {
+        'L1': _state(auxRooms: _auxWith([_pending('M1')])),
+      };
+      final client = _FakeT02();
+      final service = _service(states, client);
+      final recovery = RecoveryRoomService(service);
+      final context = _context('L1');
+
+      recovery.prefetchPendingRecoveryQuestion(context);
+      await Future<void>.delayed(Duration.zero);
+      final view = recovery.openRecoveryRoomInstant(context);
+
+      expect(view.status, RecoveryRoomStatus.ready);
+      expect(view.conteudo, isNotNull);
+      expect(view.status, isNot(RecoveryRoomStatus.preparing));
+      expect(
+        states['L1']!.events.map((event) => event.type),
+        containsAll([
+          'RECOVERY_PREFETCH_STARTED',
+          'RECOVERY_PREFETCH_READY',
+          'RECOVERY_OPENED_WITH_READY_CONTENT',
+        ]),
+      );
+    });
+
+    test('recovery intro nao renderiza preparing tecnico no modelo', () {
+      final states = {
+        'L1': _state(auxRooms: _auxWith([_pending('M1')])),
+      };
+      final recovery = RecoveryRoomService(_service(states, _DelayedT02()));
+
+      final view = recovery.openRecoveryRoomInstant(_context('L1'));
+
+      expect(view.status, RecoveryRoomStatus.intro);
+      expect(view.status, isNot(RecoveryRoomStatus.preparing));
+      expect(view.conteudo, isNull);
+      expect(isFinalBlockedByRecovery(recovery, 'L1'), isTrue);
+      expect(
+        states['L1']!.events.map((event) => event.type),
+        contains('RECOVERY_OPENED_WITH_INTRO'),
+      );
+    });
 
     test(
       'reparo correto com sinal 1 ou 2 limpa; erro ou sinal 3 mantem',
@@ -438,4 +483,15 @@ class _FakeT02 implements T02LessonClient {
   @override
   Future<T02LessonMaterial> placement(T02LessonRequest request) async =>
       auxiliaryRoom(request);
+}
+
+class _DelayedT02 extends _FakeT02 {
+  final _completer = Completer<T02LessonMaterial>();
+
+  @override
+  Future<T02LessonMaterial> auxiliaryRoom(T02LessonRequest request) {
+    auxCalls += 1;
+    lastRequest = request;
+    return _completer.future;
+  }
 }

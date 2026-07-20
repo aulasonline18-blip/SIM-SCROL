@@ -18,6 +18,8 @@ class LessonMaterialController {
   final StudentLearningStateService stateService;
   final StudentLessonMaterialService materialService;
   final SimConstitutionalContract constitutionalContract;
+  LessonMaterialSource? lastAppliedMaterialSource;
+  int lastAppliedMaterialWaitedMs = 0;
   static const int _hotAdvanceWaitAfterOrderMs = 0;
   static const int _hotAdvanceCachePolls = 40;
   static const Duration _hotAdvanceCachePollInterval = Duration(
@@ -351,6 +353,8 @@ class LessonMaterialController {
     ResolveLessonMaterialResult material,
   ) {
     constitutionalContract.assertLessonMaterial(material.conteudo);
+    lastAppliedMaterialSource = material.source;
+    lastAppliedMaterialWaitedMs = material.waitedMs;
     position.conteudo = material.conteudo;
     position.imagem = material.imagem;
     position.imageMetadata = material.imageMetadata;

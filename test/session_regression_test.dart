@@ -291,7 +291,13 @@ void main() {
       final launch = session.launchExperience();
       await Future<void>.delayed(Duration.zero);
 
-      session.openWarmupBridge();
+      session.warmupLesson = const SimWarmupLesson(
+        explanation: 'Welcome bridge.',
+        question: 'What should happen first?',
+        options: {'A': 'Begin gently', 'B': 'Grade now', 'C': 'Block'},
+        correctAnswer: 'A',
+      );
+      await session.continueFromPreparationToWarmup();
       await session.continueFromWarmupToAula();
       expect(session.route, '/cyber/warmup');
       expect(session.aulaSnapshot, isNull);
@@ -344,7 +350,13 @@ void main() {
       final launch = session.launchExperience();
       await Future<void>.delayed(Duration.zero);
 
-      session.openWarmupBridge();
+      session.warmupLesson = const SimWarmupLesson(
+        explanation: 'Welcome bridge.',
+        question: 'What should happen first?',
+        options: {'A': 'Begin gently', 'B': 'Grade now', 'C': 'Block'},
+        correctAnswer: 'A',
+      );
+      await session.continueFromPreparationToWarmup();
       expect(session.route, '/cyber/warmup');
 
       officialReady.complete();

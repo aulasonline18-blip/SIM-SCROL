@@ -56,7 +56,7 @@ class LessonUiState extends ChangeNotifier {
 
   void openAmparoRoom() {
     amparoRoom = const AmparoRoomView(
-      status: AmparoRoomStatus.preparing,
+      status: AmparoRoomStatus.intro,
       stations: [],
       idx: 0,
       amparoLvl: 0,

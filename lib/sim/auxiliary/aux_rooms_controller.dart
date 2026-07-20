@@ -32,6 +32,18 @@ class AuxRoomsController {
     review = await reviewRoomService.startReviewRoom(context, count);
   }
 
+  void openReviewInstant(ReviewRoomContext context, int count) {
+    review = reviewRoomService.openReviewRoomInstant(context, count);
+  }
+
+  Future<void> resolveReview(ReviewRoomContext context) async {
+    review = await reviewRoomService.resolveReviewRoomQuestion(context, review);
+  }
+
+  void prefetchReview(ReviewRoomContext context) {
+    reviewRoomService.prefetchLikelyReviewQuestion(context);
+  }
+
   void reviewSelecionar(AnswerLetter letter) {
     review = reviewRoomService.selectLetter(review, letter);
   }
@@ -58,6 +70,24 @@ class AuxRoomsController {
       idx: 0,
     );
     recovery = await recoveryRoomService.startRecoveryRoom(context);
+  }
+
+  void openRecoveryInstant(RecoveryRoomContext context) {
+    recovery = recoveryRoomService.openRecoveryRoomInstant(context);
+  }
+
+  Future<void> resolveRecovery(RecoveryRoomContext context) async {
+    final current = recovery;
+    if (current != null) {
+      recovery = await recoveryRoomService.resolveRecoveryRoomQuestion(
+        context,
+        current,
+      );
+    }
+  }
+
+  void prefetchRecovery(RecoveryRoomContext context) {
+    recoveryRoomService.prefetchPendingRecoveryQuestion(context);
   }
 
   void continueRecovery() {
@@ -115,6 +145,17 @@ class AuxRoomsController {
       amparoLvl: 0,
     );
     amparo = await amparoRoomService.startAmparoRoom(context);
+  }
+
+  void openAmparoInstant(AmparoRoomContext context) {
+    amparo = amparoRoomService.openAmparoRoomInstant(context);
+  }
+
+  Future<void> resolveAmparo(AmparoRoomContext context) async {
+    final current = amparo;
+    if (current != null) {
+      amparo = await amparoRoomService.resolveAmparoRoomStep(context, current);
+    }
   }
 
   void amparoSelecionar(AnswerLetter letter) {

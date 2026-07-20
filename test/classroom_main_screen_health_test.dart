@@ -74,6 +74,38 @@ void main() {
     expect(find.text('Primeira'), findsOneWidget);
   });
 
+  testWidgets('conteudo pronto vence loading antigo de aula e imagem', (
+    tester,
+  ) async {
+    final session = _snapshotSession()
+      ..aulaRuntimeLoading = true
+      ..imageStatus = 'loading'
+      ..aulaSnapshot = _snapshot(
+        phase: const ClassroomPhase.loading(),
+        content: const LessonContent(
+          explanation: 'Texto ja renderizavel.',
+          question: 'Qual texto continua visivel?',
+          options: {
+            AnswerLetter.A: 'Opcao A',
+            AnswerLetter.B: 'Opcao B',
+            AnswerLetter.C: 'Opcao C',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump();
+
+    expect(find.text('Texto ja renderizavel.'), findsOneWidget);
+    expect(find.text('Opcao A'), findsOneWidget);
+    expect(find.text(t('aula_advance_pending')), findsNothing);
+    expect(find.text(t('aula_image_loading')), findsNothing);
+    expect(find.text(t('loading')), findsNothing);
+  });
+
   test('advance pending vira preparo, não retry manual', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(

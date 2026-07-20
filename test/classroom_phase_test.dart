@@ -521,6 +521,14 @@ void main() {
       );
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.avancoPendente);
       expect(t02.calls, 1);
+      final pendingEvents = service
+          .read('cyber-class')!
+          .events
+          .map((event) => event.type);
+      expect(pendingEvents, contains('INSTANT_ADVANCE_STARTED'));
+      expect(pendingEvents, contains('INSTANT_ADVANCE_BACKGROUND_ORDERED'));
+      expect(pendingEvents, contains('INSTANT_ADVANCE_PENDING_VISIBLE'));
+      expect(pendingEvents, contains('INSTANT_ADVANCE_SLOW_PATH'));
 
       t02.pending.complete(
         T02LessonMaterial(
@@ -546,6 +554,13 @@ void main() {
       expect(snapshot.phase.type, ClassroomPhaseType.lendo);
       expect(snapshot.conteudo?.question, 'Pergunta tardia M1 L2?');
       expect(service.read('cyber-class')?.extra['advancePending'], isNull);
+      expect(
+        service
+            .read('cyber-class')!
+            .events
+            .map((event) => event.type),
+        contains('INSTANT_ADVANCE_RECOVERED'),
+      );
     },
   );
 
@@ -854,6 +869,25 @@ void main() {
             as Map?)?['status'],
         'preparing',
       );
+      final pending = service.read('cyber-class')!.extra['advancePending'] as Map;
+      expect(pending['fromItemIdx'], 0);
+      expect(pending['fromLayer'], LessonLayer.l1.value);
+      expect(pending['fromMarker'], 'M1');
+      expect(pending['toItemIdx'], 0);
+      expect(pending['toLayer'], LessonLayer.l2.value);
+      expect(pending['toMarker'], 'M1');
+      expect(pending['reason'], 'material_missing_after_valid_decision');
+      expect(
+        service
+            .read('cyber-class')!
+            .events
+            .map((event) => event.type),
+        containsAll([
+          'INSTANT_ADVANCE_BACKGROUND_ORDERED',
+          'INSTANT_ADVANCE_PENDING_VISIBLE',
+          'INSTANT_ADVANCE_SLOW_PATH',
+        ]),
+      );
       expect(t02.calls, 1);
     },
   );
@@ -972,6 +1006,13 @@ void main() {
 
       runtime.select(AnswerLetter.A);
       await runtime.signal(DecisionSignal.two);
+      expect(
+        service
+            .read('cyber-class')!
+            .events
+            .map((event) => event.type),
+        contains('INSTANT_ADVANCE_FEEDBACK_SHOWN'),
+      );
       await Future<void>.delayed(Duration.zero);
       await runtime.advance();
       final snap = runtime.snapshot();
@@ -989,6 +1030,12 @@ void main() {
             .payload['source'],
         LessonMaterialSource.studentState.name,
       );
+      final instantEvents = service
+          .read('cyber-class')!
+          .events
+          .map((event) => event.type);
+      expect(instantEvents, contains('INSTANT_ADVANCE_STARTED'));
+      expect(instantEvents, contains('INSTANT_ADVANCE_READY_FROM_STATE'));
     },
   );
 
@@ -1151,6 +1198,10 @@ void main() {
       state.events.where(
         (event) => event.type == 'LOCAL_PENDING_ADVANCE_DISPLAYED',
       ),
+      hasLength(1),
+    );
+    expect(
+      state.events.where((event) => event.type == 'INSTANT_ADVANCE_RECOVERED'),
       hasLength(1),
     );
   });

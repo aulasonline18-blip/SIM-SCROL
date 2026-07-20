@@ -50,20 +50,37 @@ extension LabSessionAmparoFlowExtensions on LabSession {
     try {
       final organism = _activeOrganism ?? _organismForActiveLesson();
       if (recoveryRoom != null) return;
-      setAmparoRoom(
-        const AmparoRoomView(
-          status: AmparoRoomStatus.preparing,
-          stations: [],
-          idx: 0,
-          amparoLvl: 0,
-        ),
-      );
       navigationState.openRoute('/cyber/amparo');
-      await organism.auxRoomsController.startAmparo(
-        _amparoRoomContext(organism),
+      final context = _amparoRoomContext(organism);
+      organism.auxRoomsController.openAmparoInstant(context);
+      final opened = organism.auxRoomsController.amparo;
+      if (opened != null) setAmparoRoom(opened);
+      unawaited(
+        organism.auxRoomsController
+            .resolveAmparo(context)
+            .then((_) {
+              final current = amparoRoom;
+              final resolved = organism.auxRoomsController.amparo;
+              if (current == null || resolved == null) return;
+              if (current.idx != resolved.idx) return;
+              if (current.status != AmparoRoomStatus.intro &&
+                  current.status != AmparoRoomStatus.preparing) {
+                return;
+              }
+              setAmparoRoom(resolved);
+            })
+            .catchError((_) {
+              final current = amparoRoom;
+              if (current == null) return;
+              setAmparoRoom(
+                current.copyWith(
+                  status: AmparoRoomStatus.failed,
+                  errMsg:
+                      'Nao consegui preparar o amparo agora. Sua aula foi preservada.',
+                ),
+              );
+            }),
       );
-      final view = organism.auxRoomsController.amparo;
-      if (view != null) setAmparoRoom(view);
     } catch (_) {
       setAmparoRoom(
         const AmparoRoomView(

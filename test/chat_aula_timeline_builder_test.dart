@@ -4,6 +4,7 @@ import 'package:sim_mobile/features/classroom/chat_aula_timeline_builder.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
+import 'package:sim_mobile/sim/classroom/pedagogical_slot_visibility.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
@@ -562,6 +563,84 @@ void main() {
       contains(ChatLessonMessageKind.question),
     );
   });
+
+  test('valid pedagogical content wins over stale runtime loading', () {
+    final snapshot = _snapshot(
+      phase: const ClassroomPhase.loading(),
+      explanation: 'Conteudo pronto vence o preparo antigo.',
+      question: 'O que deve aparecer?',
+    );
+
+    expect(hasValidPedagogicalContent(snapshot.conteudo), isTrue);
+    expect(
+      shouldShowPreparationForCurrentPedagogicalSlot(
+        snapshot: snapshot,
+        runtimeLoading: true,
+      ),
+      isFalse,
+    );
+
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(snapshot: snapshot, runtimeLoading: true),
+    );
+
+    expect(
+      messages.where((message) => message.id == 'runtime-loading'),
+      isEmpty,
+    );
+    expect(
+      messages.where(
+        (message) => message.id.startsWith('local-advance-preparing-'),
+      ),
+      isEmpty,
+    );
+    expect(
+      messages.map((message) => message.text),
+      contains('Conteudo pronto vence o preparo antigo.'),
+    );
+    expect(
+      messages.map((message) => message.kind),
+      contains(ChatLessonMessageKind.question),
+    );
+  });
+
+  test(
+    'handoff feedback is a renderable alternative while next slot prepares',
+    () {
+      const snapshot = LessonRuntimeSnapshot(
+        authReady: true,
+        authed: true,
+        hasCurriculum: true,
+        isDone: false,
+        viewModel: LessonMainViewModel(
+          progress: 20,
+          headerLabel: 'aula_item_of:1/5:aula_layer_1',
+          options: [],
+          locked: true,
+          nextLabel: '',
+        ),
+        phase: ClassroomPhase.advancePending(
+          message: 'aula_advance_preparing',
+          letter: AnswerLetter.A,
+          signal: DecisionSignal.one,
+        ),
+        history: [],
+        conteudo: null,
+        imagem: null,
+        itemMarker: 'M1',
+        itemText: 'Item 1',
+      );
+
+      expect(hasRenderablePedagogicalAlternative(snapshot), isTrue);
+      expect(
+        shouldShowPreparationForCurrentPedagogicalSlot(
+          snapshot: snapshot,
+          runtimeLoading: true,
+        ),
+        isFalse,
+      );
+    },
+  );
 
   test(
     'first lesson pending without content still shows preparation message',

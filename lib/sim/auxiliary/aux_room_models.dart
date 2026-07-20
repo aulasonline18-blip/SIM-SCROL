@@ -5,6 +5,7 @@ enum AuxRoomMode { review, recovery, doubt, amparo }
 
 enum ReviewRoomStatus {
   choose,
+  intro,
   preparing,
   ready,
   answering,
@@ -23,7 +24,15 @@ enum RecoveryRoomStatus {
   failed,
 }
 
-enum AmparoRoomStatus { preparing, ready, answering, result, done, failed }
+enum AmparoRoomStatus {
+  intro,
+  preparing,
+  ready,
+  answering,
+  result,
+  done,
+  failed,
+}
 
 enum DoubtStatus { idle, processing, explaining, error }
 

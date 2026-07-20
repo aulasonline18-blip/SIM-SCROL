@@ -7,6 +7,7 @@ const String defaultDoubtError =
     'Nao consegui carregar a explicacao, tente novamente.';
 
 typedef DoubtScopeStillCurrent = bool Function(DoubtRequestScope scope);
+typedef DoubtScopeStaleIgnored = void Function(DoubtRequestScope scope);
 
 class DoubtRequestScope {
   const DoubtRequestScope({
@@ -65,6 +66,7 @@ class LessonDoubtController {
     String? marker,
     required DoubtInputDraft input,
     DoubtScopeStillCurrent? isScopeStillCurrent,
+    DoubtScopeStaleIgnored? onStaleIgnored,
   }) async {
     if (state.status == DoubtStatus.processing) return;
     final validation = input.validate();
@@ -84,9 +86,13 @@ class LessonDoubtController {
       itemIdx: itemIdx,
       layer: layer,
     );
-    bool stale() =>
-        generation != _requestGeneration ||
-        isScopeStillCurrent != null && !isScopeStillCurrent(scope);
+    bool stale() {
+      final isStale =
+          generation != _requestGeneration ||
+          isScopeStillCurrent != null && !isScopeStillCurrent(scope);
+      if (isStale) onStaleIgnored?.call(scope);
+      return isStale;
+    }
     state = const DoubtState(
       status: DoubtStatus.processing,
       progress: 15,

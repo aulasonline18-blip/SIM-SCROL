@@ -180,6 +180,21 @@ class LessonAnswerProgressController {
           'letra': letter.name,
         },
       ),
+      StudentLearningEvent(
+        type: 'INSTANT_ADVANCE_FEEDBACK_SHOWN',
+        ts: submittedAt,
+        payload: {
+          'marker': item.marker,
+          'itemIdx': position.itemIdx,
+          'layer': position.layer.value,
+          'letra': letter.name,
+          'sinal': signal.value,
+          'correct': correct,
+          'phase': position.phase.type.name,
+          'visualResponse': 'feedback',
+          'progressAuthority': 'local_advance_engine',
+        },
+      ),
     ]);
   }
 
@@ -236,6 +251,19 @@ class LessonAnswerProgressController {
       );
       return;
     }
+    final advanceStartedAt = DateTime.now().millisecondsSinceEpoch;
+    _recordInstantAdvanceEvent(
+      lessonLocalId: lessonLocalId,
+      type: 'INSTANT_ADVANCE_STARTED',
+      ts: advanceStartedAt,
+      payload: {
+        'fromItemIdx': position.itemIdx,
+        'fromLayer': position.layer.value,
+        'fromMarker': item.marker,
+        'phase': position.phase.type.name,
+        'serverRequiredForVisualPath': false,
+      },
+    );
     final activeState = state;
     if (!view.ended &&
         view.itemIdx == position.itemIdx &&
@@ -266,6 +294,15 @@ class LessonAnswerProgressController {
           baseItems: baseItems,
         );
         if (loadedPrepared) {
+          _recordInstantAdvanceReady(
+            lessonLocalId: lessonLocalId,
+            startedAt: advanceStartedAt,
+            fromItemIdx: previousItemIdx,
+            fromLayer: previousLayer,
+            toItemIdx: next.idx,
+            toLayer: next.layer,
+            marker: position.itemAtivo?.marker,
+          );
           _recordLocalPendingAdvanceDisplayed(
             lessonLocalId: lessonLocalId,
             fromItemIdx: previousItemIdx,
@@ -287,6 +324,15 @@ class LessonAnswerProgressController {
         );
         if (position.phase.type == ClassroomPhaseType.lendo &&
             position.conteudo != null) {
+          _recordInstantAdvanceReady(
+            lessonLocalId: lessonLocalId,
+            startedAt: advanceStartedAt,
+            fromItemIdx: previousItemIdx,
+            fromLayer: previousLayer,
+            toItemIdx: next.idx,
+            toLayer: next.layer,
+            marker: position.itemAtivo?.marker,
+          );
           _recordLocalPendingAdvanceDisplayed(
             lessonLocalId: lessonLocalId,
             fromItemIdx: previousItemIdx,
@@ -321,6 +367,7 @@ class LessonAnswerProgressController {
       );
       _recordLocalAdvancePending(
         lessonLocalId: lessonLocalId,
+        advanceStartedAt: advanceStartedAt,
         fromItemIdx: position.itemIdx,
         fromLayer: position.layer,
         toItemIdx: targetItemIdx,
@@ -337,7 +384,7 @@ class LessonAnswerProgressController {
         layer: targetLayer,
         items: _dopamineItemsFromCurriculum(baseItems),
         source: 'cyber.aula.advance-cache-miss',
-        priority: 'background',
+        priority: 'hot-local',
         reason: 'advance_cache_miss_prepares_without_blocking_touch',
       );
       return;
@@ -372,6 +419,15 @@ class LessonAnswerProgressController {
         baseItems: baseItems,
       );
       if (loadedPrepared) {
+        _recordInstantAdvanceReady(
+          lessonLocalId: lessonLocalId,
+          startedAt: advanceStartedAt,
+          fromItemIdx: previousItemIdx,
+          fromLayer: previousLayer,
+          toItemIdx: view.itemIdx,
+          toLayer: view.layer,
+          marker: targetMarker,
+        );
         _recordLocalPendingAdvanceDisplayed(
           lessonLocalId: lessonLocalId,
           fromItemIdx: previousItemIdx,
@@ -393,6 +449,15 @@ class LessonAnswerProgressController {
       );
       if (position.phase.type == ClassroomPhaseType.lendo &&
           position.conteudo != null) {
+        _recordInstantAdvanceReady(
+          lessonLocalId: lessonLocalId,
+          startedAt: advanceStartedAt,
+          fromItemIdx: previousItemIdx,
+          fromLayer: previousLayer,
+          toItemIdx: view.itemIdx,
+          toLayer: view.layer,
+          marker: targetMarker,
+        );
         _recordLocalPendingAdvanceDisplayed(
           lessonLocalId: lessonLocalId,
           fromItemIdx: previousItemIdx,
@@ -417,6 +482,7 @@ class LessonAnswerProgressController {
       );
       _recordLocalAdvancePending(
         lessonLocalId: lessonLocalId,
+        advanceStartedAt: advanceStartedAt,
         fromItemIdx: previousItemIdx,
         fromLayer: previousLayer,
         toItemIdx: view.itemIdx,
@@ -433,7 +499,7 @@ class LessonAnswerProgressController {
         layer: view.layer,
         items: _dopamineItemsFromCurriculum(baseItems),
         source: 'cyber.aula.advance-cache-miss',
-        priority: 'background',
+        priority: 'hot-local',
         reason: 'advance_cache_miss_prepares_without_blocking_touch',
       );
       return;
@@ -473,6 +539,7 @@ class LessonAnswerProgressController {
     );
     _recordLocalAdvancePending(
       lessonLocalId: lessonLocalId,
+      advanceStartedAt: advanceStartedAt,
       fromItemIdx: position.itemIdx,
       fromLayer: position.layer,
       toItemIdx: view.itemIdx,
@@ -491,7 +558,7 @@ class LessonAnswerProgressController {
       layer: view.layer,
       items: _dopamineItemsFromCurriculum(baseItems),
       source: 'cyber.aula.advance-cache-miss',
-      priority: 'background',
+      priority: 'hot-local',
       reason: 'advance_cache_miss_prepares_without_blocking_touch',
     );
   }
@@ -614,7 +681,7 @@ class LessonAnswerProgressController {
           layer: toLayer,
           items: _dopamineItemsFromCurriculum(baseItems),
           source: 'cyber.aula.advance-pending-recover',
-          priority: 'background',
+          priority: 'hot-local',
           reason: 'advance_pending_failed_job_recovered_without_manual_retry',
         );
         return true;
@@ -754,6 +821,10 @@ class LessonAnswerProgressController {
     final progress = latest?.progress;
     if (latest == null || progress == null) return;
     final ts = DateTime.now().millisecondsSinceEpoch;
+    final pending = latest.extra['advancePending'];
+    final pendingStartedAt = pending is Map
+        ? (pending['startedAt'] as num?)?.toInt()
+        : null;
     final eventPayload = <String, dynamic>{
       'lessonLocalId': lessonLocalId,
       'fromItemIdx': fromItemIdx,
@@ -791,6 +862,22 @@ class LessonAnswerProgressController {
         ),
         events: [
           ...latest.events,
+          if (pendingStartedAt != null)
+            StudentLearningEvent(
+              type: 'INSTANT_ADVANCE_RECOVERED',
+              ts: ts,
+              payload: {
+                'lessonLocalId': lessonLocalId,
+                'fromItemIdx': fromItemIdx,
+                'fromLayer': fromLayer.value,
+                'toItemIdx': toItemIdx,
+                'toLayer': toLayer.value,
+                'marker': marker,
+                'elapsedMs': ts - pendingStartedAt,
+                'source': 'advance_pending_reevaluation',
+                'serverRequiredForVisualPath': false,
+              },
+            ),
           StudentLearningEvent(
             type: 'LOCAL_PENDING_ADVANCE_DISPLAYED',
             ts: ts,
@@ -808,6 +895,7 @@ class LessonAnswerProgressController {
 
   void _recordLocalAdvancePending({
     required String lessonLocalId,
+    required int advanceStartedAt,
     required int fromItemIdx,
     required LessonLayer fromLayer,
     required int toItemIdx,
@@ -820,27 +908,54 @@ class LessonAnswerProgressController {
     final latest = stateService.read(lessonLocalId);
     if (latest == null) return;
     final ts = DateTime.now().millisecondsSinceEpoch;
+    final pendingPayload = {
+      'status': 'preparing',
+      'fromItemIdx': fromItemIdx,
+      'fromLayer': fromLayer.value,
+      'fromMarker': fromMarker,
+      'toItemIdx': toItemIdx,
+      'toLayer': toLayer.value,
+      'toMarker': toMarker,
+      'letter': letter.name,
+      'signal': signal.value,
+      'startedAt': advanceStartedAt,
+      'updatedAt': ts,
+      'reason': 'material_missing_after_valid_decision',
+    };
     stateService.write(
       latest.copyWith(
         updatedAt: ts,
-        extra: {
-          ...latest.extra,
-          'advancePending': {
-            'status': 'preparing',
-            'fromItemIdx': fromItemIdx,
-            'fromLayer': fromLayer.value,
-            'fromMarker': fromMarker,
-            'toItemIdx': toItemIdx,
-            'toLayer': toLayer.value,
-            'toMarker': toMarker,
-            'letter': letter.name,
-            'signal': signal.value,
-            'startedAt': ts,
-            'reason': 'material_missing_after_valid_decision',
-          },
-        },
+        extra: {...latest.extra, 'advancePending': pendingPayload},
         events: [
           ...latest.events,
+          StudentLearningEvent(
+            type: 'INSTANT_ADVANCE_BACKGROUND_ORDERED',
+            ts: ts,
+            payload: {
+              ...pendingPayload,
+              'elapsedMs': ts - advanceStartedAt,
+              'priority': 'hot-local',
+              'serverRequiredForVisualPath': false,
+            },
+          ),
+          StudentLearningEvent(
+            type: 'INSTANT_ADVANCE_PENDING_VISIBLE',
+            ts: ts,
+            payload: {
+              ...pendingPayload,
+              'elapsedMs': ts - advanceStartedAt,
+              'previousContentMustRemainRenderable': true,
+            },
+          ),
+          StudentLearningEvent(
+            type: 'INSTANT_ADVANCE_SLOW_PATH',
+            ts: ts,
+            payload: {
+              ...pendingPayload,
+              'elapsedMs': ts - advanceStartedAt,
+              'fallback': 'keep_feedback_and_previous_content_alive',
+            },
+          ),
           StudentLearningEvent(
             type: 'ADVANCE_PENDING_WAITING_FOR_MATERIAL',
             ts: ts,
@@ -856,6 +971,54 @@ class LessonAnswerProgressController {
           ),
         ],
       ),
+    );
+  }
+
+  void _recordInstantAdvanceReady({
+    required String lessonLocalId,
+    required int startedAt,
+    required int fromItemIdx,
+    required LessonLayer fromLayer,
+    required int toItemIdx,
+    required LessonLayer toLayer,
+    required String? marker,
+  }) {
+    final source = materialController.lastAppliedMaterialSource;
+    final eventType = switch (source) {
+      LessonMaterialSource.memoryCacheFromMotor =>
+        'INSTANT_ADVANCE_READY_FROM_CACHE',
+      LessonMaterialSource.studentState ||
+      LessonMaterialSource.studentStateAfterWait ||
+      null => 'INSTANT_ADVANCE_READY_FROM_STATE',
+    };
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    _recordInstantAdvanceEvent(
+      lessonLocalId: lessonLocalId,
+      type: eventType,
+      ts: ts,
+      payload: {
+        'fromItemIdx': fromItemIdx,
+        'fromLayer': fromLayer.value,
+        'toItemIdx': toItemIdx,
+        'toLayer': toLayer.value,
+        'marker': marker,
+        'elapsedMs': ts - startedAt,
+        'source': source?.name ?? 'unknown',
+        'materialWaitedMs': materialController.lastAppliedMaterialWaitedMs,
+        'serverRequiredForVisualPath': false,
+      },
+    );
+  }
+
+  void _recordInstantAdvanceEvent({
+    required String lessonLocalId,
+    required String type,
+    required int ts,
+    required JsonMap payload,
+  }) {
+    stateService.appendEvent(
+      lessonLocalId,
+      StudentLearningEvent(type: type, ts: ts, payload: payload),
     );
   }
 

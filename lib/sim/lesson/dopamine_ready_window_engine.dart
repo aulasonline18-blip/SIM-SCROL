@@ -11,6 +11,97 @@ import 'lesson_readiness_resolver.dart';
 const int offlineWarmCacheSize = 15;
 const int localLessonTraySize = offlineWarmCacheSize;
 
+List<StudentLearningEvent> dopamineWindowServiceEvents({
+  required int ts,
+  required String lessonLocalId,
+  required String source,
+  required String reason,
+  required int currentItemIdx,
+  required LessonLayer currentLayer,
+  required List<
+    ({int offset, int idx, DopamineWindowItem item, LessonLayer layer})
+  >
+  window,
+  required Map<String, JsonMap> readyMaterials,
+  required bool promotedHot,
+  required String idempotencyKey,
+  required String? marker,
+}) {
+  final missing = (window.length - readyMaterials.length).clamp(
+    0,
+    window.length,
+  );
+  final mediaPending = readyMaterials.values.where((material) {
+    final image = material['imagem'] as String?;
+    return image == null || image.trim().isEmpty;
+  }).length;
+  return [
+    StudentLearningEvent(
+      type: 'CACHE_WINDOW_UPDATED',
+      ts: ts,
+      payload: {
+        'lessonLocalId': lessonLocalId,
+        'currentItemIdx': currentItemIdx,
+        'currentLayer': currentLayer.value,
+        'windowMarkers': window
+            .map(
+              (slot) => {
+                'marker': slot.item.marker,
+                'layer': slot.layer.value,
+                'offset': slot.offset,
+              },
+            )
+            .toList(growable: false),
+        'windowSize': window.length,
+        'cachedCount': window.length,
+      },
+    ),
+    StudentLearningEvent(
+      type: 'DOPAMINE_WINDOW_HEALTH_CHECKED',
+      ts: ts,
+      payload: {
+        'source': source,
+        'reason': reason,
+        'expectedCount': window.length,
+        'readyCount': readyMaterials.length,
+        'queuedCount': 1,
+        'missingCount': missing,
+        'hotTextReadyCount': readyMaterials.length.clamp(0, 4),
+        'mediaPendingCount': mediaPending,
+        if (window.isNotEmpty)
+          'windowStart': {
+            'itemIdx': window.first.idx,
+            'marker': window.first.item.marker,
+            'layer': window.first.layer.value,
+          },
+      },
+    ),
+    StudentLearningEvent(
+      type: 'DOPAMINE_WINDOW_REFILLED',
+      ts: ts,
+      payload: {
+        'source': source,
+        'reason': reason,
+        'requested': window.length,
+        'ready': readyMaterials.length,
+        'missing': missing,
+      },
+    ),
+    if (promotedHot)
+      StudentLearningEvent(
+        type: 'DOPAMINE_WINDOW_HOT_PROMOTED',
+        ts: ts,
+        payload: {
+          'source': source,
+          'idempotencyKey': idempotencyKey,
+          'itemIdx': currentItemIdx,
+          'marker': marker,
+          'layer': currentLayer.value,
+        },
+      ),
+  ];
+}
+
 class DopamineWindowItem {
   const DopamineWindowItem({
     required this.text,
@@ -41,6 +132,60 @@ class DopamineReadySlot {
   final LessonLayer layer;
   final CompleteLessonParams params;
   final String? expectedKey;
+}
+
+class DopamineReadyWindowHealth {
+  const DopamineReadyWindowHealth({
+    required this.expectedSlots,
+    required this.readySlots,
+    required this.queuedSlots,
+    required this.missingSlots,
+    required this.staleSlots,
+    required this.wrongIdentitySlots,
+    required this.hotTextReadyCount,
+    required this.mediaPendingCount,
+    required this.windowStart,
+    required this.source,
+    required this.reason,
+  });
+
+  final List<JsonMap> expectedSlots;
+  final List<JsonMap> readySlots;
+  final List<JsonMap> queuedSlots;
+  final List<JsonMap> missingSlots;
+  final List<JsonMap> staleSlots;
+  final List<JsonMap> wrongIdentitySlots;
+  final int hotTextReadyCount;
+  final int mediaPendingCount;
+  final JsonMap? windowStart;
+  final String source;
+  final String? reason;
+
+  int get expectedCount => expectedSlots.length;
+  int get readyCount => readySlots.length;
+  bool get exhaustedAtCurriculumEnd =>
+      expectedSlots.length < localLessonTraySize && missingSlots.isEmpty;
+
+  JsonMap toJson() => {
+    'expectedSlots': expectedSlots,
+    'readySlots': readySlots,
+    'queuedSlots': queuedSlots,
+    'missingSlots': missingSlots,
+    'staleSlots': staleSlots,
+    'wrongIdentitySlots': wrongIdentitySlots,
+    'expectedCount': expectedCount,
+    'readyCount': readyCount,
+    'queuedCount': queuedSlots.length,
+    'missingCount': missingSlots.length,
+    'staleCount': staleSlots.length,
+    'wrongIdentityCount': wrongIdentitySlots.length,
+    'hotTextReadyCount': hotTextReadyCount,
+    'mediaPendingCount': mediaPendingCount,
+    if (windowStart != null) 'windowStart': windowStart,
+    'source': source,
+    if (reason != null) 'reason': reason,
+    'exhaustedAtCurriculumEnd': exhaustedAtCurriculumEnd,
+  };
 }
 
 class DopamineReadyWindowEngine {
@@ -136,6 +281,13 @@ class DopamineReadyWindowEngine {
     final selected = slots
         .take(maxSlots ?? (returnMode ? 2 : localLessonTraySize))
         .toList();
+    final beforeHealth = inspectDopamineReadyWindow(
+      lessonLocalId: lessonLocalId,
+      slots: selected,
+      source: source,
+      reason: 'before_refill',
+    );
+    _emitHealth(lessonLocalId, beforeHealth);
     orchestrator.protectWarmCachedLessons(
       selected.map((slot) => lessonKeyFor(slot.params)),
     );
@@ -181,6 +333,15 @@ class DopamineReadyWindowEngine {
         ),
         params: slot.params,
       );
+      if (readiness.status == LessonReadinessStatus.stale ||
+          readiness.status == LessonReadinessStatus.invalid) {
+        _discardStaleReadyMaterial(
+          lessonLocalId: lessonLocalId,
+          slot: slot,
+          result: readiness,
+          source: source,
+        );
+      }
       if (readiness.status == LessonReadinessStatus.readyFromState &&
           readiness.lesson != null) {
         final lesson = _prepareMediaFromCachedLesson(
@@ -243,6 +404,11 @@ class DopamineReadyWindowEngine {
         'layer': slot.layer.value,
         'priority': index == 0 ? 'hot-local' : 'background',
       });
+      _event(lessonLocalId, 'DOPAMINE_WINDOW_SLOT_MISSING', {
+        'source': source,
+        ..._slotJson(slot),
+        'priority': index == 0 ? 'hot-local' : 'background',
+      });
 
       try {
         final lesson = await orchestrator.prefetchCompleteLesson(
@@ -297,8 +463,98 @@ class DopamineReadyWindowEngine {
       'ready': results.where((ready) => ready).length,
       'requested': selected.length,
     });
+    final afterHealth = inspectDopamineReadyWindow(
+      lessonLocalId: lessonLocalId,
+      slots: selected,
+      source: source,
+      reason: 'after_refill',
+    );
+    _emitHealth(lessonLocalId, afterHealth);
+    _event(lessonLocalId, 'DOPAMINE_WINDOW_REFILLED', {
+      'source': source,
+      'requested': selected.length,
+      'ready': afterHealth.readyCount,
+      'missing': afterHealth.missingSlots.length,
+      'hotTextReadyCount': afterHealth.hotTextReadyCount,
+    });
+    if (afterHealth.exhaustedAtCurriculumEnd) {
+      _event(lessonLocalId, 'DOPAMINE_WINDOW_EXHAUSTED_AT_CURRICULUM_END', {
+        'source': source,
+        'expected': afterHealth.expectedCount,
+        'ready': afterHealth.readyCount,
+      });
+    }
     _queueSecondaryMedia(lessonLocalId, source, mediaSlots);
     return results;
+  }
+
+  DopamineReadyWindowHealth inspectDopamineReadyWindow({
+    required String lessonLocalId,
+    required List<DopamineReadySlot> slots,
+    required String source,
+    String? reason,
+  }) {
+    final state = service.read(lessonLocalId);
+    final expected = <JsonMap>[];
+    final ready = <JsonMap>[];
+    final queued = <JsonMap>[];
+    final missing = <JsonMap>[];
+    final stale = <JsonMap>[];
+    final wrongIdentity = <JsonMap>[];
+    var mediaPendingCount = 0;
+
+    for (var index = 0; index < slots.length; index += 1) {
+      final slot = slots[index];
+      final slotJson = _slotJson(slot);
+      expected.add(slotJson);
+      final result = readinessResolver.resolve(
+        state: state,
+        orchestrator: orchestrator,
+        identity: LessonReadinessIdentity(
+          lessonLocalId: lessonLocalId,
+          itemIdx: slot.itemIdx,
+          marker: slot.marker,
+          layer: slot.layer,
+        ),
+        params: slot.params,
+      );
+      if (result.isReady && result.lesson != null) {
+        ready.add({...slotJson, 'source': result.status.name});
+        if ((result.lesson!.imagem ?? '').trim().isEmpty) {
+          mediaPendingCount += 1;
+        }
+        continue;
+      }
+      final queuedForSlot = _isSlotQueued(state, slot);
+      if (queuedForSlot) queued.add(slotJson);
+      if (result.status == LessonReadinessStatus.stale ||
+          result.status == LessonReadinessStatus.invalid) {
+        final detail = {
+          ...slotJson,
+          if (result.discardedKey != null) 'discardedKey': result.discardedKey,
+          if (result.safeReason != null) 'reason': result.safeReason,
+        };
+        stale.add(detail);
+        wrongIdentity.add(detail);
+      }
+      if (!queuedForSlot) missing.add(slotJson);
+    }
+
+    return DopamineReadyWindowHealth(
+      expectedSlots: expected,
+      readySlots: ready,
+      queuedSlots: queued,
+      missingSlots: missing,
+      staleSlots: stale,
+      wrongIdentitySlots: wrongIdentity,
+      hotTextReadyCount: ready
+          .where((slot) => const {'A', 'B', 'C', 'D'}.contains(slot['slot']))
+          .length,
+      mediaPendingCount: mediaPendingCount,
+      windowStart: expected.isEmpty ? null : expected.first,
+      source: source,
+      reason: reason,
+    );
   }
 
   Future<List<bool>> runDopamineReadyWindowFromStudentState({
@@ -498,6 +754,26 @@ class DopamineReadyWindowEngine {
     });
   }
 
+  void _discardStaleReadyMaterial({
+    required String lessonLocalId,
+    required DopamineReadySlot slot,
+    required LessonReadinessResult result,
+    required String source,
+  }) {
+    final key = result.discardedKey;
+    if (key == null) return;
+    service.mutate(lessonLocalId, (state) {
+      final next = {...state.readyLessonMaterials}..remove(key);
+      return state.copyWith(readyLessonMaterials: next);
+    }, allowLocalHousekeeping: true);
+    _event(lessonLocalId, 'DOPAMINE_WINDOW_SLOT_STALE_DISCARDED', {
+      'source': source,
+      ..._slotJson(slot),
+      'discardedKey': key,
+      if (result.safeReason != null) 'reason': result.safeReason,
+    });
+  }
+
   CompleteLesson _prepareMediaFromCachedLesson({
     required String lessonLocalId,
     required String source,
@@ -593,6 +869,54 @@ class DopamineReadyWindowEngine {
       ),
     );
   }
+
+  void _emitHealth(String lessonLocalId, DopamineReadyWindowHealth health) {
+    _event(lessonLocalId, 'DOPAMINE_WINDOW_HEALTH_CHECKED', health.toJson());
+    _event(lessonLocalId, 'DOPAMINE_WINDOW_TEXT_READY_COUNT', {
+      'source': health.source,
+      if (health.reason != null) 'reason': health.reason,
+      'hotTextReadyCount': health.hotTextReadyCount,
+      'readyCount': health.readyCount,
+      'expectedCount': health.expectedCount,
+      'mediaPendingCount': health.mediaPendingCount,
+    });
+  }
+
+  bool _isSlotQueued(StudentLearningState? state, DopamineReadySlot slot) {
+    final jobs = state?.queuedActions ?? const <JsonMap>[];
+    return jobs.any((job) {
+      if (job['type'] != 'PREPARE_READY_WINDOW') return false;
+      final status = job['status'];
+      if (status != 'queued' && status != 'running') return false;
+      final payload = job['payload'];
+      if (payload is! Map) return false;
+      final itemIdx = (payload['itemIdx'] as num?)?.toInt();
+      final layer = LessonLayerValue.fromValue(payload['layer']);
+      final marker = payload['marker'] as String?;
+      if (itemIdx == null) return true;
+      if (itemIdx == slot.itemIdx && layer == slot.layer) {
+        return marker == null || marker.isEmpty || marker == slot.marker;
+      }
+      return false;
+    });
+  }
+
+  JsonMap _slotJson(DopamineReadySlot slot) => {
+    'slot': slot.slot,
+    'lessonLocalId': slot.params.lessonLocalId,
+    'itemIdx': slot.itemIdx,
+    'marker': slot.marker,
+    'layer': slot.layer.value,
+    'mode': slot.params.mode.name,
+    'topic': slot.params.topic,
+    'lessonKey': lessonKeyFor(slot.params),
+    'preparedKey': preparedLessonMaterialKey(
+      slot.itemIdx,
+      slot.marker,
+      slot.layer,
+    ),
+    if (slot.expectedKey != null) 'expectedKey': slot.expectedKey,
+  };
 }
 
 class _ReadyWindowMediaSlot {

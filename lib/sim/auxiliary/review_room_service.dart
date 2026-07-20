@@ -43,18 +43,115 @@ class ReviewRoomService {
     );
   }
 
+  ReviewRoomView openReviewRoomInstant(ReviewRoomContext context, int count) {
+    final boundedCount = count == 10 ? 10 : 5;
+    final queue = service.buildReviewQueueForLesson(
+      lessonLocalId: context.lessonLocalId,
+      topic: context.topic,
+      items: context.items,
+      count: boundedCount,
+      fallbackStartIdx: context.fallbackStartIdx,
+    );
+    if (queue.isEmpty) {
+      return ReviewRoomView(
+        status: ReviewRoomStatus.failed,
+        count: boundedCount,
+        queue: const [],
+        idx: 0,
+        errMsg: 'Sem itens para revisar.',
+      );
+    }
+    final marker = queue.first;
+    final cached = service.cachedAuxRoomQuestion(
+      lessonLocalId: context.lessonLocalId,
+      mode: AuxRoomMode.review,
+      marker: marker,
+    );
+    if (cached?.ok == true) {
+      service.recordAuxEvent(
+        context.lessonLocalId,
+        'REVIEW_OPENED_WITH_READY_CONTENT',
+        {'marker': marker},
+      );
+      return ReviewRoomView(
+        status: ReviewRoomStatus.ready,
+        count: boundedCount,
+        queue: queue,
+        idx: 0,
+        conteudo: cached!.conteudo,
+      );
+    }
+    service.recordAuxEvent(context.lessonLocalId, 'REVIEW_OPENED_WITH_INTRO', {
+      'marker': marker,
+    });
+    service.prefetchAuxRoomQuestion(
+      lessonLocalId: context.lessonLocalId,
+      mode: AuxRoomMode.review,
+      profile: context.profile,
+      items: context.items,
+      marker: marker,
+      signal: DecisionSignal.two,
+    );
+    return ReviewRoomView(
+      status: ReviewRoomStatus.intro,
+      count: boundedCount,
+      queue: queue,
+      idx: 0,
+    );
+  }
+
+  void prefetchLikelyReviewQuestion(
+    ReviewRoomContext context, {
+    int count = 5,
+  }) {
+    final queue = service.buildReviewQueueForLesson(
+      lessonLocalId: context.lessonLocalId,
+      topic: context.topic,
+      items: context.items,
+      count: count,
+      fallbackStartIdx: context.fallbackStartIdx,
+    );
+    if (queue.isEmpty) return;
+    service.prefetchAuxRoomQuestion(
+      lessonLocalId: context.lessonLocalId,
+      mode: AuxRoomMode.review,
+      profile: context.profile,
+      items: context.items,
+      marker: queue.first,
+      signal: DecisionSignal.two,
+    );
+  }
+
+  Future<ReviewRoomView> resolveReviewRoomQuestion(
+    ReviewRoomContext context,
+    ReviewRoomView view,
+  ) async {
+    if (view.status == ReviewRoomStatus.ready ||
+        view.status == ReviewRoomStatus.result ||
+        view.status == ReviewRoomStatus.done) {
+      return view;
+    }
+    return prepareReviewRoomQuestion(
+      context: context,
+      queue: view.queue,
+      idx: view.idx,
+      count: view.count,
+    );
+  }
+
   Future<ReviewRoomView> prepareReviewRoomQuestion({
     required ReviewRoomContext context,
     required List<String> queue,
     required int idx,
     required int count,
   }) async {
-    final prepared = await service.prepareAuxRoomQuestion(
+    final marker = idx < queue.length ? queue[idx] : null;
+    final prepared = await service.prefetchAuxRoomQuestion(
       lessonLocalId: context.lessonLocalId,
       mode: AuxRoomMode.review,
       profile: context.profile,
       items: context.items,
-      marker: idx < queue.length ? queue[idx] : null,
+      marker: marker,
       signal: DecisionSignal.two,
     );
     if (!prepared.ok) {

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
 import 'package:sim_mobile/sim/experience/student_experience_types.dart';
 import 'package:sim_mobile/sim/experience/warmup_bridge_addendum.dart';
@@ -10,6 +11,8 @@ import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('Warmup welcome bridge constitucional', () {
     test('chama T02 com adendo e ficha real do aluno', () async {
       final t02 = _RecordingWarmupT02();
@@ -134,6 +137,49 @@ void main() {
         expect(session.aulaSnapshot, isNotNull);
         await session.continueFromWarmupToAula();
         expect(session.route, '/cyber/aula');
+      },
+    );
+
+    test('ponte legada nao abre warmup vazio', () {
+      final session = LabSession()
+        ..selectedLanguageCode = 'pt'
+        ..stableLang = 'pt-BR'
+        ..freeText = 'Quero aprender deslocamento em física começando do zero.';
+
+      expect(session.saveObjectiveEntry(), isTrue);
+      session.openWarmupBridge();
+
+      final state = session.canonicalStore!.readState(session.lessonLocalId!);
+      expect(session.route, '/cyber/curriculo');
+      expect(session.warmupLesson, isNull);
+      expect(
+        state.events.map((event) => event.type),
+        contains('PREPARATION_GATE_WAITING_FOR_WARMUP'),
+      );
+    });
+
+    test(
+      'escolha encontrar ponto inicia preteste em background sem bloquear rota',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final session = LabSession(prefs: prefs)
+          ..selectedLanguageCode = 'pt'
+          ..stableLang = 'pt-BR'
+          ..freeText =
+              'Quero aprender deslocamento em física começando do zero.';
+
+        expect(session.saveObjectiveEntry(), isTrue);
+        session.choosePlacementFindMyPointThenPreparation();
+        expect(session.route, '/cyber/curriculo');
+        await Future<void>.delayed(Duration.zero);
+
+        final state = session.canonicalStore!.readState(session.lessonLocalId!);
+        expect(state.placement?['choice'], 'find_my_point');
+        expect(
+          state.events.map((event) => event.type),
+          contains('PLACEMENT_PRETEST_PREFETCH_STARTED'),
+        );
       },
     );
 
