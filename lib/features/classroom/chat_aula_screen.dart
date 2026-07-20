@@ -110,7 +110,9 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     await _conversationStore.persist(
       lessonKey: lessonKey,
       archiveSeq: _conversationArchiveSeq,
-      messages: _messagesWithDeadPastFeedbackActions(),
+      messages: _messagesWithDeadPastFeedbackActions()
+          .where((message) => !_isEphemeralRuntimeMessage(message))
+          .toList(growable: false),
     );
   }
 
@@ -384,6 +386,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       if (_isDuplicateHistoryMessage(message)) continue;
       _insertConversationMessage(message, incoming, incomingIndex);
     }
+    _removeStaleEphemeralMessages(incoming);
 
     final messages = List<ChatLessonMessage>.unmodifiable(
       _messagesWithDeadPastFeedbackActions(),
@@ -487,6 +490,22 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       ),
       _ => false,
     };
+  }
+
+  void _removeStaleEphemeralMessages(List<ChatLessonMessage> incoming) {
+    final liveIncomingIds = incoming.map((message) => message.id).toSet();
+    _conversationMessages.removeWhere(
+      (message) =>
+          _isEphemeralRuntimeMessage(message) &&
+          !liveIncomingIds.contains(message.id),
+    );
+  }
+
+  bool _isEphemeralRuntimeMessage(ChatLessonMessage message) {
+    if (message.isHistorical) return false;
+    return message.kind == ChatLessonMessageKind.loading ||
+        message.kind == ChatLessonMessageKind.processing ||
+        message.kind == ChatLessonMessageKind.error;
   }
 
   bool _shouldArchiveAsNewTurn(

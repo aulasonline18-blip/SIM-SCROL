@@ -29,6 +29,51 @@ void main() {
     expect(find.text('Ponto isolado'), findsOneWidget);
   });
 
+  testWidgets('preparo efemero some quando o conteudo preparado renderiza', (
+    tester,
+  ) async {
+    final session = _snapshotSession()
+      ..aulaRuntimeLoading = true
+      ..aulaSnapshot = _snapshot(
+        phase: const ClassroomPhase.advancePending(
+          message: 'aula_advance_pending',
+        ),
+        content: null,
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump();
+
+    expect(find.text(t('aula_advance_pending')), findsOneWidget);
+
+    session
+      ..aulaRuntimeLoading = false
+      ..aulaSnapshot = _snapshot(
+        phase: const ClassroomPhase.reading(),
+        content: const LessonContent(
+          explanation: 'Aula preparada apareceu.',
+          question: 'Qual alternativa continua?',
+          options: {
+            AnswerLetter.A: 'Primeira',
+            AnswerLetter.B: 'Segunda',
+            AnswerLetter.C: 'Terceira',
+          },
+          correctAnswer: AnswerLetter.A,
+        ),
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump();
+
+    expect(find.text(t('aula_advance_pending')), findsNothing);
+    expect(find.text('Aula preparada apareceu.'), findsOneWidget);
+    expect(find.text('Primeira'), findsOneWidget);
+  });
+
   test('advance pending vira preparo, não retry manual', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(
@@ -72,6 +117,16 @@ LabSession _snapshotSession() => LabSession()
 
 LessonRuntimeSnapshot _snapshot({
   ClassroomPhase phase = const ClassroomPhase.reading(),
+  LessonContent? content = const LessonContent(
+    explanation: 'Observe o desenho da curva antes de responder.',
+    question: 'Qual curva representa o crescimento?',
+    options: {
+      AnswerLetter.A: 'Linha reta',
+      AnswerLetter.B: 'Curva',
+      AnswerLetter.C: 'Ponto isolado',
+    },
+    correctAnswer: AnswerLetter.B,
+  ),
 }) => LessonRuntimeSnapshot(
   authReady: true,
   authed: true,
@@ -86,16 +141,7 @@ LessonRuntimeSnapshot _snapshot({
   ),
   phase: phase,
   history: const [],
-  conteudo: const LessonContent(
-    explanation: 'Observe o desenho da curva antes de responder.',
-    question: 'Qual curva representa o crescimento?',
-    options: {
-      AnswerLetter.A: 'Linha reta',
-      AnswerLetter.B: 'Curva',
-      AnswerLetter.C: 'Ponto isolado',
-    },
-    correctAnswer: AnswerLetter.B,
-  ),
+  conteudo: content,
   imagem: null,
   itemMarker: 'M1',
   itemText: 'Funções',
