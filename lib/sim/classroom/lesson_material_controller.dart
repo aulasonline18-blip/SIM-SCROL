@@ -294,6 +294,9 @@ class LessonMaterialController {
 
   String _lessonMaterialFailureCode(Object error) {
     final text = error.toString().toLowerCase();
+    if (text.contains('contract') || text.contains('invalid')) {
+      return 'CONTRACT_INVALID';
+    }
     if (text.contains('401') || text.contains('403')) {
       return 'AUTH_REQUIRED';
     }
@@ -302,9 +305,6 @@ class LessonMaterialController {
     }
     if (text.contains('429')) return 'RATE_LIMITED';
     if (text.contains('timeout') || text.contains('408')) return 'TIMEOUT';
-    if (text.contains('contract') || text.contains('invalid')) {
-      return 'CONTRACT_INVALID';
-    }
     if (text.contains('500') ||
         text.contains('502') ||
         text.contains('503') ||

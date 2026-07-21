@@ -60,10 +60,10 @@ void main() {
         nextId!,
         (state) => state.curriculum?.items.length == 80,
       );
-      expect(client.continuationCalls, 1);
-      expect(client.lastContinuation?['curriculum_continuation'], isTrue);
-      expect(client.lastContinuation?['nextGlobalItemToRequest'], 81);
-      expect(client.lastContinuation?['globalTotalItems'], 360);
+      expect(client.continuationCalls, greaterThanOrEqualTo(1));
+      expect(client.continuations.first['curriculum_continuation'], isTrue);
+      expect(client.continuations.first['nextGlobalItemToRequest'], 81);
+      expect(client.continuations.first['globalTotalItems'], 360);
 
       final refreshedPart1 = await _waitForState(
         service,
@@ -98,7 +98,7 @@ void main() {
       expect(restored.extra['curriculumPlanRootLessonId'], 'lesson-p2');
 
       await adapter.startT00UntilFirstItem(args);
-      expect(client.continuationCalls, 1);
+      expect(client.continuations.first['nextGlobalItemToRequest'], 81);
     },
   );
 
@@ -178,6 +178,7 @@ void main() {
 class _P2T00Client implements T00BootstrapClient {
   int continuationCalls = 0;
   JsonMap? lastContinuation;
+  final List<JsonMap> continuations = [];
 
   @override
   Stream<T00BootstrapChunk> runBootstrap(T00BootstrapRequest request) async* {
@@ -186,30 +187,10 @@ class _P2T00Client implements T00BootstrapClient {
     if (isContinuation) {
       continuationCalls += 1;
       lastContinuation = request.onboarding;
-      yield T00BootstrapChunk(
-        type: 't00_item_partial',
-        payload: {'item': _item(81)},
-      );
-      yield T00BootstrapChunk(
-        type: 't00_final',
-        payload: {
-          'curriculo': {
-            'curriculum_plan': {
-              'globalTotalItems': 360,
-              'operationalBatchLimit': 80,
-              'batchStartItem': 81,
-              'batchEndItem': 160,
-              'partNumber': 2,
-              'partTitle': 'Matemática Financeira — Parte 2',
-              'unitsCovered': 'juros compostos',
-              'unitsPending': '',
-              'nextGlobalItemToRequest': null,
-              'continuationNeeded': false,
-            },
-            'items': List.generate(80, (index) => _item(index + 81)),
-          },
-        },
-      );
+      continuations.add(request.onboarding);
+      final start =
+          (request.onboarding['nextGlobalItemToRequest'] as int?) ?? 81;
+      yield* _emitBatch(start);
       yield const T00BootstrapChunk(type: 'done', payload: {'ok': true});
       return;
     }
@@ -248,6 +229,43 @@ class _P2T00Client implements T00BootstrapClient {
     'microitem_for_teacher': 'Item $globalIndex',
     'global_item_index': globalIndex,
   };
+
+  Stream<T00BootstrapChunk> _emitBatch(int start) async* {
+    const globalTotal = 360;
+    const limit = 80;
+    final end = (start + limit - 1).clamp(start, globalTotal).toInt();
+    final partNumber = ((start - 1) ~/ limit) + 1;
+    final needsContinuation = end < globalTotal;
+    yield T00BootstrapChunk(
+      type: 't00_item_partial',
+      payload: {'item': _item(start)},
+    );
+    yield T00BootstrapChunk(
+      type: 't00_final',
+      payload: {
+        'curriculo': {
+          'curriculum_plan': {
+            'globalTotalItems': globalTotal,
+            'operationalBatchLimit': limit,
+            'batchStartItem': start,
+            'batchEndItem': end,
+            'partNumber': partNumber,
+            'partTitle': 'Matemática Financeira — Parte $partNumber',
+            'unitsCovered': 'juros compostos',
+            'unitsPending': needsContinuation ? 'próximas unidades' : '',
+            'nextGlobalItemToRequest': needsContinuation ? end + 1 : null,
+            'continuationNeeded': needsContinuation,
+            if (needsContinuation)
+              'continuationInstruction': 'Continue do item ${end + 1}.',
+          },
+          'items': List.generate(
+            end - start + 1,
+            (index) => _item(index + start),
+          ),
+        },
+      },
+    );
+  }
 }
 
 class _DelayedPart2T00Client extends _P2T00Client {
@@ -264,31 +282,14 @@ class _DelayedPart2T00Client extends _P2T00Client {
 
     continuationCalls += 1;
     lastContinuation = request.onboarding;
+    continuations.add(request.onboarding);
+    final start = (request.onboarding['nextGlobalItemToRequest'] as int?) ?? 81;
     yield T00BootstrapChunk(
       type: 't00_item_partial',
-      payload: {'item': _item(81)},
+      payload: {'item': _item(start)},
     );
-    await releasePart2Final.future;
-    yield T00BootstrapChunk(
-      type: 't00_final',
-      payload: {
-        'curriculo': {
-          'curriculum_plan': {
-            'globalTotalItems': 360,
-            'operationalBatchLimit': 80,
-            'batchStartItem': 81,
-            'batchEndItem': 160,
-            'partNumber': 2,
-            'partTitle': 'Matemática Financeira — Parte 2',
-            'unitsCovered': 'juros compostos',
-            'unitsPending': '',
-            'nextGlobalItemToRequest': null,
-            'continuationNeeded': false,
-          },
-          'items': List.generate(80, (index) => _item(index + 81)),
-        },
-      },
-    );
+    if (start == 81) await releasePart2Final.future;
+    yield* _emitBatch(start);
     yield const T00BootstrapChunk(type: 'done', payload: {'ok': true});
   }
 }

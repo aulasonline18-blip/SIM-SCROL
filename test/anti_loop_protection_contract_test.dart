@@ -11,6 +11,11 @@ void main() {
     expect(law, contains('Codigo: LPTAL-1'));
     expect(law, contains('tao protegidas quanto prompts, T00, T02 e contrato N3'));
     expect(law, contains('anti-loop-protection'));
+    expect(law, contains('AiCostProtectionGate'));
+    expect(law, contains('ai-cost-protection-gate'));
+    expect(law, contains('Retry-After'));
+    expect(law, contains('single-flight'));
+    expect(law, contains('orcamento por minuto/hora'));
     expect(law, contains('AUDIO_ALREADY_RUNNING'));
     expect(law, contains('DOPAMINE_WINDOW_REQUEST_CAPPED'));
     expect(law, contains('.data/ai-usage-daily.json'));
@@ -22,6 +27,15 @@ void main() {
     ).readAsStringSync();
     final media = File(
       'lib/sim/media/student_lesson_media_service.dart',
+    ).readAsStringSync();
+    final aiConfig = File(
+      'lib/sim/external_ai/sim_ai_server_config.dart',
+    ).readAsStringSync();
+    final aiClients = File(
+      'lib/sim/external_ai/sim_server_ai_clients.dart',
+    ).readAsStringSync();
+    final worker = File(
+      'lib/sim/lesson/ready_window_worker.dart',
     ).readAsStringSync();
     final readyWindowTest = File(
       'test/first_lesson_ready_window_test.dart',
@@ -35,6 +49,12 @@ void main() {
     expect(dopamine, contains('status != \'queued\' && status != \'running\''));
     expect(dopamine, contains('mediaType'));
     expect(media, contains('mediaType: SlotMediaType.audio'));
+    expect(aiConfig, contains('retryAfter'));
+    expect(aiConfig, contains('retry-after'));
+    expect(aiClients, contains("'idempotencyKey': idempotencyKey"));
+    expect(aiClients, contains('_t02IdempotencyKey'));
+    expect(worker, contains('error.retryAfter'));
+    expect(worker, contains('300000'));
     expect(readyWindowTest, contains('maxSlots: 50'));
     expect(readyWindowTest, contains('DOPAMINE_WINDOW_REQUEST_CAPPED'));
     expect(readyWindowTest, contains('expect(t02.calls, localLessonTraySize)'));
@@ -46,6 +66,15 @@ void main() {
     ).readAsStringSync();
     final router = File('/root/sim-work/sim-api/src/app/router.js')
         .readAsStringSync();
+    final gate = File(
+      '/root/sim-work/sim-api/src/ai/ai-cost-protection-gate.js',
+    ).readAsStringSync();
+    final t02 = File(
+      '/root/sim-work/sim-api/src/t02/complete-lesson-controller.js',
+    ).readAsStringSync();
+    final mandatoryTest = File(
+      '/root/sim-work/sim-api/test/ai_cost_protection_mandatory_law.test.js',
+    ).readAsStringSync();
     final manifest = File(
       '/root/sim-work/sim-api/docs/migracao-sim-nv/protected-files.manifest.json',
     ).readAsStringSync();
@@ -57,7 +86,15 @@ void main() {
     expect(audio, contains("status === 'running'"));
     expect(router, contains('ai-usage-daily.json'));
     expect(router, contains('recordAiUsageDaily'));
+    expect(router, contains('createAiCostProtectionGate'));
+    expect(router, contains('aiCostGate.assertRouteBudget'));
     expect(router, contains('routeClass === \'audio\''));
+    expect(gate, contains('AI_COST_BUDGET_EXCEEDED'));
+    expect(gate, contains('AI_COST_SINGLE_FLIGHT_RUNNING'));
+    expect(gate, contains('AI_COST_CIRCUIT_OPEN'));
+    expect(t02, contains('costGate.run'));
+    expect(t02, contains('fullJitter: true'));
+    expect(mandatoryTest, contains('AI cost protection mandatory law tests passed'));
     expect(manifest, contains('"id": "anti-loop-protection"'));
     expect(manifest, contains('/root/SIM-SCROL/lib/sim/lesson/dopamine_ready_window_engine.dart'));
     expect(serverTest, contains('AUDIO_ALREADY_RUNNING'));

@@ -1,10 +1,8 @@
 part of 'lab_session.dart';
 
 const Duration _autoAdvanceAfterFeedbackDelay = Duration(milliseconds: 900);
-String humanErrorMessage(
-  Object? error, {
-  String fallback =
-      'Nao consegui concluir isso agora. Tente novamente em instantes.',
+String humanErrorMessage(Object? error, {
+  String fallback = 'Nao consegui concluir isso agora. Tente novamente em instantes.',
 }) {
   final raw = error?.toString() ?? '';
   final lower = raw.toLowerCase();
@@ -1436,9 +1434,7 @@ extension LabSessionFlowExtensions on LabSession {
     return state != null && hasPendingNextCurriculumPart(state);
   }
 
-  Future<void> _retryOpenAulaWhenNextCurriculumPartIsReady(
-    String currentLessonId,
-  ) async {
+  Future<void> _retryOpenAulaWhenNextCurriculumPartIsReady(String currentLessonId) async {
     final deadline = DateTime.now().add(const Duration(seconds: 30));
     while (!_disposed &&
         lessonLocalId == currentLessonId &&

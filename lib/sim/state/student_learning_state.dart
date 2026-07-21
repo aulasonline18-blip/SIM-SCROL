@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 typedef JsonMap = Map<String, dynamic>;
 
 int? _intValue(Object? value) {
@@ -225,10 +227,12 @@ class CurriculumGlobalPlan {
     this.partTitle,
     this.unitsCovered,
     this.unitsPending,
-    this.nextGlobalItemToRequest,
-    this.continuationNeeded = false,
-    this.continuationInstruction,
-  });
+    int? nextGlobalItemToRequest,
+    bool continuationNeeded = false,
+    String? continuationInstruction,
+  }) : _nextGlobalItemToRequest = nextGlobalItemToRequest,
+       _continuationNeeded = continuationNeeded,
+       _continuationInstruction = continuationInstruction;
 
   final int globalTotalItems;
   final int batchStartItem;
@@ -238,21 +242,37 @@ class CurriculumGlobalPlan {
   final String? partTitle;
   final String? unitsCovered;
   final String? unitsPending;
-  final int? nextGlobalItemToRequest;
-  final bool continuationNeeded;
-  final String? continuationInstruction;
+  final int? _nextGlobalItemToRequest;
+  final bool _continuationNeeded;
+  final String? _continuationInstruction;
 
+  bool get hasRemainingGlobalItems => globalTotalItems > batchEndItem;
+
+  int? get nextGlobalItemToRequest {
+    final next = _nextGlobalItemToRequest;
+    if (next != null && next > batchEndItem) return next;
+    if (hasRemainingGlobalItems) return batchEndItem + 1;
+    return null;
+  }
+  bool get continuationNeeded => _continuationNeeded || hasRemainingGlobalItems;
+  String? get continuationInstruction {
+    final clean = _continuationInstruction?.trim();
+    if (clean != null && clean.isNotEmpty && clean.toLowerCase() != 'n/a' && clean != '-') {
+      return clean;
+    }
+    final next = nextGlobalItemToRequest;
+    if (!continuationNeeded || next == null) return null;
+    return 'Continue a partir do item $next.';
+  }
   int globalItemNumberForLocalIndex(int localIndex) {
     return batchStartItem + localIndex.clamp(0, batchSize).toInt();
   }
-
   int get batchSize {
     final size = batchEndItem - batchStartItem + 1;
     return size > 0 ? size : 0;
   }
-
   bool get isMultiPart {
-    return globalTotalItems > batchEndItem ||
+    return hasRemainingGlobalItems ||
         continuationNeeded ||
         (partNumber ?? 1) > 1;
   }

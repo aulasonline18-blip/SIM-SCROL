@@ -266,12 +266,14 @@ class SimServerT02Client implements T02LessonClient {
         retryable: false,
       );
     }
+    final idempotencyKey = _t02IdempotencyKey(request, mode);
     final SimHttpResponse response;
     try {
       response = await transport.postJson(
         config.uri(path),
         headers: await config.jsonHeaders(),
         body: {
+          'idempotencyKey': idempotencyKey,
           'mode': mode,
           'lessonLocalId': request.lessonLocalId,
           'item': request.item,
@@ -402,6 +404,18 @@ class SimServerT02Client implements T02LessonClient {
       n3Reason: _stringOrNull(pick('n3Reason', 'n3_reason')),
     );
   }
+}
+
+String _t02IdempotencyKey(T02LessonRequest request, String mode) {
+  return [
+    't02',
+    mode,
+    request.lessonLocalId,
+    request.marker ?? 'marker',
+    request.itemIdx?.toString() ?? 'idx',
+    request.layer.value.toString(),
+    _stableHash('${request.item}|${request.topic ?? ''}|${request.mode}'),
+  ].join(':');
 }
 
 String? _stringOrNull(Object? value) {

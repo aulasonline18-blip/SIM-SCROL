@@ -57,6 +57,7 @@ class SimExternalAiException implements Exception {
     this.requestId,
     this.code,
     this.retryable,
+    this.retryAfter,
   });
 
   final String message;
@@ -64,6 +65,7 @@ class SimExternalAiException implements Exception {
   final String? requestId;
   final String? code;
   final bool? retryable;
+  final Duration? retryAfter;
 
   @override
   String toString() {
@@ -71,7 +73,10 @@ class SimExternalAiException implements Exception {
     final request = requestId == null ? '' : ' requestId=$requestId';
     final safeCode = code == null ? '' : ' code=$code';
     final retry = retryable == null ? '' : ' retryable=$retryable';
-    return 'SimExternalAiException$status$request$safeCode$retry: $message';
+    final wait = retryAfter == null
+        ? ''
+        : ' retryAfter=${retryAfter!.inSeconds}s';
+    return 'SimExternalAiException$status$request$safeCode$retry$wait: $message';
   }
 }
 
@@ -80,16 +85,19 @@ SimExternalAiException simSafeHttpException(
   String? fallbackRequestId,
 }) {
   final parsed = _parseSafeHttpBody(response.body);
-  final code = _safeCodeForStatus(response.statusCode);
+  final statusCode = _safeCodeForStatus(response.statusCode);
+  final code =
+      _safePublicErrorCode(parsed.code, response.statusCode) ?? statusCode;
   return SimExternalAiException(
     code,
     statusCode: response.statusCode,
     requestId:
         _safeToken(response.headers['x-request-id']) ??
         _safeToken(parsed.requestId) ??
-        _safeToken(fallbackRequestId),
+      _safeToken(fallbackRequestId),
     code: code,
-    retryable: _retryableForStatus(response.statusCode),
+    retryable: parsed.retryable ?? _retryableForStatus(response.statusCode),
+    retryAfter: _retryAfter(response.headers, parsed.retryAfter),
   );
 }
 
@@ -107,21 +115,73 @@ SimExternalAiException simSafeTimeoutException({
 }
 
 class _ParsedSafeHttpBody {
-  const _ParsedSafeHttpBody({this.requestId});
+  const _ParsedSafeHttpBody({
+    this.requestId,
+    this.code,
+    this.retryable,
+    this.retryAfter,
+  });
 
   final String? requestId;
+  final String? code;
+  final bool? retryable;
+  final String? retryAfter;
 }
 
 _ParsedSafeHttpBody _parseSafeHttpBody(String body) {
   try {
     final decoded = jsonDecode(body);
     if (decoded is! Map) return const _ParsedSafeHttpBody();
+    final humanError = decoded['humanError'];
+    final technical = humanError is Map ? humanError['technical'] : null;
     return _ParsedSafeHttpBody(
       requestId: (decoded['requestId'] ?? decoded['request_id'])?.toString(),
+      code:
+          (decoded['code'] ??
+                  decoded['error'] ??
+                  (technical is Map ? technical['code'] : null))
+              ?.toString(),
+      retryable: decoded['retryable'] is bool
+          ? decoded['retryable'] as bool
+          : technical is Map && technical['retryable'] is bool
+          ? technical['retryable'] as bool
+          : null,
+      retryAfter:
+          (decoded['retryAfter'] ??
+                  decoded['retry_after'] ??
+                  (technical is Map
+                      ? technical['retryAfter'] ?? technical['retry_after']
+                      : null))
+              ?.toString(),
     );
   } catch (_) {
     return const _ParsedSafeHttpBody();
   }
+}
+
+Duration? _retryAfter(Map<String, String> headers, String? bodyValue) {
+  final raw =
+      headers['retry-after'] ??
+      headers['Retry-After'] ??
+      headers['Retry-after'] ??
+      bodyValue;
+  final value = (raw ?? '').trim();
+  if (value.isEmpty) return null;
+  final seconds = int.tryParse(value);
+  if (seconds != null && seconds > 0) return Duration(seconds: seconds);
+  final date = DateTime.tryParse(value);
+  if (date == null) return null;
+  final wait = date.difference(DateTime.now().toUtc());
+  return wait.isNegative ? null : wait;
+}
+
+String? _safePublicErrorCode(String? raw, int statusCode) {
+  final value = (raw ?? '').trim();
+  if (value.isEmpty || value.length > 80) return null;
+  final allowed = RegExp(r'^[A-Z0-9_:-]+$');
+  if (!allowed.hasMatch(value)) return null;
+  if (statusCode == 403 && value == 'FORBIDDEN') return null;
+  return value;
 }
 
 String _safeCodeForStatus(int statusCode) {

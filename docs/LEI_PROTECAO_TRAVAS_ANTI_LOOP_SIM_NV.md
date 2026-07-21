@@ -36,6 +36,16 @@ usuario.
    conteudo do aluno.
 7. Rate limit de rotas `ai`, `image` e `audio` deve continuar sendo aplicado
    antes do despacho da rota.
+8. O `AiCostProtectionGate` e o portao financeiro autoritativo antes de chamada
+   paga de IA. Ele deve continuar existindo com idempotencia, single-flight,
+   cache de resultado, orcamento por minuto/hora, teto global, circuit breaker
+   por 429 e respeito a `Retry-After`.
+9. `/api/complete-lesson` deve passar pelo `AiCostProtectionGate` antes de
+   chamar T02. Pedido repetido do mesmo slot nao pode executar IA novamente.
+10. `429` de provedor ou servidor nao pode disparar retry imediato. Retry
+    permitido precisa usar backoff exponencial com jitter ou `Retry-After`.
+11. O servidor e o portao financeiro. O app pode colaborar com idempotency key,
+    fila e espera, mas o custo nunca pode depender apenas do app.
 
 ## Arquivos protegidos
 
@@ -46,7 +56,13 @@ As travas acima vivem principalmente nestes arquivos:
 - `test/first_lesson_ready_window_test.dart`
 - `/root/sim-work/sim-api/src/media/audio-controller.js`
 - `/root/sim-work/sim-api/src/app/router.js`
+- `/root/sim-work/sim-api/src/ai/ai-cost-protection-gate.js`
+- `/root/sim-work/sim-api/src/t02/complete-lesson-controller.js`
+- `/root/sim-work/sim-api/src/config/env.js`
+- `/root/sim-work/sim-api/src/app/media-cache.js`
 - `/root/sim-work/sim-api/test/media_visual_n3_contract.test.js`
+- `/root/sim-work/sim-api/test/ai_cost_protection_mandatory_law.test.js`
+- `/root/sim-work/sim-api/test/t02_aula_auxiliares_contract.test.js`
 - `/root/sim-work/sim-api/docs/migracao-sim-nv/protected-files.manifest.json`
 - `/root/sim-work/sim-api/scripts/check-protected-files.js`
 - `/root/sim-work/sim-api/test/protected_files_gate.test.js`
@@ -65,6 +81,12 @@ E proibido:
 8. Remover ou reduzir a auditoria diaria de uso de IA/midia.
 9. Remover testes que provam essas travas.
 10. Substituir a trava por comentario, TODO, log, loader ou fallback visual.
+11. Remover, contornar, tornar opcional ou enfraquecer `AiCostProtectionGate`.
+12. Reduzir limites, TTLs, circuit breaker, idempotencia, single-flight ou
+    `Retry-After` sem autorizacao extrema e teste novo.
+13. Criar caminho paralelo que chame IA paga sem passar pelo gate financeiro.
+14. Permitir OpenAI, Gemini, imagem, audio, anexo ou qualquer provedor pago fora
+    da politica oficial do servidor e fora do gate financeiro.
 
 ## Excecao permitida
 
@@ -76,15 +98,20 @@ verdadeiras:
 3. A implementacao explica antes da edicao o que sera alterado e por que a trava
    continua equivalente ou mais forte.
 4. Os testes de contrato anti-loop sao mantidos ou reforcados.
-5. `flutter analyze`, `flutter test`, `node test/media_visual_n3_contract.test.js`,
+5. `flutter analyze`, `flutter test`, `node test/ai_cost_protection_mandatory_law.test.js`,
+   `node test/media_visual_n3_contract.test.js`,
    `node test/protected_files_gate.test.js`, `node test/server_size_budget_contract.test.js`
    e `npm test` passam quando aplicavel.
+6. Para reducao de protecao, a autorizacao deve nomear explicitamente:
+   `anti-loop-protection`, `ai-cost-protection-gate`, o arquivo tocado e a razao
+   de a mudanca continuar mais forte ou equivalente.
 
 ## Regra para janelas futuras
 
 Se uma janela futura receber tarefa que toque midia, audio, imagem, cache, janela
-dopaminica, prefetch, retry, rate limit, roteador do servidor ou auditoria de IA,
-ela deve primeiro ler esta lei.
+dopaminica, prefetch, retry, rate limit, roteador do servidor, auditoria de IA,
+provedor de IA, modelo de IA, `AiCostProtectionGate`, idempotencia, single-flight,
+orcamento ou circuit breaker, ela deve primeiro ler esta lei.
 
 Se a tarefa exigir mexer nas travas protegidas, a janela deve parar, explicar o
 impacto e pedir autorizacao explicita. Sem essa autorizacao, a janela deve escolher
@@ -96,6 +123,9 @@ O SIM so esta conforme esta lei quando:
 
 - as travas continuam no codigo;
 - os testes continuam provando as travas;
+- `AiCostProtectionGate` continua antes de `/api/complete-lesson`;
+- T02 continua sem retry imediato em 429;
+- o app continua enviando idempotency key e respeitando `Retry-After`;
 - o manifesto protegido do servidor reconhece `anti-loop-protection`;
 - nenhuma mudanca em arquivo protegido passa sem autorizacao rastreavel;
 - o aluno nunca paga o custo de loop tecnico com espera, erro repetido, gasto

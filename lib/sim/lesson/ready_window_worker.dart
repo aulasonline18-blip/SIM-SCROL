@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../external_ai/sim_ai_server_config.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
 
@@ -177,7 +178,7 @@ class ReadyWindowWorker {
         final attempts = (job['attempts'] as num?)?.toInt() ?? 0;
         final newAttempts = attempts + 1;
         final now = DateTime.now().millisecondsSinceEpoch;
-        final retryDelayMs = _retryDelayMs(newAttempts);
+        final retryDelayMs = _retryDelayMs(newAttempts, error);
         final retryAt = now + retryDelayMs;
         service.mutate(lessonLocalId, (current) {
           return current.copyWith(
@@ -190,7 +191,9 @@ class ReadyWindowWorker {
                 'attempts': newAttempts,
                 'max_attempts': null,
                 'next_retry_at': retryAt,
-                'error_code': 'READY_WINDOW_JOB_RETRYABLE',
+                'error_code': error is SimExternalAiException
+                    ? error.code ?? 'READY_WINDOW_JOB_RETRYABLE'
+                    : 'READY_WINDOW_JOB_RETRYABLE',
               };
             }).toList(),
           );
@@ -237,8 +240,11 @@ class ReadyWindowWorker {
     return queued.isEmpty ? null : queued.first;
   }
 
-  static int _retryDelayMs(int attempt) {
-    const delays = [2000, 5000, 15000];
+  static int _retryDelayMs(int attempt, Object error) {
+    if (error is SimExternalAiException && error.retryAfter != null) {
+      return error.retryAfter!.inMilliseconds.clamp(1000, 300000);
+    }
+    const delays = [2000, 5000, 15000, 60000, 300000];
     return delays[(attempt - 1).clamp(0, delays.length - 1)];
   }
 

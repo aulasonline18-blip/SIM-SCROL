@@ -169,6 +169,48 @@ void main() {
       expect((request?['previousBatch'] as Map)['end'], 80);
     });
 
+    test('software, not AI text, decides continuation from global range', () {
+      final plan = CurriculumGlobalPlan.fromJson(const {
+        'globalTotalItems': 70,
+        'operationalBatchLimit': 10,
+        'batchStartItem': 1,
+        'batchEndItem': 10,
+        'partNumber': 1,
+        'continuationNeeded': false,
+        'nextGlobalItemToRequest': null,
+        'continuationInstruction': 'N/A',
+      }, 10);
+
+      expect(plan.continuationNeeded, isTrue);
+      expect(plan.nextGlobalItemToRequest, 11);
+      expect(plan.continuationInstruction, 'Continue a partir do item 11.');
+
+      final state = StudentLearningState.empty(lessonLocalId: 'lesson-c2-70')
+          .copyWith(
+            profile: const StudentProfile(objetivo: 'Equação do segundo grau'),
+            curriculum: StudentCurriculum(
+              topic: 'Equação do segundo grau',
+              totalItems: 10,
+              generatedAt: 10,
+              provisional: false,
+              items: List.generate(
+                10,
+                (index) => CurriculumItem(
+                  marker: 'M${index + 1}',
+                  text: 'Item ${index + 1}',
+                ),
+              ),
+              globalPlan: plan,
+            ),
+          );
+
+      final request = buildCurriculumContinuationRequest(state);
+      expect(request, isNotNull);
+      expect(request?['nextGlobalItemToRequest'], 11);
+      expect((request?['previousBatch'] as Map)['end'], 10);
+      expect(request?['globalTotalItems'], 70);
+    });
+
     test(
       'ready next part accepts correct deterministic part id without extra root',
       () {
