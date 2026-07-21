@@ -48,7 +48,7 @@ fun boolDartDefine(name: String, fallback: Boolean = false): Boolean =
         ?.let { it == "1" || it == "true" || it == "yes" }
         ?: fallback
 
-val simApplicationId = stringProperty("SIM_ANDROID_APPLICATION_ID", "com.example.sim_mobile")
+val simApplicationId = stringProperty("SIM_ANDROID_APPLICATION_ID", "com.aulasonline.sim")
 val simUsesCleartextTraffic =
     boolProperty("SIM_ANDROID_ALLOW_CLEARTEXT") ||
         boolDartDefine("SIM_ALLOW_HTTP_IN_PRODUCTION")
@@ -63,10 +63,10 @@ val simReleaseSigningReady =
         !signingValue("storePassword").isNullOrBlank() &&
         !signingValue("keyAlias").isNullOrBlank() &&
         !signingValue("keyPassword").isNullOrBlank()
-val simRequireReleaseSigning = boolProperty("SIM_REQUIRE_RELEASE_SIGNING")
+val simRequireReleaseSigning = boolProperty("SIM_REQUIRE_RELEASE_SIGNING", true)
 
 android {
-    namespace = "com.example.sim_mobile"
+    namespace = "com.aulasonline.sim"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -108,11 +108,13 @@ android {
                     "Release signing is required. Configure android/key.properties or SIM_ANDROID_* environment variables."
                 )
             }
-            signingConfig = signingConfigs.getByName(
-                if (simReleaseSigningReady) "release" else "debug"
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
             )
-            isMinifyEnabled = false
-            isShrinkResources = false
         }
     }
 }

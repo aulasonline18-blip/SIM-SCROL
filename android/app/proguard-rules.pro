@@ -1,0 +1,5 @@
+-keep class io.flutter.** { *; }
+-keep class io.flutter.plugins.** { *; }
+-keep class com.aulasonline.sim.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*

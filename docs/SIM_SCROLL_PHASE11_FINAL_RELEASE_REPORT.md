@@ -1,3 +1,9 @@
+# DOCUMENTO HISTORICO. NAO E AUTORIDADE DE RUNTIME OU PUBLICACAO.
+
+Este relatorio registra um APK antigo de continuidade/teste. Para publicacao
+Google Play, a autoridade vigente e `docs/GOOGLE_PLAY_RELEASE_READINESS.md` com
+package `com.aulasonline.sim`, HTTPS obrigatorio e release signing oficial.
+
 # SIM Scroll - Fase 11 - Relatorio final de release
 
 Data: 2026-07-03

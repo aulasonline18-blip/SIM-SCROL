@@ -19,28 +19,55 @@ void main() {
     expect(manifest, contains('android.permission.READ_EXTERNAL_STORAGE'));
     expect(manifest, contains('android:maxSdkVersion="32"'));
     expect(manifest, isNot(contains('android.permission.RECORD_AUDIO')));
-    expect(manifest, isNot(contains('android.permission.ACCESS_FINE_LOCATION')));
+    expect(
+      manifest,
+      isNot(contains('android.permission.ACCESS_FINE_LOCATION')),
+    );
     expect(manifest, isNot(contains('android.permission.READ_CONTACTS')));
     expect(manifest, isNot(contains('android.permission.SEND_SMS')));
     expect(manifest, isNot(contains('android.permission.QUERY_ALL_PACKAGES')));
     expect(manifest, isNot(contains('android:usesCleartextTraffic="true"')));
   });
 
-  test('M17 Android release build identity and signing are configurable', () {
+  test('M17 Android release build identity and signing are Play Store strict', () {
     final gradle = File('android/app/build.gradle.kts').readAsStringSync();
     final pubspec = File('pubspec.yaml').readAsStringSync();
 
     expect(
       gradle,
       contains(
-        'val simApplicationId = stringProperty("SIM_ANDROID_APPLICATION_ID", "com.example.sim_mobile")',
+        'val simApplicationId = stringProperty("SIM_ANDROID_APPLICATION_ID", "com.aulasonline.sim")',
       ),
     );
+    expect(gradle, contains('namespace = "com.aulasonline.sim"'));
     expect(gradle, contains('applicationId = simApplicationId'));
-    expect(gradle, contains('SIM_REQUIRE_RELEASE_SIGNING'));
+    expect(
+      gradle,
+      contains(
+        'val simRequireReleaseSigning = boolProperty("SIM_REQUIRE_RELEASE_SIGNING", true)',
+      ),
+    );
     expect(gradle, contains('android/key.properties'));
+    expect(
+      gradle,
+      contains('signingConfig = signingConfigs.getByName("release")'),
+    );
+    expect(gradle, contains('isMinifyEnabled = true'));
+    expect(gradle, contains('isShrinkResources = true'));
+    expect(gradle, contains('proguard-rules.pro'));
+    expect(
+      gradle,
+      isNot(contains('if (simReleaseSigningReady) "release" else "debug"')),
+    );
+    expect(gradle, isNot(contains('com.example.sim_mobile')));
     expect(gradle, contains('versionCode = flutter.versionCode'));
     expect(gradle, contains('versionName = flutter.versionName'));
+    expect(
+      File(
+        'android/app/src/main/kotlin/com/aulasonline/sim/MainActivity.kt',
+      ).readAsStringSync(),
+      contains('package com.aulasonline.sim'),
+    );
     expect(
       pubspec,
       matches(RegExp(r'^version:\s+\d+\.\d+\.\d+\+[1-9]\d*$', multiLine: true)),
@@ -51,8 +78,13 @@ void main() {
     expect(SimEnvironment.billingProvider, 'google_play');
     expect(SimEnvironment.useGooglePlayBilling, true);
 
-    final source = File('lib/sim/config/sim_environment.dart').readAsStringSync();
-    expect(source, contains("SIM_SERVER_URL precisa usar HTTPS em production."));
+    final source = File(
+      'lib/sim/config/sim_environment.dart',
+    ).readAsStringSync();
+    expect(
+      source,
+      contains("SIM_SERVER_URL precisa usar HTTPS em production."),
+    );
     expect(
       source,
       contains(
@@ -85,6 +117,7 @@ void main() {
 
   test('M17 Google Play documents cover required store declarations', () {
     final requiredDocs = <String>[
+      'docs/GOOGLE_PLAY_DATA_SAFETY_FINAL.md',
       'docs/google-play/privacy-policy.md',
       'docs/google-play/account-deletion.md',
       'docs/google-play/data-safety.md',
@@ -96,9 +129,18 @@ void main() {
       expect(File(path).existsSync(), true, reason: path);
     }
 
-    final privacy = File('docs/google-play/privacy-policy.md').readAsStringSync();
-    final deletion = File('docs/google-play/account-deletion.md').readAsStringSync();
-    final dataSafety = File('docs/google-play/data-safety.md').readAsStringSync();
+    final privacy = File(
+      'docs/google-play/privacy-policy.md',
+    ).readAsStringSync();
+    final deletion = File(
+      'docs/google-play/account-deletion.md',
+    ).readAsStringSync();
+    final dataSafety = File(
+      'docs/google-play/data-safety.md',
+    ).readAsStringSync();
+    final finalDataSafety = File(
+      'docs/GOOGLE_PLAY_DATA_SAFETY_FINAL.md',
+    ).readAsStringSync();
     final billing = File(
       'docs/google-play/play-billing-implementation.md',
     ).readAsStringSync();
@@ -108,8 +150,39 @@ void main() {
     expect(deletion, contains('Conta -> Solicitar exclusao da conta'));
     expect(dataSafety, contains('App activity'));
     expect(dataSafety, contains('Progresso, respostas, eventos de aula'));
+    expect(finalDataSafety, contains('Status: PENDING_PLAY_CONSOLE_APPROVAL'));
+    expect(finalDataSafety, contains('Supabase'));
+    expect(finalDataSafety, contains('configured AI'));
+    expect(
+      finalDataSafety,
+      isNot(contains('Nenhum dado compartilhado com terceiros')),
+    );
     expect(billing, contains('Google Play Billing'));
   });
+
+  test(
+    'M17 official production build script uses HTTPS appbundle contract',
+    () {
+      final script = File(
+        'scripts/build-sim-scroll-production-apk.sh',
+      ).readAsStringSync();
+
+      expect(script, contains('flutter build appbundle --release'));
+      expect(script, contains('SIM_SERVER_URL must use HTTPS'));
+      expect(
+        script,
+        contains('--dart-define=SIM_BILLING_PROVIDER=google_play'),
+      );
+      expect(
+        script,
+        contains('-PSIM_ANDROID_APPLICATION_ID=com.aulasonline.sim'),
+      );
+      expect(script, contains('-PSIM_REQUIRE_RELEASE_SIGNING=true'));
+      expect(script, isNot(contains('SIM_ALLOW_HTTP_IN_PRODUCTION=true')));
+      expect(script, isNot(contains('http://167.179.109.137:3000')));
+      expect(script, isNot(contains('com.example.sim_mobile')));
+    },
+  );
 
   test('M17 app source does not contain committed production secrets', () {
     final files = <File>[

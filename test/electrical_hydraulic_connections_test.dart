@@ -244,11 +244,20 @@ void main() {
     expect(
       buildGradle,
       contains(
-        'stringProperty("SIM_ANDROID_APPLICATION_ID", "com.example.sim_mobile")',
+        'stringProperty("SIM_ANDROID_APPLICATION_ID", "com.aulasonline.sim")',
       ),
     );
+    expect(buildGradle, contains('namespace = "com.aulasonline.sim"'));
     expect(buildGradle, contains('applicationId = simApplicationId'));
-    expect(buildGradle, contains('SIM_REQUIRE_RELEASE_SIGNING'));
+    expect(
+      buildGradle,
+      contains('boolProperty("SIM_REQUIRE_RELEASE_SIGNING", true)'),
+    );
+    expect(
+      buildGradle,
+      contains('signingConfig = signingConfigs.getByName("release")'),
+    );
+    expect(buildGradle, isNot(contains('com.example.sim_mobile')));
   });
 
   test('dependencias reais de midia existem no pubspec', () {

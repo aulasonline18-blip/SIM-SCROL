@@ -1,16 +1,15 @@
 # SIM Android Google Play Release Readiness
 
-Status desta frente: prontidao Android/Google Play validada pela M17.
+Status desta frente: prontidao local reforcada pela Fase 1. Publicacao real
+permanece bloqueada ate haver keystore oficial, dominio HTTPS publico e
+aprovacao Play Console.
 
 ## Identidade Android
 
-- Package ID atual de continuidade/teste: `com.example.sim_mobile`
-- Android namespace atual de continuidade/teste: `com.example.sim_mobile`
-- Observacao: este package foi restaurado temporariamente para atualizar por
-  cima do APK antigo e preservar aulas locais. Antes de submissao Google Play,
-  gerar o build com o package oficial planejado `com.aulasonline.sim`, usando
-  `-PSIM_ANDROID_APPLICATION_ID=com.aulasonline.sim` e migracao consciente de
-  dados/identidade.
+- Package ID oficial de loja: `com.aulasonline.sim`
+- Android namespace oficial: `com.aulasonline.sim`
+- Observacao: trocar package muda a identidade Android. Instalacoes antigas com
+  outro package nao recebem atualizacao direta sem estrategia de migracao.
 - App label: `SIM`
 - Build de producao: sem `android:usesCleartextTraffic`
 - Debug/profile: cleartext liberado apenas para desenvolvimento local
@@ -38,7 +37,7 @@ SIM_ANDROID_KEYALIAS=sim_upload
 SIM_ANDROID_KEYPASSWORD=...
 ```
 
-Comando recomendado para gerar o Android App Bundle:
+Comando oficial para gerar o Android App Bundle:
 
 ```bash
 flutter build appbundle --release \

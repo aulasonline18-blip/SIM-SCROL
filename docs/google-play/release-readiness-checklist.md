@@ -13,9 +13,9 @@ Base oficial consultada em 04/07/2026:
 
 | Gate | Status | Prova |
 |---|---|---|
-| Package id real configuravel | FEITO | `SIM_ANDROID_APPLICATION_ID` no Gradle |
+| Package id oficial | FEITO | default `com.aulasonline.sim` no Gradle |
 | Assinatura release configuravel | FEITO | `android/key.properties` ou `SIM_ANDROID_*` |
-| Falhar se assinatura Play faltar | FEITO | `SIM_REQUIRE_RELEASE_SIGNING=true` |
+| Falhar se assinatura Play faltar | FEITO | `SIM_REQUIRE_RELEASE_SIGNING=true` por default |
 | Cleartext off no manifest main | FEITO | main manifest sem `usesCleartextTraffic=true` |
 | Privacy policy publica | FEITO | Documento e rota publica `/privacy-policy`; apontar URL HTTPS final no Play Console |
 | Account deletion publica | FEITO | Documento e rota publica `/account-deletion`; apontar URL HTTPS final no Play Console |
@@ -24,6 +24,7 @@ Base oficial consultada em 04/07/2026:
 | Role gate para `/pai` | PARCIAL | App exige role em metadata/claim; servidor precisa emitir role |
 | Observabilidade | PARCIAL | ErrorWidget/FlutterError existem; falta Sentry/Crashlytics real |
 | Billing Play no app | FEITO | `GooglePlayBillingFunctions` + `SIM_BILLING_PROVIDER=google_play` obrigatorio em production |
+| Data Safety aprovado no Play Console | BLOQUEADO EXTERNO | Registrar evidencia real da Play Console em `docs/GOOGLE_PLAY_DATA_SAFETY_FINAL.md` |
 | Produtos Play Console | BLOQUEADO EXTERNO | Criar `sim_credits_100`, `sim_credits_200`, `sim_credits_500` como consumiveis |
 | Validacao Play no servidor | FEITO | `POST /api/play-billing/consume-credit-pack` valida Android Publisher API, aceita service account e concede idempotente |
 | API level 35+ | A VERIFICAR | Depende do Flutter/Android Gradle instalado no build |

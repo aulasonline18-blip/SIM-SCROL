@@ -1,4 +1,4 @@
-package com.example.sim_mobile
+package com.aulasonline.sim
 
 import io.flutter.embedding.android.FlutterActivity
 

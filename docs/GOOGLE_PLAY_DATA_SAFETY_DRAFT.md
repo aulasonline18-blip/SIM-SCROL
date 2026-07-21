@@ -1,3 +1,8 @@
+# DOCUMENTO HISTORICO. NAO E AUTORIDADE DE RUNTIME OU PUBLICACAO.
+
+Use `docs/GOOGLE_PLAY_DATA_SAFETY_FINAL.md` como espelho vigente da submissao.
+Este rascunho permanece apenas para auditoria historica.
+
 # SIM Google Play Data Safety Draft
 
 Este rascunho serve para preencher o Play Console. Deve ser revisado pelo dono
