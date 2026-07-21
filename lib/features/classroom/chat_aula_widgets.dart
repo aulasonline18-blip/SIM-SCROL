@@ -50,14 +50,14 @@ class ChatAulaTimeline extends StatefulWidget {
 
 class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   static const double _renderedElementAnchor = 0.75;
-  static const double _feedbackElementAnchor = 0.50;
+  static const double _feedbackElementAnchor = 0.75;
   static const int _scrollMillisecondsPerScreen = 420;
   static const Duration _minimumScrollDuration = Duration(milliseconds: 220);
   static const Duration _maximumScrollDuration = Duration(milliseconds: 680);
   static const Duration _settledElementScrollDuration = Duration(
     milliseconds: 420,
   );
-  static const Duration _roundRevealStepDelay = Duration(milliseconds: 120);
+  static const Duration _roundRevealStepDelay = Duration(milliseconds: 100);
   static const Duration _optionsRevealDelay = Duration(milliseconds: 180);
 
   late final ScrollController _ownedScrollController;
@@ -304,7 +304,10 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     };
   }
 
-  bool _roundQuestionUnlocked(List<ChatLessonMessage> messages, String roundId) {
+  bool _roundQuestionUnlocked(
+    List<ChatLessonMessage> messages,
+    String roundId,
+  ) {
     return _practiceUnlockedRounds.contains(roundId) ||
         _roundHasStudentAction(messages, roundId);
   }
@@ -320,7 +323,10 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     );
   }
 
-  bool _roundHasStudentAction(List<ChatLessonMessage> messages, String roundId) {
+  bool _roundHasStudentAction(
+    List<ChatLessonMessage> messages,
+    String roundId,
+  ) {
     return messages.any((message) {
       if (_roundIdFor(message) != roundId) return false;
       return message.kind == ChatLessonMessageKind.feedback ||
@@ -382,6 +388,28 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
     messages,
     (message) => message.kind == ChatLessonMessageKind.feedback,
   );
+  if (feedbackIndex != null) {
+    final nextItemIntroAfterFeedbackIndex = _firstIndexWhereAfter(
+      messages,
+      feedbackIndex,
+      (message) =>
+          !message.isHistorical &&
+          message.kind == ChatLessonMessageKind.itemIntro,
+    );
+    if (nextItemIntroAfterFeedbackIndex != null) {
+      return _target(messages, nextItemIntroAfterFeedbackIndex);
+    }
+    final nextExplanationAfterFeedbackIndex = _firstIndexWhereAfter(
+      messages,
+      feedbackIndex,
+      (message) =>
+          !message.isHistorical &&
+          message.kind == ChatLessonMessageKind.explanation,
+    );
+    if (nextExplanationAfterFeedbackIndex != null) {
+      return _target(messages, nextExplanationAfterFeedbackIndex);
+    }
+  }
   if (feedbackIndex != null) {
     return _target(
       messages,
@@ -519,6 +547,17 @@ int? _lastIndexWhere(
   bool Function(ChatLessonMessage message) test,
 ) {
   for (var i = messages.length - 1; i >= 0; i--) {
+    if (test(messages[i])) return i;
+  }
+  return null;
+}
+
+int? _firstIndexWhereAfter(
+  List<ChatLessonMessage> messages,
+  int startExclusive,
+  bool Function(ChatLessonMessage message) test,
+) {
+  for (var i = startExclusive + 1; i < messages.length; i++) {
     if (test(messages[i])) return i;
   }
   return null;

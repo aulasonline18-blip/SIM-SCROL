@@ -68,6 +68,21 @@ class ThrowingGeneratedAudioClient implements GeneratedAudioClient {
   }
 }
 
+class InvalidGeneratedAudioClient implements GeneratedAudioClient {
+  int calls = 0;
+
+  @override
+  Future<String?> generateAudio({
+    required String text,
+    required String lang,
+    required String voice,
+    required String lessonKey,
+  }) async {
+    calls += 1;
+    return 'data:audio/wav;base64,@@@@';
+  }
+}
+
 class CountingPlaybackAdapter implements AudioPlaybackAdapter {
   int dataUrlPlays = 0;
   int platformTtsCalls = 0;
@@ -105,6 +120,29 @@ class CountingPlaybackAdapter implements AudioPlaybackAdapter {
   void stop() {
     stops += 1;
   }
+}
+
+class ControlledEndPlaybackAdapter implements AudioPlaybackAdapter {
+  void Function()? pendingEnd;
+  int dataUrlPlays = 0;
+
+  @override
+  Future<bool> playDataUrl(String dataUrl, SpeakOptions opts) async {
+    dataUrlPlays += 1;
+    pendingEnd = opts.onEnd;
+    opts.onStart?.call();
+    return true;
+  }
+
+  @override
+  Future<bool> speakWithPlatformTts(String text, SpeakOptions opts) async {
+    pendingEnd = opts.onEnd;
+    opts.onStart?.call();
+    return true;
+  }
+
+  @override
+  void stop() {}
 }
 
 class FakeAudioT02Client implements T02LessonClient {
@@ -366,6 +404,28 @@ void main() {
     expect(playback.dataUrlPlays, 0);
   });
 
+  test('generated audio is cached only after playback accepts it', () async {
+    final preference = AudioPreference(storage: MemoryAudioPreferenceStorage());
+    final playback = CountingPlaybackAdapter()..failDataUrl = true;
+    final client = InvalidGeneratedAudioClient();
+    final core = AudioCore(
+      preference: preference,
+      playback: playback,
+      generatedAudioClient: client,
+    );
+
+    expect(
+      await core.speak('Audio invalido', const SpeakOptions(lessonKey: 'k')),
+      true,
+    );
+    expect(
+      await core.speak('Audio invalido', const SpeakOptions(lessonKey: 'k')),
+      true,
+    );
+    expect(client.calls, 2);
+    expect(playback.platformTtsCalls, 2);
+  });
+
   test('audio cache key separates lesson language voice and text', () {
     final core = AudioCore(
       preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
@@ -457,6 +517,46 @@ void main() {
       contains('AUDIO_READY'),
     );
     expect(states['l1']!.audio.status, 'ready');
+  });
+
+  test('lesson audio state stays playing until playback end callback', () async {
+    final states = {'l1': seedState()};
+    final playback = ControlledEndPlaybackAdapter();
+    final media = StudentLessonMediaService(
+      audioCore: AudioCore(
+        preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
+        playback: playback,
+      ),
+      readState: (id) => states[id]!,
+      writeState: (state) => states[state.lessonLocalId] = state,
+    );
+    final controller = LessonAudioController(
+      lessonLocalId: 'l1',
+      mediaService: media,
+      preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
+    );
+    const content = LessonContent(
+      explanation: 'Explicacao',
+      question: 'Pergunta',
+      options: {AnswerLetter.A: 'A1'},
+      correctAnswer: AnswerLetter.A,
+    );
+
+    expect(await controller.playConteudo(content, 'M1', LessonLayer.l1), true);
+    expect(states['l1']!.audio.status, 'playing');
+    expect(states['l1']!.audio.playing, true);
+    expect(states['l1']!.events.map((event) => event.type), [
+      'AUDIO_STARTED',
+    ]);
+
+    playback.pendingEnd?.call();
+
+    expect(states['l1']!.audio.status, 'ready');
+    expect(states['l1']!.audio.playing, false);
+    expect(states['l1']!.events.map((event) => event.type), [
+      'AUDIO_STARTED',
+      'AUDIO_READY',
+    ]);
   });
 
   test(

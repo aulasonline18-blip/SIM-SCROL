@@ -592,6 +592,149 @@ void main() {
     expect(questionTop, closeTo(expected, 80));
   });
 
+  testWidgets('timeline lands feedback near three quarters after signal', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 400,
+            child: ChatAulaTimeline(
+              scrollController: controller,
+              initialScrollToCurrent: true,
+              initialScrollKey: 'lesson-scroll-feedback-anchor',
+              padding: EdgeInsets.zero,
+              messages: [
+                for (var i = 0; i < 16; i++)
+                  ChatLessonMessage(
+                    id: 'feedback-history-$i',
+                    role: ChatLessonMessageRole.sim,
+                    kind: ChatLessonMessageKind.historyQuestion,
+                    text: 'Histórico feedback $i\nlinha\nlinha\nlinha',
+                    isHistorical: true,
+                  ),
+                const ChatLessonMessage(
+                  id: 'active-feedback-anchor',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.feedback,
+                  text: 'Feedback ativo na altura correta.',
+                ),
+                for (var i = 0; i < 24; i++)
+                  ChatLessonMessage(
+                    id: 'feedback-tail-$i',
+                    role: ChatLessonMessageRole.sim,
+                    kind: ChatLessonMessageKind.historyAnswer,
+                    text: 'Espaço feedback $i\nlinha\nlinha',
+                    isHistorical: true,
+                  ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final viewport = tester.getRect(
+      find.byKey(const Key('chat-aula-timeline')),
+    );
+    final feedbackTop = tester
+        .getTopLeft(find.text('Feedback ativo na altura correta.'))
+        .dy;
+    final expected = viewport.top + (viewport.height * 0.75);
+
+    expect(controller.offset, greaterThan(0));
+    expect(feedbackTop, closeTo(expected, 80));
+  });
+
+  testWidgets('timeline prefers next item description after feedback', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 400,
+            child: ChatAulaTimeline(
+              scrollController: controller,
+              initialScrollToCurrent: true,
+              initialScrollKey: 'lesson-scroll-next-item-anchor',
+              padding: EdgeInsets.zero,
+              messages: [
+                for (var i = 0; i < 16; i++)
+                  ChatLessonMessage(
+                    id: 'next-item-history-$i',
+                    role: ChatLessonMessageRole.sim,
+                    kind: ChatLessonMessageKind.historyQuestion,
+                    text: 'Histórico próximo $i\nlinha\nlinha\nlinha',
+                    isHistorical: true,
+                  ),
+                const ChatLessonMessage(
+                  id: 'previous-feedback-anchor',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.feedback,
+                  text: 'Feedback anterior que não pode segurar o scroll.',
+                  isHistorical: true,
+                ),
+                const ChatLessonMessage(
+                  id: 'next-item-description-anchor',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.itemIntro,
+                  text: 'Descrição do próximo item na altura correta.',
+                ),
+                const ChatLessonMessage(
+                  id: 'next-item-explanation-anchor',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.explanation,
+                  text: 'Explicação do próximo item.',
+                ),
+                for (var i = 0; i < 24; i++)
+                  ChatLessonMessage(
+                    id: 'next-item-tail-$i',
+                    role: ChatLessonMessageRole.sim,
+                    kind: ChatLessonMessageKind.historyAnswer,
+                    text: 'Espaço próximo $i\nlinha\nlinha',
+                    isHistorical: true,
+                  ),
+              ],
+              onChooseAnswer: (_) {},
+              onSignal: (_) {},
+              onRetry: () {},
+              onNext: () {},
+              onOpenDoubt: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final viewport = tester.getRect(
+      find.byKey(const Key('chat-aula-timeline')),
+    );
+    final itemTop = tester
+        .getTopLeft(find.text('Descrição do próximo item na altura correta.'))
+        .dy;
+    final expected = viewport.top + (viewport.height * 0.75);
+
+    expect(controller.offset, greaterThan(0));
+    expect(itemTop, closeTo(expected, 80));
+  });
+
   testWidgets('timeline reacts when same lesson renders answer signals', (
     tester,
   ) async {

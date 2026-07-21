@@ -27,12 +27,14 @@ class PlatformAudioAdapter implements AudioPlaybackAdapter {
 
   @override
   Future<bool> playDataUrl(String dataUrl, SpeakOptions opts) async {
-    final bytes = _extractWavBytes(dataUrl);
-    if (bytes == null) return false;
+    final audio = _extractAudioData(dataUrl);
+    if (audio == null) return false;
     _stop();
     _onEnd = opts.onEnd;
     try {
-      await _activePlayer.play(BytesSource(bytes));
+      await _activePlayer.play(
+        BytesSource(audio.bytes, mimeType: audio.mimeType),
+      );
       opts.onStart?.call();
       return true;
     } catch (_) {
@@ -107,8 +109,8 @@ class PlatformAudioAdapter implements AudioPlaybackAdapter {
     }
   }
 
-  /// Decodes `data:audio/wav;base64,<payload>` → raw bytes.
-  Uint8List? _extractWavBytes(String dataUrl) {
+  /// Decodes `data:audio/*;base64,<payload>` into typed bytes for audioplayers.
+  _AudioData? _extractAudioData(String dataUrl) {
     try {
       final comma = dataUrl.indexOf(',');
       if (comma < 0) return null;
@@ -116,8 +118,16 @@ class PlatformAudioAdapter implements AudioPlaybackAdapter {
       if (!header.startsWith('data:audio/') || !header.contains(';base64')) {
         return null;
       }
+      final mimeType = header
+          .substring('data:'.length)
+          .split(';')
+          .first
+          .trim();
+      if (mimeType.isEmpty || !mimeType.startsWith('audio/')) return null;
       final payload = dataUrl.substring(comma + 1);
-      return base64Decode(payload);
+      final bytes = base64Decode(payload);
+      if (bytes.isEmpty) return null;
+      return _AudioData(bytes: bytes, mimeType: mimeType);
     } catch (_) {
       return null;
     }
@@ -128,6 +138,13 @@ class PlatformAudioAdapter implements AudioPlaybackAdapter {
     _player?.dispose();
     unawaited(_tts?.stop());
   }
+}
+
+class _AudioData {
+  const _AudioData({required this.bytes, required this.mimeType});
+
+  final Uint8List bytes;
+  final String mimeType;
 }
 
 String simTtsLanguageForStableLang(String? lang) {

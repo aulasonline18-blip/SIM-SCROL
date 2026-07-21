@@ -1,6 +1,6 @@
 part of 'lab_session.dart';
 
-const Duration _autoAdvanceAfterFeedbackDelay = Duration(milliseconds: 900);
+const Duration _autoAdvanceAfterFeedbackDelay = Duration(milliseconds: 100);
 String humanErrorMessage(Object? error, {
   String fallback = 'Nao consegui concluir isso agora. Tente novamente em instantes.',
 }) {

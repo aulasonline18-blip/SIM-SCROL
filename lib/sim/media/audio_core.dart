@@ -129,8 +129,10 @@ class AudioCore {
         onGeneratedAudioError?.call(error);
       }
       if (generated != null && generated.isNotEmpty) {
-        rememberAudio(key, generated);
-        if (await playback.playDataUrl(generated, opts)) return true;
+        if (await playback.playDataUrl(generated, opts)) {
+          rememberAudio(key, generated);
+          return true;
+        }
       }
     }
     return await playback.speakWithPlatformTts(

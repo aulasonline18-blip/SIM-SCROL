@@ -146,17 +146,18 @@ class StudentLessonMediaService {
             markLessonAudioStarted(position);
             onStart?.call();
           },
-          onEnd: onEnd,
+          onEnd: () {
+            markLessonAudioReady(
+              position,
+              lessonKey: lessonKey,
+              language: language,
+              voice: voice,
+            );
+            onEnd?.call();
+          },
         ),
       );
-      if (ok) {
-        markLessonAudioReady(
-          position,
-          lessonKey: lessonKey,
-          language: language,
-          voice: voice,
-        );
-      } else {
+      if (!ok) {
         markLessonAudioFailed(position, error: 'audio_playback_unavailable');
       }
       return ok;
