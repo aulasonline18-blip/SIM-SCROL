@@ -18,8 +18,10 @@ enum ChatLessonMessageKind {
   studentDoubt,
   review,
   recovery,
+  itemIntro,
   explanation,
   image,
+  practiceAction,
   question,
   options,
   studentAnswer,
@@ -32,8 +34,10 @@ enum ChatLessonMessageKind {
 }
 
 enum AulaConversationBlockType {
+  itemIntro,
   explanation,
   visual,
+  practiceAction,
   question,
   answerOptions,
   signalOptions,
@@ -118,9 +122,12 @@ class AulaConversationBlock {
 
   static AulaConversationBlockType _typeFor(ChatLessonMessage message) {
     return switch (message.kind) {
+      ChatLessonMessageKind.itemIntro => AulaConversationBlockType.itemIntro,
       ChatLessonMessageKind.explanation =>
         AulaConversationBlockType.explanation,
       ChatLessonMessageKind.image => AulaConversationBlockType.visual,
+      ChatLessonMessageKind.practiceAction =>
+        AulaConversationBlockType.practiceAction,
       ChatLessonMessageKind.question => AulaConversationBlockType.question,
       ChatLessonMessageKind.options => AulaConversationBlockType.answerOptions,
       ChatLessonMessageKind.signals => AulaConversationBlockType.signalOptions,
@@ -162,6 +169,7 @@ class AulaConversationBlock {
         message.kind == ChatLessonMessageKind.doubtAction
             ? AulaConversationAction.openDoubt
             : null,
+      AulaConversationBlockType.practiceAction => AulaConversationAction.advance,
       AulaConversationBlockType.recoverableError => null,
       _ => null,
     };

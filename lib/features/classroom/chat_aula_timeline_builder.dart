@@ -166,6 +166,23 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     final activeId = _activeMessageId(snapshot, content);
     messages.add(
       ChatLessonMessage(
+        id: 'item-intro-$activeId',
+        role: ChatLessonMessageRole.sim,
+        kind: ChatLessonMessageKind.itemIntro,
+        text: _itemDescriptionText(snapshot, marker),
+        lessonLocalId: input.lessonLocalId,
+        marker: marker,
+        unit: snapshot?.viewModel?.itemUnit ?? snapshot?.itemUnit,
+        title: snapshot?.viewModel?.itemTitle ?? snapshot?.itemTitle,
+        itemIdx: itemIdx,
+        layer: layer,
+        isActionable: false,
+        deliveryStatus: ChatLessonDeliveryStatus.delivered,
+      ),
+    );
+
+    messages.add(
+      ChatLessonMessage(
         id: 'explanation-$activeId',
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.explanation,
@@ -258,6 +275,22 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
 
     messages.add(
       ChatLessonMessage(
+        id: 'practice-action-$activeId',
+        role: ChatLessonMessageRole.sim,
+        kind: ChatLessonMessageKind.practiceAction,
+        text: t('aula_practice_foundation'),
+        actionKey: 'practice-foundation',
+        lessonLocalId: input.lessonLocalId,
+        marker: marker,
+        itemIdx: itemIdx,
+        layer: layer,
+        isActionable: true,
+        deliveryStatus: ChatLessonDeliveryStatus.delivered,
+      ),
+    );
+
+    messages.add(
+      ChatLessonMessage(
         id: 'question-$activeId',
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.question,
@@ -346,6 +379,18 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
   }
 
   return _withSequenceIndexes(messages);
+}
+
+String _itemDescriptionText(LessonRuntimeSnapshot? snapshot, String? marker) {
+  final title = (snapshot?.viewModel?.itemTitle ?? snapshot?.itemTitle ?? '')
+      .trim();
+  if (title.isNotEmpty) return title;
+  final unit = (snapshot?.viewModel?.itemUnit ?? snapshot?.itemUnit ?? '')
+      .trim();
+  if (unit.isNotEmpty) return unit;
+  final markerText = marker?.trim();
+  if (markerText != null && markerText.isNotEmpty) return markerText;
+  return t('lesson');
 }
 
 int? _itemIdxFromHeader(String? headerLabel) {

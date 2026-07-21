@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../shared/widgets/shared_widgets.dart';
@@ -48,17 +50,25 @@ class ChatAulaTimeline extends StatefulWidget {
 
 class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   static const double _renderedElementAnchor = 0.75;
+  static const double _feedbackElementAnchor = 0.50;
   static const int _scrollMillisecondsPerScreen = 420;
   static const Duration _minimumScrollDuration = Duration(milliseconds: 220);
   static const Duration _maximumScrollDuration = Duration(milliseconds: 680);
   static const Duration _settledElementScrollDuration = Duration(
     milliseconds: 420,
   );
+  static const Duration _roundRevealStepDelay = Duration(milliseconds: 120);
+  static const Duration _optionsRevealDelay = Duration(milliseconds: 180);
 
   late final ScrollController _ownedScrollController;
   final Map<String, GlobalKey> _messageKeys = <String, GlobalKey>{};
+  final Map<String, int> _roundRevealStage = <String, int>{};
+  final Set<String> _practiceUnlockedRounds = <String>{};
+  final Set<String> _optionsReadyRounds = <String>{};
   String? _lastScrollSignature;
   bool _scrollScheduled = false;
+  Timer? _revealTimer;
+  Timer? _optionsTimer;
 
   ScrollController get _effectiveScrollController =>
       widget.scrollController ?? _ownedScrollController;
@@ -67,6 +77,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   void initState() {
     super.initState();
     _ownedScrollController = ScrollController();
+    _syncPedagogicalRoundClock(widget.messages);
     _schedulePedagogicalScroll();
   }
 
@@ -77,14 +88,55 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
             _timelineSignature(widget.messages) ||
         oldWidget.initialScrollKey != widget.initialScrollKey ||
         oldWidget.initialScrollToCurrent != widget.initialScrollToCurrent) {
+      _syncPedagogicalRoundClock(widget.messages);
       _schedulePedagogicalScroll();
     }
   }
 
   @override
   void dispose() {
+    _revealTimer?.cancel();
+    _optionsTimer?.cancel();
     _ownedScrollController.dispose();
     super.dispose();
+  }
+
+  void _syncPedagogicalRoundClock(List<ChatLessonMessage> messages) {
+    for (final message in messages) {
+      final roundId = _roundIdFor(message);
+      if (roundId == null || message.isHistorical) continue;
+      _roundRevealStage.putIfAbsent(roundId, () => 0);
+      if (_roundHasStudentAction(messages, roundId)) {
+        _practiceUnlockedRounds.add(roundId);
+        _optionsReadyRounds.add(roundId);
+      }
+    }
+    _scheduleRevealTick();
+  }
+
+  void _scheduleRevealTick() {
+    _revealTimer?.cancel();
+    final roundId = _nextRoundToReveal(widget.messages);
+    if (roundId == null) return;
+    _revealTimer = Timer(_roundRevealStepDelay, () {
+      if (!mounted) return;
+      setState(() {
+        final current = _roundRevealStage[roundId] ?? 0;
+        _roundRevealStage[roundId] = (current + 1).clamp(0, 3);
+      });
+      _schedulePedagogicalScroll();
+      _scheduleRevealTick();
+    });
+  }
+
+  String? _nextRoundToReveal(List<ChatLessonMessage> messages) {
+    for (final message in messages) {
+      final roundId = _roundIdFor(message);
+      if (roundId == null || message.isHistorical) continue;
+      if (!_roundUsesGuidedPractice(messages, roundId)) continue;
+      if ((_roundRevealStage[roundId] ?? 0) < 3) return roundId;
+    }
+    return null;
   }
 
   void _schedulePedagogicalScroll() {
@@ -100,7 +152,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
 
   void _scrollToPedagogicalTarget() {
     if (!_effectiveScrollController.hasClients) return;
-    final target = _selectPedagogicalScrollTarget(widget.messages);
+    final visibleMessages = _visibleMessages(widget.messages);
+    final target = _selectPedagogicalScrollTarget(visibleMessages);
     if (target == null) return;
     final signature =
         '${widget.initialScrollKey ?? ''}|${target.signaturePart}';
@@ -117,9 +170,9 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     final position = _effectiveScrollController.position;
     final max = position.maxScrollExtent;
     if (max <= 0) return;
-    final estimated = target.index <= 0 || widget.messages.length <= 1
+    final estimated = target.index <= 0 || visibleMessages.length <= 1
         ? 0.0
-        : max * (target.index / (widget.messages.length - 1));
+        : max * (target.index / (visibleMessages.length - 1));
     _effectiveScrollController
         .animateTo(
           estimated.clamp(position.minScrollExtent, position.maxScrollExtent),
@@ -177,7 +230,8 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.messages.isEmpty) {
+    final visibleMessages = _visibleMessages(widget.messages);
+    if (visibleMessages.isEmpty) {
       return Center(
         key: const Key('chat-empty-state'),
         child: Padding(
@@ -194,21 +248,100 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       key: const Key('chat-aula-timeline'),
       controller: _effectiveScrollController,
       padding: widget.padding,
-      itemCount: widget.messages.length,
+      itemCount: visibleMessages.length,
       itemBuilder: (context, index) => ChatAulaMessageBubble(
-        key: _keyForMessage(widget.messages[index]),
-        message: widget.messages[index],
+        key: _keyForMessage(visibleMessages[index]),
+        message: visibleMessages[index],
         semanticIndex: index,
         onChooseAnswer: widget.onChooseAnswer,
         onSignal: widget.onSignal,
         onRetry: widget.onRetry,
         onNext: widget.onNext,
+        onPractice: _unlockPracticeRound,
         onOpenDoubt: widget.onOpenDoubt,
         session: widget.session,
         pendingActionKeys: widget.pendingActionKeys,
         onImageSettled: widget.onImageSettled,
       ),
     );
+  }
+
+  List<ChatLessonMessage> _visibleMessages(List<ChatLessonMessage> messages) {
+    return [
+      for (final message in messages)
+        if (_isMessageVisible(message, messages)) message,
+    ];
+  }
+
+  bool _isMessageVisible(
+    ChatLessonMessage message,
+    List<ChatLessonMessage> messages,
+  ) {
+    if (message.isHistorical) return true;
+    final roundId = _roundIdFor(message);
+    if (roundId == null) return true;
+    if (!_roundUsesGuidedPractice(messages, roundId)) return true;
+    final stage = _roundRevealStage[roundId] ?? 0;
+    if (!_stageAllowsMessage(message, stage)) return false;
+    if (message.kind == ChatLessonMessageKind.question) {
+      return _roundQuestionUnlocked(messages, roundId);
+    }
+    if (message.kind == ChatLessonMessageKind.options) {
+      if (!_roundQuestionUnlocked(messages, roundId)) return false;
+      if (_roundHasStudentAction(messages, roundId)) return true;
+      return _optionsReadyRounds.contains(roundId);
+    }
+    return true;
+  }
+
+  bool _stageAllowsMessage(ChatLessonMessage message, int stage) {
+    return switch (message.kind) {
+      ChatLessonMessageKind.itemIntro => true,
+      ChatLessonMessageKind.explanation => stage >= 1,
+      ChatLessonMessageKind.image => stage >= 2,
+      ChatLessonMessageKind.practiceAction => stage >= 3,
+      _ => true,
+    };
+  }
+
+  bool _roundQuestionUnlocked(List<ChatLessonMessage> messages, String roundId) {
+    return _practiceUnlockedRounds.contains(roundId) ||
+        _roundHasStudentAction(messages, roundId);
+  }
+
+  bool _roundUsesGuidedPractice(
+    List<ChatLessonMessage> messages,
+    String roundId,
+  ) {
+    return messages.any(
+      (message) =>
+          _roundIdFor(message) == roundId &&
+          message.kind == ChatLessonMessageKind.practiceAction,
+    );
+  }
+
+  bool _roundHasStudentAction(List<ChatLessonMessage> messages, String roundId) {
+    return messages.any((message) {
+      if (_roundIdFor(message) != roundId) return false;
+      return message.kind == ChatLessonMessageKind.feedback ||
+          message.selectedAnswer != null ||
+          message.signals.isNotEmpty;
+    });
+  }
+
+  void _unlockPracticeRound(ChatLessonMessage message) {
+    final roundId = _roundIdFor(message);
+    if (roundId == null) return;
+    setState(() {
+      _practiceUnlockedRounds.add(roundId);
+    });
+    _schedulePedagogicalScroll();
+    _optionsTimer?.cancel();
+    _optionsTimer = Timer(_optionsRevealDelay, () {
+      if (!mounted) return;
+      setState(() => _optionsReadyRounds.add(roundId));
+      _schedulePedagogicalScroll();
+    });
   }
 }
 
@@ -250,7 +383,11 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
     (message) => message.kind == ChatLessonMessageKind.feedback,
   );
   if (feedbackIndex != null) {
-    return _target(messages, feedbackIndex);
+    return _target(
+      messages,
+      feedbackIndex,
+      alignment: _ChatAulaTimelineState._feedbackElementAnchor,
+    );
   }
 
   final signalIndex = _lastIndexWhere(
@@ -323,12 +460,58 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
   return _target(messages, messages.length - 1);
 }
 
-_PedagogicalScrollTarget _target(List<ChatLessonMessage> messages, int index) {
+_PedagogicalScrollTarget _target(
+  List<ChatLessonMessage> messages,
+  int index, {
+  double alignment = _ChatAulaTimelineState._renderedElementAnchor,
+}) {
   return _PedagogicalScrollTarget(
     message: messages[index],
     index: index,
-    alignment: _ChatAulaTimelineState._renderedElementAnchor,
+    alignment: alignment,
   );
+}
+
+String? _roundIdFor(ChatLessonMessage message) {
+  if (message.isHistorical) return null;
+  final base = [
+    message.lessonLocalId ?? '',
+    message.marker ?? '',
+    message.itemIdx?.toString() ?? '',
+    message.layer?.toString() ?? '',
+    _activeRoundSuffix(message.id),
+  ].where((part) => part.isNotEmpty).join('|');
+  if (base.trim().isEmpty) return null;
+  return base;
+}
+
+String _activeRoundSuffix(String id) {
+  const prefixes = [
+    'item-intro-',
+    'explanation-',
+    'image-',
+    'practice-action-',
+    'question-',
+    'options-',
+    'feedback-',
+  ];
+  for (final prefix in prefixes) {
+    if (id.startsWith(prefix)) return id.substring(prefix.length);
+  }
+  return id;
+}
+
+double _pedagogicalGapAfter(ChatLessonMessage message) {
+  return switch (message.kind) {
+    ChatLessonMessageKind.itemIntro => SimSpacing.xl,
+    ChatLessonMessageKind.explanation => SimSpacing.xxl,
+    ChatLessonMessageKind.image => SimSpacing.xxl,
+    ChatLessonMessageKind.practiceAction => SimSpacing.xxl,
+    ChatLessonMessageKind.question => SimSpacing.xl,
+    ChatLessonMessageKind.options => SimSpacing.xl,
+    ChatLessonMessageKind.feedback => SimSpacing.xxl,
+    _ => SimSpacing.md,
+  };
 }
 
 int? _lastIndexWhere(
@@ -391,6 +574,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
     required this.onSignal,
     required this.onRetry,
     required this.onNext,
+    required this.onPractice,
     required this.onOpenDoubt,
     this.pendingActionKeys = const {},
     this.session,
@@ -405,6 +589,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
   final void Function(int value) onSignal;
   final VoidCallback onRetry;
   final VoidCallback onNext;
+  final void Function(ChatLessonMessage message) onPractice;
   final VoidCallback onOpenDoubt;
   final Set<String> pendingActionKeys;
   final VoidCallback? onImageSettled;
@@ -419,29 +604,41 @@ class ChatAulaMessageBubble extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
         child: Padding(
-          padding: const EdgeInsets.only(bottom: SimSpacing.sm),
-          child: SimLearningSurface(
-            tone: tone,
-            borderWidth: message.kind == ChatLessonMessageKind.question
-                ? 1.5
-                : 1,
-            padding: EdgeInsets.all(
-              message.kind == ChatLessonMessageKind.options
-                  ? SimSpacing.sm
-                  : SimSpacing.md,
-            ),
-            child: DefaultTextStyle.merge(
-              style: TextStyle(color: palette.text),
-              child: AulaConversationBlockRenderer(
-                block: AulaConversationBlock.fromMessage(message),
-                pendingActionKeys: pendingActionKeys,
-                onImageSettled: onImageSettled,
-                actions: AulaConversationActions(
-                  chooseAnswer: onChooseAnswer,
-                  submitSignal: onSignal,
-                  advance: onNext,
-                  retry: onRetry,
-                  openDoubt: onOpenDoubt,
+          padding: EdgeInsets.only(bottom: _pedagogicalGapAfter(message)),
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 160),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeOutCubic,
+              child: SimLearningSurface(
+                key: ValueKey('surface-${message.id}-${message.kind.name}'),
+                tone: tone,
+                borderWidth: message.kind == ChatLessonMessageKind.question
+                    ? 1.5
+                    : 1,
+                padding: EdgeInsets.all(
+                  message.kind == ChatLessonMessageKind.options
+                      ? SimSpacing.sm
+                      : SimSpacing.md,
+                ),
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(color: palette.text),
+                  child: AulaConversationBlockRenderer(
+                    block: AulaConversationBlock.fromMessage(message),
+                    pendingActionKeys: pendingActionKeys,
+                    onImageSettled: onImageSettled,
+                    onPractice: () => onPractice(message),
+                    actions: AulaConversationActions(
+                      chooseAnswer: onChooseAnswer,
+                      submitSignal: onSignal,
+                      advance: onNext,
+                      retry: onRetry,
+                      openDoubt: onOpenDoubt,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -458,6 +655,7 @@ class AulaConversationBlockRenderer extends StatelessWidget {
     required this.actions,
     this.pendingActionKeys = const {},
     this.onImageSettled,
+    this.onPractice,
     super.key,
   });
 
@@ -465,6 +663,7 @@ class AulaConversationBlockRenderer extends StatelessWidget {
   final AulaConversationActions actions;
   final Set<String> pendingActionKeys;
   final VoidCallback? onImageSettled;
+  final VoidCallback? onPractice;
 
   @override
   Widget build(BuildContext context) {
@@ -482,6 +681,10 @@ class AulaConversationBlockRenderer extends StatelessWidget {
       AulaConversationBlockType.visual => ChatImageBubble(
         message: message,
         onImageSettled: onImageSettled,
+      ),
+      AulaConversationBlockType.practiceAction => _ActionButton(
+        label: message.text ?? t('aula_practice_foundation'),
+        onPressed: onPractice ?? actions.advance,
       ),
       AulaConversationBlockType.advanceAction => _ActionButton(
         label: message.text ?? t('continue'),
@@ -511,6 +714,7 @@ class AulaConversationBlockRenderer extends StatelessWidget {
 SimSurfaceTone _surfaceToneFor(ChatLessonMessage message, bool isStudent) {
   if (isStudent) return SimSurfaceTone.selected;
   return switch (message.kind) {
+    ChatLessonMessageKind.itemIntro => SimSurfaceTone.soft,
     ChatLessonMessageKind.question => SimSurfaceTone.elevated,
     ChatLessonMessageKind.feedback =>
       message.isCorrect == false
@@ -583,6 +787,9 @@ class _TextBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
     final style = switch (message.kind) {
+      ChatLessonMessageKind.itemIntro => SimTypography.label.copyWith(
+        color: palette.muted,
+      ),
       ChatLessonMessageKind.explanation => SimTypography.lessonBody.copyWith(
         color: palette.text,
       ),

@@ -152,6 +152,7 @@ const _strings = <String, String>{
   'aula_menu_lesson_arriving': 'Você escolheu esta aula. Estou buscando.',
   'aula_registering': 'Registrando sua resposta',
   'aula_next': 'Próximo',
+  'aula_practice_foundation': 'Vamos fundamentar este item',
   'aula_try_again_2': 'Tentar novamente',
   'aula_doubt_processing': 'Respondendo sua dúvida',
   'aula_choose_goal': 'Escolha um objetivo para começar.',

@@ -74,6 +74,137 @@ void main() {
     expect(chosen, AnswerLetter.B);
   });
 
+  testWidgets('guided lesson round reveals blocks with practice gate', (
+    tester,
+  ) async {
+    AnswerLetter? chosen;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAulaTimeline(
+            messages: const [
+              ChatLessonMessage(
+                id: 'item-intro-round-guided',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.itemIntro,
+                text: 'Item novo',
+                lessonLocalId: 'lesson-guided',
+                marker: 'M1',
+                itemIdx: 0,
+                layer: 1,
+                isActionable: false,
+              ),
+              ChatLessonMessage(
+                id: 'explanation-round-guided',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.explanation,
+                text: 'Explicação guiada',
+                lessonLocalId: 'lesson-guided',
+                marker: 'M1',
+                itemIdx: 0,
+                layer: 1,
+                isActionable: false,
+              ),
+              ChatLessonMessage(
+                id: 'practice-action-round-guided',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.practiceAction,
+                text: 'Vamos fundamentar este item',
+                lessonLocalId: 'lesson-guided',
+                marker: 'M1',
+                itemIdx: 0,
+                layer: 1,
+              ),
+              ChatLessonMessage(
+                id: 'question-round-guided',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.question,
+                text: 'Pergunta guiada?',
+                lessonLocalId: 'lesson-guided',
+                marker: 'M1',
+                itemIdx: 0,
+                layer: 1,
+                isActionable: false,
+              ),
+              ChatLessonMessage(
+                id: 'options-round-guided',
+                role: ChatLessonMessageRole.sim,
+                kind: ChatLessonMessageKind.options,
+                lessonLocalId: 'lesson-guided',
+                marker: 'M1',
+                itemIdx: 0,
+                layer: 1,
+                options: [
+                  ChatLessonOption(
+                    letter: AnswerLetter.A,
+                    text: 'A',
+                    selected: false,
+                    enabled: true,
+                  ),
+                  ChatLessonOption(
+                    letter: AnswerLetter.B,
+                    text: 'B',
+                    selected: false,
+                    enabled: true,
+                  ),
+                  ChatLessonOption(
+                    letter: AnswerLetter.C,
+                    text: 'C',
+                    selected: false,
+                    enabled: true,
+                  ),
+                ],
+              ),
+            ],
+            onChooseAnswer: (letter) => chosen = letter,
+            onSignal: (_) {},
+            onRetry: () {},
+            onNext: () {},
+            onOpenDoubt: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Item novo'), findsOneWidget);
+    expect(find.text('Explicação guiada'), findsNothing);
+    expect(find.text('Pergunta guiada?'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 140));
+    await tester.pump(const Duration(milliseconds: 140));
+    await tester.pump(const Duration(milliseconds: 160));
+    expect(find.text('Explicação guiada'), findsOneWidget);
+    await tester.drag(
+      find.byKey(const Key('chat-aula-timeline')),
+      const Offset(0, -360),
+    );
+    await tester.pump();
+    expect(find.text('Vamos fundamentar este item'), findsOneWidget);
+    expect(find.text('Pergunta guiada?'), findsNothing);
+
+    await tester.tap(find.text('Vamos fundamentar este item'));
+    await tester.pump();
+    await tester.drag(
+      find.byKey(const Key('chat-aula-timeline')),
+      const Offset(0, -240),
+    );
+    await tester.pump();
+    expect(find.text('Pergunta guiada?'), findsOneWidget);
+    expect(find.byKey(const Key('chat-answer-card-A')), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pump();
+    await tester.drag(
+      find.byKey(const Key('chat-aula-timeline')),
+      const Offset(0, -240),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('chat-answer-card-A')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-answer-card-B')));
+    expect(chosen, AnswerLetter.B);
+  });
+
   testWidgets('chat timeline keeps signal buttons tappable', (tester) async {
     int? signal;
 
@@ -458,7 +589,7 @@ void main() {
     final expected = viewport.top + (viewport.height * 0.75);
 
     expect(controller.offset, greaterThan(0));
-    expect(questionTop, closeTo(expected, 64));
+    expect(questionTop, closeTo(expected, 80));
   });
 
   testWidgets('timeline reacts when same lesson renders answer signals', (

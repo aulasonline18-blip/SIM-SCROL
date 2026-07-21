@@ -24,8 +24,10 @@ void main() {
     expect(
       messages.map((message) => message.kind),
       containsAllInOrder([
+        ChatLessonMessageKind.itemIntro,
         ChatLessonMessageKind.explanation,
         ChatLessonMessageKind.image,
+        ChatLessonMessageKind.practiceAction,
         ChatLessonMessageKind.question,
         ChatLessonMessageKind.options,
       ]),
@@ -57,8 +59,10 @@ void main() {
     expect(
       blocks.map((block) => block.type),
       containsAllInOrder([
+        AulaConversationBlockType.itemIntro,
         AulaConversationBlockType.explanation,
         AulaConversationBlockType.visual,
+        AulaConversationBlockType.practiceAction,
         AulaConversationBlockType.question,
         AulaConversationBlockType.answerOptions,
       ]),
