@@ -22,6 +22,12 @@ void main() {
     expect(law, contains('AUDIO_ALREADY_RUNNING'));
     expect(law, contains('DOPAMINE_WINDOW_REQUEST_CAPPED'));
     expect(law, contains('.data/ai-usage-daily.json'));
+    expect(law, contains('Versao: 1.1'));
+    expect(law, contains('readyWindowWorkerMaxAttempts = 3'));
+    expect(law, contains('readyWindowWorkerMaxJobsPerDrain = 15'));
+    expect(law, contains('mesa diretora'));
+    expect(law, contains('E proibido polling remoto por timer'));
+    expect(law, contains('Job que atingiu falha permanente'));
   });
 
   test('travas anti-loop do app continuam presentes', () {
@@ -48,6 +54,12 @@ void main() {
     ).readAsStringSync();
     final sessionFlows = File(
       'lib/features/session/lab_session_flows.dart',
+    ).readAsStringSync();
+    final session = File(
+      'lib/features/session/lab_session.dart',
+    ).readAsStringSync();
+    final organismProvider = File(
+      'lib/sim/organism/sim_organism_provider.dart',
     ).readAsStringSync();
     final readyWindowTest = File(
       'test/first_lesson_ready_window_test.dart',
@@ -81,6 +93,9 @@ void main() {
       isNot(contains('while (_isCurrentExperience(id, generation))')),
     );
     expect(sessionFlows, contains('_aulaRuntimeOpen.run'));
+    expect(session, contains('_SingleFlightOperation'));
+    expect(session, contains('stopReadyWindowWorker()'));
+    expect(organismProvider, contains('stopReadyWindowWorker()'));
     expect(readyWindowTest, contains('maxSlots: 50'));
     expect(readyWindowTest, contains('DOPAMINE_WINDOW_REQUEST_CAPPED'));
     expect(readyWindowTest, contains('expect(t02.calls, localLessonTraySize)'));

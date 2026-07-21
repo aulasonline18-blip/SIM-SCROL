@@ -1,7 +1,7 @@
 # Lei de Protecao das Travas Anti-Loop do SIM NV
 
 Codigo: LPTAL-1
-Versao: 1.0
+Versao: 1.1
 Status: Normativo constitucional
 
 ## Finalidade
@@ -46,12 +46,34 @@ usuario.
     permitido precisa usar backoff exponencial com jitter ou `Retry-After`.
 11. O servidor e o portao financeiro. O app pode colaborar com idempotency key,
     fila e espera, mas o custo nunca pode depender apenas do app.
+12. A entrada da primeira aula pode solicitar a abertura remota uma unica vez
+    por operacao viva. E proibido polling remoto por timer para tentar acelerar
+    a percepcao de espera do aluno.
+13. Chamadas concorrentes para abrir a mesma aula devem compartilhar uma unica
+    operacao em andamento. E proibido criar uma segunda chamada T02 enquanto a
+    primeira ainda estiver viva.
+14. O worker da janela pronta deve ter `readyWindowWorkerMaxAttempts = 3` e
+    `readyWindowWorkerMaxJobsPerDrain = 15`. `max_attempts: null`, `while (true)`
+    e qualquer retry ilimitado sao constitucionalmente proibidos.
+15. Job que atingiu falha permanente deve permanecer deduplicado pela mesma
+    chave de idempotencia. Ele nao pode ser recriado automaticamente.
+16. Somente o worker da aula ativa pode continuar agendando preparo. Troca de
+    aula, encerramento da sessao ou descarte do organismo deve cancelar timers,
+    limpar drains pendentes e impedir novos retries.
+17. Retry so pode existir para erro explicitamente retryable, dentro do limite
+    finito, respeitando `Retry-After` e o teto de espera ja protegido.
 
 ## Arquivos protegidos
 
 As travas acima vivem principalmente nestes arquivos:
 
 - `lib/sim/lesson/dopamine_ready_window_engine.dart`
+- `lib/features/session/lab_session.dart`
+- `lib/features/session/lab_session_entry_flows.dart`
+- `lib/features/session/lab_session_flows.dart`
+- `lib/sim/lesson/ready_window_worker.dart`
+- `lib/sim/lesson/student_lesson_material_service.dart`
+- `lib/sim/organism/sim_organism_provider.dart`
 - `lib/sim/media/student_lesson_media_service.dart`
 - `test/first_lesson_ready_window_test.dart`
 - `/root/sim-work/sim-api/src/media/audio-controller.js`
@@ -87,6 +109,15 @@ E proibido:
 13. Criar caminho paralelo que chame IA paga sem passar pelo gate financeiro.
 14. Permitir OpenAI, Gemini, imagem, audio, anexo ou qualquer provedor pago fora
     da politica oficial do servidor e fora do gate financeiro.
+15. Reintroduzir polling remoto, `while (true)`, `max_attempts: null` ou qualquer
+    mecanismo sem limite matematico de chamadas e tentativas.
+16. Permitir que uma chamada concorrente contorne a operacao em andamento.
+17. Recriar automaticamente job marcado como `failed` com a mesma idempotency key.
+18. Manter timer de retry ou worker de aula anterior depois de troca, dispose ou
+    encerramento da sessao.
+19. Aumentar os limites 3 tentativas ou 15 jobs por drain sem decisao formal e
+    rastreavel da mesa diretora e novos testes que provem protecao equivalente
+    ou superior.
 
 ## Excecao permitida
 
@@ -105,6 +136,9 @@ verdadeiras:
 6. Para reducao de protecao, a autorizacao deve nomear explicitamente:
    `anti-loop-protection`, `ai-cost-protection-gate`, o arquivo tocado e a razao
    de a mudanca continuar mais forte ou equivalente.
+7. Qualquer reducao, remocao ou aumento de limite exige decisao formal,
+   discutida e rastreavel da mesa diretora. Autorizacao generica para refatorar,
+   otimizar, corrigir ou melhorar performance nao autoriza tocar nestas travas.
 
 ## Regra para janelas futuras
 
@@ -127,6 +161,9 @@ O SIM so esta conforme esta lei quando:
 - T02 continua sem retry imediato em 429;
 - o app continua enviando idempotency key e respeitando `Retry-After`;
 - o manifesto protegido do servidor reconhece `anti-loop-protection`;
+- primeira aula usa operacao unica, sem polling remoto;
+- worker possui no maximo 3 tentativas e 15 jobs por drain;
+- falha permanente nao se auto-recria e timers sao cancelados no encerramento;
 - nenhuma mudanca em arquivo protegido passa sem autorizacao rastreavel;
 - o aluno nunca paga o custo de loop tecnico com espera, erro repetido, gasto
   duplicado, uso indevido de IA ou travamento da aula.
