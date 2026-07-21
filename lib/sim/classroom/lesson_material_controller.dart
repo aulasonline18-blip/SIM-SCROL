@@ -181,7 +181,14 @@ class LessonMaterialController {
           remoteOrderPriority: remoteOrderPriority,
         ),
       );
-    } catch (_) {
+    } catch (error) {
+      _appendLessonMaterialRequestFailed(
+        lessonLocalId: lessonLocalId,
+        position: position,
+        item: item,
+        source: missingSource,
+        error: error,
+      );
       resolved = null;
     }
     if (resolved == null) {
@@ -259,6 +266,52 @@ class LessonMaterialController {
       priority: 'hot-local',
       reason: 'lesson_loaded_keeps_ready_window_alive',
     );
+  }
+
+  void _appendLessonMaterialRequestFailed({
+    required String lessonLocalId,
+    required LessonPositionState position,
+    required PlannedItem item,
+    required String source,
+    required Object error,
+  }) {
+    stateService.appendEvent(
+      lessonLocalId,
+      StudentLearningEvent(
+        type: 'LESSON_MATERIAL_REQUEST_FAILED',
+        ts: DateTime.now().millisecondsSinceEpoch,
+        payload: {
+          'lessonLocalId': lessonLocalId,
+          'itemIdx': position.itemIdx,
+          'marker': item.marker,
+          'layer': position.layer.value,
+          'source': source,
+          'errorCode': _lessonMaterialFailureCode(error),
+        },
+      ),
+    );
+  }
+
+  String _lessonMaterialFailureCode(Object error) {
+    final text = error.toString().toLowerCase();
+    if (text.contains('401') || text.contains('403')) {
+      return 'AUTH_REQUIRED';
+    }
+    if (text.contains('402') || text.contains('credit')) {
+      return 'CREDIT_REQUIRED';
+    }
+    if (text.contains('429')) return 'RATE_LIMITED';
+    if (text.contains('timeout') || text.contains('408')) return 'TIMEOUT';
+    if (text.contains('contract') || text.contains('invalid')) {
+      return 'CONTRACT_INVALID';
+    }
+    if (text.contains('500') ||
+        text.contains('502') ||
+        text.contains('503') ||
+        text.contains('504')) {
+      return 'SERVER_UNAVAILABLE';
+    }
+    return 'REQUEST_FAILED';
   }
 
   Future<void> carregarTextoDeAvanco({

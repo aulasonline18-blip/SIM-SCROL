@@ -14,6 +14,7 @@ import 'sim_http_transport.dart';
 
 const String simT00BootstrapPath = '/api/bootstrap-t00';
 const String simLessonAudioPath = '/api/generate-lesson-audio';
+const Duration simT02LessonRequestTimeout = Duration(seconds: 140);
 
 class SimServerT00Client implements T00BootstrapClient {
   SimServerT00Client({
@@ -218,7 +219,7 @@ class SimServerT02Client implements T02LessonClient {
   SimServerT02Client({
     required this.config,
     SimHttpTransport? transport,
-    this.timeout = const Duration(seconds: 45),
+    this.timeout = simT02LessonRequestTimeout,
   }) : transport = transport ?? DartIoSimHttpTransport();
 
   final SimAiServerConfig config;
@@ -265,31 +266,36 @@ class SimServerT02Client implements T02LessonClient {
         retryable: false,
       );
     }
-    final response = await transport.postJson(
-      config.uri(path),
-      headers: await config.jsonHeaders(),
-      body: {
-        'mode': mode,
-        'lessonLocalId': request.lessonLocalId,
-        'item': request.item,
-        ...locale,
-        if (request.topic != null) 'topic': request.topic,
-        if (request.itemIdx != null) 'itemIdx': request.itemIdx,
-        'stable_lang': locale['explanationLanguage'] ?? request.lang,
-        'academic_level': request.academic,
-        'layer': request.layer.value,
-        'err_count': request.errCount,
-        'lesson_mode': request.mode,
-        'history': request.history,
-        if (request.marker != null) 'marker': request.marker,
-        if (request.addendum != null) 'addendum': request.addendum,
-        if (request.amparoLvl != null) 'amparo_level': request.amparoLvl,
-        if (request.curriculumItems.isNotEmpty)
-          'curriculumItems': request.curriculumItems,
-        ...request.profile,
-      },
-      timeout: timeout,
-    );
+    final SimHttpResponse response;
+    try {
+      response = await transport.postJson(
+        config.uri(path),
+        headers: await config.jsonHeaders(),
+        body: {
+          'mode': mode,
+          'lessonLocalId': request.lessonLocalId,
+          'item': request.item,
+          ...locale,
+          if (request.topic != null) 'topic': request.topic,
+          if (request.itemIdx != null) 'itemIdx': request.itemIdx,
+          'stable_lang': locale['explanationLanguage'] ?? request.lang,
+          'academic_level': request.academic,
+          'layer': request.layer.value,
+          'err_count': request.errCount,
+          'lesson_mode': request.mode,
+          'history': request.history,
+          if (request.marker != null) 'marker': request.marker,
+          if (request.addendum != null) 'addendum': request.addendum,
+          if (request.amparoLvl != null) 'amparo_level': request.amparoLvl,
+          if (request.curriculumItems.isNotEmpty)
+            'curriculumItems': request.curriculumItems,
+          ...request.profile,
+        },
+        timeout: timeout,
+      );
+    } on TimeoutException {
+      throw simSafeTimeoutException(code: 'T02_TIMEOUT');
+    }
     if (!response.ok) {
       throw simSafeHttpException(response);
     }

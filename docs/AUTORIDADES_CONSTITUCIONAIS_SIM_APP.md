@@ -9,6 +9,7 @@ Este mapa fixa a fonte unica de verdade para as regras criticas do app.
 - `LessonAnswerProgressController`: dono transacional atual do avanco local, ate a extracao completa de `AdvanceLessonTransaction`.
 - `SimOrganismRouter`: dono oficial de rotas e guards. UI e `NavigationState` guardam intencao e renderizam decisao.
 - `StudentAuxRoomService`: dono do preparo T02 auxiliar comum. Review e recovery mantem estrategias pedagogicas separadas.
+- `Lei de Protecao das Travas Anti-Loop (LPTAL-1)`: trava constitucional de custo, seguranca e estabilidade. Limite de 15 slots, deduplicacao de midia por identidade forte, `AUDIO_ALREADY_RUNNING` e auditoria diaria de uso nao podem ser removidos sem autorizacao explicita do usuario.
 
 Regras:
 
@@ -18,3 +19,4 @@ Regras:
 4. Avanco exige evidencia local validada por software.
 5. Texto da aula tem prioridade sobre imagem e audio.
 6. A janela offline mira 15 experiencias quando houver curriculo suficiente.
+7. Travas anti-loop sao tao protegidas quanto prompts, T00, T02 e N3.

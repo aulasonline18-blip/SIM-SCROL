@@ -306,6 +306,66 @@ void main() {
     expect(material.imageDataUrl, isNull);
   });
 
+  test('T02 usa timeout oficial maior que o orçamento do servidor', () async {
+    final transport = RecordingTransport()
+      ..jsonBody =
+          '{"conteudo":{"explanation":"Explique","question":"Pergunta?","options":{"A":"um","B":"dois","C":"tres"},"correct_answer":"A","why_correct":"ok","why_wrong":{"B":"nao","C":"nao"}}}';
+    final client = SimServerT02Client(
+      config: SimAiServerConfig(
+        baseUrl: 'https://sim.example',
+        t02Path: '/api/complete-lesson',
+      ),
+      transport: transport,
+    );
+
+    await client.completeLesson(
+      const T02LessonRequest(
+        lessonLocalId: 'lesson-timeout',
+        item: 'Frações',
+        lang: 'pt-BR',
+        academic: 'ano 6',
+        layer: LessonLayer.l1,
+        mode: 'session',
+        errCount: 0,
+        history: [],
+      ),
+    );
+
+    expect(transport.lastTimeout, simT02LessonRequestTimeout);
+    expect(simT02LessonRequestTimeout, const Duration(seconds: 140));
+  });
+
+  test('T02 timeout vira erro seguro e recuperavel', () async {
+    final client = SimServerT02Client(
+      config: SimAiServerConfig(
+        baseUrl: 'https://sim.example',
+        t02Path: '/api/complete-lesson',
+      ),
+      transport: RecordingTransport()..throwTimeout = true,
+    );
+
+    await expectLater(
+      client.completeLesson(
+        const T02LessonRequest(
+          lessonLocalId: 'lesson-timeout',
+          item: 'Frações',
+          lang: 'pt-BR',
+          academic: 'ano 6',
+          layer: LessonLayer.l1,
+          mode: 'session',
+          errCount: 0,
+          history: [],
+        ),
+      ),
+      throwsA(
+        isA<SimExternalAiException>()
+            .having((error) => error.statusCode, 'status', 408)
+            .having((error) => error.code, 'code', 'T02_TIMEOUT')
+            .having((error) => error.retryable, 'retryable', true),
+      ),
+    );
+  });
+
   test('T02 envia curriculo para geracao direta sem adotar sessao', () async {
     final transport = RecordingTransport()
       ..jsonBody =
