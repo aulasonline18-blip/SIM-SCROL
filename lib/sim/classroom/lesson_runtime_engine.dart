@@ -293,6 +293,28 @@ class LessonRuntimeEngine {
     );
   }
 
+  bool reavaliarMaterialVisivelSolicitado() {
+    _refreshSessionFromState();
+    final position = _position;
+    final session = _session;
+    if (position == null || session == null) return false;
+    if (position.phase.type != ClassroomPhaseType.avancoPendente) {
+      return false;
+    }
+    final state = stateService.read(session.lessonLocalId);
+    if (state?.extra['advancePending'] is Map) return false;
+    if (position.itemAtivo == null) return false;
+    return materialController.carregarRapidoSePronto(
+      lessonLocalId: session.lessonLocalId,
+      topic: session.curriculum?.topic ?? session.onboarding.objetivo,
+      position: position,
+      idioma: session.idioma,
+      academic: session.academic,
+      mode: LessonMode.session,
+      baseItems: session.baseItems,
+    );
+  }
+
   LessonRuntimeSnapshot snapshot() {
     _refreshSessionFromState();
     final position = _position;

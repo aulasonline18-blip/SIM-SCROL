@@ -953,6 +953,7 @@ extension LabSessionFlowExtensions on LabSession {
       }
     }
   }
+
   bool _isCurrentAulaRuntime(String lessonLocalId, int generation) =>
       this.lessonLocalId == lessonLocalId &&
       _aulaRuntimeGeneration == generation;
@@ -1021,7 +1022,9 @@ extension LabSessionFlowExtensions on LabSession {
 
   void _reavaliarAvancoPendenteSePossivel(SimOrganism organism) {
     if (_disposed || _activeOrganism != organism) return;
-    final changed = organism.lessonRuntimeEngine.reavaliarAvancoPendente();
+    final changed =
+        organism.lessonRuntimeEngine.reavaliarMaterialVisivelSolicitado() ||
+        organism.lessonRuntimeEngine.reavaliarAvancoPendente();
     if (!changed) return;
     aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
     if (_drawerAulaTextReady(aulaSnapshot)) aulaMenuLessonWaiting = false;

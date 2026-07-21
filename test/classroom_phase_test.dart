@@ -555,10 +555,7 @@ void main() {
       expect(snapshot.conteudo?.question, 'Pergunta tardia M1 L2?');
       expect(service.read('cyber-class')?.extra['advancePending'], isNull);
       expect(
-        service
-            .read('cyber-class')!
-            .events
-            .map((event) => event.type),
+        service.read('cyber-class')!.events.map((event) => event.type),
         contains('INSTANT_ADVANCE_RECOVERED'),
       );
     },
@@ -869,7 +866,8 @@ void main() {
             as Map?)?['status'],
         'preparing',
       );
-      final pending = service.read('cyber-class')!.extra['advancePending'] as Map;
+      final pending =
+          service.read('cyber-class')!.extra['advancePending'] as Map;
       expect(pending['fromItemIdx'], 0);
       expect(pending['fromLayer'], LessonLayer.l1.value);
       expect(pending['fromMarker'], 'M1');
@@ -878,10 +876,7 @@ void main() {
       expect(pending['toMarker'], 'M1');
       expect(pending['reason'], 'material_missing_after_valid_decision');
       expect(
-        service
-            .read('cyber-class')!
-            .events
-            .map((event) => event.type),
+        service.read('cyber-class')!.events.map((event) => event.type),
         containsAll([
           'INSTANT_ADVANCE_BACKGROUND_ORDERED',
           'INSTANT_ADVANCE_PENDING_VISIBLE',
@@ -1007,10 +1002,7 @@ void main() {
       runtime.select(AnswerLetter.A);
       await runtime.signal(DecisionSignal.two);
       expect(
-        service
-            .read('cyber-class')!
-            .events
-            .map((event) => event.type),
+        service.read('cyber-class')!.events.map((event) => event.type),
         contains('INSTANT_ADVANCE_FEEDBACK_SHOWN'),
       );
       await Future<void>.delayed(Duration.zero);
@@ -1348,6 +1340,65 @@ void main() {
         snap.conteudo?.question,
         'A pergunta deve aparecer sem preparo preso?',
       );
+    },
+  );
+
+  test(
+    'aula escolhida no menu aplica material T02 tardio sem novo toque',
+    () async {
+      final remoteLight = _classroomState().copyWith(
+        currentLessonMaterial: null,
+        readyLessonMaterials: const {},
+        extra: const {'remoteHydratedSource': 'drawer_cloud_lesson'},
+      );
+      final service = StudentLearningStateService(
+        seed: {'cyber-class': remoteLight},
+      );
+      final runtime = _runtime(service, FailingClassroomT02());
+
+      final snapshot = await runtime.open(
+        lessonLocalId: 'cyber-class',
+        menuOpenPriority: true,
+        suppressReadyWindowUntilVisibleLessonReady: true,
+      );
+
+      expect(snapshot.phase.type, ClassroomPhaseType.avancoPendente);
+      expect(snapshot.conteudo, isNull);
+      expect(service.read('cyber-class')?.extra['advancePending'], isNull);
+
+      final material = preparedMaterialFromLesson(
+        lesson: const CompleteLesson(
+          conteudo: LessonContent(
+            explanation: 'Texto do menu chegou.',
+            question: 'A aula escolhida deve aparecer?',
+            options: {
+              AnswerLetter.A: 'Sim',
+              AnswerLetter.B: 'Nao',
+              AnswerLetter.C: 'Talvez',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+          imagem: null,
+          audioText: 'Texto do menu chegou.',
+        ),
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l1,
+      );
+      service.mutate(
+        'cyber-class',
+        (state) => state.copyWith(
+          readyLessonMaterials: {
+            ...state.readyLessonMaterials,
+            preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): material,
+          },
+        ),
+      );
+
+      expect(runtime.reavaliarMaterialVisivelSolicitado(), isTrue);
+      final ready = runtime.snapshot();
+      expect(ready.phase.type, ClassroomPhaseType.lendo);
+      expect(ready.conteudo?.question, 'A aula escolhida deve aparecer?');
     },
   );
 
