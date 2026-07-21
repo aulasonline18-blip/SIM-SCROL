@@ -421,7 +421,7 @@ class LabSession extends ChangeNotifier {
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 8);
       final req = await client
-          .getUrl(Uri.parse('$simApiBaseUrl/health'))
+          .getUrl(Uri.parse('$simApiBaseUrl/api/health'))
           .timeout(const Duration(seconds: 8));
       final res = await req.close().timeout(const Duration(seconds: 8));
       await res.drain<void>();
