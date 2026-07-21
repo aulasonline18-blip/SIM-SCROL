@@ -22,6 +22,7 @@ import '../cloud/cloud_queue.dart';
 import '../cloud/lesson_cloud_bootstrap.dart';
 import '../cloud/lesson_curriculum_sync_engine.dart';
 import '../cloud/student_learning_sync.dart';
+import '../config/sim_api_routes.dart';
 import '../experience/student_experience_engine.dart';
 import '../experience/student_experience_placement_adapter.dart';
 import '../experience/start_first_lesson_use_case.dart';
@@ -97,9 +98,9 @@ class SimOrganismRouter {
   };
 
   static const _serverRoutes = {
-    '/api/bootstrap-t00',
-    '/api/complete-lesson',
-    '/api/generate-lesson-audio',
+    SimApiRoutes.t00Bootstrap,
+    SimApiRoutes.t02CompleteLesson,
+    SimApiRoutes.generateLessonAudio,
   };
 
   SimRouteDecision resolve({
@@ -225,9 +226,9 @@ SimOrganismHealthReport buildSimOrganismHealthReport() =>
         'billing',
       ],
       serverOnlyOrgans: [
-        '/api/bootstrap-t00',
-        '/api/complete-lesson',
-        '/api/generate-lesson-audio',
+        SimApiRoutes.t00Bootstrap,
+        SimApiRoutes.t02CompleteLesson,
+        SimApiRoutes.generateLessonAudio,
       ],
       unresolvedDoors: [],
       promptsStayOnServer: true,

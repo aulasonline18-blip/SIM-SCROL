@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'sim_api_routes.dart';
+
 class SimEnvironment {
   const SimEnvironment._();
 
@@ -79,7 +81,7 @@ class SimEnvironment {
     return clean;
   }
 
-  static const t00Path = '/api/bootstrap-t00';
-  static const t02Path = '/api/complete-lesson';
-  static const audioPath = '/api/generate-lesson-audio';
+  static const t00Path = SimApiRoutes.t00Bootstrap;
+  static const t02Path = SimApiRoutes.t02CompleteLesson;
+  static const audioPath = SimApiRoutes.generateLessonAudio;
 }

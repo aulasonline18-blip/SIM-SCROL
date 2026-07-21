@@ -31,9 +31,13 @@ void main() {
   });
 
   test('travas anti-loop do app continuam presentes', () {
-    final dopamine = File(
+    final dopamine = [
       'lib/sim/lesson/dopamine_ready_window_engine.dart',
-    ).readAsStringSync();
+      'lib/sim/lesson/ready_window/ready_window_executor.dart',
+      'lib/sim/lesson/ready_window/ready_window_health.dart',
+      'lib/sim/lesson/ready_window/ready_window_media.dart',
+      'lib/sim/lesson/ready_window/ready_window_planner.dart',
+    ].map((path) => File(path).readAsStringSync()).join('\n');
     final media = File(
       'lib/sim/media/student_lesson_media_service.dart',
     ).readAsStringSync();
@@ -72,7 +76,7 @@ void main() {
     );
     expect(dopamine, contains('DOPAMINE_WINDOW_REQUEST_CAPPED'));
     expect(dopamine, contains('_boundedWindowLimit'));
-    expect(dopamine, contains('_slotMediaAlreadyRequested'));
+    expect(dopamine, contains('slotMediaAlreadyRequested'));
     expect(dopamine, contains('status != \'queued\' && status != \'running\''));
     expect(dopamine, contains('mediaType'));
     expect(media, contains('mediaType: SlotMediaType.audio'));

@@ -871,8 +871,8 @@ class LabSession extends ChangeNotifier {
   SimAiServerConfig _serverConfig() {
     return SimAiServerConfig(
       baseUrl: simApiBaseUrl,
-      t00Path: '/api/bootstrap-t00',
-      t02Path: '/api/complete-lesson',
+      t00Path: SimEnvironment.t00Path,
+      t02Path: SimEnvironment.t02Path,
       accessTokenProvider: _freshServerAccessToken,
     );
   }

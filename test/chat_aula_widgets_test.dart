@@ -339,6 +339,12 @@ void main() {
     final chatSource = File(
       'lib/features/classroom/chat_aula_widgets.dart',
     ).readAsStringSync();
+    final chatMediaSource = File(
+      'lib/features/classroom/widgets/media_widget.dart',
+    ).readAsStringSync();
+    final chatFeedbackSource = File(
+      'lib/features/classroom/widgets/feedback_widget.dart',
+    ).readAsStringSync();
     final studySurface = RegExp(
       r'class LessonImageStudySurface[\s\S]*?class LessonMediaImageView',
     ).firstMatch(aulaSource)?.group(0);
@@ -350,12 +356,13 @@ void main() {
     ).firstMatch(aulaSource)?.group(0);
     final chatImageBubble = RegExp(
       r'class ChatImageBubble[\s\S]*?class _TextBlock',
-    ).firstMatch(chatSource)?.group(0);
+    ).firstMatch('$chatMediaSource\n$chatFeedbackSource')?.group(0);
 
     expect(studySurface, isNotNull);
     expect(visualBoard, isNotNull);
     expect(mediaImageView, isNotNull);
     expect(chatImageBubble, isNotNull);
+    expect(chatSource, contains("part 'widgets/media_widget.dart'"));
     expect(studySurface, isNot(contains('BoxFit.cover')));
     expect(visualBoard, isNot(contains('BoxFit.cover')));
     expect(mediaImageView, isNot(contains('BoxFit.cover')));

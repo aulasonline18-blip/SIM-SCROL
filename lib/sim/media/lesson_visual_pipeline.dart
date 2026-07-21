@@ -3,11 +3,12 @@ import 'dart:convert';
 
 import '../external_ai/sim_ai_server_config.dart';
 import '../external_ai/sim_http_transport.dart';
+import '../config/sim_api_routes.dart';
 import '../state/student_learning_state.dart';
 import 'lesson_image_api_contract.dart';
 import 'math_templates/math_visual_templates.dart';
 
-const String simVisualRoutePath = '/api/visual-route';
+const String simVisualRoutePath = SimApiRoutes.visualRoute;
 
 class LessonVisualTrigger {
   const LessonVisualTrigger({required this.needsImage, this.kind, this.svg, this.mathTemplate, this.description, this.reason, this.raw = const {}});

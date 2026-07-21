@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import '../config/sim_api_routes.dart';
 import '../external_ai/sim_ai_server_config.dart';
 import '../external_ai/sim_http_transport.dart';
 import '../state/student_learning_state.dart';
@@ -11,11 +12,11 @@ class SimServerCloudFunctions implements StudentStateCloudFunctions {
   SimServerCloudFunctions({
     required this.config,
     SimHttpTransport? transport,
-    this.persistPath = '/api/student-state/persist',
-    this.listPath = '/api/student-state/list',
-    this.summariesPath = '/api/student-state/summaries',
-    this.getPath = '/api/student-state/get',
-    this.deletePath = '/api/student-state/delete',
+    this.persistPath = SimApiRoutes.studentStatePersist,
+    this.listPath = SimApiRoutes.studentStateList,
+    this.summariesPath = SimApiRoutes.studentStateSummaries,
+    this.getPath = SimApiRoutes.studentStateGet,
+    this.deletePath = SimApiRoutes.studentStateDelete,
     this.timeout = const Duration(seconds: 45),
   }) : transport = transport ?? DartIoSimHttpTransport();
 

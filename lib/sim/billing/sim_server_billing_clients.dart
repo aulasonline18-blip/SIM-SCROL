@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../config/sim_api_routes.dart';
 import '../external_ai/sim_ai_server_config.dart';
 import '../external_ai/sim_http_transport.dart';
 import '../state/student_learning_state.dart';
@@ -13,9 +14,9 @@ class SimServerPaymentsClient implements PaymentsFunctions {
   SimServerPaymentsClient({
     required this.config,
     SimHttpTransport? transport,
-    this.hostedPath = '/api/payments/create-credits-checkout-hosted',
-    this.embeddedPath = '/api/payments/create-credits-checkout',
-    this.statusPath = '/api/payments/checkout-status',
+    this.hostedPath = SimApiRoutes.paymentsCreateCreditsCheckoutHosted,
+    this.embeddedPath = SimApiRoutes.paymentsCreateCreditsCheckout,
+    this.statusPath = SimApiRoutes.paymentsCheckoutStatus,
     this.timeout = const Duration(seconds: 45),
   }) : transport = transport ?? DartIoSimHttpTransport();
 
@@ -108,9 +109,9 @@ class SimServerCreditsClient implements CreditsFunctions {
   SimServerCreditsClient({
     required this.config,
     SimHttpTransport? transport,
-    this.snapshotPath = '/api/credits/me',
-    this.reservePath = '/api/credits/reserve',
-    this.capturePath = '/api/credits/capture',
+    this.snapshotPath = SimApiRoutes.creditsMe,
+    this.reservePath = SimApiRoutes.creditsReserve,
+    this.capturePath = SimApiRoutes.creditsCapture,
     this.timeout = const Duration(seconds: 30),
   }) : transport = transport ?? DartIoSimHttpTransport();
 
@@ -173,7 +174,7 @@ class SimServerPlayBillingGrantClient implements PlayBillingGrantGateway {
   SimServerPlayBillingGrantClient({
     required this.config,
     SimHttpTransport? transport,
-    this.grantPath = '/api/play-billing/consume-credit-pack',
+    this.grantPath = SimApiRoutes.playBillingConsumeCreditPack,
     this.timeout = const Duration(seconds: 45),
   }) : transport = transport ?? DartIoSimHttpTransport();
 
@@ -222,7 +223,7 @@ class SimServerAccountDeletionGateway implements AccountDeletionGateway {
   SimServerAccountDeletionGateway({
     required this.config,
     SimHttpTransport? transport,
-    this.path = '/api/account/request-deletion',
+    this.path = SimApiRoutes.accountRequestDeletion,
     this.timeout = const Duration(seconds: 30),
   }) : transport = transport ?? DartIoSimHttpTransport();
 

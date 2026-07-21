@@ -12,6 +12,7 @@ import 'package:sim_mobile/sim/auxiliary/aux_room_models.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
+import 'package:sim_mobile/sim/config/sim_api_routes.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
@@ -1172,7 +1173,8 @@ void main() {
       ]) {
         expect(mediaRuntime, isNot(contains(forbidden)), reason: forbidden);
       }
-      expect(mediaRuntime, contains('/api/visual-route'));
+      expect(SimApiRoutes.visualRoute, '/api/visual-route');
+      expect(mediaRuntime, contains('SimApiRoutes.visualRoute'));
     },
   );
 }

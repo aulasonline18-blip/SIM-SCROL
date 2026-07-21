@@ -8,12 +8,13 @@ import '../lesson/lesson_content_validator.dart';
 import '../localization/sim_locale_contract.dart';
 import '../modules/pedagogical_module_contracts.dart';
 import '../experience/bootstrap_payload.dart';
+import '../config/sim_api_routes.dart';
 import '../state/student_learning_state.dart';
 import 'sim_ai_server_config.dart';
 import 'sim_http_transport.dart';
 
-const String simT00BootstrapPath = '/api/bootstrap-t00';
-const String simLessonAudioPath = '/api/generate-lesson-audio';
+const String simT00BootstrapPath = SimApiRoutes.t00Bootstrap;
+const String simLessonAudioPath = SimApiRoutes.generateLessonAudio;
 const Duration simT02LessonRequestTimeout = Duration(seconds: 140);
 
 class SimServerT00Client implements T00BootstrapClient {

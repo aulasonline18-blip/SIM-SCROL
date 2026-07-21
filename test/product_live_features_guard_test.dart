@@ -7,6 +7,7 @@ import 'package:sim_mobile/features/classroom/chat_aula_messages.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_widgets.dart';
 import 'package:sim_mobile/features/onboarding/onboarding_screens.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
+import 'package:sim_mobile/sim/config/sim_api_routes.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_accessibility.dart';
 import 'package:sim_mobile/sim/ui/sim_theme.dart';
@@ -309,7 +310,7 @@ void main() {
       'class VisualRouterN2',
       'class VisualRouterN3Client',
       'math_templates',
-      '/api/visual-route',
+      'SimApiRoutes.visualRoute',
       'SvgPicture.string',
       'Image.memory',
       'Image.network',
@@ -317,6 +318,7 @@ void main() {
     ]) {
       expect('$mediaRuntime\n$classroom', contains(required), reason: required);
     }
+    expect(SimApiRoutes.visualRoute, '/api/visual-route');
     for (final forbidden in const [
       'WebView',
       '/api/warmup',

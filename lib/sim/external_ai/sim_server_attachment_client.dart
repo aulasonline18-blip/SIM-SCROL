@@ -1,10 +1,11 @@
 import 'dart:convert';
 
+import '../config/sim_api_routes.dart';
 import '../state/student_learning_state.dart';
 import 'sim_ai_server_config.dart';
 import 'sim_http_transport.dart';
 
-const String simProcessAttachmentPath = '/api/process-attachment';
+const String simProcessAttachmentPath = SimApiRoutes.processAttachment;
 const int simMaxAttachmentBytes = 10 * 1024 * 1024;
 
 class SimAttachmentFile {

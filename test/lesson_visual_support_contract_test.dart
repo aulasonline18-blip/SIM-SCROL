@@ -146,14 +146,23 @@ void main() {
       final chatWidgets = File(
         'lib/features/classroom/chat_aula_widgets.dart',
       ).readAsStringSync();
+      final chatMediaWidgets = File(
+        'lib/features/classroom/widgets/media_widget.dart',
+      ).readAsStringSync();
 
       expect(aulaWidgets, contains('lessonImageStudyAspectRatio'));
       expect(aulaWidgets, contains('class LessonVisualBoard'));
-      expect(chatWidgets, contains('LessonVisualBoard'));
+      expect(chatWidgets, contains("part 'widgets/media_widget.dart'"));
+      expect(chatMediaWidgets, contains('LessonVisualBoard'));
       expect(aulaWidgets, isNot(contains('AspectRatio(aspectRatio: 16 / 10')));
       expect(chatWidgets, isNot(contains('AspectRatio(aspectRatio: 16 / 10')));
+      expect(
+        chatMediaWidgets,
+        isNot(contains('AspectRatio(aspectRatio: 16 / 10')),
+      );
       expect(aulaWidgets, isNot(contains('BoxFit.cover')));
       expect(chatWidgets, isNot(contains('BoxFit.cover')));
+      expect(chatMediaWidgets, isNot(contains('BoxFit.cover')));
     });
   });
 }

@@ -1,5 +1,13 @@
 // ignore_for_file: prefer_initializing_formals
 
+part 'domain/student_profile.dart';
+part 'domain/student_curriculum.dart';
+part 'domain/student_progress.dart';
+part 'cache/student_cache_info.dart';
+part 'events/student_event_log.dart';
+part 'snapshot/student_snapshot.dart';
+part 'sync/student_sync_state.dart';
+
 typedef JsonMap = Map<String, dynamic>;
 
 int? _intValue(Object? value) {
@@ -81,530 +89,6 @@ enum LiveEntryStatus {
   blockedCredits,
 }
 
-class StudentProfile {
-  const StudentProfile({
-    this.preferredName,
-    this.language,
-    this.stableLang,
-    this.objetivo,
-    this.nivel,
-    this.academicLevel,
-    this.targetTopic,
-    this.sessionGoal,
-    this.extra = const {},
-  });
-
-  final String? preferredName;
-  final String? language;
-  final String? stableLang;
-  final String? objetivo;
-  final String? nivel;
-  final String? academicLevel;
-  final String? targetTopic;
-  final String? sessionGoal;
-  final JsonMap extra;
-
-  JsonMap toJson() => {
-    ...extra,
-    if (preferredName != null) 'preferredName': preferredName,
-    if (language != null) 'language': language,
-    if (stableLang != null) 'stableLang': stableLang,
-    if (objetivo != null) 'objetivo': objetivo,
-    if (nivel != null) 'nivel': nivel,
-    if (academicLevel != null) 'academicLevel': academicLevel,
-    if (targetTopic != null) 'targetTopic': targetTopic,
-    if (sessionGoal != null) 'sessionGoal': sessionGoal,
-  };
-
-  factory StudentProfile.fromJson(JsonMap json) {
-    final extra = JsonMap.of(json)
-      ..removeWhere(
-        (key, _) => {
-          'preferredName',
-          'language',
-          'stableLang',
-          'objetivo',
-          'nivel',
-          'academicLevel',
-          'targetTopic',
-          'sessionGoal',
-        }.contains(key),
-      );
-    return StudentProfile(
-      preferredName: json['preferredName'] as String?,
-      language: json['language'] as String?,
-      stableLang: json['stableLang'] as String?,
-      objetivo: json['objetivo'] as String?,
-      nivel: json['nivel'] as String?,
-      academicLevel: json['academicLevel'] as String?,
-      targetTopic: json['targetTopic'] as String?,
-      sessionGoal: json['sessionGoal'] as String?,
-      extra: extra,
-    );
-  }
-
-  StudentProfile copyWith({
-    String? preferredName,
-    String? language,
-    String? stableLang,
-    String? objetivo,
-    String? nivel,
-    String? academicLevel,
-    String? targetTopic,
-    String? sessionGoal,
-    JsonMap? extra,
-  }) {
-    return StudentProfile(
-      preferredName: preferredName ?? this.preferredName,
-      language: language ?? this.language,
-      stableLang: stableLang ?? this.stableLang,
-      objetivo: objetivo ?? this.objetivo,
-      nivel: nivel ?? this.nivel,
-      academicLevel: academicLevel ?? this.academicLevel,
-      targetTopic: targetTopic ?? this.targetTopic,
-      sessionGoal: sessionGoal ?? this.sessionGoal,
-      extra: extra ?? this.extra,
-    );
-  }
-}
-
-class CurriculumItem {
-  const CurriculumItem({
-    required this.marker,
-    required this.text,
-    this.unit,
-    this.title,
-    this.microitemForTeacher,
-    this.extra = const {},
-  });
-
-  final String marker;
-  final String text;
-  final String? unit;
-  final String? title;
-  final String? microitemForTeacher;
-  final JsonMap extra;
-
-  String get teacherText => microitemForTeacher ?? text;
-
-  JsonMap toJson() => {
-    ...extra,
-    'marker': marker,
-    'text': text,
-    if (unit != null) 'unit': unit,
-    if (title != null) 'title': title,
-    if (microitemForTeacher != null)
-      'microitem_for_teacher': microitemForTeacher,
-  };
-
-  factory CurriculumItem.fromJson(JsonMap json) => CurriculumItem(
-    marker: (json['marker'] ?? '').toString(),
-    text: (json['text'] ?? json['title'] ?? '').toString(),
-    unit: _stringValue(json['unit'] ?? json['unidade']),
-    title: json['title'] as String?,
-    microitemForTeacher: json['microitem_for_teacher'] as String?,
-    extra: JsonMap.of(json)
-      ..removeWhere(
-        (key, _) => {
-          'marker',
-          'text',
-          'unit',
-          'unidade',
-          'title',
-          'microitem_for_teacher',
-        }.contains(key),
-      ),
-  );
-}
-
-class CurriculumGlobalPlan {
-  const CurriculumGlobalPlan({
-    required this.globalTotalItems,
-    required this.batchStartItem,
-    required this.batchEndItem,
-    this.operationalBatchLimit,
-    this.partNumber,
-    this.partTitle,
-    this.unitsCovered,
-    this.unitsPending,
-    int? nextGlobalItemToRequest,
-    bool continuationNeeded = false,
-    String? continuationInstruction,
-  }) : _nextGlobalItemToRequest = nextGlobalItemToRequest,
-       _continuationNeeded = continuationNeeded,
-       _continuationInstruction = continuationInstruction;
-
-  final int globalTotalItems;
-  final int batchStartItem;
-  final int batchEndItem;
-  final int? operationalBatchLimit;
-  final int? partNumber;
-  final String? partTitle;
-  final String? unitsCovered;
-  final String? unitsPending;
-  final int? _nextGlobalItemToRequest;
-  final bool _continuationNeeded;
-  final String? _continuationInstruction;
-
-  bool get hasRemainingGlobalItems => globalTotalItems > batchEndItem;
-
-  int? get nextGlobalItemToRequest {
-    final next = _nextGlobalItemToRequest;
-    if (next != null && next > batchEndItem) return next;
-    if (hasRemainingGlobalItems) return batchEndItem + 1;
-    return null;
-  }
-  bool get continuationNeeded => _continuationNeeded || hasRemainingGlobalItems;
-  String? get continuationInstruction {
-    final clean = _continuationInstruction?.trim();
-    if (clean != null && clean.isNotEmpty && clean.toLowerCase() != 'n/a' && clean != '-') {
-      return clean;
-    }
-    final next = nextGlobalItemToRequest;
-    if (!continuationNeeded || next == null) return null;
-    return 'Continue a partir do item $next.';
-  }
-  int globalItemNumberForLocalIndex(int localIndex) {
-    return batchStartItem + localIndex.clamp(0, batchSize).toInt();
-  }
-  int get batchSize {
-    final size = batchEndItem - batchStartItem + 1;
-    return size > 0 ? size : 0;
-  }
-  bool get isMultiPart {
-    return hasRemainingGlobalItems ||
-        continuationNeeded ||
-        (partNumber ?? 1) > 1;
-  }
-
-  String get displayPartTitle {
-    final clean = partTitle?.trim();
-    if (clean != null && clean.isNotEmpty) return clean;
-    final number = partNumber ?? 1;
-    return 'Parte $number';
-  }
-
-  JsonMap toJson() => {
-    'globalTotalItems': globalTotalItems,
-    'batchStartItem': batchStartItem,
-    'batchEndItem': batchEndItem,
-    if (operationalBatchLimit != null)
-      'operationalBatchLimit': operationalBatchLimit,
-    if (partNumber != null) 'partNumber': partNumber,
-    if (partTitle != null) 'partTitle': partTitle,
-    if (unitsCovered != null) 'unitsCovered': unitsCovered,
-    if (unitsPending != null) 'unitsPending': unitsPending,
-    if (nextGlobalItemToRequest != null)
-      'nextGlobalItemToRequest': nextGlobalItemToRequest,
-    'continuationNeeded': continuationNeeded,
-    if (continuationInstruction != null)
-      'continuationInstruction': continuationInstruction,
-  };
-
-  factory CurriculumGlobalPlan.fromJson(JsonMap json, int localItemCount) {
-    final globalTotal =
-        _intValue(
-          json['globalTotalItems'] ??
-              json['global_total_items'] ??
-              json['estimatedGlobalTotalItems'] ??
-              json['estimated_global_total_items'],
-        ) ??
-        localItemCount;
-    final start =
-        _intValue(json['batchStartItem'] ?? json['batch_start_item']) ?? 1;
-    final end =
-        _intValue(json['batchEndItem'] ?? json['batch_end_item']) ??
-        (start + localItemCount - 1);
-    return CurriculumGlobalPlan(
-      globalTotalItems: globalTotal,
-      operationalBatchLimit: _intValue(
-        json['operationalBatchLimit'] ?? json['operational_batch_limit'],
-      ),
-      batchStartItem: start,
-      batchEndItem: end,
-      partNumber: _intValue(json['partNumber'] ?? json['part_number']),
-      partTitle: _stringValue(json['partTitle'] ?? json['part_title']),
-      unitsCovered: _stringValue(json['unitsCovered'] ?? json['units_covered']),
-      unitsPending: _stringValue(json['unitsPending'] ?? json['units_pending']),
-      nextGlobalItemToRequest: _intValue(
-        json['nextGlobalItemToRequest'] ?? json['next_global_item_to_request'],
-      ),
-      continuationNeeded:
-          json['continuationNeeded'] == true ||
-          json['continuation_needed'] == true,
-      continuationInstruction: _stringValue(
-        json['continuationInstruction'] ?? json['continuation_instruction'],
-      ),
-    );
-  }
-}
-
-class StudentCurriculum {
-  const StudentCurriculum({
-    required this.topic,
-    required this.totalItems,
-    required this.generatedAt,
-    required this.provisional,
-    required this.items,
-    this.globalPlan,
-  });
-
-  final String topic;
-  final int totalItems;
-  final int? generatedAt;
-  final bool provisional;
-  final List<CurriculumItem> items;
-  final CurriculumGlobalPlan? globalPlan;
-
-  int get displayTotalItems => globalPlan?.globalTotalItems ?? totalItems;
-
-  int displayItemNumberForLocalIndex(int localIndex) {
-    return globalPlan?.globalItemNumberForLocalIndex(localIndex) ??
-        (localIndex + 1);
-  }
-
-  bool get isPartOfGlobalPlan => globalPlan?.isMultiPart == true;
-
-  String get displayPartTitle => globalPlan?.displayPartTitle ?? '';
-
-  JsonMap toJson() => {
-    'topic': topic,
-    'totalItems': totalItems,
-    'generatedAt': generatedAt,
-    'provisional': provisional,
-    'items': items.map((item) => item.toJson()).toList(),
-    if (globalPlan != null) 'globalPlan': globalPlan!.toJson(),
-  };
-
-  factory StudentCurriculum.fromJson(JsonMap json) {
-    final items = (json['items'] as List? ?? const [])
-        .whereType<Map>()
-        .map((item) => CurriculumItem.fromJson(JsonMap.from(item)))
-        .toList();
-    final rawGlobalPlan =
-        json['globalPlan'] ?? json['global_plan'] ?? json['curriculum_plan'];
-    return StudentCurriculum(
-      topic: (json['topic'] ?? '').toString(),
-      totalItems: (json['totalItems'] as num?)?.toInt() ?? items.length,
-      generatedAt: (json['generatedAt'] as num?)?.toInt(),
-      provisional: json['provisional'] == true,
-      items: items,
-      globalPlan: rawGlobalPlan is Map
-          ? CurriculumGlobalPlan.fromJson(
-              JsonMap.from(rawGlobalPlan),
-              items.length,
-            )
-          : null,
-    );
-  }
-}
-
-class StudentCurriculumStatus {
-  const StudentCurriculumStatus({
-    required this.status,
-    required this.expansionStatus,
-    required this.updatedAt,
-    required this.objectiveKey,
-    required this.initialCount,
-    required this.totalCount,
-    this.error,
-  });
-
-  final CurriculumStatusValue status;
-  final CurriculumStatusValue expansionStatus;
-  final String updatedAt;
-  final String objectiveKey;
-  final int initialCount;
-  final int totalCount;
-  final String? error;
-
-  JsonMap toJson() => {
-    'status': status.name,
-    'expansionStatus': expansionStatus.name,
-    'updatedAt': updatedAt,
-    'objectiveKey': objectiveKey,
-    'initialCount': initialCount,
-    'totalCount': totalCount,
-    if (error != null) 'error': error,
-  };
-
-  factory StudentCurriculumStatus.fromJson(JsonMap json) {
-    return StudentCurriculumStatus(
-      status: _curriculumStatusFromJson(json['status']),
-      expansionStatus: _curriculumStatusFromJson(json['expansionStatus']),
-      updatedAt: (json['updatedAt'] ?? '').toString(),
-      objectiveKey: (json['objectiveKey'] ?? '').toString(),
-      initialCount: (json['initialCount'] as num?)?.toInt() ?? 0,
-      totalCount: (json['totalCount'] as num?)?.toInt() ?? 0,
-      error: json['error'] as String?,
-    );
-  }
-}
-
-CurriculumStatusValue _curriculumStatusFromJson(Object? value) {
-  final raw = value?.toString() ?? '';
-  return CurriculumStatusValue.values.firstWhere(
-    (status) => status.name == raw,
-    orElse: () => switch (raw) {
-      'initial_loading' => CurriculumStatusValue.initialLoading,
-      'initial_ready' => CurriculumStatusValue.initialReady,
-      'partial_ready' => CurriculumStatusValue.partialReady,
-      _ => CurriculumStatusValue.empty,
-    },
-  );
-}
-
-class LessonCurrent {
-  const LessonCurrent({
-    required this.itemIdx,
-    required this.marker,
-    required this.layer,
-    required this.amparoLvl,
-  });
-
-  final int itemIdx;
-  final String? marker;
-  final LessonLayer layer;
-  final int amparoLvl;
-
-  JsonMap toJson() => {
-    'itemIdx': itemIdx,
-    'marker': marker,
-    'layer': layer.value,
-    'amparoLvl': amparoLvl,
-  };
-
-  factory LessonCurrent.fromJson(JsonMap json) => LessonCurrent(
-    itemIdx: (json['itemIdx'] as num?)?.toInt() ?? 0,
-    marker: json['marker'] as String?,
-    layer: LessonLayerValue.fromValue(json['layer']),
-    amparoLvl: (json['amparoLvl'] as num?)?.toInt() ?? 0,
-  );
-}
-
-class LessonProgress {
-  const LessonProgress({
-    required this.itemIdx,
-    required this.layer,
-    required this.erros,
-    required this.amparoLvl,
-    required this.historia,
-    required this.mainAdvances,
-    required this.concluidos,
-    required this.pendentesMarkers,
-    required this.totalItems,
-    required this.pctAvanco,
-  });
-
-  final int itemIdx;
-  final LessonLayer layer;
-  final int erros;
-  final int amparoLvl;
-  final List<String> historia;
-  final int mainAdvances;
-  final List<String> concluidos;
-  final List<String> pendentesMarkers;
-  final int totalItems;
-  final int pctAvanco;
-
-  LessonProgress copyWith({
-    int? itemIdx,
-    LessonLayer? layer,
-    int? erros,
-    int? amparoLvl,
-    List<String>? historia,
-    int? mainAdvances,
-    List<String>? concluidos,
-    List<String>? pendentesMarkers,
-    int? totalItems,
-    int? pctAvanco,
-  }) {
-    return LessonProgress(
-      itemIdx: itemIdx ?? this.itemIdx,
-      layer: layer ?? this.layer,
-      erros: erros ?? this.erros,
-      amparoLvl: amparoLvl ?? this.amparoLvl,
-      historia: historia ?? this.historia,
-      mainAdvances: mainAdvances ?? this.mainAdvances,
-      concluidos: concluidos ?? this.concluidos,
-      pendentesMarkers: pendentesMarkers ?? this.pendentesMarkers,
-      totalItems: totalItems ?? this.totalItems,
-      pctAvanco: pctAvanco ?? this.pctAvanco,
-    );
-  }
-
-  JsonMap toJson() => {
-    'itemIdx': itemIdx,
-    'layer': layer.value,
-    'erros': erros,
-    'amparoLvl': amparoLvl,
-    'historia': historia,
-    'mainAdvances': mainAdvances,
-    'concluidos': concluidos,
-    'pendentesMarkers': pendentesMarkers,
-    'totalItems': totalItems,
-    'pctAvanco': pctAvanco,
-  };
-
-  factory LessonProgress.fromJson(JsonMap json) => LessonProgress(
-    itemIdx: (json['itemIdx'] as num?)?.toInt() ?? 0,
-    layer: LessonLayerValue.fromValue(json['layer']),
-    erros: (json['erros'] as num?)?.toInt() ?? 0,
-    amparoLvl: (json['amparoLvl'] as num?)?.toInt() ?? 0,
-    historia: (json['historia'] as List? ?? const [])
-        .map((value) => value.toString())
-        .toList(),
-    mainAdvances: (json['mainAdvances'] as num?)?.toInt() ?? 0,
-    concluidos: (json['concluidos'] as List? ?? const [])
-        .map((value) => value.toString())
-        .toList(),
-    pendentesMarkers: (json['pendentesMarkers'] as List? ?? const [])
-        .map((value) => value.toString())
-        .toList(),
-    totalItems: (json['totalItems'] as num?)?.toInt() ?? 0,
-    pctAvanco: (json['pctAvanco'] as num?)?.toInt() ?? 0,
-  );
-}
-
-class LessonAttempt {
-  const LessonAttempt({
-    required this.marker,
-    required this.layer,
-    required this.letra,
-    required this.sinal,
-    required this.correct,
-    required this.ts,
-  });
-
-  final String marker;
-  final LessonLayer layer;
-  final AnswerLetter letra;
-  final DecisionSignal sinal;
-  final bool correct;
-  final int ts;
-
-  JsonMap toJson() => {
-    'marker': marker,
-    'layer': layer.value,
-    'letra': letra.name,
-    'sinal': sinal.value,
-    'correct': correct,
-    'ts': ts,
-  };
-
-  factory LessonAttempt.fromJson(JsonMap json) => LessonAttempt(
-    marker: (json['marker'] ?? '').toString(),
-    layer: LessonLayerValue.fromValue(json['layer']),
-    letra: AnswerLetter.values.firstWhere(
-      (letter) => letter.name == json['letra'],
-      orElse: () => AnswerLetter.A,
-    ),
-    sinal: DecisionSignalValue.fromValue(json['sinal']),
-    correct: json['correct'] == true,
-    ts: (json['ts'] as num?)?.toInt() ?? 0,
-  );
-}
-
 class LiveEntry {
   const LiveEntry({
     required this.status,
@@ -677,20 +161,6 @@ class LiveEntry {
     firstLessonReadyAt: (json['first_lesson_ready_at'] as num?)?.toInt(),
     updatedAt: (json['updated_at'] as num?)?.toInt() ?? 0,
   );
-}
-
-class StudentLearningEvent {
-  const StudentLearningEvent({
-    required this.type,
-    required this.ts,
-    required this.payload,
-  });
-
-  final String type;
-  final int ts;
-  final JsonMap payload;
-
-  JsonMap toJson() => {'type': type, 'ts': ts, 'payload': payload};
 }
 
 class StudentMasteryTruth {
@@ -969,67 +439,6 @@ Object? _sanitizeRemoteVaultValue(
   return value;
 }
 
-class StudentSyncStatus {
-  const StudentSyncStatus({
-    required this.status,
-    required this.pendingJobs,
-    required this.highWaterMark,
-    required this.updatedAt,
-    this.lastSyncedAt,
-    this.lastError,
-  });
-
-  final String status;
-  final int pendingJobs;
-  final int highWaterMark;
-  final int updatedAt;
-  final int? lastSyncedAt;
-  final String? lastError;
-
-  factory StudentSyncStatus.empty([int now = 0]) => StudentSyncStatus(
-    status: 'idle',
-    pendingJobs: 0,
-    highWaterMark: 0,
-    updatedAt: now,
-  );
-
-  JsonMap toJson() => {
-    'status': status,
-    'pending_jobs': pendingJobs,
-    'high_water_mark': highWaterMark,
-    'updated_at': updatedAt,
-    if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
-    if (lastError != null) 'last_error': lastError,
-  };
-
-  factory StudentSyncStatus.fromJson(JsonMap json) => StudentSyncStatus(
-    status: (json['status'] ?? 'idle').toString(),
-    pendingJobs: (json['pending_jobs'] as num?)?.toInt() ?? 0,
-    highWaterMark: (json['high_water_mark'] as num?)?.toInt() ?? 0,
-    updatedAt: (json['updated_at'] as num?)?.toInt() ?? 0,
-    lastSyncedAt: (json['last_synced_at'] as num?)?.toInt(),
-    lastError: json['last_error'] as String?,
-  );
-
-  StudentSyncStatus copyWith({
-    String? status,
-    int? pendingJobs,
-    int? highWaterMark,
-    int? updatedAt,
-    int? lastSyncedAt,
-    String? lastError,
-  }) {
-    return StudentSyncStatus(
-      status: status ?? this.status,
-      pendingJobs: pendingJobs ?? this.pendingJobs,
-      highWaterMark: highWaterMark ?? this.highWaterMark,
-      updatedAt: updatedAt ?? this.updatedAt,
-      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
-      lastError: lastError ?? this.lastError,
-    );
-  }
-}
-
 class StudentLearningState {
   static const Object _unset = Object();
 
@@ -1091,6 +500,31 @@ class StudentLearningState {
   final JsonMap extra;
 
   bool get hasCurriculum => curriculum?.items.isNotEmpty == true;
+
+  StudentEventLog get eventLog => StudentEventLog(events: events);
+
+  StudentSyncState get syncState => StudentSyncState.fromStatus(syncStatus);
+
+  StudentCacheInfo get cacheInfo => StudentCacheInfo(
+    currentLessonMaterial: currentLessonMaterial,
+    readyLessonMaterials: readyLessonMaterials,
+    queuedActions: queuedActions,
+    inflightJobs: inflightJobs,
+  );
+
+  StudentSnapshot get snapshot => StudentSnapshot(
+    stateVersion: stateVersion,
+    lessonLocalId: lessonLocalId,
+    lessonCloudId: lessonCloudId,
+    userId: userId,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    profile: profile,
+    curriculum: curriculum,
+    curriculumStatus: curriculumStatus,
+    current: current,
+    progress: progress,
+  );
 
   StudentLearningState copyWith({
     int? stateVersion,
@@ -1175,6 +609,10 @@ class StudentLearningState {
       audio: StudentAudioState.empty(ts),
       syncStatus: StudentSyncStatus.empty(ts),
     );
+  }
+
+  factory StudentLearningState.fromLegacy(JsonMap json) {
+    return StudentLearningState.fromJson(json);
   }
 
   JsonMap toJson() => {
