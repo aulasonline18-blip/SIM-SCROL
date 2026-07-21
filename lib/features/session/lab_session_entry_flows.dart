@@ -110,7 +110,7 @@ extension LabSessionEntryFlows on LabSession {
           return;
         }
       }
-      debugPrint('[SIM] T00_STARTED');
+      SecureLogger.log('SIM', 'T00_STARTED');
       final ficha = buildPedagogicalFicha();
       final guidedProfile = _guidedProfileFields(freeText.trim(), ficha: ficha);
       final academic = _academicFromOnboarding(guidedProfile);
@@ -183,7 +183,9 @@ extension LabSessionEntryFlows on LabSession {
       entryStatus = 'primeira_aula_pronta';
       _notifyFromChild();
 
-      debugPrint('[SIM] CLASSROOM_OPENED route=${result.destination}');
+      SecureLogger.log('SIM', 'CLASSROOM_OPENED', {
+        'route': result.destination,
+      });
       if (route == '/cyber/warmup' || warmupWaitingForOfficialLesson) {
         unawaited(_tryOpenOfficialAula(source: 'official_ready'));
       } else if (route == '/cyber/curriculo' &&
@@ -192,13 +194,13 @@ extension LabSessionEntryFlows on LabSession {
       }
     } on StudentExperienceEngineException catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
-      debugPrint('[SIM] BLOCKED reason=${err.error.kind.name}');
+      SecureLogger.log('SIM', 'BLOCKED', {'reason': err.error.kind.name});
       entryError = err.error.message;
       entryStatus = 'erro';
       _notifyFromChild();
     } catch (err) {
       if (!_isCurrentExperience(id, generation)) return;
-      debugPrint('[SIM] BLOCKED reason=unexpected');
+      SecureLogger.log('SIM', 'BLOCKED', {'reason': 'unexpected'});
       entryError = humanErrorMessage(
         err,
         fallback:
@@ -263,24 +265,14 @@ extension LabSessionEntryFlows on LabSession {
     required String id,
     required int generation,
   }) async {
-    final startedAt = DateTime.now().millisecondsSinceEpoch;
-    var lastRuntimeError = aulaRuntimeError;
-    while (_isCurrentExperience(id, generation)) {
-      await openAulaRuntime();
-      if (!_isCurrentExperience(id, generation)) return;
-      if (_isFirstAulaTextRendered(aulaSnapshot)) {
-        debugPrint('[SIM] FIRST_AULA_RENDER_READY');
-        return;
-      }
-      lastRuntimeError = aulaRuntimeError;
-      final elapsed = DateTime.now().millisecondsSinceEpoch - startedAt;
-      if (elapsed >= 45000) break;
-      await Future<void>.delayed(
-        Duration(milliseconds: elapsed < 3000 ? 250 : 750),
-      );
+    await openAulaRuntime();
+    if (!_isCurrentExperience(id, generation)) return;
+    if (_isFirstAulaTextRendered(aulaSnapshot)) {
+      SecureLogger.log('SIM', 'FIRST_AULA_RENDER_READY');
+      return;
     }
     throw StateError(
-      lastRuntimeError ??
+      aulaRuntimeError ??
           'A primeira aula ainda nao carregou explicacao, questao e alternativas.',
     );
   }

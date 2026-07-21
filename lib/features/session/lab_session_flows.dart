@@ -883,9 +883,19 @@ extension LabSessionFlowExtensions on LabSession {
   Future<void> openAulaRuntime({
     bool menuOpenPriority = false,
     bool suppressReadyWindowUntilVisibleLessonReady = false,
+  }) => _aulaRuntimeOpen.run(
+        () => _openAulaRuntimeOnce(
+          menuOpenPriority: menuOpenPriority,
+          suppressReadyWindowUntilVisibleLessonReady:
+              suppressReadyWindowUntilVisibleLessonReady,
+        ),
+      );
+
+  Future<void> _openAulaRuntimeOnce({
+    required bool menuOpenPriority,
+    required bool suppressReadyWindowUntilVisibleLessonReady,
   }) async {
-    if (aulaRuntimeLoading) return;
-    final id = lessonLocalId;
+    var id = lessonLocalId;
     if (id == null || id.trim().isEmpty) {
       aulaSnapshot = null;
       aulaRuntimeError = null;
@@ -894,11 +904,11 @@ extension LabSessionFlowExtensions on LabSession {
       _notifyFromChild();
       return;
     }
-    final runtimeGeneration = ++_aulaRuntimeGeneration;
     if (_activateReadyNextCurriculumPartIfNeeded(id)) {
-      unawaited(openAulaRuntime());
-      return;
+      id = lessonLocalId;
+      if (id == null || id.trim().isEmpty) return;
     }
+    final runtimeGeneration = ++_aulaRuntimeGeneration;
     aulaRuntimeLoading = true;
     if (menuOpenPriority && suppressReadyWindowUntilVisibleLessonReady) {
       aulaMenuLessonWaiting = true;
@@ -1323,45 +1333,16 @@ extension LabSessionFlowExtensions on LabSession {
       lessonUiState.setDeleteConfirmation(value);
 
   void requestAccountDeletion() {
-    unawaited(_requestAccountDeletion());
-  }
-
-  Future<void> _requestAccountDeletion() async {
-    if (lessonUiState.accountDeletionLoading) return;
-    final confirmation = lessonUiState.deleteConfirmation.trim();
-    if (confirmation != 'DELETAR') {
-      lessonUiState.failAccountDeletionRequest(
-        'Digite DELETAR para confirmar a solicitação.',
-      );
-      return;
-    }
-    final id = (authSession.userId ?? '').trim();
-    if (!authed || id.isEmpty) {
-      lessonUiState.failAccountDeletionRequest(
-        'Entre na sua conta para solicitar exclusão.',
-      );
-      return;
-    }
-    lessonUiState.beginAccountDeletionRequest();
-    try {
-      final gateway =
-          _accountDeletionGateway ??
-          SimServerAccountDeletionGateway(config: _serverConfig());
-      await gateway.requestAccountDeletion(
-        AccountDeletionRequest(
-          userId: id,
-          confirmation: confirmation,
-          emailSnapshot: authSession.userEmail,
-        ),
-      );
-      lessonUiState.completeAccountDeletionRequest();
-      await authSession.signOutReal();
-      navigationState.openRoute('/');
-    } catch (error) {
-      lessonUiState.failAccountDeletionRequest(
-        t('account_delete_failed', {'error': error}),
-      );
-    }
+    unawaited(
+      RequestAccountDeletionUseCase(
+        lessonUiState: lessonUiState,
+        authSession: authSession,
+        navigationState: navigationState,
+        gatewayFactory: () =>
+            _accountDeletionGateway ??
+            SimServerAccountDeletionGateway(config: _serverConfig()),
+      ).execute(),
+    );
   }
 
   Future<void> advanceAula() async {

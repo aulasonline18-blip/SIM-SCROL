@@ -687,6 +687,40 @@
       "officialPaths": []
     },
     {
+      "path": "lib/features/session/use_cases/request_account_deletion_use_case.dart",
+      "layer": "Assistente local",
+      "category": "use-case",
+      "owner": "feature-session",
+      "logicalOwner": "feature-session",
+      "inputs": [
+        "LessonUiState",
+        "AuthSession",
+        "NavigationState",
+        "AccountDeletionGateway"
+      ],
+      "outputs": [
+        "solicitacao de exclusao",
+        "sign-out",
+        "rota inicial"
+      ],
+      "tests": [
+        "test/lab_session_use_cases_test.dart",
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
       "path": "lib/features/session/lab_session_entry_flows.dart",
       "layer": "UI",
       "category": "ui",
@@ -1827,6 +1861,39 @@
       "officialPaths": [
         "objetivo do aluno ate T00",
         "aula/pergunta"
+      ]
+    },
+    {
+      "path": "lib/sim/cache/secure_lesson_cache_store.dart",
+      "layer": "Infraestrutura segura",
+      "category": "cache-criptografado",
+      "owner": "sim-security",
+      "logicalOwner": "sim-security",
+      "inputs": [
+        "payload de cache de aula",
+        "chave local protegida"
+      ],
+      "outputs": [
+        "arquivo cifrado",
+        "payload restaurado"
+      ],
+      "tests": [
+        "test/security_privacy_phase2_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "seguranca/privacidade",
+        "cache/sync",
+        "aula/pergunta"
+      ],
+      "stateMachines": [
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "retomada offline",
+        "seguranca local"
       ]
     },
     {
@@ -5061,6 +5128,37 @@
       ]
     },
     {
+      "path": "lib/sim/state/secure_storage_service.dart",
+      "layer": "Infraestrutura segura",
+      "category": "storage-seguro",
+      "owner": "sim-security",
+      "logicalOwner": "sim-security",
+      "inputs": [
+        "segredos pequenos",
+        "chave de cache local"
+      ],
+      "outputs": [
+        "valor protegido por storage nativo"
+      ],
+      "tests": [
+        "test/security_privacy_phase2_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "seguranca/privacidade",
+        "estado local"
+      ],
+      "stateMachines": [
+        "auth/sessao",
+        "cache/sync"
+      ],
+      "officialPaths": [
+        "seguranca local"
+      ]
+    },
+    {
       "path": "lib/sim/state/shared_prefs_state_storage.dart",
       "layer": "Motores pedagogicos",
       "category": "motor-pedagogico-estado",
@@ -5709,6 +5807,36 @@
         "falha/retry"
       ],
       "officialPaths": []
+    },
+    {
+      "path": "lib/sim/utils/secure_logger.dart",
+      "layer": "Infraestrutura segura",
+      "category": "logs-redigidos",
+      "owner": "sim-security",
+      "logicalOwner": "sim-security",
+      "inputs": [
+        "metadados tecnicos",
+        "payload tecnico opcional"
+      ],
+      "outputs": [
+        "log debug redigido"
+      ],
+      "tests": [
+        "test/security_privacy_phase2_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "seguranca/privacidade",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "diagnostico seguro"
+      ]
     }
   ],
   "counts": {

@@ -1,10 +1,9 @@
-import 'package:flutter/foundation.dart';
-
 import '../lesson/lesson_models.dart';
 import '../lesson/student_lesson_material_service.dart';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
+import '../utils/secure_logger.dart';
 import 'curriculum_utils.dart';
 import 'start_first_lesson_use_case.dart';
 import 'student_experience_store.dart';
@@ -40,7 +39,9 @@ class StudentExperienceT02Adapter {
         startItemIndex: first.itemIndex,
       );
     }
-    debugPrint('[SIM] T02_FIRST_LESSON_STARTED marker=${first.marker}');
+    SecureLogger.log('SIM', 'T02_FIRST_LESSON_STARTED', {
+      'marker': first.marker,
+    });
     publishStudentExperienceEvent(
       service,
       args.lessonLocalId,
@@ -112,7 +113,9 @@ class StudentExperienceT02Adapter {
       source: material.source.name,
       waitedMs: material.waitedMs,
     );
-    debugPrint('[SIM] T02_FIRST_MINIMUM_LESSON_READY marker=${first.marker}');
+    SecureLogger.log('SIM', 'T02_FIRST_MINIMUM_LESSON_READY', {
+      'marker': first.marker,
+    });
 
     materialService.prepareReadyWindowInBackground(
       lessonLocalId: args.lessonLocalId,

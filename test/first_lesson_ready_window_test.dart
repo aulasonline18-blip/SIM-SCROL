@@ -8,11 +8,13 @@ import 'package:sim_mobile/sim/experience/student_experience_engine.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t00_adapter.dart';
 import 'package:sim_mobile/sim/experience/student_experience_t02_adapter.dart';
 import 'package:sim_mobile/sim/experience/student_experience_types.dart';
+import 'package:sim_mobile/sim/external_ai/sim_ai_server_config.dart';
 import 'package:sim_mobile/sim/classroom/lesson_answer_progress_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_hydration_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
+import 'package:sim_mobile/sim/cache/secure_lesson_cache_store.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
@@ -806,7 +808,7 @@ void main() {
     expect(cache.warmEntryCount, 15);
   });
 
-  test('M7 worker active hot job does not wait for running warm job', () async {
+  test('M7 worker serializes hot job behind running warm job', () async {
     final service = StudentLearningStateService(
       seed: {
         'cyber-worker':
@@ -839,6 +841,7 @@ void main() {
     );
     final warmStarted = Completer<void>();
     final releaseWarm = Completer<void>();
+    final hotProcessed = Completer<void>();
     final processed = <String>[];
     final worker = ReadyWindowWorker(
       service: service,
@@ -857,6 +860,10 @@ void main() {
             if (source.contains('warm-offline-cache')) {
               if (!warmStarted.isCompleted) warmStarted.complete();
               await releaseWarm.future;
+            }
+            if (source.contains('hot-visible-window') &&
+                !hotProcessed.isCompleted) {
+              hotProcessed.complete();
             }
             return List<bool>.filled(maxSlots ?? localLessonTraySize, true);
           },
@@ -894,12 +901,18 @@ void main() {
       );
     });
 
-    final hot = await worker
-        .drainReadyWindowJobs('cyber-worker')
-        .timeout(const Duration(milliseconds: 200));
-
-    expect(hot, hasLength(localLessonTraySize));
+    final hot = worker.drainReadyWindowJobs('cyber-worker');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(processed, contains('job:warm-offline-cache:15'));
+    expect(
+      processed,
+      isNot(contains('job:hot-visible-window:$localLessonTraySize')),
+    );
+
+    releaseWarm.complete();
+    await warm;
+    await hot;
+    await hotProcessed.future.timeout(const Duration(milliseconds: 200));
     expect(processed, contains('job:hot-visible-window:$localLessonTraySize'));
     expect(
       service
@@ -908,9 +921,129 @@ void main() {
           .firstWhere((job) => job['job_id'] == 'hot-job')['status'],
       'done',
     );
+    worker.stopReadyWindowWorker();
+  });
 
-    releaseWarm.complete();
-    await warm;
+  test('M7 worker stops retryable job at its hard attempt limit', () async {
+    final service = StudentLearningStateService(
+      seed: {
+        'cyber-worker-limit':
+            StudentLearningState.empty(
+              lessonLocalId: 'cyber-worker-limit',
+            ).copyWith(
+              queuedActions: [
+                {
+                  'job_id': 'limited-job',
+                  'type': 'PREPARE_READY_WINDOW',
+                  'status': 'queued',
+                  'idempotency_key': 'limited',
+                  'priority': 'background',
+                  'source': 'limited-retry',
+                  'payload': {'maxSlots': 1},
+                  'created_at': 1,
+                  'attempts': 0,
+                  'max_attempts': 1,
+                  'next_retry_at': null,
+                },
+              ],
+            ),
+      },
+    );
+    var calls = 0;
+    final worker = ReadyWindowWorker(
+      service: service,
+      processor:
+          ({
+            required lessonLocalId,
+            required source,
+            maxSlots,
+            returnMode = false,
+            itemIdx,
+            layer,
+            marker,
+            topic,
+          }) async {
+            calls += 1;
+            throw const SimExternalAiException(
+              'temporary',
+              statusCode: 503,
+              retryable: true,
+            );
+          },
+    );
+
+    await worker.drainReadyWindowJobs('cyber-worker-limit');
+
+    final state = service.read('cyber-worker-limit')!;
+    final job = state.queuedActions.single;
+    expect(calls, 1);
+    expect(job['status'], 'failed');
+    expect(job['attempts'], 1);
+    expect(job['max_attempts'], 1);
+    expect(job['next_retry_at'], isNull);
+    expect(
+      state.events.any(
+        (event) => event.type == 'READY_WINDOW_JOB_FAILED_PERMANENTLY',
+      ),
+      isTrue,
+    );
+    worker.stopReadyWindowWorker();
+  });
+
+  test('M7 stopping worker cancels a scheduled paid retry', () async {
+    final service = StudentLearningStateService(
+      seed: {
+        'cyber-worker-stop':
+            StudentLearningState.empty(
+              lessonLocalId: 'cyber-worker-stop',
+            ).copyWith(
+              queuedActions: [
+                {
+                  'job_id': 'stopped-job',
+                  'type': 'PREPARE_READY_WINDOW',
+                  'status': 'queued',
+                  'idempotency_key': 'stopped',
+                  'priority': 'background',
+                  'source': 'stopped-retry',
+                  'payload': {'maxSlots': 1},
+                  'created_at': 1,
+                  'attempts': 0,
+                  'max_attempts': 3,
+                  'next_retry_at': null,
+                },
+              ],
+            ),
+      },
+    );
+    var calls = 0;
+    final worker = ReadyWindowWorker(
+      service: service,
+      processor:
+          ({
+            required lessonLocalId,
+            required source,
+            maxSlots,
+            returnMode = false,
+            itemIdx,
+            layer,
+            marker,
+            topic,
+          }) async {
+            calls += 1;
+            throw const SimExternalAiException(
+              'temporary',
+              statusCode: 503,
+              retryable: true,
+              retryAfter: Duration(seconds: 1),
+            );
+          },
+    );
+
+    await worker.drainReadyWindowJobs('cyber-worker-stop');
+    worker.stopReadyWindowWorker();
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+
+    expect(calls, 1);
   });
 
   test('M7 warm cache expires by lastAccessedAt after seven days', () async {
@@ -939,7 +1072,8 @@ void main() {
     });
 
     final cache = LessonMaterialCache();
-    await cache.hydrate();
+    final prefs = await SharedPreferences.getInstance();
+    cache.hydrateFromPreferences(prefs);
 
     expect(cache.peek('fresh')?.conteudo.question, 'Pergunta fresh?');
     expect(cache.peek('expired'), isNull);
@@ -2115,8 +2249,6 @@ void main() {
   test(
     'M-EXP3-B: cache preserves validated CG-1 part 2 cold index metadata',
     () async {
-      SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
       const params = CompleteLessonParams(
         lessonLocalId: 'lesson-cg-part-2',
         item: 'Item global 81',
@@ -2139,7 +2271,8 @@ void main() {
         ],
       );
       final key = lessonKeyFor(params);
-      final cache = LessonMaterialCache(maxLessons: 1);
+      final cacheStore = MemoryLessonCacheStore();
+      final cache = LessonMaterialCache(maxLessons: 1, store: cacheStore);
       expect(
         cache.putForParams(
           params,
@@ -2160,10 +2293,10 @@ void main() {
         ),
         isTrue,
       );
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await cache.persistNow();
 
-      final hydrated = LessonMaterialCache(maxLessons: 1);
-      hydrated.hydrateFromPreferences(prefs);
+      final hydrated = LessonMaterialCache(maxLessons: 1, store: cacheStore);
+      await hydrated.hydrate();
       final cold = hydrated.coldEntry(key);
 
       expect(cold, isNotNull);

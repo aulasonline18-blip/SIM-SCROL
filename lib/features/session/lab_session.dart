@@ -50,15 +50,16 @@ import '../../sim/media/doubt_audio.dart';
 import '../../sim/media/lesson_audio_controller.dart';
 import '../../sim/media/platform_audio_adapter.dart';
 import '../../sim/media/student_lesson_media_service.dart';
-import '../../sim/state/shared_prefs_state_storage.dart';
 import '../../sim/state/student_learning_state.dart';
 import '../../sim/state/student_state_store.dart';
 import '../../sim/ui/sim_i18n.dart';
+import '../../sim/utils/secure_logger.dart';
 import '../../sim/auxiliary/aux_room_models.dart';
 import '../../sim/auxiliary/doubt_input_sheet.dart';
 import '../../sim/auxiliary/doubt_t02_caller.dart';
 import '../../sim/auxiliary/lesson_doubt_controller.dart';
 import '../../sim/auxiliary/student_aux_rooms.dart' as aux_rooms;
+import 'use_cases/request_account_deletion_use_case.dart';
 
 import '../../core/utils/sim_constants.dart';
 
@@ -68,6 +69,22 @@ part 'lab_session_entry_flows.dart';
 part 'lab_session_warmup_flows.dart';
 part 'lab_session_amparo_flows.dart';
 part 'lab_session_aux_flows.dart';
+
+class _SingleFlightOperation<T> {
+  Future<T>? _running;
+
+  Future<T> run(Future<T> Function() operation) {
+    final current = _running;
+    if (current != null) return current;
+
+    late final Future<T> future;
+    future = Future<T>.sync(operation).whenComplete(() {
+      if (identical(_running, future)) _running = null;
+    });
+    _running = future;
+    return future;
+  }
+}
 
 class LabSession extends ChangeNotifier {
   LabSession({
@@ -169,6 +186,8 @@ class LabSession extends ChangeNotifier {
   bool _creditsLoaded = false;
   Future<void>? _creditsLoadInFlight;
   Future<void>? _launchExperienceInFlight;
+  final _SingleFlightOperation<void> _aulaRuntimeOpen =
+      _SingleFlightOperation<void>();
   int _experienceGeneration = 0;
   int _aulaRuntimeGeneration = 0;
   bool _entryOfficialLessonReady = false;
@@ -431,12 +450,12 @@ class LabSession extends ChangeNotifier {
 
   void start() {
     if (!authed) {
-      debugPrint('[SIM] BLOCKED reason=not_authed');
+      SecureLogger.log('SIM', 'BLOCKED', {'reason': 'not_authed'});
       goLogin(target: '/cyber/idioma');
       return;
     }
     if (_creditsLoaded && credits <= 0) {
-      debugPrint('[SIM] BLOCKED reason=credits_zero');
+      SecureLogger.log('SIM', 'BLOCKED', {'reason': 'credits_zero'});
       openCredits();
       return;
     }
@@ -711,7 +730,7 @@ class LabSession extends ChangeNotifier {
   }) async {
     final token = await _freshServerAccessToken(forceRefresh: forceRefresh);
     if (token == null || token.trim().isEmpty) {
-      debugPrint('[SIM] PROTECTED_SESSION_FAILED');
+      SecureLogger.log('SIM', 'PROTECTED_SESSION_FAILED');
       goLogin(target: returnTo);
       return false;
     }
@@ -947,6 +966,8 @@ class LabSession extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _aulaRuntimeGeneration++;
+    _activeOrganism?.readyWindowWorker.stopReadyWindowWorker();
     entryForm.removeListener(_notifyFromChild);
     authSession.removeListener(_notifyFromChild);
     navigationState.removeListener(_notifyFromChild);
@@ -969,9 +990,13 @@ bool _isFlutterTestEnvironment() {
 StudentStateLocalStorage _studentStateStorageForSession(
   SharedPreferences? prefs,
 ) {
-  if (prefs != null) return SharedPrefsStudentStateLocalStorage(prefs);
   if (_isFlutterTestEnvironment()) {
     return _TestOnlyVolatileStudentStateStorage();
+  }
+  if (prefs != null) {
+    throw const StudentStateStorageException(
+      'CANONICAL_STUDENT_STATE_STORE_REQUIRED',
+    );
   }
   return _ExplicitStudentStateStorageRequired();
 }

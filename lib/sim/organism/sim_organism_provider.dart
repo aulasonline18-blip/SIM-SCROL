@@ -30,6 +30,7 @@ class SimOrganismProvider {
   final StudentStateCloudFunctions? cloudFunctions;
   final SupabaseSessionProvider? sessionProvider;
   final Map<String, SimOrganism> _organisms = {};
+  String? _activeLessonLocalId;
   SupabaseSessionProvider get _resolvedSessionProvider =>
       sessionProvider ?? const SupabaseFlutterSessionProvider();
   late final StudentStateStoreAdapter _remoteVaultStateService =
@@ -50,7 +51,12 @@ class SimOrganismProvider {
       );
 
   SimOrganism forLesson(String lessonLocalId) {
-    return _organisms.putIfAbsent(
+    final previousId = _activeLessonLocalId;
+    if (previousId != null && previousId != lessonLocalId) {
+      _organisms[previousId]?.readyWindowWorker.stopReadyWindowWorker();
+    }
+    final existed = _organisms.containsKey(lessonLocalId);
+    final organism = _organisms.putIfAbsent(
       lessonLocalId,
       () => SimOrganism.production(
         lessonLocalId: lessonLocalId,
@@ -60,5 +66,12 @@ class SimOrganismProvider {
         remoteVaultQueue: remoteVaultQueue,
       ),
     );
+    if (existed && previousId != lessonLocalId) {
+      organism.readyWindowWorker.startReadyWindowWorker(
+        activeLessonLocalId: lessonLocalId,
+      );
+    }
+    _activeLessonLocalId = lessonLocalId;
+    return organism;
   }
 }

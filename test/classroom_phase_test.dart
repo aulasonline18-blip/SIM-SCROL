@@ -15,6 +15,7 @@ import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
+import 'package:sim_mobile/sim/cache/secure_lesson_cache_store.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
@@ -593,7 +594,6 @@ void main() {
     'M-EXP3-B runtime reopens from hydrated cache without T02 when offline',
     () async {
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
       final seedState = _classroomState();
       final params = const CompleteLessonParams(
         lessonLocalId: 'cyber-class',
@@ -629,7 +629,8 @@ void main() {
           'original_text_preserved': 'Aprender regra de tres',
         },
       );
-      final firstCache = LessonMaterialCache();
+      final cacheStore = MemoryLessonCacheStore();
+      final firstCache = LessonMaterialCache(store: cacheStore);
       expect(
         firstCache.putForParams(
           params,
@@ -650,19 +651,10 @@ void main() {
         ),
         isTrue,
       );
-      for (var i = 0; i < 20; i += 1) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        await prefs.reload();
-        if ((prefs.getString('sim-lesson-text-cache-v1') ?? '').contains(
-          'Qual texto abre offline?',
-        )) {
-          break;
-        }
-      }
-      await prefs.reload();
+      await firstCache.persistNow();
 
-      final hydratedCache = LessonMaterialCache();
-      hydratedCache.hydrateFromPreferences(prefs);
+      final hydratedCache = LessonMaterialCache(store: cacheStore);
+      await hydratedCache.hydrate();
       final service = StudentLearningStateService(
         seed: {'cyber-class': seedState},
       );
@@ -1057,7 +1049,7 @@ void main() {
   );
 
   test(
-    'M7.1 worker falho mantem advancePending e reencaminha preparo interno',
+    'M7.1 worker falho mantem advancePending sem duplicar preparo interno',
     () async {
       final service = StudentLearningStateService(
         seed: {'cyber-class': _classroomState()},
@@ -1126,13 +1118,21 @@ void main() {
             as Map?)?['status'],
         'preparing',
       );
+      final afterFirstReevaluation = service
+          .read('cyber-class')!
+          .queuedActions
+          .where((job) => job['type'] == 'PREPARE_READY_WINDOW')
+          .length;
+      expect(afterFirstReevaluation, lessThanOrEqualTo(beforeRetryJobs + 1));
+
+      runtime.reavaliarAvancoPendente();
       expect(
         service
             .read('cyber-class')!
             .queuedActions
             .where((job) => job['type'] == 'PREPARE_READY_WINDOW')
             .length,
-        greaterThan(beforeRetryJobs),
+        afterFirstReevaluation,
       );
     },
   );
@@ -2146,7 +2146,12 @@ void main() {
   test('M-EXP5 confirma tamanho e contagem de cache quente frio', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    final cache = LessonMaterialCache(maxLessons: 1, ttlMs: 1);
+    final cacheStore = MemoryLessonCacheStore();
+    final cache = LessonMaterialCache(
+      maxLessons: 1,
+      ttlMs: 1,
+      store: cacheStore,
+    );
     const params = CompleteLessonParams(
       lessonLocalId: 'cyber-class',
       item: 'Item 1',
@@ -2186,12 +2191,14 @@ void main() {
     );
     await Future<void>.delayed(const Duration(milliseconds: 5));
     cache.trimWarmCache();
+    await cache.persistNow();
 
     expect(cache.warmEntryCount, 0);
     expect(cache.coldEntryCount, 1);
     expect(cache.coldEntry(lessonKeyFor(params))?.hadMaterial, isTrue);
     expect(cache.coldEntry(lessonKeyFor(params))?.toJson()['imagem'], isNull);
-    expect(prefs.getString('sim-lesson-text-cache-v1'), isNotNull);
+    expect(prefs.getString('sim-lesson-text-cache-v1'), isNull);
+    expect(cacheStore.value, isNotNull);
   });
 
   test(

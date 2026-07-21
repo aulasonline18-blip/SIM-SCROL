@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../billing/account_deletion.dart';
@@ -47,7 +49,6 @@ import '../state/student_state_store.dart';
 import '../state/student_state_store_adapter.dart';
 import '../external_ai/sim_ai_server_config.dart';
 import '../external_ai/sim_server_ai_clients.dart';
-import '../state/shared_prefs_state_storage.dart';
 import '../media/platform_audio_adapter.dart';
 
 enum SimOrganismRouteGuard {
@@ -303,12 +304,12 @@ class SimOrganism {
     AudioPlaybackAdapter? playback,
     required CloudQueue remoteVaultQueue,
   }) {
-    final localStorage = SharedPrefsStudentStateLocalStorage(
-      prefs,
-      activeLessonLocalId: lessonLocalId,
-    );
-    final activeStore =
-        canonicalStore ?? StudentStateStore(local: localStorage);
+    if (canonicalStore == null) {
+      throw const StudentStateStorageException(
+        'CANONICAL_STUDENT_STATE_STORE_REQUIRED',
+      );
+    }
+    final activeStore = canonicalStore;
     final stateAdapter = StudentStateStoreAdapter(activeStore);
     final StudentLearningStateService stateService = stateAdapter;
     stateService.ensure(lessonLocalId: lessonLocalId);
@@ -317,7 +318,7 @@ class SimOrganism {
     final t02Client = SimServerT02Client(config: aiConfig);
     final warmupBridgeService = WarmupBridgeService(t02Client: t02Client);
     final cache = LessonMaterialCache();
-    cache.hydrateFromPreferences(prefs);
+    unawaited(cache.hydrate());
     final eventBus = LessonEventBus();
     final orchestrator = LessonOrchestrator(
       t02Client: t02Client,

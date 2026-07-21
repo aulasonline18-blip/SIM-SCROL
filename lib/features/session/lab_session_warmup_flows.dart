@@ -52,7 +52,7 @@ extension LabSessionWarmupFlowExtensions on LabSession {
       unawaited(_tryOpenOfficialAula(source: 'warmup_ready'));
     } catch (error) {
       if (!_isCurrentExperience(lessonLocalId, generation)) return;
-      debugPrint('[SIM] WARMUP_PREPARE_FAILED');
+      SecureLogger.log('SIM', 'WARMUP_PREPARE_FAILED');
       _warmupCoordinator.markWarmupUnavailable();
       _syncEntryCoordinatorFields();
       warmupLoading = false;
@@ -250,18 +250,21 @@ extension LabSessionWarmupFlowExtensions on LabSession {
       payload: const {'route': '/cyber/curriculo'},
     );
     unawaited(
-      controller.startTest().then((_) {
-        if (controller.questionScreen() != null ||
-            controller.resultScreen() != null) {
-          _recordOnboardingFlowEvent(
-            'PLACEMENT_PRETEST_READY_BEFORE_OPEN',
-            payload: const {'route': '/cyber/placement'},
-          );
-        }
-        _notifyFromChild();
-      }).catchError((Object _) {
-        _notifyFromChild();
-      }),
+      controller
+          .startTest()
+          .then((_) {
+            if (controller.questionScreen() != null ||
+                controller.resultScreen() != null) {
+              _recordOnboardingFlowEvent(
+                'PLACEMENT_PRETEST_READY_BEFORE_OPEN',
+                payload: const {'route': '/cyber/placement'},
+              );
+            }
+            _notifyFromChild();
+          })
+          .catchError((Object _) {
+            _notifyFromChild();
+          }),
     );
   }
 
@@ -325,7 +328,10 @@ extension LabSessionWarmupFlowExtensions on LabSession {
       }
       _warmupCoordinator.markAulaNavigationStarted();
       _syncEntryCoordinatorFields();
-      debugPrint('[SIM] ENTRY_NAVIGATE_AULA source=$source placement=false');
+      SecureLogger.log('SIM', 'ENTRY_NAVIGATE_AULA', {
+        'source': source,
+        'placement': false,
+      });
       navigationState.openRoute('/cyber/aula');
       await openAulaRuntime();
       return;
@@ -341,7 +347,10 @@ extension LabSessionWarmupFlowExtensions on LabSession {
     if (controller.destination != '/cyber/aula') return;
     _warmupCoordinator.markAulaNavigationStarted();
     _syncEntryCoordinatorFields();
-    debugPrint('[SIM] ENTRY_NAVIGATE_AULA source=$source placement=true');
+    SecureLogger.log('SIM', 'ENTRY_NAVIGATE_AULA', {
+      'source': source,
+      'placement': true,
+    });
     await openAulaAfterPlacementIfReady();
   }
 

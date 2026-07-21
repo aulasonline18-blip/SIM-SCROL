@@ -30,7 +30,9 @@ fun boolProperty(name: String, fallback: Boolean = false): Boolean =
         ?: fallback
 
 fun dartDefineValue(name: String): String? {
-    val rawDefines = project.findProperty("dart-defines") as String? ?: return null
+    val rawDefines = (project.findProperty("dart-defines") as String?)
+        ?: (project.findProperty("dart-defines-${name}") as String?)
+        ?: return null
     return rawDefines
         .split(",")
         .mapNotNull { encoded ->
@@ -49,15 +51,7 @@ fun boolDartDefine(name: String, fallback: Boolean = false): Boolean =
         ?: fallback
 
 val simApplicationId = stringProperty("SIM_ANDROID_APPLICATION_ID", "com.aulasonline.sim")
-val simUsesCleartextTraffic =
-    boolProperty("SIM_ANDROID_ALLOW_CLEARTEXT") ||
-        boolDartDefine("SIM_ALLOW_HTTP_IN_PRODUCTION")
-val simNetworkSecurityConfig =
-    if (simUsesCleartextTraffic) {
-        "@xml/network_security_config_cleartext"
-    } else {
-        "@xml/network_security_config"
-    }
+val simReleaseServerUrl = dartDefineValue("SIM_SERVER_URL") ?: ""
 val simReleaseSigningReady =
     !signingValue("storeFile").isNullOrBlank() &&
         !signingValue("storePassword").isNullOrBlank() &&
@@ -83,10 +77,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        manifestPlaceholders["simUsesCleartextTraffic"] =
-            simUsesCleartextTraffic.toString()
+        manifestPlaceholders["simUsesCleartextTraffic"] = "false"
         manifestPlaceholders["simNetworkSecurityConfig"] =
-            simNetworkSecurityConfig
+            "@xml/network_security_config"
     }
 
     signingConfigs {
@@ -102,12 +95,24 @@ android {
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["simUsesCleartextTraffic"] =
+                boolProperty("SIM_ANDROID_DEBUG_ALLOW_CLEARTEXT", true).toString()
+        }
         release {
+            if (simReleaseServerUrl.startsWith("http://")) {
+                throw GradleException(
+                    "SIM_SERVER_URL must use HTTPS for release builds."
+                )
+            }
             if (simRequireReleaseSigning && !simReleaseSigningReady) {
                 throw GradleException(
                     "Release signing is required. Configure android/key.properties or SIM_ANDROID_* environment variables."
                 )
             }
+            manifestPlaceholders["simUsesCleartextTraffic"] = "false"
+            manifestPlaceholders["simNetworkSecurityConfig"] =
+                "@xml/network_security_config"
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true

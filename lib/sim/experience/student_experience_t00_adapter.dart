@@ -1,10 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-
 import '../modules/pedagogical_module_contracts.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
+import '../utils/secure_logger.dart';
 import 'curriculum_utils.dart';
 import 'partial_curriculum_writer.dart';
 import 'student_experience_store.dart';
@@ -119,7 +118,7 @@ class StudentExperienceT00Adapter {
       StudentExperienceEventType.t00Started,
       {'topic': topic},
     );
-    debugPrint('[SIM] T00_STARTED');
+    SecureLogger.log('SIM', 'T00_STARTED');
 
     service.mutate(args.lessonLocalId, (state) {
       return state.copyWith(
@@ -206,9 +205,9 @@ class StudentExperienceT00Adapter {
               if (result != null && result.count == 1) {
                 final curriculum = service.read(args.lessonLocalId)?.curriculum;
                 first = curriculum == null ? null : _firstItemFrom(curriculum);
-                debugPrint(
-                  '[SIM] T00_FIRST_ITEM_RECEIVED marker=${result.marker}',
-                );
+                SecureLogger.log('SIM', 'T00_FIRST_ITEM_RECEIVED', {
+                  'marker': result.marker,
+                });
                 args.onStage?.call(StudentExperienceRouteStage.curriculum);
                 writeStudentExperienceSnapshot(
                   service,

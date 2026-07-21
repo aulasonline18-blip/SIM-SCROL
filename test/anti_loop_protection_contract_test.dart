@@ -9,7 +9,10 @@ void main() {
     ).readAsStringSync();
 
     expect(law, contains('Codigo: LPTAL-1'));
-    expect(law, contains('tao protegidas quanto prompts, T00, T02 e contrato N3'));
+    expect(
+      law,
+      contains('tao protegidas quanto prompts, T00, T02 e contrato N3'),
+    );
     expect(law, contains('anti-loop-protection'));
     expect(law, contains('AiCostProtectionGate'));
     expect(law, contains('ai-cost-protection-gate'));
@@ -37,12 +40,24 @@ void main() {
     final worker = File(
       'lib/sim/lesson/ready_window_worker.dart',
     ).readAsStringSync();
+    final materialService = File(
+      'lib/sim/lesson/student_lesson_material_service.dart',
+    ).readAsStringSync();
+    final entryFlows = File(
+      'lib/features/session/lab_session_entry_flows.dart',
+    ).readAsStringSync();
+    final sessionFlows = File(
+      'lib/features/session/lab_session_flows.dart',
+    ).readAsStringSync();
     final readyWindowTest = File(
       'test/first_lesson_ready_window_test.dart',
     ).readAsStringSync();
 
     expect(dopamine, contains('const int offlineWarmCacheSize = 15'));
-    expect(dopamine, contains('const int localLessonTraySize = offlineWarmCacheSize'));
+    expect(
+      dopamine,
+      contains('const int localLessonTraySize = offlineWarmCacheSize'),
+    );
     expect(dopamine, contains('DOPAMINE_WINDOW_REQUEST_CAPPED'));
     expect(dopamine, contains('_boundedWindowLimit'));
     expect(dopamine, contains('_slotMediaAlreadyRequested'));
@@ -55,6 +70,17 @@ void main() {
     expect(aiClients, contains('_t02IdempotencyKey'));
     expect(worker, contains('error.retryAfter'));
     expect(worker, contains('300000'));
+    expect(worker, contains('readyWindowWorkerMaxAttempts = 3'));
+    expect(worker, contains('readyWindowWorkerMaxJobsPerDrain = 15'));
+    expect(worker, contains('READY_WINDOW_JOB_FAILED_PERMANENTLY'));
+    expect(worker, isNot(contains('max_attempts\': null')));
+    expect(materialService, contains('readyWindowWorkerMaxAttempts'));
+    expect(materialService, contains("job['status'] == 'failed'"));
+    expect(
+      entryFlows,
+      isNot(contains('while (_isCurrentExperience(id, generation))')),
+    );
+    expect(sessionFlows, contains('_aulaRuntimeOpen.run'));
     expect(readyWindowTest, contains('maxSlots: 50'));
     expect(readyWindowTest, contains('DOPAMINE_WINDOW_REQUEST_CAPPED'));
     expect(readyWindowTest, contains('expect(t02.calls, localLessonTraySize)'));
@@ -64,8 +90,9 @@ void main() {
     final audio = File(
       '/root/sim-work/sim-api/src/media/audio-controller.js',
     ).readAsStringSync();
-    final router = File('/root/sim-work/sim-api/src/app/router.js')
-        .readAsStringSync();
+    final router = File(
+      '/root/sim-work/sim-api/src/app/router.js',
+    ).readAsStringSync();
     final gate = File(
       '/root/sim-work/sim-api/src/ai/ai-cost-protection-gate.js',
     ).readAsStringSync();
@@ -94,9 +121,17 @@ void main() {
     expect(gate, contains('AI_COST_CIRCUIT_OPEN'));
     expect(t02, contains('costGate.run'));
     expect(t02, contains('fullJitter: true'));
-    expect(mandatoryTest, contains('AI cost protection mandatory law tests passed'));
+    expect(
+      mandatoryTest,
+      contains('AI cost protection mandatory law tests passed'),
+    );
     expect(manifest, contains('"id": "anti-loop-protection"'));
-    expect(manifest, contains('/root/SIM-SCROL/lib/sim/lesson/dopamine_ready_window_engine.dart'));
+    expect(
+      manifest,
+      contains(
+        '/root/SIM-SCROL/lib/sim/lesson/dopamine_ready_window_engine.dart',
+      ),
+    );
     expect(serverTest, contains('AUDIO_ALREADY_RUNNING'));
   });
 }

@@ -31,6 +31,14 @@ void main() {
                 'lib/sim/media/math_templates',
           )
           .length;
+      final securityPhaseDirs = dirs.where((dir) {
+        final path = dir.path.replaceAll('\\', '/');
+        return path == 'lib/sim/cache' || path == 'lib/sim/utils';
+      }).length;
+      final sessionUseCaseDirs = dirs.where((dir) {
+        final path = dir.path.replaceAll('\\', '/');
+        return path == 'lib/features/session/use_cases';
+      }).length;
       final emptyDirs = libRoot
           .listSync(recursive: true)
           .whereType<Directory>()
@@ -73,6 +81,17 @@ void main() {
             path == 'lib/sim/auxiliary/amparo_room_engine.dart' ||
             path == 'lib/sim/auxiliary/amparo_room_service.dart';
       }).toList();
+      final securityPhaseFiles = dartFiles.where((file) {
+        final path = file.path.replaceAll('\\', '/');
+        return path == 'lib/sim/cache/secure_lesson_cache_store.dart' ||
+            path == 'lib/sim/state/secure_storage_service.dart' ||
+            path == 'lib/sim/utils/secure_logger.dart';
+      }).toList();
+      final sessionUseCaseFiles = dartFiles.where((file) {
+        final path = file.path.replaceAll('\\', '/');
+        return path ==
+            'lib/features/session/use_cases/request_account_deletion_use_case.dart';
+      }).toList();
       expect(lineCount, greaterThan(0));
       expect(lineCount - visualPhaseLines - productLiveLines, greaterThan(0));
       expect(visualPhaseLines, lessThanOrEqualTo(520));
@@ -81,13 +100,22 @@ void main() {
         dartFiles.length -
             visualPhaseFiles.length -
             productLiveFiles.length -
-            amparoConstitutionalFiles.length,
+            amparoConstitutionalFiles.length -
+            securityPhaseFiles.length -
+            sessionUseCaseFiles.length,
         lessThanOrEqualTo(140),
       );
       expect(visualPhaseFiles.length, lessThanOrEqualTo(6));
       expect(productLiveFiles.length, lessThanOrEqualTo(9));
       expect(amparoConstitutionalFiles.length, 3);
-      expect(dirCount - visualPhaseDirs, lessThanOrEqualTo(32));
+      expect(securityPhaseFiles.length, 3);
+      expect(sessionUseCaseFiles.length, 1);
+      expect(
+        dirCount - visualPhaseDirs - securityPhaseDirs - sessionUseCaseDirs,
+        lessThanOrEqualTo(32),
+      );
+      expect(securityPhaseDirs, 2);
+      expect(sessionUseCaseDirs, 1);
       expect(visualPhaseDirs, lessThanOrEqualTo(1));
       expect(emptyDirs, isEmpty);
 

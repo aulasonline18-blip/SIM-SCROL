@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../cache/secure_lesson_cache_store.dart';
 import '../media/lesson_image_api_contract.dart';
 import '../state/student_learning_state.dart';
 import 'lesson_content_validator.dart';
@@ -173,12 +174,14 @@ class LessonColdCacheEntry {
 }
 
 class LessonMaterialCache {
-  LessonMaterialCache({int? maxLessons, int? ttlMs})
+  LessonMaterialCache({int? maxLessons, int? ttlMs, LessonCacheStore? store})
     : maxLessons = maxLessons ?? _kMaxWarmLessons,
-      ttlMs = ttlMs ?? _kLessonTtlMs;
+      ttlMs = ttlMs ?? _kLessonTtlMs,
+      _store = store ?? EncryptedFileLessonCacheStore();
 
   final int maxLessons;
   final int ttlMs;
+  final LessonCacheStore _store;
   final Map<String, _CacheEntry> _memory = {};
   final Map<String, LessonColdCacheEntry> _cold = {};
   final Set<String> _protectedKeys = {};
@@ -202,11 +205,21 @@ class LessonMaterialCache {
   LessonColdCacheEntry? coldEntry(String key) => _cold[key];
 
   // Deve ser chamado no boot antes de usar o cache.
-  // Lê sim-lesson-text-cache-v1, descarta entradas expiradas, popula _memory.
+  // Le o arquivo criptografado vigente; SharedPreferences e apenas migracao legado.
   Future<LessonMaterialCacheAudit> hydrate() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return hydrateFromPreferences(prefs);
+      final raw = await _store.read();
+      if (raw == null || raw.trim().isEmpty) {
+        final legacyPrefs = await SharedPreferences.getInstance();
+        final legacyAudit = hydrateFromPreferences(legacyPrefs);
+        if (legacyAudit.ok && _memory.isNotEmpty) {
+          await persistNow();
+          await legacyPrefs.remove(_kCacheKey);
+          return _audit(true, 'CACHE_MIGRATED_TO_ENCRYPTED_STORE');
+        }
+        return legacyAudit;
+      }
+      return hydrateFromJson(raw);
     } catch (_) {
       return _audit(false, 'CACHE_HYDRATE_FAILED');
     }
@@ -215,6 +228,13 @@ class LessonMaterialCache {
   LessonMaterialCacheAudit hydrateFromPreferences(SharedPreferences prefs) {
     final raw = prefs.getString(_kCacheKey);
     if (raw == null || raw.trim().isEmpty) {
+      return _audit(true, 'CACHE_EMPTY');
+    }
+    return hydrateFromJson(raw);
+  }
+
+  LessonMaterialCacheAudit hydrateFromJson(String raw) {
+    if (raw.trim().isEmpty) {
       return _audit(true, 'CACHE_EMPTY');
     }
     dynamic decoded;
@@ -436,13 +456,9 @@ class LessonMaterialCache {
 
   Future<LessonMaterialCacheAudit> persistNow() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final payload = _cachePayload();
       final encoded = jsonEncode(payload);
-      final ok = await prefs.setString(_kCacheKey, encoded);
-      if (!ok || prefs.getString(_kCacheKey) != encoded) {
-        return _audit(false, 'CACHE_PERSIST_FAILED');
-      }
+      await _store.write(encoded);
       return _audit(true, 'CACHE_PERSISTED');
     } catch (_) {
       return _audit(false, 'CACHE_PERSIST_FAILED');

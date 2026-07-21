@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../utils/secure_logger.dart';
+
 class SimHttpResponse {
   const SimHttpResponse({
     required this.statusCode,
@@ -53,7 +55,7 @@ class DartIoSimHttpTransport implements SimHttpTransport {
   final bool _ownsClient;
 
   void _debug(String message) {
-    if (kDebugMode) debugPrint(message);
+    if (kDebugMode) SecureLogger.log('SIM_HTTP', message);
   }
 
   void dispose() {

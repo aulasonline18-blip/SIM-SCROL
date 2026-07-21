@@ -1,7 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
-
+import '../utils/secure_logger.dart';
 import 'sim_http_transport.dart';
 
 typedef SimAccessTokenProvider = Future<String?> Function();
@@ -30,7 +29,7 @@ class SimAiServerConfig {
   Future<Map<String, String>> jsonHeaders() async {
     final token = await accessTokenProvider?.call();
     final trimmed = (token ?? '').trim();
-    debugPrint('[SIM_CFG] jsonHeaders prepared');
+    SecureLogger.log('SIM_CFG', 'jsonHeaders prepared');
     return {
       'content-type': 'application/json',
       'accept': 'application/json',
@@ -41,7 +40,7 @@ class SimAiServerConfig {
   Future<Map<String, String>> streamHeaders() async {
     final token = await accessTokenProvider?.call();
     final trimmed = (token ?? '').trim();
-    debugPrint('[SIM_CFG] streamHeaders prepared');
+    SecureLogger.log('SIM_CFG', 'streamHeaders prepared');
     return {
       'content-type': 'application/json',
       'accept': 'text/event-stream',
@@ -94,7 +93,7 @@ SimExternalAiException simSafeHttpException(
     requestId:
         _safeToken(response.headers['x-request-id']) ??
         _safeToken(parsed.requestId) ??
-      _safeToken(fallbackRequestId),
+        _safeToken(fallbackRequestId),
     code: code,
     retryable: parsed.retryable ?? _retryableForStatus(response.statusCode),
     retryAfter: _retryAfter(response.headers, parsed.retryAfter),

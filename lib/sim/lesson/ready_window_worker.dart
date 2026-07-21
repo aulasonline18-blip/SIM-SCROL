@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../external_ai/sim_ai_server_config.dart';
+import '../utils/secure_logger.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
 
@@ -16,6 +17,9 @@ typedef ReadyWindowWorkerProcessor =
       String? topic,
     });
 
+const int readyWindowWorkerMaxAttempts = 3;
+const int readyWindowWorkerMaxJobsPerDrain = 15;
+
 class ReadyWindowWorker {
   ReadyWindowWorker({required this.service, required this.processor});
 
@@ -25,6 +29,8 @@ class ReadyWindowWorker {
   // F3.5: Map em vez de Set para armazenar o Future em andamento
   final Map<String, Future<List<bool>>> _inflight = {};
   final Set<String> _pendingDrain = {};
+  final Map<String, Timer> _retryTimers = {};
+  bool _acceptingWork = true;
 
   // F3.4: controle do worker auto-ativo
   String? _activeLessonLocalId;
@@ -32,6 +38,7 @@ class ReadyWindowWorker {
 
   // F3.4: inicia o worker que escuta writes e drena automaticamente
   void startReadyWindowWorker({String? activeLessonLocalId}) {
+    _acceptingWork = true;
     _activeLessonLocalId = activeLessonLocalId;
     _unsubscribe?.call();
     debugLog(
@@ -43,11 +50,19 @@ class ReadyWindowWorker {
   }
 
   void stopReadyWindowWorker() {
+    _acceptingWork = false;
     _unsubscribe?.call();
     _unsubscribe = null;
+    _activeLessonLocalId = null;
+    _pendingDrain.clear();
+    for (final timer in _retryTimers.values) {
+      timer.cancel();
+    }
+    _retryTimers.clear();
   }
 
   void _scheduleConditionalDrain(String id) {
+    if (!_acceptingWork) return;
     final state = service.read(id);
     if (state == null) return;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -84,9 +99,7 @@ class ReadyWindowWorker {
         final retryAt = (nextJob['next_retry_at'] as num?)?.toInt() ?? now;
         final delay = retryAt - now;
         if (delay > 0) {
-          Timer(Duration(milliseconds: delay), () {
-            drainReadyWindowJobs(id);
-          });
+          _scheduleDrain(id, Duration(milliseconds: delay));
         }
       }
     }
@@ -94,11 +107,9 @@ class ReadyWindowWorker {
 
   // F3.5: retorna Future existente se drain em andamento; marca pendingDrain
   Future<List<bool>> drainReadyWindowJobs(String lessonLocalId) {
+    if (!_acceptingWork) return Future.value(const <bool>[]);
     final existing = _inflight[lessonLocalId];
     if (existing != null) {
-      if (_hasQueuedHotLocalReadyWindow(lessonLocalId)) {
-        return _dodrainReadyWindowJobs(lessonLocalId);
-      }
       _pendingDrain.add(lessonLocalId);
       return existing;
     }
@@ -107,28 +118,19 @@ class ReadyWindowWorker {
     return future.whenComplete(() {
       _inflight.remove(lessonLocalId);
       // F3.5: re-dispara se houve write durante o drain
-      if (_pendingDrain.remove(lessonLocalId)) {
+      if (_acceptingWork && _pendingDrain.remove(lessonLocalId)) {
         drainReadyWindowJobs(lessonLocalId);
       }
     });
   }
 
-  bool _hasQueuedHotLocalReadyWindow(String lessonLocalId) {
-    final state = service.read(lessonLocalId);
-    if (state == null) return false;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    return state.queuedActions.any(
-      (job) =>
-          job['type'] == 'PREPARE_READY_WINDOW' &&
-          job['status'] == 'queued' &&
-          job['priority'] == 'hot-local' &&
-          ((job['next_retry_at'] as num?)?.toInt() ?? 0) <= now,
-    );
-  }
-
   Future<List<bool>> _dodrainReadyWindowJobs(String lessonLocalId) async {
     final all = <bool>[];
-    while (true) {
+    for (
+      var processedJobs = 0;
+      processedJobs < readyWindowWorkerMaxJobsPerDrain && _acceptingWork;
+      processedJobs += 1
+    ) {
       final state = service.read(lessonLocalId);
       final jobs = List<JsonMap>.from(state?.queuedActions ?? const []);
       final job = _eligibleJob(jobs);
@@ -177,23 +179,32 @@ class ReadyWindowWorker {
       } catch (error) {
         final attempts = (job['attempts'] as num?)?.toInt() ?? 0;
         final newAttempts = attempts + 1;
+        final maxAttempts =
+            (job['max_attempts'] as num?)?.toInt() ??
+            readyWindowWorkerMaxAttempts;
+        final retryable =
+            error is SimExternalAiException && error.retryable == true;
+        final shouldRetry =
+            _acceptingWork && retryable && newAttempts < maxAttempts;
         final now = DateTime.now().millisecondsSinceEpoch;
-        final retryDelayMs = _retryDelayMs(newAttempts, error);
-        final retryAt = now + retryDelayMs;
+        final retryDelayMs = shouldRetry
+            ? _retryDelayMs(newAttempts, error)
+            : 0;
+        final retryAt = shouldRetry ? now + retryDelayMs : null;
         service.mutate(lessonLocalId, (current) {
           return current.copyWith(
             queuedActions: current.queuedActions.map((cur) {
               if (cur['job_id'] != jobId) return cur;
               return {
                 ...cur,
-                'status': 'queued',
-                'finished_at': null,
+                'status': shouldRetry ? 'queued' : 'failed',
+                'finished_at': shouldRetry ? null : now,
                 'attempts': newAttempts,
-                'max_attempts': null,
+                'max_attempts': maxAttempts,
                 'next_retry_at': retryAt,
                 'error_code': error is SimExternalAiException
                     ? error.code ?? 'READY_WINDOW_JOB_RETRYABLE'
-                    : 'READY_WINDOW_JOB_RETRYABLE',
+                    : 'READY_WINDOW_JOB_FAILED',
               };
             }).toList(),
           );
@@ -201,22 +212,35 @@ class ReadyWindowWorker {
         service.appendEvent(
           lessonLocalId,
           StudentLearningEvent(
-            type: 'READY_WINDOW_JOB_RETRY_SCHEDULED',
+            type: shouldRetry
+                ? 'READY_WINDOW_JOB_RETRY_SCHEDULED'
+                : 'READY_WINDOW_JOB_FAILED_PERMANENTLY',
             ts: now,
             payload: {
               'job_id': jobId,
               'attempt': newAttempts,
+              'max_attempts': maxAttempts,
               'retry_at': retryAt,
-              'delay_ms': retryDelayMs,
+              if (shouldRetry) 'delay_ms': retryDelayMs,
             },
           ),
         );
-        Timer(Duration(milliseconds: retryDelayMs), () {
-          drainReadyWindowJobs(lessonLocalId);
-        });
+        if (shouldRetry) {
+          _scheduleDrain(lessonLocalId, Duration(milliseconds: retryDelayMs));
+        }
       }
     }
     return all;
+  }
+
+  void _scheduleDrain(String lessonLocalId, Duration delay) {
+    if (!_acceptingWork) return;
+    _retryTimers.remove(lessonLocalId)?.cancel();
+    _retryTimers[lessonLocalId] = Timer(delay, () {
+      _retryTimers.remove(lessonLocalId);
+      if (!_acceptingWork) return;
+      drainReadyWindowJobs(lessonLocalId);
+    });
   }
 
   JsonMap? _eligibleJob(List<JsonMap> jobs) {
@@ -249,7 +273,6 @@ class ReadyWindowWorker {
   }
 
   static void debugLog(String msg) {
-    // ignore: avoid_print
-    print('[ReadyWindowWorker] $msg');
+    SecureLogger.log('ReadyWindowWorker', msg);
   }
 }

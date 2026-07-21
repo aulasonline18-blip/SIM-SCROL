@@ -9,6 +9,7 @@ import 'dopamine_ready_window_engine.dart';
 import 'lesson_models.dart';
 import 'lesson_orchestrator.dart';
 import 'lesson_readiness_resolver.dart';
+import 'ready_window_worker.dart';
 
 enum LessonMaterialSource {
   studentState,
@@ -461,7 +462,9 @@ class StudentLessonMaterialService {
         (job) =>
             job['type'] == 'PREPARE_READY_WINDOW' &&
             job['idempotency_key'] == idempotencyKey &&
-            (job['status'] == 'queued' || job['status'] == 'running'),
+            (job['status'] == 'queued' ||
+                job['status'] == 'running' ||
+                job['status'] == 'failed'),
       );
       var promotedHot = false;
       if (duplicateIndex < 0) {
@@ -485,7 +488,7 @@ class StudentLessonMaterialService {
           'finished_at': null,
           'error': null,
           'attempts': 0,
-          'max_attempts': null,
+          'max_attempts': readyWindowWorkerMaxAttempts,
           'next_retry_at': null,
         });
       } else if (priority == 'hot-local' &&

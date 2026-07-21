@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class SimEnvironment {
   const SimEnvironment._();
 
@@ -44,23 +46,37 @@ class SimEnvironment {
 
   static bool get useGooglePlayBilling => billingProvider == 'google_play';
 
-  static const allowHttpInProduction = bool.fromEnvironment(
-    'SIM_ALLOW_HTTP_IN_PRODUCTION',
-    defaultValue: false,
-  );
+  static bool get allowHttpInDevelopment {
+    if (kReleaseMode) return false;
+    return const bool.fromEnvironment(
+      'SIM_ALLOW_HTTP_IN_DEVELOPMENT',
+      defaultValue: false,
+    );
+  }
 
   static bool get isProduction => appMode == 'production';
 
   static void assertProductionSafe() {
-    final url = apiBaseUrl;
-    if (isProduction && !url.startsWith('https://') && !allowHttpInProduction) {
-      throw StateError('SIM_SERVER_URL precisa usar HTTPS em production.');
-    }
+    validateServerUrl(apiBaseUrl);
     if (isProduction && !useGooglePlayBilling) {
       throw StateError(
         'Build Google Play production deve usar SIM_BILLING_PROVIDER=google_play.',
       );
     }
+  }
+
+  static String validateServerUrl(String url) {
+    final clean = url.trim();
+    final uri = Uri.tryParse(clean);
+    final isLocalDevelopmentHost =
+        uri != null && (uri.host == '127.0.0.1' || uri.host == 'localhost');
+    if (clean.startsWith('http://') &&
+        (kReleaseMode ||
+            isProduction ||
+            (!allowHttpInDevelopment && !isLocalDevelopmentHost))) {
+      throw StateError('SIM_SERVER_URL precisa usar HTTPS em production.');
+    }
+    return clean;
   }
 
   static const t00Path = '/api/bootstrap-t00';
