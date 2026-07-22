@@ -148,8 +148,13 @@ class AulaConversationBlockRenderer extends StatelessWidget {
             text: message.text ?? t('aula_gen_fail'),
             tone: SimSurfaceTone.danger,
           ),
-          const SizedBox(height: SimSpacing.sm),
-          _ActionButton(label: t('retry'), onPressed: actions.retry),
+          if (message.actionKey == 'retry-menu-lesson') ...[
+            const SizedBox(height: SimSpacing.sm),
+            _ActionButton(
+              label: t('aula_try_again_2'),
+              onPressed: actions.retry,
+            ),
+          ],
         ],
       ),
       AulaConversationBlockType.loading => _LiveLoadingBlock(

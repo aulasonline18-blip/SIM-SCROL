@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../features/session/lab_session.dart';
 import '../../sim/ui/sim_design_system.dart';
@@ -105,24 +106,33 @@ class AnswerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    final accent = resultCorrect == true
+    final disabled = !enabled || onTap == null;
+    final accent = disabled
+        ? palette.muted
+        : resultCorrect == true
         ? palette.success
         : resultCorrect == false
         ? palette.danger
         : selected
         ? palette.primary
         : palette.border;
-    final background = resultCorrect == true
+    final background = disabled
+        ? palette.surfaceSoft
+        : resultCorrect == true
         ? palette.successSurface
         : resultCorrect == false
         ? palette.dangerSurface
         : selected
         ? palette.selectedSurface
         : palette.surface;
-    final letterColor = selected || resultCorrect != null
+    final letterColor = disabled
+        ? palette.muted
+        : selected || resultCorrect != null
         ? palette.onPrimary
         : palette.text;
-    final letterBg = selected || resultCorrect != null
+    final letterBg = disabled
+        ? palette.border
+        : selected || resultCorrect != null
         ? accent
         : palette.surfaceSoft;
     return Padding(
@@ -130,13 +140,13 @@ class AnswerButton extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: selected,
-        enabled: enabled && onTap != null,
+        enabled: !disabled,
         label: '$letter. $text',
         child: Material(
           color: background,
           borderRadius: BorderRadius.circular(SimRadius.lg),
           child: InkWell(
-            onTap: enabled ? onTap : null,
+            onTap: disabled ? null : onTap,
             borderRadius: BorderRadius.circular(SimRadius.lg),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
@@ -150,7 +160,7 @@ class AnswerButton extends StatelessWidget {
                 borderRadius: BorderRadius.circular(SimRadius.lg),
                 border: Border.all(color: accent, width: selected ? 1.5 : 1),
                 boxShadow: [
-                  if (enabled)
+                  if (!disabled)
                     BoxShadow(
                       color: palette.shadow.withValues(alpha: 0.08),
                       blurRadius: 10,
@@ -181,7 +191,7 @@ class AnswerButton extends StatelessWidget {
                     child: Text(
                       text,
                       style: SimTypography.option.copyWith(
-                        color: enabled ? palette.text : palette.muted,
+                        color: disabled ? palette.muted : palette.text,
                       ),
                     ),
                   ),
@@ -568,6 +578,15 @@ class SimInput extends StatelessWidget {
     this.label,
     this.maxLines = 1,
     this.keyboardType,
+    this.textInputAction,
+    this.onSubmitted,
+    this.focusNode,
+    this.validator,
+    this.errorText,
+    this.helperText,
+    this.maxLength,
+    this.inputFormatters,
+    this.autofocus = false,
     this.obscureText = false,
     this.onChanged,
     super.key,
@@ -578,22 +597,43 @@ class SimInput extends StatelessWidget {
   final String? label;
   final int maxLines;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final FocusNode? focusNode;
+  final FormFieldValidator<String>? validator;
+  final String? errorText;
+  final String? helperText;
+  final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool autofocus;
   final bool obscureText;
   final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    return TextField(
+    return TextFormField(
       controller: controller,
+      focusNode: focusNode,
       maxLines: obscureText ? 1 : maxLines,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      onFieldSubmitted: onSubmitted,
+      validator: validator,
+      maxLength: maxLength,
+      maxLengthEnforcement: maxLength == null
+          ? null
+          : MaxLengthEnforcement.none,
+      inputFormatters: inputFormatters,
+      autofocus: autofocus,
       obscureText: obscureText,
       onChanged: onChanged,
       style: SimTypography.body.copyWith(color: palette.text),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
+        helperText: helperText,
+        errorText: errorText,
         filled: true,
         fillColor: palette.surface,
         border: OutlineInputBorder(

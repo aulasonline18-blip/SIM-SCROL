@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/features/classroom/aula_widgets.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_messages.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_widgets.dart';
+import 'package:sim_mobile/shared/widgets/shared_widgets.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
@@ -72,6 +74,30 @@ void main() {
 
     await tester.tap(find.byKey(const Key('chat-answer-card-B')));
     expect(chosen, AnswerLetter.B);
+  });
+
+  testWidgets('abc_disabled_during_processing_has_clear_state', (tester) async {
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AnswerButton(
+            letter: 'A',
+            text: 'Alternativa indisponivel',
+            onTap: null,
+            enabled: false,
+          ),
+        ),
+      ),
+    );
+
+    final inkWell = tester.widget<InkWell>(find.byType(InkWell));
+    final node = tester.getSemantics(find.byType(AnswerButton));
+
+    expect(inkWell.onTap, isNull);
+    expect(node.flagsCollection.isEnabled, isNot(Tristate.isTrue));
+    semantics.dispose();
   });
 
   testWidgets('guided lesson round reveals blocks with practice gate', (

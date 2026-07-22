@@ -108,12 +108,14 @@ class AttachmentChip extends StatelessWidget {
     final statusTone = switch (attachment.status) {
       'ready' => SimSurfaceTone.success,
       'error' => SimSurfaceTone.danger,
+      'insufficient' => SimSurfaceTone.warning,
       'processing' => SimSurfaceTone.warning,
       _ => SimSurfaceTone.soft,
     };
     final statusIcon = switch (attachment.status) {
       'ready' => Icons.check_circle_outline,
       'error' => Icons.error_outline,
+      'insufficient' => Icons.info_outline,
       'processing' => Icons.hourglass_top,
       _ => Icons.description_outlined,
     };
@@ -135,8 +137,7 @@ class AttachmentChip extends StatelessWidget {
               children: [
                 Text(
                   attachment.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
                   style: SimTypography.label.copyWith(color: palette.text),
                 ),
                 const SizedBox(height: 3),
@@ -152,7 +153,7 @@ class AttachmentChip extends StatelessWidget {
             icon: Icons.close,
             semanticLabel: t('remove'),
             onPressed: onRemove,
-            size: 40,
+            size: SimTouch.min,
             iconSize: 18,
           ),
         ],
@@ -162,13 +163,17 @@ class AttachmentChip extends StatelessWidget {
 
   String _attachmentStatusText(AttachmentDraft attachment) {
     return switch (attachment.status) {
-      'processing' => 'Estou lendo seu material...',
-      'ready' => 'Consegui extrair o conteúdo.',
+      'processing' => t('objective_attachment_processing'),
+      'ready' => t('objective_attachment_ready'),
+      'insufficient' =>
+        attachment.error?.trim().isNotEmpty == true
+            ? attachment.error!.trim()
+            : t('objective_attachment_insufficient'),
       'error' =>
         attachment.error?.trim().isNotEmpty == true
             ? attachment.error!.trim()
-            : 'Não consegui ler bem. Você pode descrever com texto.',
-      _ => 'Material recebido.',
+            : t('objective_attachment_error'),
+      _ => t('objective_attachment_received'),
     };
   }
 }

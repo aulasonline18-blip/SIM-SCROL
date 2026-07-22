@@ -24,8 +24,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Recepção pedagógica'), findsOneWidget);
-    expect(find.text('Como vamos começar?'), findsOneWidget);
+    expect(find.text('O que você quer estudar?'), findsOneWidget);
+    expect(find.byKey(const Key('reception-objective-input')), findsOneWidget);
     expect(find.byKey(const Key('reception-guided-path')), findsOneWidget);
 
     session.dispose();

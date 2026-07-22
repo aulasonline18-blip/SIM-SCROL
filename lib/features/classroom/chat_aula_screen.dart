@@ -297,6 +297,9 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
           doubtError: session.doubt.error,
           lessonLocalId: session.lessonLocalId,
           menuLessonWaiting: session.aulaMenuLessonWaiting,
+          menuLessonRetrying:
+              session.aulaOpeningTransition?.status ==
+              AulaOpeningStatus.retrying,
         ),
       ),
     );

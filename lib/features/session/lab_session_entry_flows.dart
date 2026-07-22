@@ -7,9 +7,11 @@ extension LabSessionEntryFlows on LabSession {
     if (attachments.any((attachment) => attachment.status == 'processing')) {
       return false;
     }
-    final clipped = freeTrim.length > maxFreeText
-        ? freeTrim.substring(0, maxFreeText)
-        : freeTrim;
+    if (freeTrim.length > maxFreeText) return false;
+    final clipped = freeTrim;
+    if (entryForm.entryPath.trim().isEmpty) {
+      entryForm.entryPath = 'guided_path';
+    }
     entryForm.attachmentsText = entryForm.buildAttachmentsText();
     final ficha = buildPedagogicalFicha(objectiveOverride: clipped);
     final guided = _guidedProfileFields(clipped, ficha: ficha);

@@ -20,7 +20,7 @@ class ObjectiveEntryViewModel {
 
   bool submitObjectiveEntry() => session.saveObjectiveEntry();
 
-  void advance() => reception.advance();
+  bool advance() => reception.advance();
 
   void edit(String stepId) => reception.edit(stepId);
 

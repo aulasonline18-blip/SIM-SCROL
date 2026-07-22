@@ -106,11 +106,10 @@ class EntryFormState extends ChangeNotifier {
   String expectedResult = '';
   String difficulties = '';
   String learningPreference = '';
+  bool describeMaterialWithoutAttachment = false;
 
   void updateFreeText(String value) {
-    freeText = value.length > entryFormMaxFreeText
-        ? value.substring(0, entryFormMaxFreeText)
-        : value;
+    freeText = value;
     notifyListeners();
   }
 
@@ -212,6 +211,10 @@ class EntryFormState extends ChangeNotifier {
         break;
       case 'entry_path':
         entryPath = clean;
+        break;
+      case 'material_description_only':
+        describeMaterialWithoutAttachment =
+            clean == 'true' || clean == '1' || clean == 'yes';
         break;
       case 'material_type':
         materialType = clean;
@@ -338,6 +341,11 @@ class EntryFormState extends ChangeNotifier {
           'profile_summary': _profileSummary(),
           'initial_adaptation_guidance': _initialAdaptationGuidance(),
           'entry_path': entryPath.trim(),
+          'subject_status': subject.trim().isEmpty
+              ? 'not_informed'
+              : 'informed',
+          'topic_status': topic.trim().isEmpty ? 'not_informed' : 'informed',
+          'material_description_only': describeMaterialWithoutAttachment,
           'material_type': materialType.trim(),
           'material_received': materialReceived,
           'subject': subject.trim(),
@@ -345,7 +353,7 @@ class EntryFormState extends ChangeNotifier {
           'academic_level': academicLevel.trim(),
           'country_curriculum': countryCurriculum.trim(),
           'objective': freeText.trim(),
-          'learning_goal': topic.trim(),
+          'learning_goal': _effectiveLearningGoal,
           'traversal_goal': traversalGoal.trim(),
           'traversal_goal_custom': traversalGoalCustom.trim(),
           'goal_summary': _goalSummary(),
@@ -436,6 +444,12 @@ class EntryFormState extends ChangeNotifier {
     final custom = traversalGoalCustom.trim();
     if (custom.isNotEmpty) return custom;
     return traversalGoal.trim();
+  }
+
+  String get _effectiveLearningGoal {
+    final explicitTopic = topic.trim();
+    if (explicitTopic.isNotEmpty) return explicitTopic;
+    return freeText.trim();
   }
 
   String get _effectiveDeadline {
@@ -537,13 +551,21 @@ class EntryFormState extends ChangeNotifier {
       final result = await _attachmentClientForSession().processAttachment(
         file,
       );
+      final extracted = result.extractedText.trim();
+      final status = result.error != null
+          ? 'error'
+          : extracted.length >= entryFormMinExtractedChars
+          ? 'ready'
+          : 'insufficient';
       _replaceAttachment(
         draft.id,
         draft.copyWith(
-          status: result.error == null ? 'ready' : 'error',
+          status: status,
           method: result.method,
           extractedText: result.extractedText,
-          error: result.error,
+          error: status == 'insufficient'
+              ? t('objective_attachment_insufficient')
+              : result.error,
         ),
       );
     } catch (error) {
@@ -559,6 +581,7 @@ class EntryFormState extends ChangeNotifier {
       for (int i = 0; i < attachments.length; i++)
         if (i != index) attachments[i],
     ];
+    attachmentError = _firstAttachmentIssue();
     notifyListeners();
   }
 
@@ -638,7 +661,18 @@ class EntryFormState extends ChangeNotifier {
       for (final attachment in attachments)
         if (attachment.id == id) next else attachment,
     ];
-    attachmentError = next.status == 'error' ? next.error : null;
+    attachmentError = _firstAttachmentIssue();
     notifyListeners();
+  }
+
+  String? _firstAttachmentIssue() {
+    for (final attachment in attachments) {
+      if ((attachment.status == 'error' ||
+              attachment.status == 'insufficient') &&
+          (attachment.error ?? '').trim().isNotEmpty) {
+        return attachment.error!.trim();
+      }
+    }
+    return null;
   }
 }

@@ -1,5 +1,8 @@
 import 'package:flutter/widgets.dart';
 
+part 'sim_i18n_objective.dart';
+part 'sim_i18n_onboarding.dart';
+
 String _activeLanguageCode = 'pt';
 
 String get simActiveLanguageCode => _activeLanguageCode;
@@ -92,64 +95,15 @@ const _strings = <String, String>{
   'login_has_account': 'Já tenho conta',
   'login_no_account': 'Criar nova conta',
   'login_back_portal': 'Voltar',
-  'language_title': 'Idioma da experiência',
-  'language_subtitle':
-      'Escolha o idioma da interface e da aula antes do objetivo.',
-  'language_choose_label': 'Idiomas principais',
-  'language_other_label': 'Outro idioma',
-  'language_other_placeholder': 'Digite o idioma',
-  'objeto_required': 'Escreva pelo menos um objetivo curto.',
-  'guided_goal_title': 'Objetivo',
-  'guided_level_title': 'Nível',
-  'guided_preference_title': 'Preferência',
-  'guided_goal_school': 'Escola',
-  'guided_goal_work': 'Trabalho',
-  'guided_goal_self': 'Aprender sozinho',
-  'guided_level_beginner': 'Começando',
-  'guided_level_mid': 'Intermediário',
-  'guided_level_high': 'Avançado',
-  'guided_pref_fast': 'Direto',
-  'guided_pref_examples': 'Com exemplos',
-  'guided_pref_step': 'Passo a passo',
-  'attach_photo': 'Foto',
-  'attach_file': 'Arquivo',
-  'attach_camera': 'Câmera',
-  'attach_image': 'Imagem',
-  'remove_doubt_photo': 'Remover foto da dúvida',
-  'doubt_placeholder': 'Digite sua dúvida',
-  'preparing_failed_title': 'Não consegui preparar agora.',
-  'preparing_change_goal': 'Trocar objetivo',
-  'preparing_profile': 'Entendendo seu objetivo',
-  'preparing_curriculum': 'Preparando seu currículo',
-  'preparing_lesson': 'Preparando sua aula',
-  'preparing_short': 'Isso leva alguns instantes.',
-  'done_title': 'A primeira aula chegou',
-  'done_cta': 'Continuar',
-  'done_hint': 'A primeira questão está pronta.',
-  'ready_to_continue': 'Pronto para continuar.',
-  'can_skip_when_ready': 'O botão aparece quando a primeira questão chega.',
-  'placement_choice_h1': 'Antes de começar, escolha seu ponto de partida.',
-  'placement_choice_body':
-      'Você pode começar do início ou fazer um teste curto para eu encontrar o melhor ponto do currículo.',
-  'placement_start_beginning': 'Começar do início',
-  'placement_take_quick': 'Encontrar meu ponto',
-  'placement_intro_h1': 'Vou procurar o ponto certo para você.',
-  'placement_intro_body':
-      'Depois do aquecimento, farei poucas perguntas do currículo para não te colocar nem antes nem depois do necessário.',
-  'placement_start': 'Começar teste',
-  'placement_preparing': 'Preparando teste',
-  'placement_waiting_h1': 'Estou preparando seu teste.',
-  'placement_waiting_body':
-      'Assim que o currículo chegar, as perguntas aparecem aqui.',
-  'placement_question_of': 'Pergunta {n} de {total}',
-  'placement_result_h1': 'Ponto encontrado.',
-  'placement_result_body': 'A aula vai começar no ponto mais seguro para você.',
-  'placement_starting_at': 'Começando em {marker}',
   'continue_arrow': 'Continuar',
   'preparing_next_lesson': 'Preparando próxima aula',
   'aula_advance_pending': 'Preparando próximo passo',
   'aula_advance_preparing': 'Preparando próximo passo',
   'aula_menu_lesson_arriving': 'Você escolheu esta aula. Estou buscando.',
+  'aula_menu_lesson_waiting': 'Ainda estou preparando sua aula.',
+  'aula_menu_lesson_slow': 'Continua preparando. A aula entra aqui.',
+  'aula_menu_lesson_still_working': 'A preparação segue ativa.',
+  'aula_menu_lesson_retrying': 'Tentando novamente...',
   'aula_registering': 'Registrando sua resposta',
   'aula_next': 'Próximo',
   'aula_practice_foundation': 'Vamos fundamentar este item',
@@ -196,16 +150,29 @@ const _strings = <String, String>{
   'pay_checkout_provider': 'Compra protegida por checkout seguro.',
 };
 
+const _localizedStrings = <String, Map<String, String>>{
+  'en': {'step_of': 'Step {n} of {total}'},
+};
+
 Map<String, List<String>> debugSimMissingLocalizationKeys() => const {
   'pt': [],
   'en': [],
 };
 
 String debugSimLocalizedValue(String code, String key) =>
-    _strings[key] ?? _humanizeKey(key);
+    _strings[key] ??
+    _objectiveStrings[key] ??
+    _onboardingStrings[key] ??
+    _humanizeKey(key);
 
 String t(String key, [Map<String, dynamic>? params]) {
-  var value = _strings[key] ?? _humanizeKey(key);
+  var value =
+      _localizedStrings[_activeLanguageCode]?[key] ??
+      _objectiveLocalizedStrings[_activeLanguageCode]?[key] ??
+      _strings[key] ??
+      _objectiveStrings[key] ??
+      _onboardingStrings[key] ??
+      _humanizeKey(key);
   params?.forEach((k, v) => value = value.replaceAll('{$k}', '$v'));
   return value;
 }

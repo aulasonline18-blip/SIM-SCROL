@@ -21,6 +21,7 @@ class ChatLessonTimelineInput {
     this.doubtError,
     this.lessonLocalId,
     this.menuLessonWaiting = false,
+    this.menuLessonRetrying = false,
   });
 
   final LessonRuntimeSnapshot? snapshot;
@@ -35,6 +36,7 @@ class ChatLessonTimelineInput {
   final String? doubtError;
   final String? lessonLocalId;
   final bool menuLessonWaiting;
+  final bool menuLessonRetrying;
 }
 
 List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
@@ -106,13 +108,15 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     runtimeLoading: input.runtimeLoading,
   );
   if (input.menuLessonWaiting && content == null) {
+    final text = input.menuLessonRetrying
+        ? t('aula_menu_lesson_retrying')
+        : t('aula_menu_lesson_arriving');
     messages.add(
       ChatLessonMessage(
         id: 'menu-lesson-arriving-${marker ?? input.lessonLocalId ?? 'active'}',
         role: ChatLessonMessageRole.system,
         kind: ChatLessonMessageKind.loading,
-        text: t('aula_menu_lesson_arriving'),
-        actionKey: 'retry-menu-lesson',
+        text: text,
         lessonLocalId: input.lessonLocalId,
         marker: marker,
         itemIdx: itemIdx,
@@ -321,7 +325,9 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     );
 
     final selected = phase?.letter;
-    final answerBusy = phase?.type == ClassroomPhaseType.processando;
+    final contentAcceptsAnswer = hasValidPedagogicalContent(content);
+    final answerBusy =
+        phase?.type == ClassroomPhaseType.processando || !contentAcceptsAnswer;
     messages.add(
       ChatLessonMessage(
         id: 'options-$activeId',
@@ -377,12 +383,17 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
 
   if (phase?.type == ClassroomPhaseType.erroEngine ||
       (input.runtimeError ?? '').trim().isNotEmpty) {
+    final runtimeError = phase?.message ?? input.runtimeError;
+    final sessionRuntimeError = input.runtimeError;
     messages.add(
       ChatLessonMessage(
         id: 'engine-error',
         role: ChatLessonMessageRole.system,
         kind: ChatLessonMessageKind.error,
-        text: studentFacingRuntimeError(phase?.message ?? input.runtimeError),
+        text: studentFacingRuntimeError(runtimeError),
+        actionKey: _isRecoverableRuntimeError(sessionRuntimeError)
+            ? 'retry-menu-lesson'
+            : null,
         lessonLocalId: input.lessonLocalId,
         marker: marker,
         itemIdx: itemIdx,
@@ -394,6 +405,28 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
   }
 
   return _withSequenceIndexes(messages);
+}
+
+bool _isRecoverableRuntimeError(String? raw) {
+  final lower = raw?.trim().toLowerCase() ?? '';
+  if (lower.isEmpty) return false;
+  if (lower.contains('sessao') ||
+      lower.contains('sessão') ||
+      lower.contains('401') ||
+      lower.contains('403') ||
+      lower.contains('unauthorized') ||
+      lower.contains('forbidden')) {
+    return false;
+  }
+  return lower.contains('tente novamente') ||
+      lower.contains('retry') ||
+      lower.contains('timeout') ||
+      lower.contains('socketexception') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('connection') ||
+      lower.contains('indisponivel') ||
+      lower.contains('indisponível') ||
+      lower.contains('preparar');
 }
 
 String _itemDescriptionText(LessonRuntimeSnapshot? snapshot, String? marker) {

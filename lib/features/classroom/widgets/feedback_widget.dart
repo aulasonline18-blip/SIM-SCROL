@@ -60,7 +60,7 @@ class _LiveLoadingBlock extends StatelessWidget {
         label: message.text ?? t('aula_doubt_processing'),
       );
     }
-    if (message.actionKey == 'retry-menu-lesson') {
+    if (message.id.startsWith('menu-lesson-arriving-')) {
       return _MenuLessonArrivalBlock(message: message, onRetry: onRetry);
     }
     return _StatusText(
@@ -85,6 +85,7 @@ class _MenuLessonArrivalBlock extends StatefulWidget {
 
 class _MenuLessonArrivalBlockState extends State<_MenuLessonArrivalBlock> {
   int _tick = 0;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -93,7 +94,7 @@ class _MenuLessonArrivalBlockState extends State<_MenuLessonArrivalBlock> {
   }
 
   void _scheduleTick() {
-    Future<void>.delayed(const Duration(seconds: 1), () {
+    _timer = Timer(const Duration(seconds: 1), () {
       if (!mounted) return;
       setState(() => _tick = (_tick + 1).clamp(0, 6));
       if (_tick < 6) _scheduleTick();
@@ -101,14 +102,19 @@ class _MenuLessonArrivalBlockState extends State<_MenuLessonArrivalBlock> {
   }
 
   @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = SimThemeScope.paletteOf(context);
-    final progress = ((_tick + 1) / 6).clamp(0.18, 0.92);
     final detail = _tick < 2
-        ? 'Localizando este ponto.'
+        ? t('aula_menu_lesson_waiting')
         : _tick < 4
-        ? 'Chamando o professor.'
-        : 'Quase lá. A aula entra aqui.';
+        ? t('aula_menu_lesson_slow')
+        : t('aula_menu_lesson_still_working');
     return SimStatusSurface(
       tone: SimSurfaceTone.soft,
       icon: Icons.auto_awesome,
@@ -129,24 +135,10 @@ class _MenuLessonArrivalBlockState extends State<_MenuLessonArrivalBlock> {
             ),
           ),
           const SizedBox(height: SimSpacing.sm),
-          TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0.12, end: progress.toDouble()),
-            duration: const Duration(milliseconds: 450),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, _) => LinearProgressIndicator(
-              minHeight: 4,
-              value: value,
-              backgroundColor: palette.border,
-            ),
+          LinearProgressIndicator(
+            minHeight: 4,
+            backgroundColor: palette.border,
           ),
-          if (_tick >= 5) ...[
-            const SizedBox(height: SimSpacing.sm),
-            SimActionButton(
-              label: t('aula_try_again_2'),
-              icon: Icons.refresh,
-              onPressed: widget.onRetry,
-            ),
-          ],
         ],
       ),
     );

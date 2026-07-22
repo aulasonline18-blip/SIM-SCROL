@@ -51,10 +51,7 @@ void main() {
       find.byKey(const Key('reception-answer-objective'), skipOffstage: false),
       findsOneWidget,
     );
-    expect(
-      find.text('Qual nível ou contexto devo considerar?'),
-      findsOneWidget,
-    );
+    expect(find.text('Qual nível ou contexto devo considerar?'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }

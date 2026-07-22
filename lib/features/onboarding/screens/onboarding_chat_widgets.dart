@@ -195,12 +195,16 @@ class SimChatError extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 8),
-    child: SimStatusSurface(
-      tone: SimSurfaceTone.danger,
-      icon: Icons.error_outline,
-      child: Text(text),
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: true,
+    label: text,
+    child: Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: SimStatusSurface(
+        tone: SimSurfaceTone.danger,
+        icon: Icons.error_outline,
+        child: Text(text),
+      ),
     ),
   );
 }

@@ -687,12 +687,27 @@ void main() {
     expect(messages, hasLength(1));
     expect(messages.single.kind, ChatLessonMessageKind.loading);
     expect(messages.single.text, t('aula_menu_lesson_arriving'));
-    expect(messages.single.actionKey, 'retry-menu-lesson');
+    expect(messages.single.actionKey, isNull);
     expect(messages.single.deliveryStatus, ChatLessonDeliveryStatus.processing);
     expect(
       messages.map((message) => message.text),
       isNot(contains(t('aula_advance_preparing'))),
     );
+  });
+
+  test('menu arrival recoverable failure exposes retry action', () {
+    final messages = buildChatLessonMessages(
+      const ChatLessonTimelineInput(
+        snapshot: null,
+        runtimeError:
+            'Nao consegui preparar esta parte agora. Tente novamente.',
+      ),
+    );
+
+    expect(messages, hasLength(1));
+    expect(messages.single.kind, ChatLessonMessageKind.error);
+    expect(messages.single.actionKey, 'retry-menu-lesson');
+    expect(messages.single.deliveryStatus, ChatLessonDeliveryStatus.failed);
   });
 
   test('technical runtime errors are controlled and do not leak raw keys', () {
@@ -721,6 +736,24 @@ void main() {
     expect(rawHttpError.last.text, isNot(contains('{"error"')));
     expect(rawHttpError.last.actionKey, isNull);
     expect(rawHttpError.last.isActionable, isFalse);
+  });
+
+  test('invalid visible content disables answer options', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          phase: const ClassroomPhase.reading(),
+          explanation: 'Explicacao presente.',
+          question: '',
+        ),
+      ),
+    );
+
+    final options = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.options,
+    );
+    expect(options.options.every((option) => option.enabled), isFalse);
+    expect(options.signals, isEmpty);
   });
 
   test('chat messages carry universal conversational delivery states', () {

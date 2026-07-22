@@ -39,7 +39,6 @@ void main() {
 
     expect(find.byType(ChatAulaScreen), findsNothing);
     expect(find.byType(ConversationalEntryScreen), findsOneWidget);
-    expect(find.text('Recepção pedagógica'), findsOneWidget);
   });
 
   testWidgets('portao de nivelamento renderiza conteudo e nao tela branca', (
@@ -162,8 +161,6 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(const Key('reception-guided-path')));
-    await tester.pumpAndSettle();
     await tester.enterText(
       find.byType(TextField).first,
       'Quero estudar porcentagem com exemplos simples',

@@ -150,7 +150,9 @@ void main() {
           path ==
               'lib/features/onboarding/view_models/language_selection_view_model.dart' ||
           path ==
-              'lib/features/onboarding/view_models/objective_entry_view_model.dart';
+              'lib/features/onboarding/view_models/objective_entry_view_model.dart' ||
+          path == 'lib/sim/ui/sim_i18n_objective.dart' ||
+          path == 'lib/sim/ui/sim_i18n_onboarding.dart';
     }).toList();
     final classroomWidgetFiles = dartFiles.where((file) {
       final path = file.path.replaceAll('\\', '/');
@@ -195,7 +197,7 @@ void main() {
     expect(phase4OperationalFiles.length, 1);
     expect(stateModuleFiles.length, 7);
     expect(readyWindowModuleFiles.length, 4);
-    expect(onboardingModuleFiles.length, 7);
+    expect(onboardingModuleFiles.length, 9);
     expect(classroomWidgetFiles.length, 5);
     expect(liveFluencyFiles.length, 2);
     expect(

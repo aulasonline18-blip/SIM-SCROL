@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../session/entry_form_state.dart';
+import '../ui/sim_i18n.dart';
 
 enum PedagogicalReceptionPath { guided, material }
 
@@ -24,119 +25,106 @@ class PedagogicalReceptionController extends ChangeNotifier {
   final EntryFormState form;
   int activeIndex = 0;
   String? error;
+  final Map<String, String> fieldErrors = {};
 
-  PedagogicalReceptionPath? get path {
-    return switch (form.entryPath) {
-      'guided_path' => PedagogicalReceptionPath.guided,
-      'material_help' => PedagogicalReceptionPath.material,
-      _ => null,
-    };
+  PedagogicalReceptionPath get path {
+    return form.entryPath == 'material_help'
+        ? PedagogicalReceptionPath.material
+        : PedagogicalReceptionPath.guided;
   }
 
   bool get hasProcessingAttachment =>
       form.attachments.any((attachment) => attachment.status == 'processing');
 
-  bool get hasAttachmentError =>
-      form.attachments.any((attachment) => attachment.status == 'error');
+  bool get hasAttachmentIssue => form.attachments.any(
+    (attachment) =>
+        attachment.status == 'error' || attachment.status == 'insufficient',
+  );
+
+  int get activeStepNumber => activeIndex + 1;
+
+  int get totalStepCount => steps.length;
+
+  String errorFor(String fieldId) => fieldErrors[fieldId] ?? '';
+
+  bool stepCanAdvance(String id) => validateStep(id, mutate: false) == null;
 
   List<PedagogicalReceptionStep> get steps {
     final selected = path;
     return [
-      const PedagogicalReceptionStep(
-        id: 'path',
-        title: 'Como vamos começar?',
-        help: 'Escolha o jeito mais parecido com o que você precisa agora.',
+      PedagogicalReceptionStep(
+        id: 'objective',
+        title: t('objective_step_title'),
+        help: t('objective_step_help'),
         required: true,
       ),
-      if (selected == PedagogicalReceptionPath.guided) ...const [
-        PedagogicalReceptionStep(
-          id: 'objective',
-          title: 'O que você quer aprender?',
-          help: 'Conte do jeito que você falaria para um professor.',
-          required: true,
-        ),
-        PedagogicalReceptionStep(
-          id: 'level',
-          title: 'Qual nível ou contexto devo considerar?',
-          help: 'Isso ajusta a linguagem, os exemplos e o ponto de partida.',
-          required: true,
-        ),
-        PedagogicalReceptionStep(
-          id: 'purpose',
-          title: 'Para que você está estudando isso?',
-          help:
-              'Prova, tarefa, trabalho ou curiosidade pedem conduções diferentes.',
-          required: true,
-        ),
-        PedagogicalReceptionStep(
-          id: 'deadline',
-          title: 'Tem prazo?',
-          help: 'Se não tiver, seguimos com calma.',
-          required: false,
-        ),
-        PedagogicalReceptionStep(
-          id: 'result',
-          title: 'O que você quer conseguir fazer no final?',
-          help: 'Uma meta clara ajuda a aula a mirar no uso real.',
-          required: false,
-        ),
-        PedagogicalReceptionStep(
-          id: 'blocker',
-          title: 'Onde costuma travar?',
-          help:
-              'Diga o ponto que costuma confundir, atrasar ou dar insegurança.',
-          required: false,
-        ),
-        PedagogicalReceptionStep(
-          id: 'style',
-          title: 'Como prefere ser conduzido?',
-          help: 'Escolha o ritmo que mais ajuda você a continuar.',
-          required: false,
-        ),
-      ] else if (selected == PedagogicalReceptionPath.material) ...const [
+      if (selected == PedagogicalReceptionPath.material) ...[
         PedagogicalReceptionStep(
           id: 'material_type',
-          title: 'Que tipo de material você trouxe?',
-          help: 'Pode ser foto, PDF, lista, prova, questão ou caderno.',
+          title: t('objective_material_type_title'),
+          help: t('objective_material_type_help'),
           required: true,
         ),
         PedagogicalReceptionStep(
           id: 'attachments',
-          title: 'Envie o material',
-          help: 'Até 3 arquivos. Use PDF, texto, CSV, foto ou imagem.',
-          required: false,
-        ),
-        PedagogicalReceptionStep(
-          id: 'material_goal',
-          title: 'O que você quer que o SIM faça com esse material?',
-          help: 'Explique o pedido principal em uma frase ou duas.',
+          title: t('objective_attachments_title'),
+          help: t('objective_attachments_help'),
           required: true,
-        ),
-        PedagogicalReceptionStep(
-          id: 'material_blocker',
-          title: 'Onde você travou?',
-          help:
-              'Se o arquivo não ficar claro, sua descrição ainda guia a aula.',
-          required: false,
         ),
         PedagogicalReceptionStep(
           id: 'material_purpose',
-          title: 'Isso é para quê?',
-          help: 'Isso muda a profundidade e o tipo de ajuda.',
+          title: t('objective_material_purpose_title'),
+          help: t('objective_material_purpose_help'),
           required: true,
         ),
+      ] else ...[
+        PedagogicalReceptionStep(
+          id: 'level',
+          title: t('objective_level_title'),
+          help: t('objective_level_help'),
+          required: true,
+        ),
+        PedagogicalReceptionStep(
+          id: 'purpose',
+          title: t('objective_purpose_title'),
+          help: t('objective_purpose_help'),
+          required: true,
+        ),
+        PedagogicalReceptionStep(
+          id: 'deadline',
+          title: t('objective_deadline_title'),
+          help: t('objective_deadline_help'),
+          required: false,
+        ),
+        PedagogicalReceptionStep(
+          id: 'result',
+          title: t('objective_result_title'),
+          help: t('objective_result_help'),
+          required: false,
+        ),
+        PedagogicalReceptionStep(
+          id: 'blocker',
+          title: t('objective_blocker_title'),
+          help: t('objective_blocker_help'),
+          required: false,
+        ),
+        PedagogicalReceptionStep(
+          id: 'style',
+          title: t('objective_style_title'),
+          help: t('objective_style_help'),
+          required: false,
+        ),
       ],
-      const PedagogicalReceptionStep(
+      PedagogicalReceptionStep(
         id: 'profile',
-        title: 'Algum cuidado para adaptar a aula?',
-        help:
-            'Nome, idade e observações são opcionais, mas ajudam o tom da aula.',
+        title: t('objective_profile_title'),
+        help: t('objective_profile_help'),
         required: false,
       ),
-      const PedagogicalReceptionStep(
+      PedagogicalReceptionStep(
         id: 'finish',
-        title: 'Foi isso que eu entendi.',
-        help: 'Confira rápido. Se algo estiver errado, toque em editar.',
+        title: t('objective_finish_title'),
+        help: t('objective_finish_help'),
         required: true,
       ),
     ];
@@ -149,11 +137,9 @@ class PedagogicalReceptionController extends ChangeNotifier {
           ? 'material_help'
           : 'guided_path',
     );
-    if (value == PedagogicalReceptionPath.material) {
-      form.updatePedagogicalField('topic', '');
-    }
     error = null;
-    activeIndex = 1;
+    fieldErrors.clear();
+    if (activeIndex >= steps.length) activeIndex = steps.length - 1;
     notifyListeners();
   }
 
@@ -178,41 +164,70 @@ class PedagogicalReceptionController extends ChangeNotifier {
     if (index < 0) return;
     activeIndex = index;
     error = null;
+    fieldErrors.clear();
     notifyListeners();
   }
 
-  String? validateStep(String id) {
+  String? validateStep(String id, {bool mutate = true}) {
+    String? set(String fieldId, String? value) {
+      if (mutate) {
+        if (value == null) {
+          fieldErrors.remove(fieldId);
+        } else {
+          fieldErrors[fieldId] = value;
+        }
+      }
+      return value;
+    }
+
     switch (id) {
-      case 'path':
-        return path == null ? 'Escolha um caminho para começar.' : null;
       case 'objective':
-        return form.freeText.trim().length < 10
-            ? 'Escreva um pouco mais sobre o que você quer aprender.'
-            : null;
+        final text = form.freeText.trim();
+        if (text.length < 10) return set('objective', t('objective_error_min'));
+        if (form.freeText.length > entryFormMaxFreeText) {
+          return set('objective', t('objective_error_max'));
+        }
+        set('objective', null);
+        return null;
       case 'level':
         return form.academicLevel.trim().isEmpty
-            ? 'Informe o nível, série ou contexto.'
+            ? t('objective_error_level')
             : null;
       case 'purpose':
         return form.traversalGoal.trim().isEmpty
-            ? 'Conte para que você está estudando.'
+            ? t('objective_error_purpose')
             : null;
       case 'material_type':
         return form.materialType.trim().isEmpty
-            ? 'Escolha o tipo de material.'
+            ? t('objective_error_material_type')
             : null;
       case 'attachments':
-        return hasProcessingAttachment
-            ? 'Estou lendo seu material. Aguarde terminar para continuar.'
-            : null;
-      case 'material_goal':
-        return form.freeText.trim().length < 10
-            ? 'Escreva um pouco mais sobre o que você quer fazer com o material.'
-            : null;
+        if (hasProcessingAttachment) {
+          return t('objective_error_attachment_wait');
+        }
+        if (!form.describeMaterialWithoutAttachment &&
+            !form.attachments.any(
+              (attachment) => attachment.status == 'ready',
+            )) {
+          return t('objective_error_attachment_required');
+        }
+        return null;
       case 'material_purpose':
         return form.traversalGoal.trim().isEmpty
-            ? 'Escolha ou descreva para que é esse material.'
+            ? t('objective_error_material_purpose')
             : null;
+      case 'profile':
+        final age = form.studentAge.trim();
+        if (age.isEmpty || form.ageNotDeclared) {
+          set('age', null);
+          return null;
+        }
+        final parsed = int.tryParse(age);
+        if (parsed == null || parsed < 3 || parsed > 120) {
+          return set('age', t('objective_error_age_invalid'));
+        }
+        set('age', null);
+        return null;
       case 'finish':
         return validateAll();
       default:
@@ -231,14 +246,7 @@ class PedagogicalReceptionController extends ChangeNotifier {
 
   String summaryFor(String id) {
     switch (id) {
-      case 'path':
-        return path == PedagogicalReceptionPath.material
-            ? 'Tenho um material e quero ajuda'
-            : path == PedagogicalReceptionPath.guided
-            ? 'Quero que o SIM monte meu caminho'
-            : '';
       case 'objective':
-      case 'material_goal':
         return form.freeText.trim();
       case 'level':
         return form.academicLevel.trim();
@@ -252,7 +260,6 @@ class PedagogicalReceptionController extends ChangeNotifier {
       case 'result':
         return form.expectedResult.trim();
       case 'blocker':
-      case 'material_blocker':
         return form.difficulties.trim();
       case 'style':
         return form.learningPreference.trim();
@@ -261,19 +268,25 @@ class PedagogicalReceptionController extends ChangeNotifier {
       case 'attachments':
         final ready = form.attachments.where((a) => a.status == 'ready').length;
         if (form.attachments.isEmpty) {
-          return 'Sem anexo; vou usar sua descrição.';
+          return form.describeMaterialWithoutAttachment
+              ? t('objective_attachment_description_summary')
+              : '';
         }
         final names = form.attachments
             .map((attachment) => attachment.name.trim())
             .where((name) => name.isNotEmpty)
             .join(', ');
-        final status =
-            '$ready de ${form.attachments.length} material(is) lido(s).';
+        final status = t('objective_attachment_summary', {
+          'ready': ready,
+          'total': form.attachments.length,
+        });
         return names.isEmpty ? status : '$status\n$names';
       case 'profile':
         return [
           form.preferredName.trim(),
-          form.studentAge.trim(),
+          form.ageNotDeclared
+              ? t('objective_age_not_declared')
+              : form.studentAge.trim(),
           form.profileObservation.trim(),
         ].where((value) => value.isNotEmpty).join(' · ');
       case 'finish':
@@ -284,27 +297,37 @@ class PedagogicalReceptionController extends ChangeNotifier {
   }
 
   List<String> finalSummaryLines() {
+    final subject = form.subject.trim().isEmpty
+        ? t('objective_not_informed')
+        : form.subject.trim();
+    final topic = form.topic.trim().isEmpty
+        ? t('objective_not_informed')
+        : form.topic.trim();
     final lines = <String>[
       path == PedagogicalReceptionPath.material
-          ? 'Vou usar seu material como ponto de partida.'
-          : 'Vou montar um caminho e encontrar o ponto certo para começar.',
-      if (form.freeText.trim().isNotEmpty) 'Objetivo: ${form.freeText.trim()}',
+          ? t('objective_summary_material_path')
+          : t('objective_summary_guided_path'),
+      if (form.freeText.trim().isNotEmpty)
+        '${t('objective_summary_objective')}: ${form.freeText.trim()}',
+      '${t('objective_summary_subject')}: $subject',
+      '${t('objective_summary_topic')}: $topic',
       if (form.materialType.trim().isNotEmpty)
-        'Material: ${form.materialType.trim()}',
+        '${t('objective_summary_material')}: ${form.materialType.trim()}',
       if (form.attachments.isNotEmpty) summaryFor('attachments'),
       if (form.academicLevel.trim().isNotEmpty)
-        'Contexto: ${form.academicLevel.trim()}',
+        '${t('objective_summary_context')}: ${form.academicLevel.trim()}',
       if (form.traversalGoal.trim().isNotEmpty)
-        'Uso: ${form.traversalGoal.trim()}',
-      if (_effectiveDeadline().isNotEmpty) 'Prazo: ${_effectiveDeadline()}',
+        '${t('objective_summary_use')}: ${form.traversalGoal.trim()}',
+      if (_effectiveDeadline().isNotEmpty)
+        '${t('objective_summary_deadline')}: ${_effectiveDeadline()}',
       if (form.expectedResult.trim().isNotEmpty)
-        'Meta: ${form.expectedResult.trim()}',
+        '${t('objective_summary_result')}: ${form.expectedResult.trim()}',
       if (form.difficulties.trim().isNotEmpty)
-        'Atenção: ${form.difficulties.trim()}',
+        '${t('objective_summary_attention')}: ${form.difficulties.trim()}',
       if (form.learningPreference.trim().isNotEmpty)
-        'Condução: ${form.learningPreference.trim()}',
+        '${t('objective_summary_style')}: ${form.learningPreference.trim()}',
       if (summaryFor('profile').trim().isNotEmpty)
-        'Cuidado: ${summaryFor('profile').trim()}',
+        '${t('objective_summary_care')}: ${summaryFor('profile').trim()}',
     ];
     return lines
         .where((line) => line.trim().isNotEmpty)

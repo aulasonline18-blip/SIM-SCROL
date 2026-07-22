@@ -247,6 +247,7 @@ void main() {
           error: 'Não consegui ler bem. Você pode descrever com texto.',
         ),
       ];
+      session.setPedagogicalEntryField('material_description_only', 'true');
       expect(session.saveObjectiveEntry(), isTrue);
     },
   );
@@ -265,36 +266,27 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: ObjetoScreen(session: session)));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('Recepção pedagógica'), findsOneWidget);
+    expect(find.text('O que você quer estudar?'), findsOneWidget);
+    expect(find.byKey(const Key('reception-objective-input')), findsOneWidget);
     expect(find.byKey(const Key('reception-guided-path')), findsOneWidget);
     expect(find.byKey(const Key('reception-material-path')), findsOneWidget);
     expect(find.text('Algum cuidado para adaptar a aula?'), findsNothing);
-    expect(find.text('Tudo certo?'), findsNothing);
-
-    await _tapVisible(tester, find.byKey(const Key('reception-guided-path')));
-    expect(find.text('O que você quer aprender?'), findsAtLeastNWidgets(1));
-    expect(find.text('Editar'), findsWidgets);
-    expect(find.byKey(const Key('reception-answer-path')), findsOneWidget);
-    expect(
-      find.text('Quero que o SIM monte meu caminho'),
-      findsAtLeastNWidgets(1),
-    );
+    expect(find.text('Foi isso que eu entendi.'), findsNothing);
 
     await _tapVisible(tester, find.text('Salvar e continuar').first);
-    expect(
-      find.text('Escreva um pouco mais sobre o que você quer aprender.'),
-      findsOneWidget,
-    );
+    expect(find.text('Qual nível ou contexto devo considerar?'), findsNothing);
 
     await tester.enterText(
       find.byType(TextField).first,
       'Quero aprender porcentagem',
     );
-    await _tapVisible(tester, find.text('Salvar e continuar').first);
-    expect(
-      find.text('Qual nível ou contexto devo considerar?'),
-      findsOneWidget,
+    tester.testTextInput.hide();
+    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('objective-primary-continue')),
     );
+    expect(find.text('Qual nível ou contexto devo considerar?'), findsWidgets);
     expect(
       find.byKey(const Key('reception-answer-objective'), skipOffstage: false),
       findsOneWidget,
@@ -371,14 +363,19 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: ObjetoScreen(session: session)));
     await tester.pumpAndSettle();
 
+    await tester.enterText(
+      find.byType(TextField).first,
+      'Explique esta lista e monte uma aula curta pelo material.',
+    );
     await _tapVisible(tester, find.byKey(const Key('reception-material-path')));
-    expect(find.text('Que tipo de material você trouxe?'), findsOneWidget);
+    await _tapVisible(tester, find.text('Salvar e continuar').first);
+    expect(find.text('Que tipo de material você trouxe?'), findsWidgets);
     await _tapVisible(tester, find.text('PDF'));
     await _tapVisible(tester, find.text('Salvar e continuar').first);
 
-    expect(find.text('Envie o material'), findsOneWidget);
+    expect(find.text('Material de apoio'), findsOneWidget);
     expect(find.text('lista.pdf'), findsOneWidget);
-    expect(find.text('Consegui extrair o conteúdo.'), findsWidgets);
+    expect(find.text('Conteúdo aproveitável.'), findsWidgets);
     expect(find.text('ready'), findsNothing);
 
     session
@@ -399,9 +396,6 @@ void main() {
 
     await tester.pumpWidget(MaterialApp(home: ObjetoScreen(session: session)));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('reception-guided-path')));
-    await tester.pumpAndSettle();
-
     for (final term in const [
       'T00',
       'T02',
@@ -479,7 +473,6 @@ Future<void> _waitAttachments(EntryFormState form) async {
 }
 
 Future<void> _finishGuidedReception(WidgetTester tester) async {
-  await _tapVisible(tester, find.byKey(const Key('reception-guided-path')));
   await tester.enterText(
     find.byType(TextField).first,
     'Quero aprender porcentagem para prova',
@@ -493,24 +486,25 @@ Future<void> _finishGuidedReception(WidgetTester tester) async {
   await _tapVisible(tester, find.text('Salvar e continuar').first);
 
   await _tapVisible(tester, find.text('Sem prazo'));
-  await _tapVisible(tester, find.text('Continuar').last);
+  await _tapVisible(tester, find.text('Continuar sem informar').last);
 
   await tester.enterText(
     find.byType(TextField).first,
     'Resolver questões sem depender de fórmula decorada',
   );
-  await _tapVisible(tester, find.text('Continuar').last);
+  await _tapVisible(tester, find.text('Continuar sem informar').last);
 
   await tester.enterText(find.byType(TextField).first, 'Regra de três');
-  await _tapVisible(tester, find.text('Continuar').last);
+  await _tapVisible(tester, find.text('Continuar sem informar').last);
 
   await _tapVisible(tester, find.text('Com exemplos'));
-  await _tapVisible(tester, find.text('Continuar').last);
+  await _tapVisible(tester, find.text('Continuar sem informar').last);
 
-  await _tapVisible(tester, find.text('Continuar').last);
+  await _tapVisible(tester, find.text('Continuar sem informar').last);
 }
 
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  tester.testTextInput.hide();
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
   await tester.tap(finder);

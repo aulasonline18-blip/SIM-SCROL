@@ -34,6 +34,9 @@ void main() {
   final materialFailures = File(
     'lib/sim/lesson/student_lesson_material_failures.dart',
   ).readAsStringSync();
+  final feedbackWidget = File(
+    'lib/features/classroom/widgets/feedback_widget.dart',
+  ).readAsStringSync();
 
   test('1. menu local does not erase the old renderable snapshot', () {
     final prepareStart = flows.indexOf('void _prepareDrawerLessonOpen');
@@ -142,6 +145,13 @@ void main() {
     expect(materialFailures, contains('LESSON_BACKGROUND_MATERIAL_FAILED'));
     expect(materialFailures, contains("'recoverable': true"));
     expect(materialFailures, contains("'retryAvailable': true"));
+  });
+
+  test('11. menu arrival retry and progress are state driven', () {
+    expect(timeline, isNot(contains("actionKey: 'retry-menu-lesson',")));
+    expect(feedbackWidget, isNot(contains('_tick >= 5')));
+    expect(feedbackWidget, isNot(contains('value: value')));
+    expect(feedbackWidget, contains('LinearProgressIndicator('));
   });
 }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sim_mobile/features/classroom/chat_aula_messages.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_screen.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_timeline_builder.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
@@ -115,7 +116,7 @@ void main() {
     expect(find.text(t('loading')), findsNothing);
   });
 
-  testWidgets('aula do menu sem cache mostra espera viva com retry', (
+  testWidgets('menu_arrival_waiting_does_not_show_retry_after_time', (
     tester,
   ) async {
     final session = _snapshotSession()
@@ -134,14 +135,93 @@ void main() {
     await tester.pump();
 
     expect(find.text(t('aula_menu_lesson_arriving')), findsOneWidget);
-    expect(find.text('Localizando este ponto.'), findsOneWidget);
+    expect(find.text(t('aula_menu_lesson_waiting')), findsOneWidget);
     expect(find.text(t('aula_advance_preparing')), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    final progress = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
+    expect(progress.value, isNull);
 
-    await tester.pump(const Duration(seconds: 6));
+    await tester.pump(const Duration(seconds: 10));
     await tester.pump();
 
+    expect(find.text(t('aula_try_again_2')), findsNothing);
+  });
+
+  testWidgets('menu_arrival_failure_shows_retry', (tester) async {
+    final session = _snapshotSession()
+      ..aulaRuntimeLoading = false
+      ..aulaMenuLessonWaiting = false
+      ..aulaRuntimeError =
+          'Nao consegui preparar esta parte agora. Tente novamente.'
+      ..aulaSnapshot = null;
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump();
+
+    expect(find.text(t('aula_gen_fail')), findsOneWidget);
     expect(find.text(t('aula_try_again_2')), findsOneWidget);
+  });
+
+  testWidgets('retry_enters_retrying_state', (tester) async {
+    final session = _snapshotSession()
+      ..aulaRuntimeLoading = true
+      ..aulaMenuLessonWaiting = true
+      ..aulaOpeningTransition = AulaOpeningTransition(
+        targetLessonLocalId: 'lesson-health',
+        previousSnapshot: null,
+        transitionStartedAt: DateTime(2026),
+        status: AulaOpeningStatus.retrying,
+        generation: 1,
+      )
+      ..aulaSnapshot = _snapshot(
+        phase: const ClassroomPhase.advancePending(
+          message: 'aula_menu_lesson_arriving',
+        ),
+        content: null,
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump();
+
+    expect(find.text(t('aula_menu_lesson_retrying')), findsOneWidget);
+    expect(find.text(t('aula_try_again_2')), findsNothing);
+  });
+
+  testWidgets('tap_option_calls_session_and_rebuilds_test', (tester) async {
+    final session = _snapshotSession();
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChatAulaScreen(session: session)),
+    );
+    await tester.pump();
+    await _pumpGuidedRoundIntro(tester);
+    await _openGuidedQuestion(tester);
+    await _scrollGuidedOptionsIntoView(tester);
+
+    expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.lendo);
+    await tester.tap(find.byKey(const Key('chat-answer-card-A')));
+    await tester.pump();
+
+    expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.expandida);
+    expect(session.aulaSnapshot?.phase.letter, AnswerLetter.A);
+    final rebuiltMessages = buildChatLessonMessages(
+      ChatLessonTimelineInput(snapshot: session.aulaSnapshot),
+    );
+    final rebuiltOptions = rebuiltMessages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.options,
+    );
+    expect(
+      rebuiltOptions.options
+          .singleWhere((option) => option.letter == AnswerLetter.A)
+          .selected,
+      isTrue,
+    );
   });
 
   test('advance pending vira preparo, não retry manual', () {
