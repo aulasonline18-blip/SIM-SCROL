@@ -2579,7 +2579,11 @@ void main() {
     expect(event?.payload['currentItemIdx'], 0);
     expect(event?.payload['currentLayer'], 1);
     expect(event?.payload['windowSize'], 6);
-    expect(event?.payload['cachedCount'], 6);
+    expect(event?.payload['cachedCount'], 0);
+    expect(event?.payload['expectedHotCount'], hotTextWindowSize);
+    expect(event?.payload['hotTextReadyCount'], 0);
+    expect(event?.payload['hotQueuedCount'], hotTextWindowSize);
+    expect(event?.payload['hotMissingCount'], 0);
     expect(event?.payload['windowMarkers'], [
       {'marker': 'M1', 'layer': 1, 'offset': 0},
       {'marker': 'M1', 'layer': 2, 'offset': 1},
@@ -2909,11 +2913,18 @@ void main() {
         suppressReadyWindowUntilVisibleLessonReady: true,
       );
       await t02.firstCallStarted.future;
+      var completedBeforeRemote = false;
+      unawaited(load.then((_) => completedBeforeRemote = true));
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
 
       final waitingState = service.read(lessonId)!;
+      expect(completedBeforeRemote, isTrue);
       expect(t02.calls, 1);
       expect(t02.requests.single.marker, 'M1');
       expect(t02.requests.single.layer, LessonLayer.l1);
+      expect(position.teoriaPronta, isFalse);
+      expect(position.phase.type, ClassroomPhaseType.avancoPendente);
       expect(waitingState.queuedActions, isEmpty);
       expect(
         waitingState.events.where(
@@ -2924,6 +2935,24 @@ void main() {
 
       t02.release.complete();
       await load;
+      await _waitUntil(
+        () => service
+            .read(lessonId)!
+            .readyLessonMaterials
+            .containsKey(preparedLessonMaterialKey(0, 'M1', LessonLayer.l1)),
+      );
+      expect(
+        controller.carregarRapidoSePronto(
+          lessonLocalId: lessonId,
+          topic: 'Menu',
+          position: position,
+          idioma: 'pt-BR',
+          academic: 'fundamental',
+          mode: LessonMode.session,
+          baseItems: items,
+        ),
+        isTrue,
+      );
 
       final readyState = service.read(lessonId)!;
       expect(position.teoriaPronta, isTrue);
@@ -2992,7 +3021,7 @@ void main() {
       mode: LessonMode.session,
       baseItems: items,
       allowRemoteOrder: true,
-      waitAfterOrderMs: 100,
+      waitAfterOrderMs: 0,
       remoteOrderPriority: 'hot-local',
       missingSource: 'drawer.aula.visible-request',
       missingPriority: 'hot-local',
@@ -3014,6 +3043,19 @@ void main() {
       state.events.where((event) => event.type == 'CACHE_WINDOW_UPDATED'),
       isEmpty,
     );
+  });
+
+  test('E3 visible hot path source has no 12s or 45s wait', () {
+    final runtimeSource = File(
+      'lib/sim/classroom/lesson_runtime_engine.dart',
+    ).readAsStringSync();
+    final firstLessonSource = File(
+      'lib/sim/experience/student_experience_t02_adapter.dart',
+    ).readAsStringSync();
+    expect(runtimeSource, isNot(contains('12000')));
+    expect(firstLessonSource, isNot(contains('45000')));
+    expect(runtimeSource, contains('waitAfterOrderMs: 0'));
+    expect(firstLessonSource, contains('waitAfterOrderMs: 0'));
   });
 
   test(
@@ -4103,13 +4145,545 @@ void main() {
     );
 
     expect(health.expectedCount, localLessonTraySize);
+    expect(health.expectedHotCount, hotTextWindowSize);
     expect(health.readyCount, 1);
     expect(health.hotTextReadyCount, 1);
+    expect(health.hotQueuedCount, 0);
+    expect(health.hotMissingCount, hotTextWindowSize - 1);
     expect(health.mediaPendingCount, 1);
     expect(health.missingSlots, hasLength(localLessonTraySize - 1));
     expect(health.windowStart?['marker'], 'M1');
     expect(health.windowStart?['layer'], LessonLayer.l1.value);
   });
+
+  test('E1 hot window plans current plus next three real positions', () {
+    const lessonId = 'cyber-e1-hot-plan';
+    final service = StudentLearningStateService();
+    service.ensure(lessonLocalId: lessonId);
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final engine = DopamineReadyWindowEngine(
+      service: service,
+      orchestrator: orchestrator,
+    );
+    final items = List<DopamineWindowItem>.generate(
+      5,
+      (index) => DopamineWindowItem(
+        text: 'Item ${index + 1}',
+        marker: 'M${index + 1}',
+      ),
+    );
+
+    final slots = engine.buildDopamineReadySlots(
+      lessonLocalId: lessonId,
+      source: 'e1-hot-plan',
+      items: items,
+      currentItemIdx: 0,
+      currentLayer: LessonLayer.l1,
+      maxSlots: hotTextWindowSize,
+      buildParams: (item, layer) => CompleteLessonParams(
+        lessonLocalId: lessonId,
+        item: item.text,
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: layer,
+        mode: LessonMode.session,
+        marker: item.marker,
+        itemIdx: items.indexOf(item),
+      ),
+    );
+
+    expect(slots.map((slot) => slot.slot), ['A', 'B', 'C', 'D']);
+    expect(slots.map((slot) => slot.itemIdx), [0, 0, 0, 1]);
+    expect(slots.map((slot) => slot.layer), [
+      LessonLayer.l1,
+      LessonLayer.l2,
+      LessonLayer.l3,
+      LessonLayer.l1,
+    ]);
+  });
+
+  test('E1 queued hot slot does not count as ready text', () {
+    const lessonId = 'cyber-e1-queued-not-ready';
+    final service = StudentLearningStateService(
+      seed: {
+        lessonId: _stateWithFiveItems().copyWith(
+          lessonLocalId: lessonId,
+          queuedActions: const [
+            {
+              'type': 'PREPARE_READY_WINDOW',
+              'status': 'queued',
+              'payload': {
+                'hotSlots': [
+                  {'itemIdx': 0, 'marker': 'M1', 'layer': 1},
+                ],
+              },
+            },
+          ],
+        ),
+      },
+    );
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final engine = DopamineReadyWindowEngine(
+      service: service,
+      orchestrator: orchestrator,
+    );
+    final items = List<DopamineWindowItem>.generate(
+      5,
+      (index) => DopamineWindowItem(
+        text: 'Item ${index + 1}',
+        marker: 'M${index + 1}',
+      ),
+    );
+    final slots = engine.buildDopamineReadySlots(
+      lessonLocalId: lessonId,
+      source: 'e1-queued',
+      items: items,
+      currentItemIdx: 0,
+      currentLayer: LessonLayer.l1,
+      maxSlots: hotTextWindowSize,
+      buildParams: (item, layer) => CompleteLessonParams(
+        lessonLocalId: lessonId,
+        item: item.text,
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: layer,
+        mode: LessonMode.session,
+        marker: item.marker,
+        itemIdx: items.indexOf(item),
+      ),
+    );
+
+    final health = engine.inspectDopamineReadyWindow(
+      lessonLocalId: lessonId,
+      slots: slots,
+      source: 'e1-queued',
+    );
+
+    expect(health.expectedHotCount, hotTextWindowSize);
+    expect(health.hotTextReadyCount, 0);
+    expect(health.readyCount, 0);
+    expect(health.hotQueuedCount, 1);
+    expect(health.hotMissingCount, hotTextWindowSize - 1);
+  });
+
+  test('E1 queued slot with incomplete identity is not queued or ready', () {
+    const lessonId = 'cyber-e1-incomplete-identity';
+    final service = StudentLearningStateService(
+      seed: {
+        lessonId: _stateWithFiveItems().copyWith(
+          lessonLocalId: lessonId,
+          queuedActions: const [
+            {
+              'type': 'PREPARE_READY_WINDOW',
+              'status': 'queued',
+              'payload': {'itemIdx': null, 'layer': 1, 'marker': null},
+            },
+          ],
+        ),
+      },
+    );
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final engine = DopamineReadyWindowEngine(
+      service: service,
+      orchestrator: orchestrator,
+    );
+    final items = List<DopamineWindowItem>.generate(
+      5,
+      (index) => DopamineWindowItem(
+        text: 'Item ${index + 1}',
+        marker: 'M${index + 1}',
+      ),
+    );
+    final slots = engine.buildDopamineReadySlots(
+      lessonLocalId: lessonId,
+      source: 'e1-incomplete',
+      items: items,
+      currentItemIdx: 0,
+      currentLayer: LessonLayer.l1,
+      maxSlots: hotTextWindowSize,
+      buildParams: (item, layer) => CompleteLessonParams(
+        lessonLocalId: lessonId,
+        item: item.text,
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: layer,
+        mode: LessonMode.session,
+        marker: item.marker,
+        itemIdx: items.indexOf(item),
+      ),
+    );
+
+    final health = engine.inspectDopamineReadyWindow(
+      lessonLocalId: lessonId,
+      slots: slots,
+      source: 'e1-incomplete',
+    );
+
+    expect(health.hotTextReadyCount, 0);
+    expect(health.hotQueuedCount, 0);
+    expect(health.hotMissingCount, hotTextWindowSize);
+  });
+
+  test('E1 hot slot with incomplete text is not ready', () {
+    const lessonId = 'cyber-e1-invalid-text';
+    final invalid = {
+      'text_status': 'ready',
+      'for_itemIdx': 0,
+      'for_marker': 'M1',
+      'for_layer': LessonLayer.l1.name,
+      'explanation': 'Explicacao presente.',
+      'question': 'Pergunta presente?',
+      'options': {'A': 'A', 'B': '', 'C': 'C'},
+      'correct_answer': 'A',
+    };
+    final service = StudentLearningStateService(
+      seed: {
+        lessonId: _stateWithFiveItems().copyWith(
+          lessonLocalId: lessonId,
+          readyLessonMaterials: {
+            preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): invalid,
+          },
+        ),
+      },
+    );
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final engine = DopamineReadyWindowEngine(
+      service: service,
+      orchestrator: orchestrator,
+    );
+    final items = List<DopamineWindowItem>.generate(
+      5,
+      (index) => DopamineWindowItem(
+        text: 'Item ${index + 1}',
+        marker: 'M${index + 1}',
+      ),
+    );
+    final slots = engine.buildDopamineReadySlots(
+      lessonLocalId: lessonId,
+      source: 'e1-invalid-text',
+      items: items,
+      currentItemIdx: 0,
+      currentLayer: LessonLayer.l1,
+      maxSlots: hotTextWindowSize,
+      buildParams: (item, layer) => CompleteLessonParams(
+        lessonLocalId: lessonId,
+        item: item.text,
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: layer,
+        mode: LessonMode.session,
+        marker: item.marker,
+        itemIdx: items.indexOf(item),
+      ),
+    );
+
+    final health = engine.inspectDopamineReadyWindow(
+      lessonLocalId: lessonId,
+      slots: slots,
+      source: 'e1-invalid-text',
+    );
+
+    expect(health.hotTextReadyCount, 0);
+    expect(health.readyCount, 0);
+    expect(health.wrongIdentitySlots, hasLength(1));
+    expect(health.hotMissingCount, hotTextWindowSize);
+  });
+
+  test('E2 warm cache plans up to fifteen real textual positions', () {
+    const lessonId = 'cyber-e2-warm-plan';
+    final service = StudentLearningStateService(
+      seed: {lessonId: _stateWithFiveItems().copyWith(lessonLocalId: lessonId)},
+    );
+    final engine = DopamineReadyWindowEngine(
+      service: service,
+      orchestrator: LessonOrchestrator(
+        t02Client: FakeT02Client(),
+        cache: LessonMaterialCache(),
+        bus: LessonEventBus(),
+      ),
+    );
+    final items = List<DopamineWindowItem>.generate(
+      5,
+      (index) => DopamineWindowItem(
+        text: 'Item ${index + 1}',
+        marker: 'M${index + 1}',
+      ),
+    );
+
+    final slots = engine.buildDopamineReadySlots(
+      lessonLocalId: lessonId,
+      source: 'e2-warm-plan',
+      items: items,
+      currentItemIdx: 0,
+      currentLayer: LessonLayer.l1,
+      maxSlots: localLessonTraySize,
+      buildParams: (item, layer) => CompleteLessonParams(
+        lessonLocalId: lessonId,
+        item: item.text,
+        lang: 'pt-BR',
+        academic: 'fundamental',
+        layer: layer,
+        mode: LessonMode.session,
+        marker: item.marker,
+        itemIdx: items.indexOf(item),
+      ),
+    );
+    final health = engine.inspectDopamineReadyWindow(
+      lessonLocalId: lessonId,
+      slots: slots,
+      source: 'e2-warm-plan',
+    );
+
+    expect(slots, hasLength(localLessonTraySize));
+    expect(slots.map((slot) => '${slot.marker}:${slot.layer.name}'), [
+      'M1:l1',
+      'M1:l2',
+      'M1:l3',
+      'M2:l1',
+      'M2:l2',
+      'M2:l3',
+      'M3:l1',
+      'M3:l2',
+      'M3:l3',
+      'M4:l1',
+      'M4:l2',
+      'M4:l3',
+      'M5:l1',
+      'M5:l2',
+      'M5:l3',
+    ]);
+    expect(health.warmExpectedCount, localLessonTraySize);
+    expect(health.expectedHotCount, hotTextWindowSize);
+    expect(health.warmMissingCount, localLessonTraySize);
+  });
+
+  test(
+    'E2 warm cache accepts only real remaining positions at curriculum end',
+    () {
+      const lessonId = 'cyber-e2-warm-end';
+      final service = StudentLearningStateService(
+        seed: {
+          lessonId: _stateWithFiveItems().copyWith(lessonLocalId: lessonId),
+        },
+      );
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: LessonOrchestrator(
+          t02Client: FakeT02Client(),
+          cache: LessonMaterialCache(),
+          bus: LessonEventBus(),
+        ),
+      );
+      final items = List<DopamineWindowItem>.generate(
+        5,
+        (index) => DopamineWindowItem(
+          text: 'Item ${index + 1}',
+          marker: 'M${index + 1}',
+        ),
+      );
+
+      final slots = engine.buildDopamineReadySlots(
+        lessonLocalId: lessonId,
+        source: 'e2-warm-end',
+        items: items,
+        currentItemIdx: 4,
+        currentLayer: LessonLayer.l2,
+        maxSlots: localLessonTraySize,
+        buildParams: (item, layer) => CompleteLessonParams(
+          lessonLocalId: lessonId,
+          item: item.text,
+          lang: 'pt-BR',
+          academic: 'fundamental',
+          layer: layer,
+          mode: LessonMode.session,
+          marker: item.marker,
+          itemIdx: items.indexOf(item),
+        ),
+      );
+      final health = engine.inspectDopamineReadyWindow(
+        lessonLocalId: lessonId,
+        slots: slots,
+        source: 'e2-warm-end',
+      );
+
+      expect(slots.map((slot) => '${slot.marker}:${slot.layer.name}'), [
+        'M5:l2',
+        'M5:l3',
+      ]);
+      expect(health.warmExpectedCount, 2);
+      expect(health.expectedHotCount, 2);
+      expect(health.warmMissingCount, 2);
+    },
+  );
+
+  test(
+    'E2 warm health separates ready queued running invalid and media states',
+    () {
+      const lessonId = 'cyber-e2-warm-health';
+      JsonMap material({
+        required int itemIdx,
+        required String marker,
+        required LessonLayer layer,
+        String? imagem,
+        JsonMap? imageMetadata,
+      }) {
+        final prepared = preparedMaterialFromLesson(
+          lesson: CompleteLesson(
+            conteudo: LessonContent(
+              explanation: 'Texto $marker ${layer.name}',
+              question: 'Pergunta $marker ${layer.name}?',
+              options: const {
+                AnswerLetter.A: 'A',
+                AnswerLetter.B: 'B',
+                AnswerLetter.C: 'C',
+              },
+              correctAnswer: AnswerLetter.A,
+            ),
+            imagem: imagem,
+            audioText: 'Texto $marker ${layer.name}',
+          ),
+          itemIdx: itemIdx,
+          marker: marker,
+          layer: layer,
+        );
+        if (imageMetadata != null) {
+          prepared['imageMetadata'] = imageMetadata;
+        }
+        return prepared;
+      }
+
+      final invalidText = material(
+        itemIdx: 0,
+        marker: 'M1',
+        layer: LessonLayer.l3,
+      );
+      invalidText['question'] = '';
+      final wrongIdentity = material(
+        itemIdx: 99,
+        marker: 'M99',
+        layer: LessonLayer.l1,
+      );
+      final service = StudentLearningStateService(
+        seed: {
+          lessonId: _stateWithFiveItems().copyWith(
+            lessonLocalId: lessonId,
+            readyLessonMaterials: {
+              preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): material(
+                itemIdx: 0,
+                marker: 'M1',
+                layer: LessonLayer.l1,
+              ),
+              preparedLessonMaterialKey(0, 'M1', LessonLayer.l2): material(
+                itemIdx: 0,
+                marker: 'M1',
+                layer: LessonLayer.l2,
+                imagem: _serverRasterDataUrl,
+              ),
+              preparedLessonMaterialKey(0, 'M1', LessonLayer.l3): invalidText,
+              preparedLessonMaterialKey(1, 'M2', LessonLayer.l1): wrongIdentity,
+              preparedLessonMaterialKey(1, 'M2', LessonLayer.l2): material(
+                itemIdx: 1,
+                marker: 'M2',
+                layer: LessonLayer.l2,
+                imageMetadata: const {'status': 'failed'},
+              ),
+              preparedLessonMaterialKey(1, 'M2', LessonLayer.l3): material(
+                itemIdx: 1,
+                marker: 'M2',
+                layer: LessonLayer.l3,
+                imageMetadata: const {'status': 'no_visual'},
+              ),
+            },
+            queuedActions: const [
+              {
+                'type': 'PREPARE_READY_WINDOW',
+                'status': 'queued',
+                'payload': {
+                  'hotSlots': [
+                    {'itemIdx': 2, 'marker': 'M3', 'layer': 1},
+                  ],
+                },
+              },
+              {
+                'type': 'PREPARE_READY_WINDOW',
+                'status': 'running',
+                'payload': {'itemIdx': 2, 'marker': 'M3', 'layer': 2},
+              },
+            ],
+          ),
+        },
+      );
+      final engine = DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: LessonOrchestrator(
+          t02Client: FakeT02Client(),
+          cache: LessonMaterialCache(),
+          bus: LessonEventBus(),
+        ),
+      );
+      final items = List<DopamineWindowItem>.generate(
+        5,
+        (index) => DopamineWindowItem(
+          text: 'Item ${index + 1}',
+          marker: 'M${index + 1}',
+        ),
+      );
+      final slots = engine.buildDopamineReadySlots(
+        lessonLocalId: lessonId,
+        source: 'e2-warm-health',
+        items: items,
+        currentItemIdx: 0,
+        currentLayer: LessonLayer.l1,
+        maxSlots: localLessonTraySize,
+        buildParams: (item, layer) => CompleteLessonParams(
+          lessonLocalId: lessonId,
+          item: item.text,
+          lang: 'pt-BR',
+          academic: 'fundamental',
+          layer: layer,
+          mode: LessonMode.session,
+          marker: item.marker,
+          itemIdx: items.indexOf(item),
+        ),
+      );
+
+      final health = engine.inspectDopamineReadyWindow(
+        lessonLocalId: lessonId,
+        slots: slots,
+        source: 'e2-warm-health',
+      );
+
+      expect(health.warmExpectedCount, localLessonTraySize);
+      expect(health.warmTextReadyCount, 4);
+      expect(health.warmQueuedCount, 1);
+      expect(health.warmRunningCount, 1);
+      expect(health.warmInvalidCount, 2);
+      expect(health.warmMissingCount, 9);
+      expect(health.warmMediaPendingCount, 1);
+      expect(health.warmMediaReadyCount, 1);
+      expect(health.warmMediaFailedCount, 1);
+      expect(health.warmNoVisualCount, 1);
+      expect(health.hotTextReadyCount, 2);
+      expect(health.hotQueuedCount, 0);
+      expect(health.hotMissingCount, 2);
+    },
+  );
 
   test('M-EXP3: one-item curriculum expects only three real slots', () {
     const lessonId = 'cyber-small-window-health';
@@ -4154,6 +4728,7 @@ void main() {
       LessonLayer.l3,
     ]);
     expect(health.expectedCount, 3);
+    expect(health.expectedHotCount, 3);
     expect(health.missingSlots, hasLength(3));
   });
 

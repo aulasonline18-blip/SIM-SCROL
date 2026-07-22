@@ -227,7 +227,7 @@ class LessonRuntimeEngine {
         mode: LessonMode.session,
         baseItems: session.baseItems,
         allowRemoteOrder: menuOpenPriority,
-        waitAfterOrderMs: menuOpenPriority ? 12000 : 0,
+        waitAfterOrderMs: 0,
         missingSource: menuOpenPriority
             ? 'drawer.aula.visible-request'
             : 'cyber.aula.local-preparation',

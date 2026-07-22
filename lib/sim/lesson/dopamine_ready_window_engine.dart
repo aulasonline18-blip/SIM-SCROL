@@ -5,6 +5,7 @@ import '../media/slot_media_contract.dart';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
+import 'lesson_content_validator.dart';
 import 'lesson_models.dart';
 import 'lesson_orchestrator.dart';
 import 'lesson_readiness_resolver.dart';
@@ -16,6 +17,7 @@ part 'ready_window/ready_window_executor.dart';
 
 const int offlineWarmCacheSize = 15;
 const int localLessonTraySize = offlineWarmCacheSize;
+const int hotTextWindowSize = 4;
 
 List<StudentLearningEvent> dopamineWindowServiceEvents({
   required int ts,
@@ -30,16 +32,47 @@ List<StudentLearningEvent> dopamineWindowServiceEvents({
   window,
   required Map<String, JsonMap> readyMaterials,
   required bool promotedHot,
+  required bool windowQueued,
   required String idempotencyKey,
   required String? marker,
 }) {
-  final missing = (window.length - readyMaterials.length).clamp(
-    0,
-    window.length,
-  );
-  final mediaPending = readyMaterials.values.where((material) {
-    final image = material['imagem'] as String?;
-    return image == null || image.trim().isEmpty;
+  final hotWindow = window.take(hotTextWindowSize).toList(growable: false);
+  final readyHotMaterials = <String, JsonMap>{};
+  final missingHotSlots = <JsonMap>[];
+  var mediaPending = 0;
+  for (final slot in hotWindow) {
+    final key = preparedLessonMaterialKey(
+      slot.idx,
+      slot.item.marker,
+      slot.layer,
+    );
+    final material = readyMaterials[key];
+    if (material != null &&
+        _isReadyMaterialForWindowSlot(material: material, slot: slot)) {
+      readyHotMaterials[key] = material;
+      final image = material['imagem'] as String?;
+      if (image == null || image.trim().isEmpty) mediaPending += 1;
+    } else {
+      missingHotSlots.add({
+        'itemIdx': slot.idx,
+        'marker': slot.item.marker,
+        'layer': slot.layer.value,
+        'preparedKey': key,
+      });
+    }
+  }
+  final hotQueuedCount = windowQueued ? missingHotSlots.length : 0;
+  final hotMissingCount = windowQueued ? 0 : missingHotSlots.length;
+  final readyWarmCount = readyMaterials.entries.where((entry) {
+    return window.any((slot) {
+      final key = preparedLessonMaterialKey(
+        slot.idx,
+        slot.item.marker,
+        slot.layer,
+      );
+      return key == entry.key &&
+          _isReadyMaterialForWindowSlot(material: entry.value, slot: slot);
+    });
   }).length;
   return [
     StudentLearningEvent(
@@ -59,7 +92,12 @@ List<StudentLearningEvent> dopamineWindowServiceEvents({
             )
             .toList(growable: false),
         'windowSize': window.length,
-        'cachedCount': window.length,
+        'cachedCount': readyWarmCount,
+        'expectedHotCount': hotWindow.length,
+        'hotTextReadyCount': readyHotMaterials.length,
+        'hotQueuedCount': hotQueuedCount,
+        'hotMissingCount': hotMissingCount,
+        'hotMissingSlots': windowQueued ? const <JsonMap>[] : missingHotSlots,
       },
     ),
     StudentLearningEvent(
@@ -69,10 +107,16 @@ List<StudentLearningEvent> dopamineWindowServiceEvents({
         'source': source,
         'reason': reason,
         'expectedCount': window.length,
-        'readyCount': readyMaterials.length,
-        'queuedCount': 1,
-        'missingCount': missing,
-        'hotTextReadyCount': readyMaterials.length.clamp(0, 4),
+        'readyCount': readyWarmCount,
+        'queuedCount': windowQueued ? 1 : 0,
+        'missingCount': windowQueued
+            ? 0
+            : (window.length - readyWarmCount).clamp(0, window.length),
+        'expectedHotCount': hotWindow.length,
+        'hotTextReadyCount': readyHotMaterials.length,
+        'hotQueuedCount': hotQueuedCount,
+        'hotMissingCount': hotMissingCount,
+        'hotMissingSlots': windowQueued ? const <JsonMap>[] : missingHotSlots,
         'mediaPendingCount': mediaPending,
         if (window.isNotEmpty)
           'windowStart': {
@@ -89,8 +133,15 @@ List<StudentLearningEvent> dopamineWindowServiceEvents({
         'source': source,
         'reason': reason,
         'requested': window.length,
-        'ready': readyMaterials.length,
-        'missing': missing,
+        'ready': readyWarmCount,
+        'queued': windowQueued ? 1 : 0,
+        'missing': windowQueued
+            ? 0
+            : (window.length - readyWarmCount).clamp(0, window.length),
+        'expectedHotCount': hotWindow.length,
+        'hotTextReadyCount': readyHotMaterials.length,
+        'hotQueuedCount': hotQueuedCount,
+        'hotMissingCount': hotMissingCount,
       },
     ),
     if (promotedHot)
@@ -106,6 +157,23 @@ List<StudentLearningEvent> dopamineWindowServiceEvents({
         },
       ),
   ];
+}
+
+bool _isReadyMaterialForWindowSlot({
+  required JsonMap material,
+  required ({int offset, int idx, DopamineWindowItem item, LessonLayer layer})
+  slot,
+}) {
+  if (material['text_status'] != 'ready') return false;
+  if (material['for_itemIdx'] != slot.idx) return false;
+  if (material['for_layer'] != slot.layer.name) return false;
+  if ((material['for_marker'] as String?) != slot.item.marker) return false;
+  try {
+    validatedLessonContentFromJson(material);
+    return true;
+  } on LessonContentValidationException {
+    return false;
+  }
 }
 
 class DopamineReadyWindowEngine {

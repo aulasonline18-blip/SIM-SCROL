@@ -86,6 +86,12 @@ class LessonReadinessResolver {
     }
     final cached = orchestrator.peekCachedLesson(lessonKeyFor(params));
     if (cached != null) {
+      if (!_hasReadyText(cached)) {
+        return LessonReadinessResult.invalid(
+          identity.preparedKey,
+          'cached lesson text incomplete',
+        );
+      }
       return LessonReadinessResult.readyFromMemoryCache(cached);
     }
     return const LessonReadinessResult.missing();
@@ -97,6 +103,16 @@ class LessonReadinessResolver {
   }) {
     final cached = orchestrator.peekCachedLesson(lessonKeyFor(params));
     if (cached != null) {
+      if (!_hasReadyText(cached)) {
+        return LessonReadinessResult.invalid(
+          preparedLessonMaterialKey(
+            params.itemIdx ?? -1,
+            params.marker,
+            params.layer,
+          ),
+          'cached lesson text incomplete',
+        );
+      }
       return LessonReadinessResult.readyFromMemoryCache(cached);
     }
     return const LessonReadinessResult.missing();
@@ -137,5 +153,14 @@ class LessonReadinessResolver {
   static String? _stringOrNull(Object? value) {
     final text = value?.toString();
     return text == null || text.trim().isEmpty ? null : text;
+  }
+
+  static bool _hasReadyText(CompleteLesson lesson) {
+    final content = lesson.conteudo;
+    return content.explanation.trim().isNotEmpty &&
+        content.question.trim().isNotEmpty &&
+        (content.options[AnswerLetter.A] ?? '').trim().isNotEmpty &&
+        (content.options[AnswerLetter.B] ?? '').trim().isNotEmpty &&
+        (content.options[AnswerLetter.C] ?? '').trim().isNotEmpty;
   }
 }

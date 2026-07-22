@@ -87,6 +87,30 @@ class StudentExperienceT02Adapter {
       firstLessonStartedAt: DateTime.now().millisecondsSinceEpoch,
     );
 
+    var readyMarked = false;
+    void markReady(ResolveLessonMaterialResult material) {
+      if (readyMarked) return;
+      readyMarked = true;
+      startFirstLesson.markMinimumLessonReady(
+        args: args,
+        first: first,
+        source: material.source.name,
+        waitedMs: material.waitedMs,
+      );
+      SecureLogger.log('SIM', 'T02_FIRST_MINIMUM_LESSON_READY', {
+        'marker': first.marker,
+      });
+
+      materialService.prepareReadyWindowInBackground(
+        lessonLocalId: args.lessonLocalId,
+        topic: topic,
+        itemIdx: first.itemIndex,
+        layer: LessonLayer.l1,
+        marker: first.marker,
+        source: 'StudentExperienceEngineV2:first_lesson_open',
+      );
+    }
+
     final material = await materialService
         .resolveLessonMaterialFromStateOrEngine(
           ResolveLessonMaterialInput(
@@ -97,34 +121,15 @@ class StudentExperienceT02Adapter {
             layer: LessonLayer.l1,
             params: params,
             waitBeforeOrderMs: 0,
-            waitAfterOrderMs: 45000,
+            waitAfterOrderMs: 0,
             allowRemoteOrder: true,
+            remoteOrderPriority: 'hot-local',
+            onBackgroundResolved: markReady,
           ),
         );
-    if (material == null) {
-      throw StateError(
-        'T02 nao devolveu a aula minima da primeira experiencia',
-      );
+    if (material != null) {
+      markReady(material);
     }
-
-    startFirstLesson.markMinimumLessonReady(
-      args: args,
-      first: first,
-      source: material.source.name,
-      waitedMs: material.waitedMs,
-    );
-    SecureLogger.log('SIM', 'T02_FIRST_MINIMUM_LESSON_READY', {
-      'marker': first.marker,
-    });
-
-    materialService.prepareReadyWindowInBackground(
-      lessonLocalId: args.lessonLocalId,
-      topic: topic,
-      itemIdx: first.itemIndex,
-      layer: LessonLayer.l1,
-      marker: first.marker,
-      source: 'StudentExperienceEngineV2:first_lesson_open',
-    );
   }
 
   JsonMap _pedagogicalEnvelope(JsonMap onboarding) {

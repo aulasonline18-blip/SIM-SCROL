@@ -192,7 +192,8 @@ class LessonMaterialController {
       resolved = null;
     }
     if (resolved == null) {
-      if (missingPriority == 'hot-local') {
+      if (missingPriority == 'hot-local' &&
+          !suppressReadyWindowUntilVisibleLessonReady) {
         final hotRecovered = await _waitForHotPreparedMaterial(
           lessonLocalId: lessonLocalId,
           topic: topic,

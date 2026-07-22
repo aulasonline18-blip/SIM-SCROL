@@ -153,24 +153,25 @@ class ReadyWindowExecutor {
           firstLessonStartedAt: DateTime.now().millisecondsSinceEpoch,
         );
       }
+      final slotPriority = _priorityForSlot(slot);
       _event(lessonLocalId, 'DOPAMINE_SLOT_REQUESTED', {
         'source': source,
         'slot': slot.slot,
         'itemIdx': slot.itemIdx,
         'marker': slot.marker,
         'layer': slot.layer.value,
-        'priority': index == 0 ? 'hot-local' : 'background',
+        'priority': slotPriority,
       });
       _event(lessonLocalId, 'DOPAMINE_WINDOW_SLOT_MISSING', {
         'source': source,
         ...readyWindowSlotJson(slot),
-        'priority': index == 0 ? 'hot-local' : 'background',
+        'priority': slotPriority,
       });
 
       try {
         final lesson = await orchestrator.prefetchCompleteLesson(
           slot.params,
-          priority: index == 0 ? 'hot-local' : 'background',
+          priority: slotPriority,
           deferMedia: true,
         );
         _mirrorPreparedLesson(
@@ -481,5 +482,11 @@ class ReadyWindowExecutor {
     final requested = maxSlots ?? ceiling;
     if (requested <= 0) return 0;
     return requested > ceiling ? ceiling : requested;
+  }
+
+  String _priorityForSlot(DopamineReadySlot slot) {
+    return const {'A', 'B', 'C', 'D'}.contains(slot.slot)
+        ? 'hot-local'
+        : 'background';
   }
 }

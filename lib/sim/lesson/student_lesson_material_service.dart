@@ -30,6 +30,7 @@ class ResolveLessonMaterialInput {
     this.waitAfterOrderMs = 12000,
     this.allowRemoteOrder = false,
     this.remoteOrderPriority = 'background',
+    this.onBackgroundResolved,
   });
 
   final String lessonLocalId;
@@ -43,6 +44,7 @@ class ResolveLessonMaterialInput {
   final int waitAfterOrderMs;
   final bool allowRemoteOrder;
   final String remoteOrderPriority;
+  final void Function(ResolveLessonMaterialResult result)? onBackgroundResolved;
 }
 
 class ResolveLessonMaterialResult {
@@ -217,12 +219,20 @@ class StudentLessonMaterialService {
         lessonFuture
             .then((lesson) {
               _mirrorPreparedAndCurrentLessonMaterial(input, lesson);
+              final result = ResolveLessonMaterialResult(
+                conteudo: lesson.conteudo,
+                imagem: lesson.imagem,
+                source: LessonMaterialSource.studentStateAfterWait,
+                waitedMs: DateTime.now().millisecondsSinceEpoch - startedAt,
+                imageMetadata: lesson.imageMetadata,
+              );
               _appendLessonTextReady(
                 input,
                 lesson.conteudo,
                 LessonMaterialSource.studentStateAfterWait,
-                DateTime.now().millisecondsSinceEpoch - startedAt,
+                result.waitedMs,
               );
+              input.onBackgroundResolved?.call(result);
             })
             .catchError((_) => null),
       );
@@ -458,6 +468,21 @@ class StudentLessonMaterialService {
         'L${layer.value}',
       ].join(':');
       final jobs = [...state.queuedActions];
+      final hotSlots = window
+          .take(hotTextWindowSize)
+          .map((slot) {
+            return {
+              'itemIdx': slot.idx,
+              'marker': slot.item.marker,
+              'layer': slot.layer.value,
+              'preparedKey': preparedLessonMaterialKey(
+                slot.idx,
+                slot.item.marker,
+                slot.layer,
+              ),
+            };
+          })
+          .toList(growable: false);
       final duplicateIndex = jobs.indexWhere(
         (job) =>
             job['type'] == 'PREPARE_READY_WINDOW' &&
@@ -467,7 +492,9 @@ class StudentLessonMaterialService {
                 job['status'] == 'failed'),
       );
       var promotedHot = false;
+      var windowQueued = false;
       if (duplicateIndex < 0) {
+        windowQueued = true;
         jobs.add({
           'job_id': 'PREPARE_READY_WINDOW:$idempotencyKey:$now',
           'type': 'PREPARE_READY_WINDOW',
@@ -482,6 +509,7 @@ class StudentLessonMaterialService {
             'layer': layer.value,
             'marker': marker,
             'topic': topic,
+            'hotSlots': hotSlots,
           },
           'created_at': now,
           'started_at': null,
@@ -495,6 +523,7 @@ class StudentLessonMaterialService {
           jobs[duplicateIndex]['priority'] != 'hot-local' &&
           jobs[duplicateIndex]['status'] == 'queued') {
         promotedHot = true;
+        windowQueued = true;
         jobs[duplicateIndex] = {
           ...jobs[duplicateIndex],
           'priority': 'hot-local',
@@ -504,9 +533,14 @@ class StudentLessonMaterialService {
               jobs[duplicateIndex]['payload'] as Map? ?? const {},
             ),
             'reason': reason ?? 'lesson_window_visible',
+            'hotSlots': hotSlots,
           },
           'next_retry_at': null,
         };
+      } else {
+        final duplicateStatus = jobs[duplicateIndex]['status'];
+        windowQueued =
+            duplicateStatus == 'queued' || duplicateStatus == 'running';
       }
       final hotKeys = {
         for (final slot in window)
@@ -531,6 +565,7 @@ class StudentLessonMaterialService {
             window: window,
             readyMaterials: hotReadyMaterials,
             promotedHot: promotedHot,
+            windowQueued: windowQueued,
             idempotencyKey: idempotencyKey,
             marker: marker,
           ),
