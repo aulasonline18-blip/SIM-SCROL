@@ -17,6 +17,9 @@ import 'features/onboarding/preparation_and_placement.dart';
 import 'features/portal/portal_flow.dart';
 import 'features/session/lab_session.dart';
 import 'sim/cloud/sim_server_cloud_functions.dart';
+import 'sim/cloud/cloud_queue.dart';
+import 'sim/cloud/drift_cloud_queue_storage.dart';
+import 'sim/cloud/shared_prefs_cloud_queue_storage.dart';
 import 'sim/cloud/supabase_flutter_session_provider.dart';
 import 'sim/cloud/supabase_student_state_cloud_storage.dart';
 import 'sim/config/sim_environment.dart';
@@ -69,11 +72,21 @@ Future<void> main() async {
       'sim_student_state',
       legacy: stateStorage,
     );
+    final cloudQueueStorage = await DriftCloudQueueStorage.open(
+      'sim_student_state',
+      legacy: SharedPrefsCloudQueueStorage(prefs),
+    );
     final canonicalStore = StudentStateStore(
       local: driftStateStorage,
       cloud: cloudStorage,
     );
-    runApp(SimApp(canonicalStore: canonicalStore, prefs: prefs));
+    runApp(
+      SimApp(
+        canonicalStore: canonicalStore,
+        cloudQueueStorage: cloudQueueStorage,
+        prefs: prefs,
+      ),
+    );
   } catch (error, stackTrace) {
     FlutterError.reportError(
       FlutterErrorDetails(
@@ -203,11 +216,13 @@ class SimApp extends StatefulWidget {
     super.key,
     this.canonicalStore,
     this.initialSession,
+    this.cloudQueueStorage,
     this.prefs,
   });
 
   final StudentStateStore? canonicalStore;
   final LabSession? initialSession;
+  final CloudQueueStorage? cloudQueueStorage;
   final SharedPreferences? prefs;
 
   @override
@@ -221,7 +236,11 @@ class _SimAppState extends State<SimApp> {
 
   late final LabSession session =
       widget.initialSession ??
-      LabSession(canonicalStore: widget.canonicalStore, prefs: widget.prefs);
+      LabSession(
+        canonicalStore: widget.canonicalStore,
+        cloudQueueStorage: widget.cloudQueueStorage,
+        prefs: widget.prefs,
+      );
   bool _darkMode = false;
 
   @override

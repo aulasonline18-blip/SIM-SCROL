@@ -3,9 +3,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/cloud/cloud_functions.dart';
 import 'package:sim_mobile/sim/cloud/cloud_queue.dart';
+import 'package:sim_mobile/sim/cloud/drift_cloud_queue_storage.dart';
+import 'package:sim_mobile/sim/cloud/shared_prefs_cloud_queue_storage.dart';
 import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/memory_test_stores.dart';
 
@@ -108,6 +111,37 @@ void main() {
     expect(merged.curriculum?.items.length, 1);
     expect(merged.progress?.totalItems, 40);
   });
+
+  test(
+    'offline queue uses Drift storage and migrates SharedPreferences legacy',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final legacy = SharedPrefsCloudQueueStorage(prefs);
+      final entry = CloudQueueEntry(
+        lessonLocalId: 'lesson-offline',
+        operation: StudentLearningSyncOperation.patch,
+        pendingSince: 10,
+        attempts: 1,
+        nextRetryAt: 20,
+      );
+      legacy.writeQueue({'lesson-offline': entry});
+      legacy.writeLastHash('lesson-offline', 'hash-1');
+
+      final first = await DriftCloudQueueStorage.memory(legacy: legacy);
+
+      expect(first.readQueue()['lesson-offline']?.stableId, entry.stableId);
+      expect(first.readLastHashes()['lesson-offline'], 'hash-1');
+      expect(legacy.readQueue(), isEmpty);
+
+      final reopened = await DriftCloudQueueStorage.fromDatabase(
+        first.debugDatabaseForTest,
+      );
+
+      expect(reopened.readQueue()['lesson-offline']?.stableId, entry.stableId);
+      expect(reopened.readLastHashes()['lesson-offline'], 'hash-1');
+    },
+  );
 }
 
 StudentLearningState _activeDigestiveLesson(String lessonLocalId) {

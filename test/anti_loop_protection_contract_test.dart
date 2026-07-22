@@ -112,6 +112,15 @@ void main() {
     final router = File(
       '/root/sim-work/sim-api/src/app/router.js',
     ).readAsStringSync();
+    final compositionRoot = File(
+      '/root/sim-work/sim-api/src/app/composition_root.js',
+    ).readAsStringSync();
+    final routeProtection = File(
+      '/root/sim-work/sim-api/src/app/middleware/route_protection_middleware.js',
+    ).readAsStringSync();
+    final mediaCache = File(
+      '/root/sim-work/sim-api/src/app/media-cache.js',
+    ).readAsStringSync();
     final gate = File(
       '/root/sim-work/sim-api/src/ai/ai-cost-protection-gate.js',
     ).readAsStringSync();
@@ -130,11 +139,13 @@ void main() {
 
     expect(audio, contains('AUDIO_ALREADY_RUNNING'));
     expect(audio, contains("status === 'running'"));
-    expect(router, contains('ai-usage-daily.json'));
-    expect(router, contains('recordAiUsageDaily'));
-    expect(router, contains('createAiCostProtectionGate'));
-    expect(router, contains('aiCostGate.assertRouteBudget'));
-    expect(router, contains('routeClass === \'audio\''));
+    expect(router, contains('composition_root'));
+    expect(compositionRoot, contains('recordAiUsageDaily'));
+    expect(compositionRoot, contains('createAiCostProtectionGate'));
+    expect(routeProtection, contains('aiCostGate.assertRouteBudget'));
+    expect(routeProtection, contains('routeClass === \'audio\''));
+    expect(mediaCache, contains('createRedisWindowLimiter'));
+    expect(mediaCache, contains('createRedisOperationRegistry'));
     expect(gate, contains('AI_COST_BUDGET_EXCEEDED'));
     expect(gate, contains('AI_COST_SINGLE_FLIGHT_RUNNING'));
     expect(gate, contains('AI_COST_CIRCUIT_OPEN'));

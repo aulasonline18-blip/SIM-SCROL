@@ -2924,6 +2924,36 @@
       "officialPaths": []
     },
     {
+      "path": "lib/sim/cloud/drift_cloud_queue_storage.dart",
+      "layer": "Persistencia/cache/sync",
+      "category": "sync-cloud",
+      "owner": "sim-cloud",
+      "logicalOwner": "sim-cloud",
+      "inputs": [
+        "fila offline legada",
+        "hashes de sincronizacao"
+      ],
+      "outputs": [
+        "fila offline transacional",
+        "hashes de sincronizacao"
+      ],
+      "tests": [
+        "test/m12_offline_cache_sync_contract_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "cache/sync",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "cache/sync",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
       "path": "lib/sim/cloud/lesson_cloud_bootstrap.dart",
       "layer": "Persistencia/cache/sync",
       "category": "sync-cloud",

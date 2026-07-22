@@ -2,7 +2,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../cloud/cloud_queue.dart';
 import '../cloud/cloud_functions.dart';
-import '../cloud/shared_prefs_cloud_queue_storage.dart';
 import '../cloud/sim_server_cloud_functions.dart';
 import '../cloud/student_learning_sync.dart';
 import '../cloud/student_remote_vault_sync_engine.dart';
@@ -18,6 +17,7 @@ class SimOrganismProvider {
     required this.canonicalStore,
     required this.aiConfig,
     required this.prefs,
+    required this.queueStorage,
     this.cloudFunctions,
     this.sessionProvider,
   }) {
@@ -27,6 +27,7 @@ class SimOrganismProvider {
   final StudentStateStore canonicalStore;
   final SimAiServerConfig aiConfig;
   final SharedPreferences prefs;
+  final CloudQueueStorage queueStorage;
   final StudentStateCloudFunctions? cloudFunctions;
   final SupabaseSessionProvider? sessionProvider;
   final Map<String, SimOrganism> _organisms = {};
@@ -36,7 +37,7 @@ class SimOrganismProvider {
   late final StudentStateStoreAdapter _remoteVaultStateService =
       StudentStateStoreAdapter(canonicalStore);
   late final CloudQueue remoteVaultQueue = CloudQueue(
-    storage: SharedPrefsCloudQueueStorage(prefs),
+    storage: queueStorage,
     stateService: _remoteVaultStateService,
     sessionProvider: _resolvedSessionProvider,
     cloudFunctions: cloudFunctions ?? SimServerCloudFunctions(config: aiConfig),

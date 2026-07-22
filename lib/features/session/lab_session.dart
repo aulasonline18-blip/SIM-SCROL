@@ -17,6 +17,7 @@ import '../../sim/billing/payment_return_store.dart';
 import '../../sim/billing/payments_functions.dart';
 import '../../sim/billing/play_billing_functions.dart';
 import '../../sim/billing/sim_pricing.dart';
+import '../../sim/cloud/cloud_queue.dart';
 import '../../sim/cloud/cloud_functions.dart';
 import '../../sim/cloud/sim_server_cloud_functions.dart';
 import '../../sim/cloud/student_remote_vault_sync_engine.dart';
@@ -101,6 +102,7 @@ class LabSession extends ChangeNotifier {
     CreditsFunctions? creditsFunctions,
     this.warmupBridgeService,
     this.experiencePreparerOverride,
+    this.cloudQueueStorage,
     this.prefs,
   }) : canonicalStore =
            canonicalStore ??
@@ -120,6 +122,7 @@ class LabSession extends ChangeNotifier {
   }
 
   final SharedPreferences? prefs;
+  final CloudQueueStorage? cloudQueueStorage;
   final Future<StudentExperienceResult> Function(StudentExperienceArgs args)?
   experiencePreparerOverride;
   final StudentStateStore? canonicalStore;
@@ -157,6 +160,7 @@ class LabSession extends ChangeNotifier {
     prefs: prefs!,
     cloudFunctions: _cloudFunctionsForDrawer(),
     sessionProvider: _sessionProviderForDrawer(),
+    queueStorage: _cloudQueueStorageForSession(cloudQueueStorage),
   );
   late final PaymentReturnStore _paymentReturnStore = PaymentReturnStore(
     storage: _paymentReturnStorageForSession(prefs),
@@ -1017,6 +1021,35 @@ AudioPreferenceStorage _audioPreferenceStorageForSession(
     return _TestOnlyVolatileAudioPreferenceStorage();
   }
   throw StateError('AUDIO_PREFERENCE_STORAGE_REQUIRED');
+}
+
+CloudQueueStorage _cloudQueueStorageForSession(CloudQueueStorage? storage) {
+  if (storage != null) return storage;
+  if (_isFlutterTestEnvironment()) return _TestOnlyVolatileCloudQueueStorage();
+  throw const CloudQueueStorageException('CLOUD_QUEUE_STORAGE_REQUIRED');
+}
+
+class _TestOnlyVolatileCloudQueueStorage implements CloudQueueStorage {
+  final Map<String, CloudQueueEntry> _queue = {};
+  final Map<String, String> _hashes = {};
+
+  @override
+  Map<String, CloudQueueEntry> readQueue() => Map.of(_queue);
+
+  @override
+  void writeQueue(Map<String, CloudQueueEntry> queue) {
+    _queue
+      ..clear()
+      ..addAll(queue);
+  }
+
+  @override
+  Map<String, String> readLastHashes() => Map.of(_hashes);
+
+  @override
+  void writeLastHash(String lessonLocalId, String hash) {
+    _hashes[lessonLocalId] = hash;
+  }
 }
 
 class _ExplicitStudentStateStorageRequired implements StudentStateLocalStorage {

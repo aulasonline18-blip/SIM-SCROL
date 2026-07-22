@@ -114,6 +114,10 @@ void main() {
       final path = file.path.replaceAll('\\', '/');
       return path == 'lib/sim/config/sim_api_routes.dart';
     }).toList();
+    final phase4OperationalFiles = dartFiles.where((file) {
+      final path = file.path.replaceAll('\\', '/');
+      return path == 'lib/sim/cloud/drift_cloud_queue_storage.dart';
+    }).toList();
     final stateModuleFiles = dartFiles.where((file) {
       final path = file.path.replaceAll('\\', '/');
       return path == 'lib/sim/state/domain/student_profile.dart' ||
@@ -168,6 +172,7 @@ void main() {
           securityPhaseFiles.length -
           sessionUseCaseFiles.length -
           routeContractFiles.length -
+          phase4OperationalFiles.length -
           stateModuleFiles.length -
           readyWindowModuleFiles.length -
           onboardingModuleFiles.length -
@@ -180,6 +185,7 @@ void main() {
     expect(securityPhaseFiles.length, 3);
     expect(sessionUseCaseFiles.length, 1);
     expect(routeContractFiles.length, 1);
+    expect(phase4OperationalFiles.length, 1);
     expect(stateModuleFiles.length, 7);
     expect(readyWindowModuleFiles.length, 4);
     expect(onboardingModuleFiles.length, 7);
