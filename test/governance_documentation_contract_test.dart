@@ -30,7 +30,7 @@ void main() {
       'scripts/run-integration-tests.sh',
       'manifest/workspace-manifest.json',
       'integration_test/smoke_test.dart',
-      '.github/workflows/app-ci.yml',
+      'docs/ci-templates/app-ci.yml',
     ]) {
       expect(File(path).existsSync(), isTrue, reason: '$path must exist');
     }
