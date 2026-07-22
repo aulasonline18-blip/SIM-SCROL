@@ -11,6 +11,8 @@ import 'lesson_orchestrator.dart';
 import 'lesson_readiness_resolver.dart';
 import 'ready_window_worker.dart';
 
+part 'student_lesson_material_failures.dart';
+
 enum LessonMaterialSource {
   studentState,
   studentStateAfterWait,
@@ -234,7 +236,10 @@ class StudentLessonMaterialService {
               );
               input.onBackgroundResolved?.call(result);
             })
-            .catchError((_) => null),
+            .catchError((Object error) {
+              appendBackgroundMaterialFailed(input, error);
+              return null;
+            }),
       );
       _appendLessonWaitApplied(
         input,

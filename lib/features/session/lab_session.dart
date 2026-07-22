@@ -70,21 +70,26 @@ part 'lab_session_entry_flows.dart';
 part 'lab_session_warmup_flows.dart';
 part 'lab_session_amparo_flows.dart';
 part 'lab_session_aux_flows.dart';
+part 'lab_session_profile_backup_helpers.dart';
 
-class _SingleFlightOperation<T> {
-  Future<T>? _running;
+enum AulaOpenOperationKind { open, retry }
 
-  Future<T> run(Future<T> Function() operation) {
-    final current = _running;
-    if (current != null) return current;
+enum AulaOpeningStatus { openingFromMenu, hydrating, retrying }
 
-    late final Future<T> future;
-    future = Future<T>.sync(operation).whenComplete(() {
-      if (identical(_running, future)) _running = null;
-    });
-    _running = future;
-    return future;
-  }
+class AulaOpeningTransition {
+  const AulaOpeningTransition({
+    required this.targetLessonLocalId,
+    required this.previousSnapshot,
+    required this.transitionStartedAt,
+    required this.status,
+    required this.generation,
+  });
+
+  final String targetLessonLocalId;
+  final LessonRuntimeSnapshot? previousSnapshot;
+  final DateTime transitionStartedAt;
+  final AulaOpeningStatus status;
+  final int generation;
 }
 
 class LabSession extends ChangeNotifier {
@@ -161,6 +166,7 @@ class LabSession extends ChangeNotifier {
     cloudFunctions: _cloudFunctionsForDrawer(),
     sessionProvider: _sessionProviderForDrawer(),
     queueStorage: _cloudQueueStorageForSession(cloudQueueStorage),
+    autoStartReadyWindowWorker: !_isFlutterTestEnvironment(),
   );
   late final PaymentReturnStore _paymentReturnStore = PaymentReturnStore(
     storage: _paymentReturnStorageForSession(prefs),
@@ -170,6 +176,7 @@ class LabSession extends ChangeNotifier {
   bool aulaRuntimeLoading = false;
   bool aulaMenuLessonWaiting = false;
   String? aulaRuntimeError;
+  AulaOpeningTransition? aulaOpeningTransition;
   SimWarmupLesson? warmupLesson;
   bool warmupLoading = false;
   String? warmupError;
@@ -190,8 +197,6 @@ class LabSession extends ChangeNotifier {
   bool _creditsLoaded = false;
   Future<void>? _creditsLoadInFlight;
   Future<void>? _launchExperienceInFlight;
-  final _SingleFlightOperation<void> _aulaRuntimeOpen =
-      _SingleFlightOperation<void>();
   int _experienceGeneration = 0;
   int _aulaRuntimeGeneration = 0;
   bool _entryOfficialLessonReady = false;
@@ -207,10 +212,19 @@ class LabSession extends ChangeNotifier {
   void Function()? _lessonImageUnsubscribe;
   void Function()? _aulaStateUnsubscribe;
   String? _aulaStateSubscriptionLessonId;
+  int _aulaStateSeenEventCount = 0;
   bool _advancePendingReevaluationScheduled = false;
   int _autoAdvanceAulaGeneration = 0;
+  bool _pendingAutoAdvanceAfterFeedback = false;
+  int _pendingAutoAdvanceGeneration = 0;
+  bool _pendingManualAdvance = false;
   int _doubtRequestSeq = 0;
   bool _disposed = false;
+
+  bool get hasPendingAutoAdvanceAfterFeedback =>
+      _pendingAutoAdvanceAfterFeedback;
+
+  bool get hasPendingManualAdvance => _pendingManualAdvance;
 
   void _notifyFromChild() {
     if (_disposed) return;

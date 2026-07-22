@@ -96,8 +96,9 @@ void main() {
       entryFlows,
       isNot(contains('while (_isCurrentExperience(id, generation))')),
     );
-    expect(sessionFlows, contains('_aulaRuntimeOpen.run'));
-    expect(session, contains('_SingleFlightOperation'));
+    expect(sessionFlows, isNot(contains('_aulaRuntimeOpen.run')));
+    expect(session, isNot(contains('_SingleFlightOperation')));
+    expect(session, contains('AulaOpeningTransition'));
     expect(session, contains('stopReadyWindowWorker()'));
     expect(organismProvider, contains('stopReadyWindowWorker()'));
     expect(readyWindowTest, contains('maxSlots: 50'));

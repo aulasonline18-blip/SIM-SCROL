@@ -101,6 +101,7 @@ class LessonMaterialController {
     String missingReason = 'material_missing_prepare_without_fallback',
     String remoteOrderPriority = 'background',
     bool suppressReadyWindowUntilVisibleLessonReady = false,
+    void Function(ResolveLessonMaterialResult result)? onBackgroundResolved,
   }) async {
     final item = position.itemAtivo;
     if (item == null) {
@@ -179,6 +180,39 @@ class LessonMaterialController {
           waitAfterOrderMs: waitAfterOrderMs,
           allowRemoteOrder: allowRemoteOrder,
           remoteOrderPriority: remoteOrderPriority,
+          onBackgroundResolved: (result) {
+            _applyMaterial(position, result);
+            _mirrorDisplayedPreparedLesson(
+              lessonLocalId: lessonLocalId,
+              position: position,
+              item: item,
+              material: result,
+            );
+            _clearAdvancePendingAfterBackgroundMaterial(
+              lessonLocalId: lessonLocalId,
+              position: position,
+              item: item,
+            );
+            _markShowingFirstLessonIfNeeded(lessonLocalId, position, item);
+            materialService.maintainLessonReadyWindow(
+              lessonLocalId: lessonLocalId,
+              topic: topic,
+              itemIdx: position.itemIdx,
+              layer: position.layer,
+              items: baseItems
+                  .map(
+                    (item) => DopamineWindowItem(
+                      text: item.text,
+                      marker: item.marker,
+                    ),
+                  )
+                  .toList(),
+              source: 'cyber.aula.background-resolved-window',
+              priority: 'hot-local',
+              reason: 'background_resolved_keeps_visible_window_alive',
+            );
+            onBackgroundResolved?.call(result);
+          },
         ),
       );
     } catch (error) {
@@ -293,6 +327,40 @@ class LessonMaterialController {
     );
   }
 
+  void _clearAdvancePendingAfterBackgroundMaterial({
+    required String lessonLocalId,
+    required LessonPositionState position,
+    required PlannedItem item,
+  }) {
+    final latest = stateService.read(lessonLocalId);
+    if (latest == null || latest.extra['advancePending'] is! Map) return;
+    final pending = latest.extra['advancePending'] as Map;
+    final startedAt = (pending['startedAt'] as num?)?.toInt();
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    stateService.write(
+      latest.copyWith(
+        updatedAt: ts,
+        extra: {...latest.extra, 'advancePending': null},
+        events: [
+          ...latest.events,
+          StudentLearningEvent(
+            type: 'INSTANT_ADVANCE_RECOVERED',
+            ts: ts,
+            payload: {
+              'lessonLocalId': lessonLocalId,
+              'toItemIdx': position.itemIdx,
+              'toLayer': position.layer.value,
+              'marker': item.marker,
+              if (startedAt != null) 'elapsedMs': ts - startedAt,
+              'source': 'background_material_resolved',
+              'serverRequiredForVisualPath': false,
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   String _lessonMaterialFailureCode(Object error) {
     final text = error.toString().toLowerCase();
     if (text.contains('contract') || text.contains('invalid')) {
@@ -323,6 +391,7 @@ class LessonMaterialController {
     required String academic,
     required LessonMode mode,
     required List<PlannedItem> baseItems,
+    void Function(ResolveLessonMaterialResult result)? onBackgroundResolved,
   }) {
     return carregar(
       lessonLocalId: lessonLocalId,
@@ -338,6 +407,7 @@ class LessonMaterialController {
       missingSource: 'cyber.aula.advance-hot-miss',
       missingPriority: 'hot-local',
       missingReason: 'advance_hot_path_fetch_failed',
+      onBackgroundResolved: onBackgroundResolved,
     );
   }
 

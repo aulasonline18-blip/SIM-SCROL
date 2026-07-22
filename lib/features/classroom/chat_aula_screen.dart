@@ -332,6 +332,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
                     session.openAulaRuntime(
                       menuOpenPriority: true,
                       suppressReadyWindowUntilVisibleLessonReady: true,
+                      operationKind: AulaOpenOperationKind.retry,
                     ),
                   );
                 },

@@ -1,5 +1,7 @@
 import '../lesson/lesson_models.dart';
+import '../lesson/student_lesson_material_service.dart';
 import '../media/lesson_image_api_contract.dart';
+import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
 import 'classroom_models.dart';
@@ -179,6 +181,7 @@ class LessonRuntimeEngine {
     bool authed = true,
     bool menuOpenPriority = false,
     bool suppressReadyWindowUntilVisibleLessonReady = false,
+    void Function(ResolveLessonMaterialResult result)? onBackgroundResolved,
   }) async {
     _lastAuthReady = authReady;
     _lastAuthed = authed;
@@ -238,6 +241,7 @@ class LessonRuntimeEngine {
         remoteOrderPriority: menuOpenPriority ? 'hot-local' : 'background',
         suppressReadyWindowUntilVisibleLessonReady:
             suppressReadyWindowUntilVisibleLessonReady,
+        onBackgroundResolved: onBackgroundResolved,
       );
     }
     return snapshot();
@@ -263,7 +267,9 @@ class LessonRuntimeEngine {
     );
   }
 
-  Future<void> advance() async {
+  Future<void> advance({
+    void Function(ResolveLessonMaterialResult result)? onBackgroundResolved,
+  }) async {
     _refreshSessionFromState();
     final position = _position;
     final session = _session;
@@ -275,10 +281,11 @@ class LessonRuntimeEngine {
       baseItems: session.baseItems,
       idioma: session.idioma,
       academic: session.academic,
+      onBackgroundResolved: onBackgroundResolved,
     );
   }
 
-  bool reavaliarAvancoPendente() {
+  bool reavaliarAvancoPendente({bool recoverFailedJobs = true}) {
     _refreshSessionFromState();
     final position = _position;
     final session = _session;
@@ -290,6 +297,7 @@ class LessonRuntimeEngine {
       baseItems: session.baseItems,
       idioma: session.idioma,
       academic: session.academic,
+      recoverFailedJobs: recoverFailedJobs,
     );
   }
 
@@ -304,6 +312,42 @@ class LessonRuntimeEngine {
     final state = stateService.read(session.lessonLocalId);
     if (state?.extra['advancePending'] is Map) return false;
     if (position.itemAtivo == null) return false;
+    return materialController.carregarRapidoSePronto(
+      lessonLocalId: session.lessonLocalId,
+      topic: session.curriculum?.topic ?? session.onboarding.objetivo,
+      position: position,
+      idioma: session.idioma,
+      academic: session.academic,
+      mode: LessonMode.session,
+      baseItems: session.baseItems,
+    );
+  }
+
+  bool reavaliarMaterialAtualSePronto() {
+    _refreshSessionFromState();
+    final position = _position;
+    final session = _session;
+    if (position == null || session == null || position.itemAtivo == null) {
+      return false;
+    }
+    final renderedQuestion = position.conteudo?.question.trim();
+    final key = preparedLessonMaterialKey(
+      position.itemIdx,
+      position.itemAtivo?.marker,
+      position.layer,
+    );
+    final prepared = stateService
+        .read(session.lessonLocalId)
+        ?.readyLessonMaterials[key];
+    final preparedQuestion =
+        (prepared?['question'] as String?)?.trim() ??
+        (prepared?['pergunta'] as String?)?.trim();
+    if (position.phase.type == ClassroomPhaseType.lendo &&
+        renderedQuestion != null &&
+        renderedQuestion.isNotEmpty &&
+        renderedQuestion == preparedQuestion) {
+      return false;
+    }
     return materialController.carregarRapidoSePronto(
       lessonLocalId: session.lessonLocalId,
       topic: session.curriculum?.topic ?? session.onboarding.objetivo,

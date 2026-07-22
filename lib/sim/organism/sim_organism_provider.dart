@@ -20,6 +20,7 @@ class SimOrganismProvider {
     required this.queueStorage,
     this.cloudFunctions,
     this.sessionProvider,
+    this.autoStartReadyWindowWorker = true,
   }) {
     remoteVaultQueue.wireCloudQueueLifecycle();
   }
@@ -30,6 +31,7 @@ class SimOrganismProvider {
   final CloudQueueStorage queueStorage;
   final StudentStateCloudFunctions? cloudFunctions;
   final SupabaseSessionProvider? sessionProvider;
+  final bool autoStartReadyWindowWorker;
   final Map<String, SimOrganism> _organisms = {};
   String? _activeLessonLocalId;
   SupabaseSessionProvider get _resolvedSessionProvider =>
@@ -65,9 +67,10 @@ class SimOrganismProvider {
         prefs: prefs,
         canonicalStore: canonicalStore,
         remoteVaultQueue: remoteVaultQueue,
+        autoStartReadyWindowWorker: autoStartReadyWindowWorker,
       ),
     );
-    if (existed && previousId != lessonLocalId) {
+    if (existed && previousId != lessonLocalId && autoStartReadyWindowWorker) {
       organism.readyWindowWorker.startReadyWindowWorker(
         activeLessonLocalId: lessonLocalId,
       );

@@ -205,6 +205,7 @@ class LessonAnswerProgressController {
     required List<PlannedItem> baseItems,
     required String idioma,
     required String academic,
+    void Function(ResolveLessonMaterialResult result)? onBackgroundResolved,
   }) async {
     if (position.phase.type != ClassroomPhaseType.concluido) return;
     audioCore?.stop();
@@ -321,6 +322,7 @@ class LessonAnswerProgressController {
           academic: academic,
           mode: _modeForNextMaterial(activeState, position.isReviewAtivo),
           baseItems: baseItems,
+          onBackgroundResolved: onBackgroundResolved,
         );
         if (position.phase.type == ClassroomPhaseType.lendo &&
             position.conteudo != null) {
@@ -446,6 +448,7 @@ class LessonAnswerProgressController {
         academic: academic,
         mode: _modeForNextMaterial(activeState, position.isReviewAtivo),
         baseItems: baseItems,
+        onBackgroundResolved: onBackgroundResolved,
       );
       if (position.phase.type == ClassroomPhaseType.lendo &&
           position.conteudo != null) {
@@ -600,6 +603,7 @@ class LessonAnswerProgressController {
     required List<PlannedItem> baseItems,
     required String idioma,
     required String academic,
+    bool recoverFailedJobs = true,
   }) {
     if (position.phase.type != ClassroomPhaseType.avancoPendente) {
       return false;
@@ -669,7 +673,7 @@ class LessonAnswerProgressController {
       position.historia = previousHistoria;
       position.mainAdvances = previousMainAdvances;
       position.phase = previousPhase;
-      if (failed) {
+      if (failed && recoverFailedJobs) {
         _updateAdvancePendingStatus(
           lessonLocalId: lessonLocalId,
           status: 'preparing',

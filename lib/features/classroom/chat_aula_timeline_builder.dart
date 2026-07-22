@@ -161,6 +161,22 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
       ),
     );
   }
+  if (!input.menuLessonWaiting && content == null && postAnswerAdvancePending) {
+    messages.add(
+      ChatLessonMessage(
+        id: 'post-answer-handoff-${marker ?? 'active'}',
+        role: ChatLessonMessageRole.system,
+        kind: ChatLessonMessageKind.processing,
+        text: t(phase?.message ?? 'aula_advance_preparing'),
+        lessonLocalId: input.lessonLocalId,
+        marker: marker,
+        itemIdx: itemIdx,
+        layer: layer,
+        isActionable: false,
+        deliveryStatus: ChatLessonDeliveryStatus.processing,
+      ),
+    );
+  }
 
   if (content != null) {
     final activeId = _activeMessageId(snapshot, content);
@@ -305,8 +321,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     );
 
     final selected = phase?.letter;
-    final answerBusy =
-        input.runtimeLoading || phase?.type == ClassroomPhaseType.processando;
+    final answerBusy = phase?.type == ClassroomPhaseType.processando;
     messages.add(
       ChatLessonMessage(
         id: 'options-$activeId',

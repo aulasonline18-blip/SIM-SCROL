@@ -550,7 +550,6 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
 
-      expect(runtime.reavaliarAvancoPendente(), isTrue);
       final snapshot = runtime.snapshot();
       expect(snapshot.phase.type, ClassroomPhaseType.lendo);
       expect(snapshot.conteudo?.question, 'Pergunta tardia M1 L2?');

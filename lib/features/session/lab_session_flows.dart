@@ -1,8 +1,10 @@
 part of 'lab_session.dart';
 
 const Duration _autoAdvanceAfterFeedbackDelay = Duration(milliseconds: 100);
-String humanErrorMessage(Object? error, {
-  String fallback = 'Nao consegui concluir isso agora. Tente novamente em instantes.',
+String humanErrorMessage(
+  Object? error, {
+  String fallback =
+      'Nao consegui concluir isso agora. Tente novamente em instantes.',
 }) {
   final raw = error?.toString() ?? '';
   final lower = raw.toLowerCase();
@@ -75,11 +77,18 @@ extension LabSessionFlowExtensions on LabSession {
   }
 
   void _prepareDrawerLessonOpen(String lessonLocalId) {
-    _aulaRuntimeGeneration++;
+    final generation = ++_aulaRuntimeGeneration;
     stopActiveAudio(notify: false);
-    _resetActiveLessonMedia(clearSnapshot: true, clearSubscriptions: true);
+    aulaOpeningTransition = AulaOpeningTransition(
+      targetLessonLocalId: lessonLocalId,
+      previousSnapshot: aulaSnapshot,
+      transitionStartedAt: DateTime.now(),
+      status: AulaOpeningStatus.openingFromMenu,
+      generation: generation,
+    );
+    _resetActiveLessonMedia(clearSnapshot: false, clearSubscriptions: true);
     aulaRuntimeLoading = false;
-    aulaMenuLessonWaiting = false;
+    aulaMenuLessonWaiting = true;
     aulaRuntimeError = null;
     this.lessonLocalId = lessonLocalId;
     navigationState.openRoute('/cyber/aula');
@@ -152,80 +161,6 @@ extension LabSessionFlowExtensions on LabSession {
     );
   }
 
-  JsonMap _guidedProfileFields(String objective, {JsonMap ficha = const {}}) {
-    final answers = guidedAnswers;
-    String? value(String key) {
-      final raw = answers[key]?.trim();
-      return raw == null || raw.isEmpty ? null : raw;
-    }
-
-    final purpose = value('purpose');
-    final level = value('level') ?? _cleanOrNull(academicLevel);
-    final blocker = value('blocker') ?? _cleanOrNull(difficulties);
-    final deadline = value('deadline') ?? _cleanOrNull(this.deadline);
-    final style = value('style') ?? _cleanOrNull(learningPreference);
-    final start = value('start');
-
-    final summaryLines = [
-      if (purpose != null) 'Objetivo real: $purpose',
-      if (level != null) 'Nivel percebido: $level',
-      if (blocker != null) 'Onde trava: $blocker',
-      if (deadline != null) 'Prazo/prova: $deadline',
-      if (style != null) 'Como prefere ser conduzido: $style',
-      if (start != null) 'Ponto de partida desejado: $start',
-    ];
-    final guidedSummary = summaryLines.join('\n');
-
-    final fields = <String, dynamic>{};
-    if (guidedSummary.isNotEmpty) fields['guided_summary'] = guidedSummary;
-    if (purpose != null) {
-      fields['real_use_goal'] = purpose;
-      fields['exam_goal'] = purpose;
-    }
-    if (objective.trim().isNotEmpty) {
-      fields['learning_goal'] = objective.trim();
-    }
-    if (level != null) {
-      fields['academic_level'] = level;
-      fields['nivel'] = level;
-    }
-    if (blocker != null) {
-      fields['known_weaknesses'] = blocker;
-      fields['learning_care_notes'] = blocker;
-    }
-    if (deadline != null) {
-      fields['session_goal'] = deadline;
-      fields['SESSION_GOAL'] = deadline;
-    }
-    if (style != null) {
-      fields['attention_profile'] = style;
-      fields['motivation_profile'] = style;
-    }
-    if (start != null) fields['prior_knowledge'] = start;
-    if (answers.isNotEmpty) fields['guided_answers'] = JsonMap.from(answers);
-    if (ficha.isNotEmpty) {
-      fields['pedagogical_entry_ficha'] = ficha;
-      for (final key in const [
-        'entry_path',
-        'age_range',
-        'material_type',
-        'material_based',
-        'attachments_text',
-        'student_profile_notes',
-        'subject',
-        'topic',
-        'country_curriculum',
-        'human_summary',
-      ]) {
-        final value = ficha[key];
-        if (value != null && value.toString().trim().isNotEmpty) {
-          fields[key == 'human_summary' ? 'human_entry_summary' : key] = value;
-        }
-      }
-    }
-    return fields;
-  }
-
   String? _cleanOrNull(String value) {
     final clean = value.trim();
     return clean.isEmpty ? null : clean;
@@ -259,99 +194,6 @@ extension LabSessionFlowExtensions on LabSession {
     }
     navigationState.openRoute('/creditos');
     _notifyFromChild();
-  }
-
-  Map<String, dynamic> _cyberLessonFromState(StudentLearningState state) {
-    final curriculum = state.curriculum;
-    final progress = state.progress;
-    final layerNumber = switch (progress?.layer ??
-        state.current?.layer ??
-        LessonLayer.l1) {
-      LessonLayer.l1 => 1,
-      LessonLayer.l2 => 2,
-      LessonLayer.l3 => 3,
-    };
-    return {
-      'id': state.lessonLocalId,
-      'name':
-          state.profile.objetivo ?? curriculum?.topic ?? state.lessonLocalId,
-      'createdAt': state.createdAt,
-      'updatedAt': state.updatedAt,
-      'onboarding': {
-        ...state.profile.toJson(),
-        'lessonLocalId': state.lessonLocalId,
-        'objetivo': state.profile.objetivo ?? curriculum?.topic ?? '',
-        'stableLang': state.profile.stableLang ?? state.profile.language ?? '',
-      },
-      'curriculo': {
-        'topic': curriculum?.topic ?? state.profile.objetivo ?? '',
-        'geradoEm': curriculum?.generatedAt ?? state.updatedAt,
-        'provisional': curriculum?.provisional ?? false,
-        'items': [
-          for (final item in curriculum?.items ?? const <CurriculumItem>[])
-            {
-              ...item.toJson(),
-              'id': item.marker,
-              'title': item.title ?? item.text,
-              'titulo': item.title ?? item.text,
-              'item_name': item.text,
-              'microitem_for_teacher': item.microitemForTeacher ?? item.text,
-            },
-        ],
-      },
-      'progress': {
-        'itemIdx': progress?.itemIdx ?? state.current?.itemIdx ?? 0,
-        'layer': layerNumber,
-        'erros': progress?.erros ?? 0,
-        'amparoLvl': progress?.amparoLvl ?? 0,
-        'historia': progress?.historia ?? const <String>[],
-        'mainAdvances': progress?.mainAdvances ?? 0,
-        'concluidos': progress?.concluidos ?? const <String>[],
-        'pendentes':
-            progress?.pendentesMarkers
-                .map((marker) => {'marker': marker})
-                .toList() ??
-            const <Map<String, dynamic>>[],
-        'tentativas': [
-          for (final attempt in state.attempts)
-            {
-              'marker': attempt.marker,
-              'layer': switch (attempt.layer) {
-                LessonLayer.l1 => 1,
-                LessonLayer.l2 => 2,
-                LessonLayer.l3 => 3,
-              },
-              'letra': attempt.letra.name,
-              'sinal': attempt.sinal.value,
-              'correct': attempt.correct,
-              'ts': attempt.ts,
-            },
-        ],
-      },
-    };
-  }
-
-  Set<String> _lessonIdsFromBackup(Map<String, dynamic> backup) {
-    final ids = <String>{};
-    final states = backup['studentLearningStates'];
-    if (states is Map) {
-      ids.addAll(
-        states.keys.map((key) => key.toString()).where((key) => key.isNotEmpty),
-      );
-    }
-    final lessons = backup['lessons'];
-    if (lessons is List) {
-      for (final lesson in lessons.whereType<Map>()) {
-        final id = lesson['id']?.toString().trim();
-        if (id != null && id.isNotEmpty) ids.add(id);
-      }
-    }
-    final state = backup['state'];
-    if (state is Map) {
-      final id = state['lessonLocalId']?.toString().trim();
-      if (id != null && id.isNotEmpty) ids.add(id);
-    }
-    return ids;
   }
 
   void openSupport(String path) {
@@ -470,8 +312,31 @@ extension LabSessionFlowExtensions on LabSession {
       unawaited(_reconcileDrawerCloudLessonInBackground(lessonLocalId));
       return true;
     }
+    final generation = ++_aulaRuntimeGeneration;
+    aulaOpeningTransition = AulaOpeningTransition(
+      targetLessonLocalId: lessonLocalId,
+      previousSnapshot: aulaSnapshot,
+      transitionStartedAt: DateTime.now(),
+      status: AulaOpeningStatus.hydrating,
+      generation: generation,
+    );
+    stopActiveAudio(notify: false);
+    _resetActiveLessonMedia(clearSnapshot: false, clearSubscriptions: true);
+    aulaRuntimeLoading = false;
+    aulaMenuLessonWaiting = true;
+    aulaRuntimeError = null;
+    this.lessonLocalId = lessonLocalId;
+    navigationState.openRoute('/cyber/aula');
+    _notifyFromChild();
     final session = await _drawerSession();
-    if (session == null) return false;
+    if (session == null) {
+      if (_isCurrentAulaRuntime(lessonLocalId, generation)) {
+        aulaRuntimeError = 'Sessao indisponivel para hidratar a aula.';
+        aulaMenuLessonWaiting = false;
+        _notifyFromChild();
+      }
+      return false;
+    }
     final row = await _cloudFunctionsForDrawer().getStudentStateByLesson(
       lessonLocalId,
       session,
@@ -481,7 +346,14 @@ extension LabSessionFlowExtensions on LabSession {
         ? rowLessonLocalId
         : lessonLocalId.trim();
     final state = row?.state;
-    if (state == null || _stateDeleted(state)) return false;
+    if (state == null || _stateDeleted(state)) {
+      if (_isCurrentAulaRuntime(lessonLocalId, generation)) {
+        aulaRuntimeError = 'Aula remota indisponivel.';
+        aulaMenuLessonWaiting = false;
+        _notifyFromChild();
+      }
+      return false;
+    }
     final hydrated = state.copyWith(
       lessonLocalId: hydratedLessonLocalId,
       profile: state.profile.copyWith(
@@ -883,17 +755,18 @@ extension LabSessionFlowExtensions on LabSession {
   Future<void> openAulaRuntime({
     bool menuOpenPriority = false,
     bool suppressReadyWindowUntilVisibleLessonReady = false,
-  }) => _aulaRuntimeOpen.run(
-        () => _openAulaRuntimeOnce(
-          menuOpenPriority: menuOpenPriority,
-          suppressReadyWindowUntilVisibleLessonReady:
-              suppressReadyWindowUntilVisibleLessonReady,
-        ),
-      );
+    AulaOpenOperationKind operationKind = AulaOpenOperationKind.open,
+  }) => _openAulaRuntimeOnce(
+    menuOpenPriority: menuOpenPriority,
+    suppressReadyWindowUntilVisibleLessonReady:
+        suppressReadyWindowUntilVisibleLessonReady,
+    operationKind: operationKind,
+  );
 
   Future<void> _openAulaRuntimeOnce({
     required bool menuOpenPriority,
     required bool suppressReadyWindowUntilVisibleLessonReady,
+    required AulaOpenOperationKind operationKind,
   }) async {
     var id = lessonLocalId;
     if (id == null || id.trim().isEmpty) {
@@ -909,6 +782,15 @@ extension LabSessionFlowExtensions on LabSession {
       if (id == null || id.trim().isEmpty) return;
     }
     final runtimeGeneration = ++_aulaRuntimeGeneration;
+    if (operationKind == AulaOpenOperationKind.retry) {
+      aulaOpeningTransition = AulaOpeningTransition(
+        targetLessonLocalId: id,
+        previousSnapshot: aulaSnapshot,
+        transitionStartedAt: DateTime.now(),
+        status: AulaOpeningStatus.retrying,
+        generation: runtimeGeneration,
+      );
+    }
     aulaRuntimeLoading = true;
     if (menuOpenPriority && suppressReadyWindowUntilVisibleLessonReady) {
       aulaMenuLessonWaiting = true;
@@ -924,6 +806,9 @@ extension LabSessionFlowExtensions on LabSession {
         return;
       }
       final organism = _organismForActiveLesson();
+      final openLessonId = id;
+      _bindActiveLessonState(organism);
+      _scheduleAdvancePendingReevaluation(organism);
       final snapshot = await organism.lessonRuntimeEngine.open(
         lessonLocalId: organism.lessonLocalId,
         authReady: authReady,
@@ -931,11 +816,18 @@ extension LabSessionFlowExtensions on LabSession {
         menuOpenPriority: menuOpenPriority,
         suppressReadyWindowUntilVisibleLessonReady:
             suppressReadyWindowUntilVisibleLessonReady,
+        onBackgroundResolved: (result) {
+          _applyBackgroundResolvedLessonMaterial(
+            organism: organism,
+            lessonLocalId: openLessonId,
+            generation: runtimeGeneration,
+          );
+        },
       );
       if (!_isCurrentAulaRuntime(id, runtimeGeneration)) return;
       aulaSnapshot = snapshot;
+      aulaOpeningTransition = null;
       if (_drawerAulaTextReady(snapshot)) aulaMenuLessonWaiting = false;
-      _bindActiveLessonState(organism);
       _bindActiveLessonMedia(organism);
       _reavaliarAvancoPendenteSePossivel(organism);
       _syncImageStateFromSnapshot();
@@ -958,6 +850,8 @@ extension LabSessionFlowExtensions on LabSession {
       if (_isCurrentAulaRuntime(id, runtimeGeneration)) {
         aulaRuntimeLoading = false;
         _notifyFromChild();
+        final active = _activeOrganism;
+        if (active != null) _drainPendingAulaIntents(active);
       }
     }
   }
@@ -965,6 +859,28 @@ extension LabSessionFlowExtensions on LabSession {
   bool _isCurrentAulaRuntime(String lessonLocalId, int generation) =>
       this.lessonLocalId == lessonLocalId &&
       _aulaRuntimeGeneration == generation;
+
+  void _applyBackgroundResolvedLessonMaterial({
+    required SimOrganism organism,
+    required String lessonLocalId,
+    required int generation,
+  }) {
+    if (_disposed || _activeOrganism != organism) return;
+    if (!_isCurrentAulaRuntime(lessonLocalId, generation)) return;
+    aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+    aulaRuntimeLoading = false;
+    aulaRuntimeError = null;
+    aulaOpeningTransition = null;
+    if (_drawerAulaTextReady(aulaSnapshot)) aulaMenuLessonWaiting = false;
+    _bindActiveLessonMedia(organism);
+    _syncImageStateFromSnapshot();
+    _notifyFromChild();
+    _drainPendingAulaIntents(organism);
+    _keepActiveAulaOfflineWindowWarm(
+      organism,
+      source: 'cyber.aula.background-resolved',
+    );
+  }
 
   void _keepActiveAulaOfflineWindowWarm(
     SimOrganism organism, {
@@ -988,6 +904,7 @@ extension LabSessionFlowExtensions on LabSession {
     final topic = curriculum.topic.trim().isNotEmpty
         ? curriculum.topic
         : state.profile.objetivo;
+    if (_isFlutterTestEnvironment()) return;
     organism.materialService.prepareReadyWindowInBackground(
       lessonLocalId: id,
       topic: topic,
@@ -1003,6 +920,8 @@ extension LabSessionFlowExtensions on LabSession {
     if (_aulaStateSubscriptionLessonId == organism.lessonLocalId) return;
     _aulaStateUnsubscribe?.call();
     _aulaStateSubscriptionLessonId = organism.lessonLocalId;
+    _aulaStateSeenEventCount =
+        organism.stateService.read(organism.lessonLocalId)?.events.length ?? 0;
     _aulaStateUnsubscribe = organism.stateService.subscribe((changedLessonId) {
       if (_disposed || changedLessonId != _aulaStateSubscriptionLessonId) {
         return;
@@ -1010,12 +929,34 @@ extension LabSessionFlowExtensions on LabSession {
       final active = _activeOrganism;
       if (active == null || active.lessonLocalId != changedLessonId) return;
       final state = active.stateService.read(changedLessonId);
-      if (state?.extra['advancePending'] is! Map &&
-          aulaSnapshot?.phase.type != ClassroomPhaseType.avancoPendente) {
+      final eventCount = state?.events.length ?? 0;
+      final latestEvent = state?.events.isNotEmpty == true
+          ? state!.events.last
+          : null;
+      if (latestEvent?.type == 'LESSON_BACKGROUND_MATERIAL_FAILED') {
+        aulaRuntimeLoading = false;
+        aulaMenuLessonWaiting = false;
+        aulaRuntimeError =
+            'Nao consegui preparar esta parte agora. Tente novamente.';
+        _notifyFromChild();
         return;
       }
+      if (eventCount > _aulaStateSeenEventCount &&
+          latestEvent != null &&
+          _isAulaStateReevaluationEcho(latestEvent.type)) {
+        _aulaStateSeenEventCount = eventCount;
+        return;
+      }
+      _aulaStateSeenEventCount = eventCount;
       _scheduleAdvancePendingReevaluation(active);
     });
+  }
+
+  bool _isAulaStateReevaluationEcho(String type) {
+    return type == 'LESSON_TEXT_READY' ||
+        type == 'INSTANT_EXPERIENCE_MEASURED' ||
+        type == 'LOCAL_PENDING_ADVANCE_DISPLAYED' ||
+        type == 'INSTANT_ADVANCE_RECOVERED';
   }
 
   void _scheduleAdvancePendingReevaluation(SimOrganism organism) {
@@ -1032,13 +973,18 @@ extension LabSessionFlowExtensions on LabSession {
     if (_disposed || _activeOrganism != organism) return;
     final changed =
         organism.lessonRuntimeEngine.reavaliarMaterialVisivelSolicitado() ||
-        organism.lessonRuntimeEngine.reavaliarAvancoPendente();
+        organism.lessonRuntimeEngine.reavaliarAvancoPendente(
+          recoverFailedJobs: false,
+        ) ||
+        organism.lessonRuntimeEngine.reavaliarMaterialAtualSePronto();
     if (!changed) return;
     aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
     if (_drawerAulaTextReady(aulaSnapshot)) aulaMenuLessonWaiting = false;
+    aulaOpeningTransition = null;
     _bindActiveLessonMedia(organism);
     _syncImageStateFromSnapshot();
     _notifyFromChild();
+    _drainPendingAulaIntents(organism);
   }
 
   bool _activateReadyNextCurriculumPartIfNeeded(String currentLessonId) {
@@ -1291,6 +1237,7 @@ extension LabSessionFlowExtensions on LabSession {
       await organism.lessonRuntimeEngine.signal(signal);
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
+      _notifyFromChild();
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
       _keepActiveAulaOfflineWindowWarm(organism, source: 'cyber.aula.signal');
       prefetchAuxRoomsAfterMainEvidence(organism);
@@ -1311,22 +1258,42 @@ extension LabSessionFlowExtensions on LabSession {
       return;
     }
     final generation = ++_autoAdvanceAulaGeneration;
+    _pendingAutoAdvanceAfterFeedback = true;
+    _pendingAutoAdvanceGeneration = generation;
     Future<void>.delayed(_autoAdvanceAfterFeedbackDelay, () async {
-      final canAdvance =
-          !_disposed &&
-          generation == _autoAdvanceAulaGeneration &&
-          _activeOrganism == organism &&
-          aulaSnapshot?.phase.type == ClassroomPhaseType.concluido &&
-          aulaSnapshot?.phase.wasCorrect == true;
-      if (!canAdvance) return;
-      if (aulaRuntimeLoading) {
-        Future<void>.delayed(const Duration(milliseconds: 1000), () async {
-          if (!aulaRuntimeLoading) await advanceAula();
-        });
-        return;
-      }
-      await advanceAula();
+      await _tryConsumePendingAutoAdvance(organism, generation);
     });
+  }
+
+  Future<void> _tryConsumePendingAutoAdvance(
+    SimOrganism organism,
+    int generation,
+  ) async {
+    final canAdvance =
+        !_disposed &&
+        _pendingAutoAdvanceAfterFeedback &&
+        generation == _pendingAutoAdvanceGeneration &&
+        generation == _autoAdvanceAulaGeneration &&
+        _activeOrganism == organism &&
+        aulaSnapshot?.phase.type == ClassroomPhaseType.concluido &&
+        aulaSnapshot?.phase.wasCorrect == true;
+    if (!canAdvance || aulaRuntimeLoading) return;
+    _pendingAutoAdvanceAfterFeedback = false;
+    await advanceAula();
+  }
+
+  void _drainPendingAulaIntents(SimOrganism organism) {
+    if (_disposed || aulaRuntimeLoading || _activeOrganism != organism) return;
+    if (_pendingAutoAdvanceAfterFeedback) {
+      unawaited(
+        _tryConsumePendingAutoAdvance(organism, _pendingAutoAdvanceGeneration),
+      );
+      return;
+    }
+    if (_pendingManualAdvance) {
+      _pendingManualAdvance = false;
+      unawaited(advanceAula());
+    }
   }
 
   void setDeleteConfirmation(String value) =>
@@ -1346,9 +1313,16 @@ extension LabSessionFlowExtensions on LabSession {
   }
 
   Future<void> advanceAula() async {
-    if (aulaRuntimeLoading) return;
+    if (aulaRuntimeLoading) {
+      _pendingManualAdvance = true;
+      aulaRuntimeError = null;
+      _notifyFromChild();
+      return;
+    }
+    _pendingManualAdvance = false;
     _autoAdvanceAulaGeneration++;
     final organism = _activeOrganism ?? _organismForActiveLesson();
+    final advanceGeneration = _aulaRuntimeGeneration;
     stopActiveAudio(notify: false);
     aulaRuntimeLoading = true;
     aulaRuntimeError = null;
@@ -1356,7 +1330,15 @@ extension LabSessionFlowExtensions on LabSession {
     var crossedToNextPart = false;
     var blockedByRecovery = false;
     try {
-      await organism.lessonRuntimeEngine.advance();
+      await organism.lessonRuntimeEngine.advance(
+        onBackgroundResolved: (result) {
+          _applyBackgroundResolvedLessonMaterial(
+            organism: organism,
+            lessonLocalId: organism.lessonLocalId,
+            generation: advanceGeneration,
+          );
+        },
+      );
       aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
       _bindActiveLessonMedia(organism);
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
@@ -1378,6 +1360,7 @@ extension LabSessionFlowExtensions on LabSession {
     } finally {
       aulaRuntimeLoading = false;
       _notifyFromChild();
+      _drainPendingAulaIntents(organism);
     }
     if (blockedByRecovery && recoveryRoom == null) {
       await startRecoveryRoom();
@@ -1415,7 +1398,9 @@ extension LabSessionFlowExtensions on LabSession {
     return state != null && hasPendingNextCurriculumPart(state);
   }
 
-  Future<void> _retryOpenAulaWhenNextCurriculumPartIsReady(String currentLessonId) async {
+  Future<void> _retryOpenAulaWhenNextCurriculumPartIsReady(
+    String currentLessonId,
+  ) async {
     final deadline = DateTime.now().add(const Duration(seconds: 30));
     while (!_disposed &&
         lessonLocalId == currentLessonId &&

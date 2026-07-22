@@ -502,7 +502,7 @@ void main() {
     },
   );
 
-  test('post-answer advance pending stays silent while handoff resolves', () {
+  test('post-answer advance pending renders living handoff state', () {
     final messages = buildChatLessonMessages(
       const ChatLessonTimelineInput(
         snapshot: LessonRuntimeSnapshot(
@@ -538,8 +538,14 @@ void main() {
       isEmpty,
     );
     expect(
+      messages.where(
+        (message) => message.id.startsWith('post-answer-handoff-'),
+      ),
+      hasLength(1),
+    );
+    expect(
       messages.map((message) => message.text),
-      isNot(contains(t('aula_advance_preparing'))),
+      contains(t('aula_advance_preparing')),
     );
   });
 
@@ -566,6 +572,10 @@ void main() {
       messages.map((message) => message.kind),
       contains(ChatLessonMessageKind.question),
     );
+    final options = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.options,
+    );
+    expect(options.options.every((option) => option.enabled), isTrue);
   });
 
   test('valid pedagogical content wins over stale runtime loading', () {

@@ -304,6 +304,7 @@ class SimOrganism {
     StudentStateStore? canonicalStore,
     AudioPlaybackAdapter? playback,
     required CloudQueue remoteVaultQueue,
+    bool autoStartReadyWindowWorker = true,
   }) {
     if (canonicalStore == null) {
       throw const StudentStateStorageException(
@@ -448,9 +449,11 @@ class SimOrganism {
     final cloudQueue = remoteVaultQueue;
     stateAdapter.onWrite = (id) =>
         cloudQueue.enqueueStudentStateSync(lessonLocalId: id);
-    readyWindowWorker.startReadyWindowWorker(
-      activeLessonLocalId: lessonLocalId,
-    );
+    if (autoStartReadyWindowWorker) {
+      readyWindowWorker.startReadyWindowWorker(
+        activeLessonLocalId: lessonLocalId,
+      );
+    }
     final sync = StudentLearningSync(cloudQueue);
     final cloudBootstrap = LessonCloudBootstrap(sync: sync);
     final curriculumSync = LessonCurriculumSyncEngine(
