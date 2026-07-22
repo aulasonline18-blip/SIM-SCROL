@@ -309,6 +309,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
           menuLessonRetrying:
               session.aulaOpeningTransition?.status ==
               AulaOpeningStatus.retrying,
+          answerInputReady: session.aulaAnswerInputReady,
         ),
       ),
     );

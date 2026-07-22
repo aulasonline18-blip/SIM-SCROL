@@ -22,6 +22,7 @@ class ChatLessonTimelineInput {
     this.lessonLocalId,
     this.menuLessonWaiting = false,
     this.menuLessonRetrying = false,
+    this.answerInputReady = true,
   });
 
   final LessonRuntimeSnapshot? snapshot;
@@ -37,6 +38,7 @@ class ChatLessonTimelineInput {
   final String? lessonLocalId;
   final bool menuLessonWaiting;
   final bool menuLessonRetrying;
+  final bool answerInputReady;
 }
 
 List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
@@ -328,6 +330,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     final contentAcceptsAnswer = hasValidPedagogicalContent(content);
     final answerBusy =
         input.menuLessonWaiting ||
+        !input.answerInputReady ||
         phase?.type == ClassroomPhaseType.processando ||
         !contentAcceptsAnswer;
     messages.add(
@@ -344,7 +347,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         marker: marker,
         itemIdx: itemIdx,
         layer: layer,
-        isActionable: !input.menuLessonWaiting,
+        isActionable: !input.menuLessonWaiting && input.answerInputReady,
         deliveryStatus: ChatLessonDeliveryStatus.delivered,
       ),
     );

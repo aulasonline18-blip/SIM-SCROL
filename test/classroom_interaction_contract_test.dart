@@ -36,6 +36,23 @@ void main() {
     },
   );
 
+  test('valid content stays inert until answer runtime is active', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(snapshot: _snapshot(), answerInputReady: false),
+    );
+
+    final options = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.options,
+    );
+
+    expect(options.isActionable, isFalse);
+    expect(options.hasInteractiveOptions, isFalse);
+    expect(
+      options.options.map((option) => option.enabled),
+      everyElement(false),
+    );
+  });
+
   test('invalid answer letter is rejected and does not become A', () {
     final session = LabSession()
       ..aulaSnapshot = _snapshot()
