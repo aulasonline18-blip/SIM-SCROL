@@ -188,15 +188,6 @@ class LabSession extends ChangeNotifier {
   bool warmupWaitingForOfficialLesson = false;
   final WarmupBridgeCoordinator _warmupCoordinator = WarmupBridgeCoordinator();
 
-  bool get aulaAnswerInputReady {
-    if (prefs == null || _runningUnderFlutterTest) {
-      return hasValidPedagogicalContent(aulaSnapshot?.conteudo);
-    }
-    final active = _activeOrganism;
-    if (active == null || active.lessonLocalId != lessonLocalId) return false;
-    return active.lessonRuntimeEngine.canSelectAnswer;
-  }
-
   VisualLearningFeedbackReport get visualLearningFeedbackReport =>
       VisualLearningFeedbackReport.fromLesson(
         history: aulaSnapshot?.history ?? const [],

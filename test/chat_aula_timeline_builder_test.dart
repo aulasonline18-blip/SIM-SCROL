@@ -133,7 +133,7 @@ void main() {
     expect(active.action, AulaConversationAction.chooseAnswer);
   });
 
-  test('menu lesson transition keeps preserved snapshot inert', () {
+  test('menu lesson transition keeps valid snapshot answerable', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(
         lessonLocalId: 'lesson-b',
@@ -149,8 +149,8 @@ void main() {
     final options = messages.singleWhere(
       (message) => message.kind == ChatLessonMessageKind.options,
     );
-    expect(options.isActionable, isFalse);
-    expect(options.options.every((option) => !option.enabled), isTrue);
+    expect(options.isActionable, isTrue);
+    expect(options.options.every((option) => option.enabled), isTrue);
   });
 
   test('typed blocks expose feedback and recoverable error actions', () {

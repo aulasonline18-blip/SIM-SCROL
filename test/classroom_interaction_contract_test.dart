@@ -36,21 +36,17 @@ void main() {
     },
   );
 
-  test('valid content stays inert until answer runtime is active', () {
+  test('valid content keeps A/B/C active while menu lesson is arriving', () {
     final messages = buildChatLessonMessages(
-      ChatLessonTimelineInput(snapshot: _snapshot(), answerInputReady: false),
+      ChatLessonTimelineInput(snapshot: _snapshot(), menuLessonWaiting: true),
     );
 
     final options = messages.singleWhere(
       (message) => message.kind == ChatLessonMessageKind.options,
     );
 
-    expect(options.isActionable, isFalse);
-    expect(options.hasInteractiveOptions, isFalse);
-    expect(
-      options.options.map((option) => option.enabled),
-      everyElement(false),
-    );
+    expect(options.isActionable, isTrue);
+    expect(options.options.map((option) => option.enabled), everyElement(true));
   });
 
   test('invalid answer letter is rejected and does not become A', () {

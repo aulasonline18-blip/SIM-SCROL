@@ -118,27 +118,6 @@ class LessonRuntimeEngine {
   bool _lastAuthReady = true;
   bool _lastAuthed = true;
 
-  bool get canSelectAnswer {
-    _refreshSessionFromState();
-    final position = _position;
-    if (position == null || position.itemAtivo == null) return false;
-    final content = position.conteudo;
-    if (content == null ||
-        content.explanation.trim().isEmpty ||
-        content.question.trim().isEmpty ||
-        AnswerLetter.values.any(
-          (letter) => (content.options[letter] ?? '').trim().isEmpty,
-        )) {
-      return false;
-    }
-    return switch (position.phase.type) {
-      ClassroomPhaseType.lendo ||
-      ClassroomPhaseType.expandida ||
-      ClassroomPhaseType.concluido => true,
-      _ => false,
-    };
-  }
-
   CompleteLessonParams? activeLessonParams() {
     _refreshSessionFromState();
     final position = _position;
@@ -272,7 +251,6 @@ class LessonRuntimeEngine {
   bool select(AnswerLetter letter) {
     final position = _position;
     if (position == null) return false;
-    if (!canSelectAnswer) return false;
     answerController.selecionar(position, letter);
     return true;
   }
