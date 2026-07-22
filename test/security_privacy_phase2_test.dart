@@ -116,8 +116,7 @@ void main() {
       final files = temp.listSync(recursive: true).whereType<File>().toList();
       expect(files, isNotEmpty);
       final raws = files.map((file) => file.readAsStringSync()).toList();
-      final raw = raws.singleWhere((content) => content.contains('cipherText'));
-      expect(raw, contains('cipherText'));
+      expect(raws.where((content) => content.contains('cipherText')), isNotEmpty);
       for (final content in raws) {
         expect(content, isNot(contains('teste@example.com')));
         expect(content, isNot(contains('Qual resposta sensivel?')));

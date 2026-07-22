@@ -102,7 +102,8 @@ android {
                 boolProperty("SIM_ANDROID_DEBUG_ALLOW_CLEARTEXT", true).toString()
         }
         release {
-            if (simReleaseServerUrl.startsWith("http://")) {
+            if (simReleaseServerUrl.startsWith("http://") &&
+                !simOperationalReleaseAllowCleartext) {
                 throw GradleException(
                     "SIM_SERVER_URL must use HTTPS for release builds."
                 )
