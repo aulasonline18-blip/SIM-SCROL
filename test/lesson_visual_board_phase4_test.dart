@@ -177,11 +177,9 @@ void main() {
     );
     await tester.pump();
 
-    await _pumpGuidedRoundIntro(tester);
     expect(find.text('Explicação pronta'), findsOneWidget);
     expect(find.text('Imagem indisponível'), findsOneWidget);
-    await _openGuidedQuestion(tester);
-    await _scrollGuidedOptionsIntoView(tester);
+    await _scrollOptionsIntoView(tester);
     expect(find.text('Pergunta pronta?'), findsOneWidget);
     expect(find.byKey(const Key('chat-answer-card-A')), findsOneWidget);
   });
@@ -247,28 +245,7 @@ LessonRuntimeSnapshot _snapshotWithContent({String? imagem}) {
   );
 }
 
-Future<void> _pumpGuidedRoundIntro(WidgetTester tester) async {
-  await tester.pump(const Duration(milliseconds: 140));
-  await tester.pump(const Duration(milliseconds: 140));
-  await tester.pump(const Duration(milliseconds: 160));
-}
-
-Future<void> _openGuidedQuestion(WidgetTester tester) async {
-  final button = find.text(t('aula_practice_foundation'));
-  if (button.evaluate().isEmpty) {
-    await tester.drag(
-      find.byKey(const Key('chat-aula-timeline')),
-      const Offset(0, -280),
-    );
-    await tester.pump();
-  }
-  await tester.tap(button);
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 220));
-  await tester.pump();
-}
-
-Future<void> _scrollGuidedOptionsIntoView(WidgetTester tester) async {
+Future<void> _scrollOptionsIntoView(WidgetTester tester) async {
   await tester.drag(
     find.byKey(const Key('chat-aula-timeline')),
     const Offset(0, -260),

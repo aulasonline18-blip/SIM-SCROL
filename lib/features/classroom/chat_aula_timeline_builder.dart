@@ -295,22 +295,6 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
 
     messages.add(
       ChatLessonMessage(
-        id: 'practice-action-$activeId',
-        role: ChatLessonMessageRole.sim,
-        kind: ChatLessonMessageKind.practiceAction,
-        text: t('aula_practice_foundation'),
-        actionKey: 'practice-foundation',
-        lessonLocalId: input.lessonLocalId,
-        marker: marker,
-        itemIdx: itemIdx,
-        layer: layer,
-        isActionable: true,
-        deliveryStatus: ChatLessonDeliveryStatus.delivered,
-      ),
-    );
-
-    messages.add(
-      ChatLessonMessage(
         id: 'question-$activeId',
         role: ChatLessonMessageRole.sim,
         kind: ChatLessonMessageKind.question,

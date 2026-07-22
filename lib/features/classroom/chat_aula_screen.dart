@@ -348,7 +348,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
                     ),
                   );
                 },
-                onNext: () {},
+                onNext: () => unawaited(session.advanceAula()),
                 onOpenDoubt: _openDoubtFromAction,
               ),
             ),

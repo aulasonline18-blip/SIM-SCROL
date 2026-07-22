@@ -100,7 +100,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('guided lesson round reveals blocks with practice gate', (
+  testWidgets('lesson round renders question and answer options directly', (
     tester,
   ) async {
     AnswerLetter? chosen;
@@ -131,16 +131,6 @@ void main() {
                 itemIdx: 0,
                 layer: 1,
                 isActionable: false,
-              ),
-              ChatLessonMessage(
-                id: 'practice-action-round-guided',
-                role: ChatLessonMessageRole.sim,
-                kind: ChatLessonMessageKind.practiceAction,
-                text: 'Vamos fundamentar este item',
-                lessonLocalId: 'lesson-guided',
-                marker: 'M1',
-                itemIdx: 0,
-                layer: 1,
               ),
               ChatLessonMessage(
                 id: 'question-round-guided',
@@ -194,33 +184,13 @@ void main() {
     );
 
     expect(find.text('Item novo'), findsOneWidget);
-    expect(find.text('Explicação guiada'), findsNothing);
-    expect(find.text('Pergunta guiada?'), findsNothing);
-
-    await tester.pump(const Duration(milliseconds: 140));
-    await tester.pump(const Duration(milliseconds: 140));
-    await tester.pump(const Duration(milliseconds: 160));
     expect(find.text('Explicação guiada'), findsOneWidget);
     await tester.drag(
       find.byKey(const Key('chat-aula-timeline')),
       const Offset(0, -360),
     );
     await tester.pump();
-    expect(find.text('Vamos fundamentar este item'), findsOneWidget);
-    expect(find.text('Pergunta guiada?'), findsNothing);
-
-    await tester.tap(find.text('Vamos fundamentar este item'));
-    await tester.pump();
-    await tester.drag(
-      find.byKey(const Key('chat-aula-timeline')),
-      const Offset(0, -240),
-    );
-    await tester.pump();
     expect(find.text('Pergunta guiada?'), findsOneWidget);
-    expect(find.byKey(const Key('chat-answer-card-A')), findsNothing);
-
-    await tester.pump(const Duration(milliseconds: 220));
-    await tester.pump();
     await tester.drag(
       find.byKey(const Key('chat-aula-timeline')),
       const Offset(0, -240),

@@ -1170,17 +1170,6 @@ extension LabSessionFlowExtensions on LabSession {
       );
       return;
     }
-    if (aulaSnapshot?.phase.type == ClassroomPhaseType.avancoPendente) {
-      aulaRuntimeError =
-          'A proxima experiencia esta sendo preparada. Seu ponto foi preservado.';
-      _recordRuntimeAudit(
-        'SIGNAL_BLOCKED_BY_ADVANCE_PENDING',
-        source: 'LabSession.submitAulaSignal',
-        details: {'value': value},
-        notify: true,
-      );
-      return;
-    }
     stopActiveAudio();
     final signal = switch (value) {
       1 => DecisionSignal.one,

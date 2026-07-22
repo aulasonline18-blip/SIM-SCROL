@@ -901,7 +901,7 @@ void main() {
   });
 
   test(
-    'T25a: enviarSinal em phase=avancoPendente → controller ignora',
+    'T25a: enviarSinal em phase=avancoPendente com evidencia completa conclui',
     () async {
       final svc = StudentLearningStateService(seed: {'L1': _state0()});
       final ctrl = _controller(svc);
@@ -941,12 +941,9 @@ void main() {
         baseItems: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
       );
 
-      expect(pos.phase.type, ClassroomPhaseType.avancoPendente);
-      expect(svc.read('L1')?.attempts, isEmpty);
-      expect(
-        svc.read('L1')?.events.where((event) => event.type == 'ANSWER_SAVED'),
-        isEmpty,
-      );
+      expect(pos.phase.type, ClassroomPhaseType.concluido);
+      expect(pos.phase.signal, DecisionSignal.one);
+      expect(svc.read('L1')?.attempts, hasLength(1));
     },
   );
 

@@ -63,18 +63,11 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   static const Duration _settledElementScrollDuration = Duration(
     milliseconds: 420,
   );
-  static const Duration _roundRevealStepDelay = Duration(milliseconds: 100);
-  static const Duration _optionsRevealDelay = Duration(milliseconds: 180);
 
   late final ScrollController _ownedScrollController;
   final Map<String, GlobalKey> _messageKeys = <String, GlobalKey>{};
-  final Map<String, int> _roundRevealStage = <String, int>{};
-  final Set<String> _practiceUnlockedRounds = <String>{};
-  final Set<String> _optionsReadyRounds = <String>{};
   String? _lastScrollSignature;
   bool _scrollScheduled = false;
-  Timer? _revealTimer;
-  Timer? _optionsTimer;
 
   ScrollController get _effectiveScrollController =>
       widget.scrollController ?? _ownedScrollController;
@@ -83,7 +76,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   void initState() {
     super.initState();
     _ownedScrollController = ScrollController();
-    _syncPedagogicalRoundClock(widget.messages);
     _schedulePedagogicalScroll();
   }
 
@@ -94,55 +86,14 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
             _timelineSignature(widget.messages) ||
         oldWidget.initialScrollKey != widget.initialScrollKey ||
         oldWidget.initialScrollToCurrent != widget.initialScrollToCurrent) {
-      _syncPedagogicalRoundClock(widget.messages);
       _schedulePedagogicalScroll();
     }
   }
 
   @override
   void dispose() {
-    _revealTimer?.cancel();
-    _optionsTimer?.cancel();
     _ownedScrollController.dispose();
     super.dispose();
-  }
-
-  void _syncPedagogicalRoundClock(List<ChatLessonMessage> messages) {
-    for (final message in messages) {
-      final roundId = _roundIdFor(message);
-      if (roundId == null || message.isHistorical) continue;
-      _roundRevealStage.putIfAbsent(roundId, () => 0);
-      if (_roundHasStudentAction(messages, roundId)) {
-        _practiceUnlockedRounds.add(roundId);
-        _optionsReadyRounds.add(roundId);
-      }
-    }
-    _scheduleRevealTick();
-  }
-
-  void _scheduleRevealTick() {
-    _revealTimer?.cancel();
-    final roundId = _nextRoundToReveal(widget.messages);
-    if (roundId == null) return;
-    _revealTimer = Timer(_roundRevealStepDelay, () {
-      if (!mounted) return;
-      setState(() {
-        final current = _roundRevealStage[roundId] ?? 0;
-        _roundRevealStage[roundId] = (current + 1).clamp(0, 3);
-      });
-      _schedulePedagogicalScroll();
-      _scheduleRevealTick();
-    });
-  }
-
-  String? _nextRoundToReveal(List<ChatLessonMessage> messages) {
-    for (final message in messages) {
-      final roundId = _roundIdFor(message);
-      if (roundId == null || message.isHistorical) continue;
-      if (!_roundUsesGuidedPractice(messages, roundId)) continue;
-      if ((_roundRevealStage[roundId] ?? 0) < 3) return roundId;
-    }
-    return null;
   }
 
   void _schedulePedagogicalScroll() {
@@ -263,7 +214,6 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
         onSignal: widget.onSignal,
         onRetry: widget.onRetry,
         onNext: widget.onNext,
-        onPractice: _unlockPracticeRound,
         onOpenDoubt: widget.onOpenDoubt,
         session: widget.session,
         pendingActionKeys: widget.pendingActionKeys,
@@ -273,87 +223,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
   }
 
   List<ChatLessonMessage> _visibleMessages(List<ChatLessonMessage> messages) {
-    return [
-      for (final message in messages)
-        if (_isMessageVisible(message, messages)) message,
-    ];
-  }
-
-  bool _isMessageVisible(
-    ChatLessonMessage message,
-    List<ChatLessonMessage> messages,
-  ) {
-    if (message.isHistorical) return true;
-    final roundId = _roundIdFor(message);
-    if (roundId == null) return true;
-    if (!_roundUsesGuidedPractice(messages, roundId)) return true;
-    final stage = _roundRevealStage[roundId] ?? 0;
-    if (!_stageAllowsMessage(message, stage)) return false;
-    if (message.kind == ChatLessonMessageKind.question) {
-      return _roundQuestionUnlocked(messages, roundId);
-    }
-    if (message.kind == ChatLessonMessageKind.options) {
-      if (!_roundQuestionUnlocked(messages, roundId)) return false;
-      if (_roundHasStudentAction(messages, roundId)) return true;
-      return _optionsReadyRounds.contains(roundId);
-    }
-    return true;
-  }
-
-  bool _stageAllowsMessage(ChatLessonMessage message, int stage) {
-    return switch (message.kind) {
-      ChatLessonMessageKind.itemIntro => true,
-      ChatLessonMessageKind.explanation => stage >= 1,
-      ChatLessonMessageKind.image => stage >= 2,
-      ChatLessonMessageKind.practiceAction => stage >= 3,
-      _ => true,
-    };
-  }
-
-  bool _roundQuestionUnlocked(
-    List<ChatLessonMessage> messages,
-    String roundId,
-  ) {
-    return _practiceUnlockedRounds.contains(roundId) ||
-        _roundHasStudentAction(messages, roundId);
-  }
-
-  bool _roundUsesGuidedPractice(
-    List<ChatLessonMessage> messages,
-    String roundId,
-  ) {
-    return messages.any(
-      (message) =>
-          _roundIdFor(message) == roundId &&
-          message.kind == ChatLessonMessageKind.practiceAction,
-    );
-  }
-
-  bool _roundHasStudentAction(
-    List<ChatLessonMessage> messages,
-    String roundId,
-  ) {
-    return messages.any((message) {
-      if (_roundIdFor(message) != roundId) return false;
-      return message.kind == ChatLessonMessageKind.feedback ||
-          message.selectedAnswer != null ||
-          message.signals.isNotEmpty;
-    });
-  }
-
-  void _unlockPracticeRound(ChatLessonMessage message) {
-    final roundId = _roundIdFor(message);
-    if (roundId == null) return;
-    setState(() {
-      _practiceUnlockedRounds.add(roundId);
-    });
-    _schedulePedagogicalScroll();
-    _optionsTimer?.cancel();
-    _optionsTimer = Timer(_optionsRevealDelay, () {
-      if (!mounted) return;
-      setState(() => _optionsReadyRounds.add(roundId));
-      _schedulePedagogicalScroll();
-    });
+    return messages;
   }
 }
 
@@ -506,41 +376,11 @@ _PedagogicalScrollTarget _target(
   );
 }
 
-String? _roundIdFor(ChatLessonMessage message) {
-  if (message.isHistorical) return null;
-  final base = [
-    message.lessonLocalId ?? '',
-    message.marker ?? '',
-    message.itemIdx?.toString() ?? '',
-    message.layer?.toString() ?? '',
-    _activeRoundSuffix(message.id),
-  ].where((part) => part.isNotEmpty).join('|');
-  if (base.trim().isEmpty) return null;
-  return base;
-}
-
-String _activeRoundSuffix(String id) {
-  const prefixes = [
-    'item-intro-',
-    'explanation-',
-    'image-',
-    'practice-action-',
-    'question-',
-    'options-',
-    'feedback-',
-  ];
-  for (final prefix in prefixes) {
-    if (id.startsWith(prefix)) return id.substring(prefix.length);
-  }
-  return id;
-}
-
 double _pedagogicalGapAfter(ChatLessonMessage message) {
   return switch (message.kind) {
     ChatLessonMessageKind.itemIntro => SimSpacing.xl,
     ChatLessonMessageKind.explanation => SimSpacing.xxl,
     ChatLessonMessageKind.image => SimSpacing.xxl,
-    ChatLessonMessageKind.practiceAction => SimSpacing.xxl,
     ChatLessonMessageKind.question => SimSpacing.xl,
     ChatLessonMessageKind.options => SimSpacing.xl,
     ChatLessonMessageKind.feedback => SimSpacing.xxl,
