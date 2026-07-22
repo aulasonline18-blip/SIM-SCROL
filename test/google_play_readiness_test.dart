@@ -52,8 +52,14 @@ void main() {
       gradle,
       contains('signingConfig = signingConfigs.getByName("release")'),
     );
-    expect(gradle, contains('isMinifyEnabled = true'));
-    expect(gradle, contains('isShrinkResources = true'));
+    expect(
+      gradle,
+      contains('isMinifyEnabled = !simOperationalReleaseAllowCleartext'),
+    );
+    expect(
+      gradle,
+      contains('isShrinkResources = !simOperationalReleaseAllowCleartext'),
+    );
     expect(gradle, contains('proguard-rules.pro'));
     expect(
       gradle,

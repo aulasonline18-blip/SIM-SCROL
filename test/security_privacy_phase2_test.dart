@@ -17,10 +17,15 @@ void main() {
     expect(env, isNot(contains('SIM_ALLOW_HTTP_IN_PRODUCTION')));
     expect(env, contains('kReleaseMode'));
     expect(env, contains('SIM_ALLOW_HTTP_IN_DEVELOPMENT'));
+    expect(env, contains('SIM_ALLOW_HTTP_IN_OPERATIONAL_RELEASE'));
     expect(env, contains('validateServerUrl'));
     expect(
       gradle,
       contains('SIM_SERVER_URL must use HTTPS for release builds'),
+    );
+    expect(
+      gradle,
+      contains('SIM_ANDROID_OPERATIONAL_RELEASE_ALLOW_CLEARTEXT'),
     );
     expect(gradle, isNot(contains('SIM_ANDROID_ALLOW_CLEARTEXT')));
     expect(gradle, isNot(contains('SIM_ALLOW_HTTP_IN_PRODUCTION')));
@@ -47,6 +52,12 @@ void main() {
     expect(profileManifest, contains('android:usesCleartextTraffic="false"'));
     expect(debugManifest, contains('android:usesCleartextTraffic="true"'));
     expect(networkConfig, contains('cleartextTrafficPermitted="false"'));
+    expect(
+      File(
+        'android/app/src/main/res/xml/network_security_config_operational_release.xml',
+      ).existsSync(),
+      isTrue,
+    );
     expect(
       File(
         'android/app/src/main/res/xml/network_security_config_cleartext.xml',

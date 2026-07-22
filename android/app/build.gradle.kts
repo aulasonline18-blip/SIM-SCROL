@@ -52,6 +52,8 @@ fun boolDartDefine(name: String, fallback: Boolean = false): Boolean =
 
 val simApplicationId = stringProperty("SIM_ANDROID_APPLICATION_ID", "com.aulasonline.sim")
 val simReleaseServerUrl = dartDefineValue("SIM_SERVER_URL") ?: ""
+val simOperationalReleaseAllowCleartext =
+    boolProperty("SIM_ANDROID_OPERATIONAL_RELEASE_ALLOW_CLEARTEXT", false)
 val simReleaseSigningReady =
     !signingValue("storeFile").isNullOrBlank() &&
         !signingValue("storePassword").isNullOrBlank() &&
@@ -110,12 +112,17 @@ android {
                     "Release signing is required. Configure android/key.properties or SIM_ANDROID_* environment variables."
                 )
             }
-            manifestPlaceholders["simUsesCleartextTraffic"] = "false"
+            manifestPlaceholders["simUsesCleartextTraffic"] =
+                simOperationalReleaseAllowCleartext.toString()
             manifestPlaceholders["simNetworkSecurityConfig"] =
-                "@xml/network_security_config"
+                if (simOperationalReleaseAllowCleartext) {
+                    "@xml/network_security_config_operational_release"
+                } else {
+                    "@xml/network_security_config"
+                }
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = !simOperationalReleaseAllowCleartext
+            isShrinkResources = !simOperationalReleaseAllowCleartext
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

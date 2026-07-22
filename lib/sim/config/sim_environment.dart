@@ -56,6 +56,11 @@ class SimEnvironment {
     );
   }
 
+  static const allowHttpInOperationalRelease = bool.fromEnvironment(
+    'SIM_ALLOW_HTTP_IN_OPERATIONAL_RELEASE',
+    defaultValue: false,
+  );
+
   static bool get isProduction => appMode == 'production';
 
   static void assertProductionSafe() {
@@ -73,9 +78,11 @@ class SimEnvironment {
     final isLocalDevelopmentHost =
         uri != null && (uri.host == '127.0.0.1' || uri.host == 'localhost');
     if (clean.startsWith('http://') &&
-        (kReleaseMode ||
+        ((kReleaseMode && !allowHttpInOperationalRelease) ||
             isProduction ||
-            (!allowHttpInDevelopment && !isLocalDevelopmentHost))) {
+            (!allowHttpInOperationalRelease &&
+                !allowHttpInDevelopment &&
+                !isLocalDevelopmentHost))) {
       throw StateError('SIM_SERVER_URL precisa usar HTTPS em production.');
     }
     return clean;
