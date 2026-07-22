@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../runtime/sim_runtime_audit.dart';
 import 'student_state_contract.dart';
 import 'student_learning_state.dart';
 
@@ -116,8 +117,37 @@ class StudentLearningStateService {
   }
 
   // I.8: subscribe to state writes.
-  void Function() subscribe(void Function(String lessonLocalId) cb) {
+  void Function() subscribe(
+    void Function(String lessonLocalId) cb, {
+    bool replayCurrent = false,
+    String? lessonLocalId,
+  }) {
     _writeListeners.add(cb);
+    if (replayCurrent) {
+      final ids = lessonLocalId == null
+          ? _states.keys
+          : <String>[lessonLocalId];
+      for (final id in ids) {
+        final state = _states[id];
+        if (state == null ||
+            state.extra['deletedAt'] != null ||
+            (state.extra['syncInfo'] is Map &&
+                (state.extra['syncInfo'] as Map)['deletedAt'] != null)) {
+          continue;
+        }
+        try {
+          cb(id);
+        } catch (error, stackTrace) {
+          SimRuntimeAudit.report(
+            code: 'listener_failed',
+            source: 'StudentLearningStateService.subscribe.replay',
+            details: {'lessonLocalId': id},
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+    }
     return () => _writeListeners.remove(cb);
   }
 
@@ -146,7 +176,15 @@ class StudentLearningStateService {
     for (final cb in List.of(_writeListeners)) {
       try {
         cb(lessonLocalId);
-      } catch (_) {}
+      } catch (error, stackTrace) {
+        SimRuntimeAudit.report(
+          code: 'listener_failed',
+          source: 'StudentLearningStateService._notifyWrite',
+          details: {'lessonLocalId': lessonLocalId},
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
     }
   }
 

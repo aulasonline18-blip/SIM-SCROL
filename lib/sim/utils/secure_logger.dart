@@ -9,7 +9,6 @@ class SecureLogger {
     debugPrint('[$tag] $message$suffix');
   }
 
-  @visibleForTesting
   static Object? redact(Object? data) {
     if (data == null) return null;
     if (data is Map) {

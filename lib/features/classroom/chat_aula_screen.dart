@@ -37,6 +37,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   final TextEditingController _doubtController = TextEditingController();
   final List<ChatLessonMessage> _conversationMessages = <ChatLessonMessage>[];
   final Set<String> _restoredConversationKeys = <String>{};
+  final Set<String> _failedConversationRestoreKeys = <String>{};
   final Set<String> _restoringConversationKeys = <String>{};
   String? _conversationLessonKey;
   int _conversationArchiveSeq = 0;
@@ -76,6 +77,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   void _ensureConversationRestored(LabSession session) {
     final key = _conversationKeyFor(session);
     if (_restoredConversationKeys.contains(key) ||
+        _failedConversationRestoreKeys.contains(key) ||
         _restoringConversationKeys.contains(key)) {
       return;
     }
@@ -85,12 +87,19 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
 
   Future<void> _restoreConversationSnapshot(String lessonKey) async {
     try {
-      final restored = await _conversationStore.restore(lessonKey);
+      final result = await _conversationStore.restoreWithAudit(lessonKey);
       if (!mounted) return;
       _restoringConversationKeys.remove(lessonKey);
-      _restoredConversationKeys.add(lessonKey);
+      if (result.canMarkRestored) {
+        _restoredConversationKeys.add(lessonKey);
+      } else {
+        _failedConversationRestoreKeys.add(lessonKey);
+      }
+      final restored = result.snapshot;
       if (restored == null) {
-        unawaited(_persistConversationSnapshot(lessonKey));
+        if (result.canMarkRestored) {
+          unawaited(_persistConversationSnapshot(lessonKey));
+        }
         return;
       }
       setState(() {
@@ -103,7 +112,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     } catch (_) {
       if (!mounted) return;
       _restoringConversationKeys.remove(lessonKey);
-      _restoredConversationKeys.add(lessonKey);
+      _failedConversationRestoreKeys.add(lessonKey);
     }
   }
 

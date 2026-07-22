@@ -1203,6 +1203,37 @@
       "officialPaths": []
     },
     {
+      "path": "lib/features/session/lab_session_placement_flows.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "feature-session",
+      "logicalOwner": "feature-session",
+      "inputs": [
+        "estado de placement",
+        "estado exposto por facade"
+      ],
+      "outputs": [
+        "rota de aula",
+        "posicao inicial aplicada"
+      ],
+      "tests": [
+        "test/session_regression_test.dart",
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "estado forte do aluno"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "item"
+      ],
+      "officialPaths": []
+    },
+    {
       "path": "lib/features/session/lab_session_profile_backup_helpers.dart",
       "layer": "UI",
       "category": "ui",
@@ -1229,6 +1260,67 @@
       "stateMachines": [
         "sessao/aula",
         "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/session/lab_session_aula_reevaluation_helpers.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "feature-session",
+      "logicalOwner": "feature-session",
+      "inputs": [
+        "evento de estado",
+        "tipo de evento"
+      ],
+      "outputs": [
+        "decisao de reavaliacao",
+        "filtro de eco"
+      ],
+      "tests": [
+        "test/live_lesson_fluency_contract_test.dart",
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "erro/falha"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "falha/retry"
+      ],
+      "officialPaths": []
+    },
+    {
+      "path": "lib/features/session/lab_session_storage_helpers.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "feature-session",
+      "logicalOwner": "feature-session",
+      "inputs": [
+        "preferencias locais",
+        "ambiente de teste"
+      ],
+      "outputs": [
+        "storage de sessao",
+        "storage volatil de teste"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "sessao/aula",
+        "persistencia local auditavel"
+      ],
+      "stateMachines": [
+        "sessao/aula",
+        "persistencia"
       ],
       "officialPaths": []
     },
@@ -5730,6 +5822,37 @@
       ]
     },
     {
+      "path": "lib/sim/runtime/sim_runtime_audit.dart",
+      "layer": "Infraestrutura",
+      "category": "runtime-audit",
+      "owner": "sim-runtime",
+      "logicalOwner": "sim-runtime",
+      "inputs": [
+        "codigo de auditoria",
+        "detalhes sanitizados"
+      ],
+      "outputs": [
+        "evento de auditoria",
+        "erro Flutter reportado"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "erro/falha",
+        "seguranca/privacidade"
+      ],
+      "stateMachines": [
+        "falha/retry"
+      ],
+      "officialPaths": [
+        "seguranca local"
+      ]
+    },
+    {
       "path": "lib/sim/state/cache/student_cache_info.dart",
       "layer": "Motores pedagogicos",
       "category": "motor-pedagogico-estado",
@@ -6308,6 +6431,40 @@
       ]
     },
     {
+      "path": "lib/sim/state/student_state_integrity.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "payload local",
+        "resultado duravel"
+      ],
+      "outputs": [
+        "auditoria de integridade",
+        "status de persistencia"
+      ],
+      "tests": [
+        "test/state_corruption_quarantine_test.dart",
+        "test/persistence_integrity_contract_test.dart",
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "persistencia local auditavel"
+      ],
+      "stateMachines": [
+        "integridade",
+        "persistencia"
+      ],
+      "officialPaths": [
+        "restauracao de estado local"
+      ]
+    },
+    {
       "path": "lib/sim/state/student_state_store.dart",
       "layer": "Motores pedagogicos",
       "category": "motor-pedagogico-estado",
@@ -6377,6 +6534,38 @@
       "officialPaths": [
         "resposta do aluno",
         "proxima camada ou proximo item"
+      ]
+    },
+    {
+      "path": "lib/sim/state/student_state_store_cyber_backup.dart",
+      "layer": "Motores pedagogicos",
+      "category": "motor-pedagogico-estado",
+      "owner": "sim-state",
+      "logicalOwner": "sim-state",
+      "inputs": [
+        "backup cyber legado",
+        "estado local existente"
+      ],
+      "outputs": [
+        "estado forte importado",
+        "eventos canonicos preservados"
+      ],
+      "tests": [
+        "test/sim_app_architecture_shape_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "estado forte do aluno",
+        "compatibilidade legado"
+      ],
+      "stateMachines": [
+        "importacao",
+        "persistencia"
+      ],
+      "officialPaths": [
+        "restauracao de estado local"
       ]
     },
     {

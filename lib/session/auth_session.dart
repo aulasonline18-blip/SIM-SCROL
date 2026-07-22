@@ -72,7 +72,10 @@ class AuthSession extends ChangeNotifier {
     roles = _extractRoles(user);
     if (authed) {
       if (navigation.route == '/login') {
-        navigation.route = safeNavigationReturnTo(navigation.returnTo);
+        navigation.openRoute(
+          navigation.returnTo,
+          fallbackReason: 'auth_return_to_invalid',
+        );
       }
       onAuthenticated?.call();
     } else {
@@ -81,7 +84,6 @@ class AuthSession extends ChangeNotifier {
       roles = const {};
     }
     notifyListeners();
-    navigation.notifyListeners();
   }
 
   bool hasAnyRole(Iterable<String> allowedRoles) {

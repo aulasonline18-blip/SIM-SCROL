@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'student_state_store.dart';
 
 class SharedPrefsStudentStateLocalStorage
-    implements DurableStudentStateLocalStorage {
+    implements DurableStudentStateLocalStorage, StudentStateQuarantineStorage {
   SharedPrefsStudentStateLocalStorage(this._prefs, {this.activeLessonLocalId});
 
   final SharedPreferences _prefs;
@@ -23,6 +23,8 @@ class SharedPrefsStudentStateLocalStorage
   static const String _eventsKeyPrefix = 'sim-events-v1-';
   // Legacy prefix used before I.6 migration — kept for read fallback
   static const String _legacyStatePrefix = 'sim-state-v1-';
+  static const String _quarantinePrefix =
+      'sim-student-learning-state-v1:quarantine:';
   static const String indexKey = 'sim-student-learning-state-v1:index-v2';
   // I.7: keep at most this many recent lessons in local storage
   static const int _keepRecentLessons = 24;
@@ -71,6 +73,38 @@ class SharedPrefsStudentStateLocalStorage
     _prefs.remove('$_legacyStatePrefix$lessonLocalId');
     final ids = readIndex().where((id) => id != lessonLocalId).toList();
     _prefs.setStringList(indexKey, ids);
+  }
+
+  @override
+  void quarantinePayload({
+    required StudentStateIntegrityKind kind,
+    required String lessonLocalId,
+    required String payload,
+    required String code,
+  }) {
+    _prefs.setString(
+      _quarantineKey(kind, lessonLocalId),
+      jsonEncode({
+        'kind': kind.name,
+        'lessonLocalId': lessonLocalId,
+        'code': code,
+        'payload': payload,
+      }),
+    );
+  }
+
+  @override
+  String? readQuarantinedPayload({
+    required StudentStateIntegrityKind kind,
+    required String lessonLocalId,
+  }) {
+    final raw = _prefs.getString(_quarantineKey(kind, lessonLocalId));
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) return decoded['payload']?.toString();
+    } catch (_) {}
+    return raw;
   }
 
   @override
@@ -167,4 +201,7 @@ class SharedPrefsStudentStateLocalStorage
     } catch (_) {}
     return 0;
   }
+
+  String _quarantineKey(StudentStateIntegrityKind kind, String lessonLocalId) =>
+      '$_quarantinePrefix${kind.name}:${Uri.encodeComponent(lessonLocalId)}';
 }

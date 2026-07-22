@@ -14,7 +14,15 @@ extension LabSessionAuxFlowExtensions on LabSession {
           profile: reviewContext.profile,
         ),
       );
-    } catch (_) {}
+    } catch (error, stackTrace) {
+      _recordRuntimeAudit(
+        'AUX_PREFETCH_FAILURE',
+        source: 'LabSession.aux_prefetch',
+        details: {'lessonLocalId': organism.lessonLocalId},
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   ReviewRoomContext _reviewRoomContext(SimOrganism organism) {

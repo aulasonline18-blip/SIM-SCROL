@@ -115,10 +115,13 @@ void main() {
 
       final files = temp.listSync(recursive: true).whereType<File>().toList();
       expect(files, isNotEmpty);
-      final raw = files.single.readAsStringSync();
+      final raws = files.map((file) => file.readAsStringSync()).toList();
+      final raw = raws.singleWhere((content) => content.contains('cipherText'));
       expect(raw, contains('cipherText'));
-      expect(raw, isNot(contains('teste@example.com')));
-      expect(raw, isNot(contains('Qual resposta sensivel?')));
+      for (final content in raws) {
+        expect(content, isNot(contains('teste@example.com')));
+        expect(content, isNot(contains('Qual resposta sensivel?')));
+      }
       expect(prefs.getString('sim-lesson-text-cache-v1'), isNull);
 
       final hydrated = LessonMaterialCache(store: store);

@@ -23,11 +23,13 @@ class EncryptedFileLessonCacheStore implements LessonCacheStore {
     Directory? baseDirectory,
     Future<SecretKey> Function()? keyProvider,
     int maxBytes = 2 * 1024 * 1024,
+    bool failBeforeReplace = false,
   }) {
     return EncryptedFileLessonCacheStore._(
       baseDirectory: baseDirectory,
       keyProvider: keyProvider,
       maxBytes: maxBytes,
+      failBeforeReplace: failBeforeReplace,
     );
   }
 
@@ -35,6 +37,7 @@ class EncryptedFileLessonCacheStore implements LessonCacheStore {
     this._baseDirectory,
     this._keyProvider,
     this.maxBytes = 2 * 1024 * 1024,
+    this.failBeforeReplace = false,
   });
 
   static const _keyName = 'sim.lessonCache.aesGcmKey.v1';
@@ -44,6 +47,7 @@ class EncryptedFileLessonCacheStore implements LessonCacheStore {
   final Directory? _baseDirectory;
   final Future<SecretKey> Function()? _keyProvider;
   final int maxBytes;
+  final bool failBeforeReplace;
   final AesGcm _cipher = AesGcm.with256bits();
 
   @override
@@ -53,11 +57,15 @@ class EncryptedFileLessonCacheStore implements LessonCacheStore {
     final raw = await file.readAsString();
     if (raw.trim().isEmpty) return null;
     final decoded = jsonDecode(raw);
-    if (decoded is! Map) return null;
+    if (decoded is! Map) {
+      throw const LessonCacheStoreException('LESSON_CACHE_SCHEMA_INVALID');
+    }
     final nonce = _bytes(decoded['nonce']);
     final mac = _bytes(decoded['mac']);
     final cipherText = _bytes(decoded['cipherText']);
-    if (nonce == null || mac == null || cipherText == null) return null;
+    if (nonce == null || mac == null || cipherText == null) {
+      throw const LessonCacheStoreException('LESSON_CACHE_SCHEMA_INVALID');
+    }
     final clear = await _cipher.decrypt(
       SecretBox(cipherText, nonce: nonce, mac: Mac(mac)),
       secretKey: await _key(),
@@ -89,8 +97,29 @@ class EncryptedFileLessonCacheStore implements LessonCacheStore {
       '${file.path}.${DateTime.now().microsecondsSinceEpoch}.${_randomBytes(4).join()}.tmp',
     );
     await tmp.writeAsString(encoded, flush: true);
-    if (await file.exists()) await file.delete();
-    await tmp.rename(file.path);
+    if (failBeforeReplace) {
+      await tmp.delete();
+      throw const LessonCacheStoreException('LESSON_CACHE_REPLACE_FAILED');
+    }
+    try {
+      await tmp.rename(file.path);
+    } on FileSystemException {
+      final backup = File('${file.path}.bak');
+      if (await backup.exists()) await backup.delete();
+      if (await file.exists()) {
+        await file.copy(backup.path);
+      }
+      try {
+        if (await file.exists()) await file.delete();
+        await tmp.rename(file.path);
+        if (await backup.exists()) await backup.delete();
+      } catch (_) {
+        if (await file.exists()) await file.delete();
+        if (await backup.exists()) await backup.rename(file.path);
+        if (await tmp.exists()) await tmp.delete();
+        throw const LessonCacheStoreException('LESSON_CACHE_REPLACE_FAILED');
+      }
+    }
   }
 
   @override

@@ -29,7 +29,7 @@ void main() {
       'scripts/verify-provenance.sh',
       'scripts/run-integration-tests.sh',
       'manifest/workspace-manifest.json',
-      'integration_test/smoke_test.dart',
+      'integration_test/student_journey_test.dart',
       'docs/ci-templates/app-ci.yml',
     ]) {
       expect(File(path).existsSync(), isTrue, reason: '$path must exist');

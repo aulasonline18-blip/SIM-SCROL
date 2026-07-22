@@ -1,3 +1,4 @@
+import '../runtime/sim_runtime_audit.dart';
 import 'lesson_models.dart';
 
 typedef LessonListener = void Function(CompleteLesson lesson);
@@ -12,8 +13,14 @@ class LessonEventBus {
     if (_latestLessons.containsKey(key)) {
       try {
         listener(_latestLessons[key]!);
-      } catch (_) {
-        // isolate listener failures so other subscribers still receive events
+      } catch (error, stackTrace) {
+        SimRuntimeAudit.report(
+          code: 'listener_failed',
+          source: 'LessonEventBus.subscribe.replay',
+          details: {'key': key},
+          error: error,
+          stackTrace: stackTrace,
+        );
       }
     }
     return () {
@@ -29,10 +36,15 @@ class LessonEventBus {
     for (final listener in List<LessonListener>.from(set)) {
       try {
         listener(lesson);
-      } catch (_) {
-        // isolate listener failures so other subscribers still receive the event
+      } catch (error, stackTrace) {
+        SimRuntimeAudit.report(
+          code: 'listener_failed',
+          source: 'LessonEventBus.notify',
+          details: {'key': key},
+          error: error,
+          stackTrace: stackTrace,
+        );
       }
     }
   }
-
 }

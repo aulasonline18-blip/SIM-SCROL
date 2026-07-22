@@ -57,6 +57,10 @@ void main() {
       final path = dir.path.replaceAll('\\', '/');
       return path == 'lib/features/classroom/widgets';
     }).length;
+    final runtimeAuditDirs = dirs.where((dir) {
+      final path = dir.path.replaceAll('\\', '/');
+      return path == 'lib/sim/runtime';
+    }).length;
     final emptyDirs = libRoot
         .listSync(recursive: true)
         .whereType<Directory>()
@@ -166,8 +170,15 @@ void main() {
     final liveFluencyFiles = dartFiles.where((file) {
       final path = file.path.replaceAll('\\', '/');
       return path ==
+              'lib/features/session/lab_session_aula_reevaluation_helpers.dart' ||
+          path == 'lib/features/session/lab_session_placement_flows.dart' ||
+          path ==
               'lib/features/session/lab_session_profile_backup_helpers.dart' ||
-          path == 'lib/sim/lesson/student_lesson_material_failures.dart';
+          path == 'lib/features/session/lab_session_storage_helpers.dart' ||
+          path == 'lib/session/chat_conversation_store.dart' ||
+          path == 'lib/sim/lesson/student_lesson_material_failures.dart' ||
+          path == 'lib/sim/runtime/sim_runtime_audit.dart' ||
+          path == 'lib/sim/state/student_state_integrity.dart';
     }).toList();
     expect(lineCount, greaterThan(0));
     expect(lineCount - visualPhaseLines - productLiveLines, greaterThan(0));
@@ -200,12 +211,13 @@ void main() {
     expect(readyWindowModuleFiles.length, 4);
     expect(onboardingModuleFiles.length, 10);
     expect(classroomWidgetFiles.length, 5);
-    expect(liveFluencyFiles.length, 2);
+    expect(liveFluencyFiles.length, 8);
     expect(
       dirCount -
           visualPhaseDirs -
           securityPhaseDirs -
           sessionUseCaseDirs -
+          runtimeAuditDirs -
           stateModuleDirs -
           readyWindowModuleDirs -
           onboardingModuleDirs -

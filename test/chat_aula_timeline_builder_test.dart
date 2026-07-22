@@ -133,6 +133,26 @@ void main() {
     expect(active.action, AulaConversationAction.chooseAnswer);
   });
 
+  test('menu lesson transition keeps preserved snapshot inert', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        lessonLocalId: 'lesson-b',
+        menuLessonWaiting: true,
+        snapshot: _snapshot(phase: const ClassroomPhase.reading()),
+      ),
+    );
+
+    expect(
+      messages.map((message) => message.kind),
+      contains(ChatLessonMessageKind.loading),
+    );
+    final options = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.options,
+    );
+    expect(options.isActionable, isFalse);
+    expect(options.options.every((option) => !option.enabled), isTrue);
+  });
+
   test('typed blocks expose feedback and recoverable error actions', () {
     const feedback = ChatLessonMessage(
       id: 'feedback',

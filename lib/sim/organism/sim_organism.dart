@@ -97,6 +97,10 @@ class SimOrganismRouter {
     '/conta/deletar',
   };
 
+  static Set<String> get screenRoutes => _screenRoutes;
+
+  static bool isKnownScreenRoute(String path) => _screenRoutes.contains(path);
+
   static const _serverRoutes = {
     SimApiRoutes.t00Bootstrap,
     SimApiRoutes.t02CompleteLesson,

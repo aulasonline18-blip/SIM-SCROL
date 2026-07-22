@@ -3,6 +3,11 @@ import 'dart:convert';
 import '../localization/sim_locale_contract.dart';
 import 'student_learning_state.dart';
 import 'student_state_contract.dart';
+import 'student_state_integrity.dart';
+
+export 'student_state_integrity.dart';
+
+part 'student_state_store_cyber_backup.dart';
 
 enum StateConflictResolution { local, cloud, equal }
 
@@ -141,6 +146,19 @@ class StudentStateStore implements StudentStateRepository {
   final String Function() idFactory;
   final Map<String, StudentLearningState> _memory = {};
   final Map<String, List<CanonicalLearningEvent>> _eventLog = {};
+  final List<StudentStateIntegrityIssue> _integrityIssues = [];
+  StudentStatePersistenceAudit _lastPersistenceAudit =
+      const StudentStatePersistenceAudit(
+        status: StudentStatePersistenceStatus.idle,
+        operation: 'idle',
+        lessonLocalId: '',
+      );
+
+  List<StudentStateIntegrityIssue> get integrityIssues =>
+      List.unmodifiable(_integrityIssues);
+
+  StudentStatePersistenceAudit get lastPersistenceAudit =>
+      _lastPersistenceAudit;
 
   @override
   StudentLearningState readState(String lessonLocalId) {
@@ -148,18 +166,24 @@ class StudentStateStore implements StudentStateRepository {
     if (cached != null) return cached;
     final encoded = local.readState(lessonLocalId);
     if (encoded != null && encoded.trim().isNotEmpty) {
-      dynamic decoded;
-      try {
-        decoded = jsonDecode(encoded);
-      } on FormatException {
-        decoded = null;
-      }
-      if (decoded is Map) {
-        final state = StudentLearningState.fromJson(JsonMap.from(decoded));
+      final state = _decodeStateOrQuarantine(lessonLocalId, encoded);
+      if (state != null) {
         _memory[lessonLocalId] = state;
         _eventLog[lessonLocalId] = _readEvents(lessonLocalId);
         return state;
       }
+      return StudentLearningState.empty(
+        lessonLocalId: lessonLocalId,
+        now: now(),
+      ).copyWith(
+        extra: {
+          'stateIntegrity': {
+            'status': 'corrupted',
+            'code': 'STATE_LOCAL_CORRUPTED',
+            'recoverable': true,
+          },
+        },
+      );
     }
     final state = StudentLearningState.empty(
       lessonLocalId: lessonLocalId,
@@ -190,6 +214,7 @@ class StudentStateStore implements StudentStateRepository {
     final next = protected.copyWith(updatedAt: now());
     _memory[next.lessonLocalId] = next;
     local.writeState(next.lessonLocalId, jsonEncode(next.toJson()));
+    _verifyDurableOperation(next.lessonLocalId, 'write_state');
     return next;
   }
 
@@ -274,6 +299,7 @@ class StudentStateStore implements StudentStateRepository {
     _eventLog.remove(lessonLocalId);
     local.deleteState(lessonLocalId);
     local.deleteEvents(lessonLocalId);
+    _verifyDurableOperation(lessonLocalId, 'delete');
   }
 
   @override
@@ -408,7 +434,7 @@ class StudentStateStore implements StudentStateRepository {
 
   StudentLearningState importBackup(JsonMap backup) {
     if (backup['magic'] == 'SIM_CYBER_BACKUP_V1') {
-      return _importCyberBackup(backup);
+      return _importCyberBackup(this, backup);
     }
     final rawState = backup['state'];
     if (rawState is! Map) {
@@ -435,198 +461,41 @@ class StudentStateStore implements StudentStateRepository {
       state.lessonLocalId,
       jsonEncode(dedupedEvents.map((e) => e.toJson()).toList()),
     );
+    _verifyDurableOperation(state.lessonLocalId, 'write_events');
     return writeState(protectedState);
-  }
-
-  StudentLearningState _importCyberBackup(JsonMap backup) {
-    final states = backup['studentLearningStates'] is Map
-        ? JsonMap.from(backup['studentLearningStates'] as Map)
-        : const <String, dynamic>{};
-    final lessons = backup['lessons'] is List
-        ? backup['lessons'] as List
-        : const [];
-    StudentLearningState? lastImported;
-    final protectedIds = <String>{
-      ...states.keys
-          .map((key) => key.toString())
-          .where((key) => key.isNotEmpty),
-      for (final lesson in lessons.whereType<Map>())
-        _lessonIdFromCyberLesson(JsonMap.from(lesson)),
-    }..removeWhere((id) => id.trim().isEmpty);
-
-    for (final id in protectedIds) {
-      final before = _memory[id] ?? _readStateIfExists(id);
-      final rawSnapshot = states[id];
-      final snapshot = rawSnapshot is Map
-          ? StudentLearningState.fromJson(
-              JsonMap.from({...rawSnapshot, 'lessonLocalId': id}),
-            )
-          : null;
-      final lesson = lessons
-          .whereType<Map>()
-          .map((entry) => JsonMap.from(entry))
-          .where((entry) => _lessonIdFromCyberLesson(entry) == id)
-          .cast<JsonMap?>()
-          .firstWhere((entry) => entry != null, orElse: () => null);
-      final lessonState = lesson == null
-          ? null
-          : _stateFromCyberLesson(lesson, id);
-      final imported = _mergeBackupStates(lessonState, snapshot);
-      if (imported == null) continue;
-      final merged = before == null
-          ? imported
-          : mergeValidatedRemoteState(imported, before);
-      lastImported = writeState(
-        merged.copyWith(
-          lessonLocalId: id,
-          profile: merged.profile.copyWith(
-            extra: {...merged.profile.extra, 'lessonLocalId': id},
-          ),
-        ),
-      );
-    }
-    if (lastImported == null) {
-      throw ArgumentError('Backup compativel sem aulas validas.');
-    }
-    return lastImported;
   }
 
   StudentLearningState? _readStateIfExists(String lessonLocalId) {
     final encoded = local.readState(lessonLocalId);
     if (encoded == null || encoded.trim().isEmpty) return null;
+    return _decodeStateOrQuarantine(lessonLocalId, encoded);
+  }
+
+  StudentLearningState? _decodeStateOrQuarantine(
+    String lessonLocalId,
+    String encoded,
+  ) {
     try {
       final decoded = jsonDecode(encoded);
-      return decoded is Map
-          ? StudentLearningState.fromJson(JsonMap.from(decoded))
-          : null;
+      if (decoded is Map) {
+        return StudentLearningState.fromJson(JsonMap.from(decoded));
+      }
+      _recordIntegrityIssue(
+        kind: StudentStateIntegrityKind.state,
+        lessonLocalId: lessonLocalId,
+        payload: encoded,
+        code: 'STATE_LOCAL_SCHEMA_INVALID',
+      );
+      return null;
     } catch (_) {
+      _recordIntegrityIssue(
+        kind: StudentStateIntegrityKind.state,
+        lessonLocalId: lessonLocalId,
+        payload: encoded,
+        code: 'STATE_LOCAL_CORRUPTED',
+      );
       return null;
     }
-  }
-
-  StudentLearningState? _mergeBackupStates(
-    StudentLearningState? existing,
-    StudentLearningState? incoming,
-  ) {
-    if (existing == null) return incoming;
-    if (incoming == null) return existing;
-    return mergeStudentLearningStateFromCloud(existing, incoming);
-  }
-
-  String _lessonIdFromCyberLesson(JsonMap lesson) {
-    final direct = (lesson['id'] ?? '').toString().trim();
-    if (direct.isNotEmpty) return direct;
-    final onboarding = lesson['onboarding'];
-    if (onboarding is Map) {
-      final fromOnboarding = (onboarding['lessonLocalId'] ?? '')
-          .toString()
-          .trim();
-      if (fromOnboarding.isNotEmpty) return fromOnboarding;
-    }
-    return '';
-  }
-
-  StudentLearningState _stateFromCyberLesson(JsonMap lesson, String id) {
-    final onboarding = lesson['onboarding'] is Map
-        ? JsonMap.from(lesson['onboarding'] as Map)
-        : const <String, dynamic>{};
-    final rawItems =
-        lesson['curriculo'] ?? lesson['curriculum'] ?? lesson['items'];
-    final items = rawItems is List
-        ? rawItems
-              .whereType<Map>()
-              .map((raw) {
-                final item = JsonMap.from(raw);
-                return CurriculumItem(
-                  marker: (item['marker'] ?? item['id'] ?? '').toString(),
-                  text:
-                      (item['text'] ??
-                              item['microitem_for_teacher'] ??
-                              item['what_student_must_master'] ??
-                              item['title'] ??
-                              '')
-                          .toString(),
-                  unit: item['unit']?.toString(),
-                  title: item['title']?.toString(),
-                  microitemForTeacher:
-                      (item['microitem_for_teacher'] ??
-                              item['what_student_must_master'])
-                          ?.toString(),
-                  extra: item
-                    ..removeWhere(
-                      (key, _) => {
-                        'marker',
-                        'id',
-                        'text',
-                        'unit',
-                        'title',
-                        'microitem_for_teacher',
-                        'what_student_must_master',
-                      }.contains(key),
-                    ),
-                );
-              })
-              .where((item) => item.marker.isNotEmpty && item.text.isNotEmpty)
-              .toList()
-        : <CurriculumItem>[];
-    final now =
-        (lesson['updatedAt'] as num?)?.toInt() ??
-        (lesson['createdAt'] as num?)?.toInt() ??
-        this.now();
-    final topic =
-        (onboarding['objetivo'] ??
-                onboarding['free_text'] ??
-                lesson['title'] ??
-                lesson['tema'] ??
-                'Aula SIM')
-            .toString();
-    return StudentLearningState.empty(lessonLocalId: id, now: now).copyWith(
-      profile: StudentProfile(
-        preferredName: onboarding['preferred_name']?.toString(),
-        language: onboarding['language']?.toString(),
-        stableLang: (onboarding['stable_lang'] ?? onboarding['stableLang'])
-            ?.toString(),
-        objetivo: topic,
-        nivel: onboarding['nivel']?.toString(),
-        academicLevel:
-            (onboarding['academic_level'] ?? onboarding['academicLevel'])
-                ?.toString(),
-        targetTopic: (onboarding['target_topic'] ?? topic).toString(),
-        sessionGoal: topic,
-        extra: onboarding,
-      ),
-      curriculum: items.isEmpty
-          ? null
-          : StudentCurriculum(
-              topic: topic,
-              totalItems: items.length,
-              generatedAt: now,
-              provisional: false,
-              items: items,
-            ),
-      progress: items.isEmpty
-          ? null
-          : LessonProgress(
-              itemIdx: 0,
-              layer: LessonLayer.l1,
-              erros: 0,
-              amparoLvl: 0,
-              historia: const [],
-              mainAdvances: 0,
-              concluidos: const [],
-              pendentesMarkers: items.map((item) => item.marker).toList(),
-              totalItems: items.length,
-              pctAvanco: 0,
-            ),
-      current: items.isEmpty
-          ? null
-          : LessonCurrent(
-              itemIdx: 0,
-              marker: items.first.marker,
-              layer: LessonLayer.l1,
-              amparoLvl: 0,
-            ),
-    );
   }
 
   int highWaterMark(StudentLearningState state) {
@@ -644,18 +513,31 @@ class StudentStateStore implements StudentStateRepository {
   List<CanonicalLearningEvent> _readEvents(String lessonLocalId) {
     final encoded = local.readEvents(lessonLocalId);
     if (encoded == null || encoded.trim().isEmpty) return const [];
-    dynamic decoded;
     try {
-      decoded = jsonDecode(encoded);
-    } on FormatException {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! List) {
+        _recordIntegrityIssue(
+          kind: StudentStateIntegrityKind.events,
+          lessonLocalId: lessonLocalId,
+          payload: encoded,
+          code: 'STATE_EVENTS_SCHEMA_INVALID',
+        );
+        return const [];
+      }
+      return _dedupeEvents(
+        decoded.whereType<Map>().map(
+          (event) => CanonicalLearningEvent.fromJson(JsonMap.from(event)),
+        ),
+      );
+    } catch (_) {
+      _recordIntegrityIssue(
+        kind: StudentStateIntegrityKind.events,
+        lessonLocalId: lessonLocalId,
+        payload: encoded,
+        code: 'STATE_EVENTS_CORRUPTED',
+      );
       return const [];
     }
-    if (decoded is! List) return const [];
-    return _dedupeEvents(
-      decoded.whereType<Map>().map(
-        (event) => CanonicalLearningEvent.fromJson(JsonMap.from(event)),
-      ),
-    );
   }
 
   List<CanonicalLearningEvent> _dedupeEvents(
@@ -683,6 +565,72 @@ class StudentStateStore implements StudentStateRepository {
       lessonLocalId,
       jsonEncode(dedupedEvents.map((e) => e.toJson()).toList()),
     );
+    _verifyDurableOperation(lessonLocalId, 'write_events');
+  }
+
+  void _recordIntegrityIssue({
+    required StudentStateIntegrityKind kind,
+    required String lessonLocalId,
+    required String payload,
+    required String code,
+  }) {
+    final issue = StudentStateIntegrityIssue(
+      kind: kind,
+      lessonLocalId: lessonLocalId,
+      code: code,
+      payload: payload,
+    );
+    _integrityIssues.add(issue);
+    final quarantine = local;
+    if (quarantine is StudentStateQuarantineStorage) {
+      (quarantine as StudentStateQuarantineStorage).quarantinePayload(
+        kind: kind,
+        lessonLocalId: lessonLocalId,
+        payload: payload,
+        code: code,
+      );
+    }
+  }
+
+  void _verifyDurableOperation(String lessonLocalId, String operation) {
+    final durable = local;
+    if (durable is! DurableStudentStateLocalStorage) {
+      _lastPersistenceAudit = StudentStatePersistenceAudit(
+        status: StudentStatePersistenceStatus.confirmed,
+        operation: operation,
+        lessonLocalId: lessonLocalId,
+      );
+      return;
+    }
+    _lastPersistenceAudit = StudentStatePersistenceAudit(
+      status: StudentStatePersistenceStatus.pending,
+      operation: operation,
+      lessonLocalId: lessonLocalId,
+    );
+    final Future<void> verification = switch (operation) {
+      'write_state' => durable.verifyLastStateWrite(),
+      'write_events' => durable.verifyLastEventsWrite(),
+      'delete' => durable.verifyLastDelete(),
+      _ => Future<void>.value(),
+    };
+    verification
+        .then((_) {
+          _lastPersistenceAudit = StudentStatePersistenceAudit(
+            status: StudentStatePersistenceStatus.confirmed,
+            operation: operation,
+            lessonLocalId: lessonLocalId,
+          );
+        })
+        .catchError((Object error) {
+          _lastPersistenceAudit = StudentStatePersistenceAudit(
+            status: StudentStatePersistenceStatus.failed,
+            operation: operation,
+            lessonLocalId: lessonLocalId,
+            code: error is StudentStateStorageException
+                ? error.code
+                : 'STATE_LOCAL_PERSIST_FAILED',
+          );
+        });
   }
 
   int _foundationRevision(StudentLearningState state) {

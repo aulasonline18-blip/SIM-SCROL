@@ -15,6 +15,29 @@ class ChatConversationSnapshot {
   final int archiveSeq;
 }
 
+enum ChatConversationRestoreStatus {
+  restored,
+  missing,
+  corrupted,
+  incompatible,
+}
+
+class ChatConversationRestoreResult {
+  const ChatConversationRestoreResult({
+    required this.status,
+    this.snapshot,
+    this.code,
+  });
+
+  final ChatConversationRestoreStatus status;
+  final ChatConversationSnapshot? snapshot;
+  final String? code;
+
+  bool get canMarkRestored =>
+      status == ChatConversationRestoreStatus.restored ||
+      status == ChatConversationRestoreStatus.missing;
+}
+
 class ChatConversationStore {
   const ChatConversationStore([this._prefs]);
 
@@ -39,22 +62,65 @@ class ChatConversationStore {
   }
 
   Future<ChatConversationSnapshot?> restore(String lessonKey) async {
+    return (await restoreWithAudit(lessonKey)).snapshot;
+  }
+
+  Future<ChatConversationRestoreResult> restoreWithAudit(
+    String lessonKey,
+  ) async {
     final prefs = await _resolvedPrefs();
     final raw = prefs.getString(_snapshotKey(lessonKey));
-    if (raw == null || raw.trim().isEmpty) return null;
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map) return null;
+    if (raw == null || raw.trim().isEmpty) {
+      return const ChatConversationRestoreResult(
+        status: ChatConversationRestoreStatus.missing,
+        code: 'CHAT_CONVERSATION_MISSING',
+      );
+    }
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      return const ChatConversationRestoreResult(
+        status: ChatConversationRestoreStatus.corrupted,
+        code: 'CHAT_CONVERSATION_CORRUPTED_JSON',
+      );
+    }
+    if (decoded is! Map) {
+      return const ChatConversationRestoreResult(
+        status: ChatConversationRestoreStatus.corrupted,
+        code: 'CHAT_CONVERSATION_CORRUPTED_SHAPE',
+      );
+    }
+    if (decoded['version'] != 1 || decoded['lessonKey'] != lessonKey) {
+      return const ChatConversationRestoreResult(
+        status: ChatConversationRestoreStatus.incompatible,
+        code: 'CHAT_CONVERSATION_INCOMPATIBLE_IDENTITY',
+      );
+    }
     final messagesRaw = decoded['messages'];
-    if (messagesRaw is! List) return null;
+    if (messagesRaw is! List) {
+      return const ChatConversationRestoreResult(
+        status: ChatConversationRestoreStatus.corrupted,
+        code: 'CHAT_CONVERSATION_CORRUPTED_MESSAGES',
+      );
+    }
     final messages = messagesRaw
         .map(ChatLessonMessage.fromJson)
         .nonNulls
         .toList(growable: false);
-    if (messages.isEmpty) return null;
+    if (messages.isEmpty) {
+      return const ChatConversationRestoreResult(
+        status: ChatConversationRestoreStatus.corrupted,
+        code: 'CHAT_CONVERSATION_EMPTY_AFTER_DECODE',
+      );
+    }
     final archiveSeq = decoded['archiveSeq'];
-    return ChatConversationSnapshot(
-      messages: messages,
-      archiveSeq: archiveSeq is int ? archiveSeq : messages.length,
+    return ChatConversationRestoreResult(
+      status: ChatConversationRestoreStatus.restored,
+      snapshot: ChatConversationSnapshot(
+        messages: messages,
+        archiveSeq: archiveSeq is int ? archiveSeq : messages.length,
+      ),
     );
   }
 

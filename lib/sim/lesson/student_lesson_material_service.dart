@@ -472,9 +472,11 @@ class StudentLessonMaterialService {
     stateService.mutate(lessonLocalId, (state) {
       final now = DateTime.now().millisecondsSinceEpoch;
       final marker = items.length > itemIdx ? items[itemIdx].marker : null;
+      final localeIdentity = state.localeContract.cacheIdentity();
       final idempotencyKey = [
         'ready-window',
         lessonLocalId,
+        localeIdentity,
         itemIdx,
         marker ?? '',
         'L${layer.value}',
@@ -487,6 +489,7 @@ class StudentLessonMaterialService {
               'itemIdx': slot.idx,
               'marker': slot.item.marker,
               'layer': slot.layer.value,
+              'localeCacheIdentity': localeIdentity,
               'preparedKey': preparedLessonMaterialKey(
                 slot.idx,
                 slot.item.marker,

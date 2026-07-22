@@ -107,7 +107,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     snapshot: snapshot,
     runtimeLoading: input.runtimeLoading,
   );
-  if (input.menuLessonWaiting && content == null) {
+  if (input.menuLessonWaiting) {
     final text = input.menuLessonRetrying
         ? t('aula_menu_lesson_retrying')
         : t('aula_menu_lesson_arriving');
@@ -327,7 +327,9 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     final selected = phase?.letter;
     final contentAcceptsAnswer = hasValidPedagogicalContent(content);
     final answerBusy =
-        phase?.type == ClassroomPhaseType.processando || !contentAcceptsAnswer;
+        input.menuLessonWaiting ||
+        phase?.type == ClassroomPhaseType.processando ||
+        !contentAcceptsAnswer;
     messages.add(
       ChatLessonMessage(
         id: 'options-$activeId',
@@ -342,7 +344,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         marker: marker,
         itemIdx: itemIdx,
         layer: layer,
-        isActionable: true,
+        isActionable: !input.menuLessonWaiting,
         deliveryStatus: ChatLessonDeliveryStatus.delivered,
       ),
     );

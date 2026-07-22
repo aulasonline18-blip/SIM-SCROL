@@ -85,7 +85,8 @@ void main() {
 
   test('5. listener reacts outside advancePending', () {
     expect(flows, isNot(contains("state?.extra['advancePending'] is! Map")));
-    expect(flows, contains('_scheduleAdvancePendingReevaluation(active)'));
+    expect(flows, contains('_scheduleAdvancePendingReevaluation('));
+    expect(flows, contains("reason: latestEvent?.type ?? 'state_write'"));
     expect(runtime, contains('reavaliarMaterialAtualSePronto'));
   });
 

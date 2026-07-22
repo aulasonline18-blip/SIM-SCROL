@@ -39,6 +39,7 @@ import '../../sim/organism/sim_organism.dart';
 import '../../sim/organism/sim_organism_provider.dart';
 import '../../sim/placement/placement_route_controller.dart';
 import '../../sim/reception/pedagogical_reception_builder.dart';
+import '../../sim/runtime/sim_runtime_audit.dart';
 import '../../session/auth_session.dart';
 import '../../session/entry_form_state.dart';
 import '../../session/lesson_ui_state.dart';
@@ -71,6 +72,9 @@ part 'lab_session_warmup_flows.dart';
 part 'lab_session_amparo_flows.dart';
 part 'lab_session_aux_flows.dart';
 part 'lab_session_profile_backup_helpers.dart';
+part 'lab_session_placement_flows.dart';
+part 'lab_session_aula_reevaluation_helpers.dart';
+part 'lab_session_storage_helpers.dart';
 
 enum AulaOpenOperationKind { open, retry }
 
@@ -214,6 +218,9 @@ class LabSession extends ChangeNotifier {
   String? _aulaStateSubscriptionLessonId;
   int _aulaStateSeenEventCount = 0;
   bool _advancePendingReevaluationScheduled = false;
+  String? _advancePendingReevaluationLessonId;
+  int? _advancePendingReevaluationGeneration;
+  String? _advancePendingReevaluationReason;
   int _autoAdvanceAulaGeneration = 0;
   bool _pendingAutoAdvanceAfterFeedback = false;
   int _pendingAutoAdvanceGeneration = 0;
@@ -229,6 +236,52 @@ class LabSession extends ChangeNotifier {
   void _notifyFromChild() {
     if (_disposed) return;
     notifyListeners();
+  }
+
+  void _recordRuntimeAudit(
+    String code, {
+    Map<String, Object?> details = const {},
+    Object? error,
+    StackTrace? stackTrace,
+    String source = 'LabSession',
+    bool notify = false,
+  }) {
+    final id = lessonLocalId;
+    final payload = <String, Object?>{
+      ...details,
+      'code': code,
+      'route': route,
+      'runtimeLoading': aulaRuntimeLoading,
+      'hasSnapshot': aulaSnapshot != null,
+      'hasValidContent': hasValidPedagogicalContent(aulaSnapshot?.conteudo),
+    };
+    if (id != null) payload['lessonLocalId'] = id;
+    SimRuntimeAudit.report(
+      code: code.toLowerCase(),
+      source: source,
+      details: payload,
+      error: error,
+      stackTrace: stackTrace,
+    );
+    if (id != null && id.trim().isNotEmpty) {
+      try {
+        canonicalStore?.appendEvent(
+          lessonLocalId: id,
+          type: code,
+          payload: JsonMap.from(payload),
+          source: 'sim_app_runtime_audit',
+        );
+      } catch (appendError, appendStackTrace) {
+        SimRuntimeAudit.report(
+          code: 'runtime_audit_append_failed',
+          source: source,
+          details: {'eventCode': code, 'lessonLocalId': id},
+          error: appendError,
+          stackTrace: appendStackTrace,
+        );
+      }
+    }
+    if (notify) _notifyFromChild();
   }
 
   StudentLearningState? get _activeCanonicalState {
@@ -260,10 +313,14 @@ class LabSession extends ChangeNotifier {
   String? get authError => authSession.authError;
 
   String get route => navigationState.route;
-  set route(String value) => navigationState.route = value;
+  set route(String value) => navigationState.openRoute(value);
   String get returnTo => navigationState.returnTo;
-  set returnTo(String value) => navigationState.returnTo = value;
+  set returnTo(String value) => navigationState.setReturnTo(value);
   String? get externalDoorOpened => navigationState.externalDoorOpened;
+  String? get externalDoorPending => navigationState.externalDoorPending;
+  String? get externalDoorError => navigationState.externalDoorError;
+  String? get routeFallbackReason => navigationState.routeFallbackReason;
+  String? get rejectedRoute => navigationState.rejectedRoute;
 
   String? get selectedLanguageCode => entryForm.selectedLanguageCode;
   set selectedLanguageCode(String? value) =>
@@ -349,6 +406,60 @@ class LabSession extends ChangeNotifier {
 
   void setDoubt(DoubtState s) => lessonUiState.setDoubt(s);
   void resetDoubt() => lessonUiState.resetDoubt();
+
+  bool get hasResolvedLanguageForNavigation {
+    final entryLanguage = (selectedLanguageCode ?? stableLang ?? '').trim();
+    if (entryLanguage.isNotEmpty) return true;
+    final profile = _activeCanonicalState?.profile;
+    if ((profile?.language ?? profile?.stableLang ?? '').trim().isNotEmpty) {
+      return true;
+    }
+    return switch (localeSettings.source) {
+      SimLocaleSource.userSelected ||
+      SimLocaleSource.userSelectedSingleLanguage ||
+      SimLocaleSource.migrated =>
+        localeSettings.learningLocale.trim().isNotEmpty,
+      SimLocaleSource.fallback || SimLocaleSource.systemDefault => false,
+    };
+  }
+
+  bool get hasObjectiveForNavigation {
+    final entryObjective = [
+      freeText,
+      subject,
+      topic,
+      traversalGoal,
+      traversalGoalCustom,
+      expectedResult,
+    ].any((value) => value.trim().isNotEmpty);
+    if (entryObjective) return true;
+    final state = _activeCanonicalState;
+    if (state == null) return false;
+    final profile = state.profile;
+    return [
+          profile.objetivo,
+          profile.sessionGoal,
+          profile.targetTopic,
+        ].any((value) => (value ?? '').trim().isNotEmpty) ||
+        state.curriculum?.items.isNotEmpty == true ||
+        state.current != null ||
+        state.progress != null ||
+        state.currentLessonMaterial != null ||
+        state.readyLessonMaterials.isNotEmpty;
+  }
+
+  void applyRouteDecision(SimRouteDecision decision) {
+    if (decision.allowed) return;
+    if (decision.guard == SimOrganismRouteGuard.needsAuth) {
+      goLogin(target: decision.requested);
+      return;
+    }
+    navigationState.openRoute(
+      decision.destination,
+      fallbackReason: 'route_guard_${decision.guard.name}',
+    );
+  }
+
   void openReviewRoom() {
     if (recoveryRoom != null || amparoRoom != null) return;
     lessonUiState.openReviewRoom();
@@ -778,7 +889,13 @@ class LabSession extends ChangeNotifier {
       try {
         final refreshed = await client.auth.refreshSession();
         session = refreshed.session ?? client.auth.currentSession;
-      } catch (_) {
+      } catch (error, stackTrace) {
+        _recordRuntimeAudit(
+          'REMOTE_IDENTITY_MISSING',
+          source: 'LabSession.freshServerAccessToken',
+          error: error,
+          stackTrace: stackTrace,
+        );
         return null;
       }
     }
@@ -837,13 +954,26 @@ class LabSession extends ChangeNotifier {
 
   void _hydrateActiveLessonFromCloud() {
     final id = lessonLocalId;
-    if (id == null || id.trim().isEmpty) return;
+    if (id == null || id.trim().isEmpty) {
+      _recordRuntimeAudit(
+        'REMOTE_IDENTITY_MISSING',
+        source: 'LabSession.hydrateActiveLessonFromCloud',
+      );
+      return;
+    }
     unawaited(_hydrateActiveLessonFromRemoteVault(id));
   }
 
   Future<void> _hydrateActiveLessonFromRemoteVault(String id) async {
     final engine = _remoteVaultSync();
-    if (engine == null) return;
+    if (engine == null) {
+      _recordRuntimeAudit(
+        'REMOTE_SYNC_UNAVAILABLE',
+        source: 'LabSession.hydrateActiveLessonFromRemoteVault',
+        details: {'lessonLocalId': id},
+      );
+      return;
+    }
     try {
       final hydrated = await engine.hydrate(lessonLocalId: id);
       if (lessonLocalId != hydrated.lessonLocalId) return;
@@ -852,8 +982,15 @@ class LabSession extends ChangeNotifier {
       } else {
         notifyListeners();
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
       final store = canonicalStore;
+      _recordRuntimeAudit(
+        'REMOTE_HYDRATION_FAILED',
+        source: 'LabSession.hydrateActiveLessonFromRemoteVault',
+        details: {'lessonLocalId': id},
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (store == null) return;
       final local = store.readState(id);
       store.writeState(
@@ -861,9 +998,9 @@ class LabSession extends ChangeNotifier {
           events: [
             ...local.events,
             StudentLearningEvent(
-              type: 'REMOTE_VAULT_HYDRATE_FAILED',
+              type: 'REMOTE_HYDRATION_FAILED',
               ts: DateTime.now().millisecondsSinceEpoch,
-              payload: {'lessonLocalId': id, 'message': error.toString()},
+              payload: {'lessonLocalId': id, 'code': 'remote_hydration_failed'},
             ),
           ],
         ),
@@ -874,7 +1011,14 @@ class LabSession extends ChangeNotifier {
 
   void _enqueueActiveLessonForRemoteVaultSync({required String reason}) {
     final id = lessonLocalId;
-    if (id == null || id.trim().isEmpty) return;
+    if (id == null || id.trim().isEmpty) {
+      _recordRuntimeAudit(
+        'REMOTE_IDENTITY_MISSING',
+        source: 'LabSession.enqueueActiveLessonForRemoteVaultSync',
+        details: {'reason': reason},
+      );
+      return;
+    }
     _enqueueLessonForRemoteVaultSync(id, reason: reason);
   }
 
@@ -883,7 +1027,14 @@ class LabSession extends ChangeNotifier {
     required String reason,
   }) {
     final engine = _remoteVaultSync();
-    if (engine == null) return;
+    if (engine == null) {
+      _recordRuntimeAudit(
+        'REMOTE_SYNC_UNAVAILABLE',
+        source: 'LabSession.enqueueLessonForRemoteVaultSync',
+        details: {'lessonLocalId': lessonLocalId, 'reason': reason},
+      );
+      return;
+    }
     engine.enqueueState(lessonLocalId: lessonLocalId, reason: reason);
     unawaited(engine.drain());
   }
@@ -1007,169 +1158,6 @@ class LabSession extends ChangeNotifier {
     _doubtAudio?.stopDoubtAudio();
     super.dispose();
   }
-}
-
-bool _isFlutterTestEnvironment() {
-  return Platform.environment['FLUTTER_TEST'] == 'true' ||
-      WidgetsBinding.instance.runtimeType.toString().contains('Test');
-}
-
-StudentStateLocalStorage _studentStateStorageForSession(
-  SharedPreferences? prefs,
-) {
-  if (_isFlutterTestEnvironment()) {
-    return _TestOnlyVolatileStudentStateStorage();
-  }
-  if (prefs != null) {
-    throw const StudentStateStorageException(
-      'CANONICAL_STUDENT_STATE_STORE_REQUIRED',
-    );
-  }
-  return _ExplicitStudentStateStorageRequired();
-}
-
-PaymentReturnStorage _paymentReturnStorageForSession(SharedPreferences? prefs) {
-  if (prefs != null) return SharedPrefsPaymentReturnStorage(prefs);
-  if (_isFlutterTestEnvironment()) {
-    return _TestOnlyVolatilePaymentReturnStorage();
-  }
-  throw StateError('PAYMENT_RETURN_STORAGE_REQUIRED');
-}
-
-AudioPreferenceStorage _audioPreferenceStorageForSession(
-  SharedPreferences? prefs,
-) {
-  if (prefs != null) return SharedPrefsAudioPreferenceStorage(prefs);
-  if (_isFlutterTestEnvironment()) {
-    return _TestOnlyVolatileAudioPreferenceStorage();
-  }
-  throw StateError('AUDIO_PREFERENCE_STORAGE_REQUIRED');
-}
-
-CloudQueueStorage _cloudQueueStorageForSession(CloudQueueStorage? storage) {
-  if (storage != null) return storage;
-  if (_isFlutterTestEnvironment()) return _TestOnlyVolatileCloudQueueStorage();
-  throw const CloudQueueStorageException('CLOUD_QUEUE_STORAGE_REQUIRED');
-}
-
-class _TestOnlyVolatileCloudQueueStorage implements CloudQueueStorage {
-  final Map<String, CloudQueueEntry> _queue = {};
-  final Map<String, String> _hashes = {};
-
-  @override
-  Map<String, CloudQueueEntry> readQueue() => Map.of(_queue);
-
-  @override
-  void writeQueue(Map<String, CloudQueueEntry> queue) {
-    _queue
-      ..clear()
-      ..addAll(queue);
-  }
-
-  @override
-  Map<String, String> readLastHashes() => Map.of(_hashes);
-
-  @override
-  void writeLastHash(String lessonLocalId, String hash) {
-    _hashes[lessonLocalId] = hash;
-  }
-}
-
-class _ExplicitStudentStateStorageRequired implements StudentStateLocalStorage {
-  Never _fail() => throw const StudentStateStorageException(
-    'STUDENT_STATE_STORAGE_REQUIRED',
-  );
-
-  @override
-  void deleteEvents(String lessonLocalId) => _fail();
-
-  @override
-  void deleteState(String lessonLocalId) => _fail();
-
-  @override
-  List<String> listStateIds() => _fail();
-
-  @override
-  String? readEvents(String lessonLocalId) => _fail();
-
-  @override
-  String? readState(String lessonLocalId) => _fail();
-
-  @override
-  void writeEvents(String lessonLocalId, String encoded) => _fail();
-
-  @override
-  void writeState(String lessonLocalId, String encoded) => _fail();
-}
-
-class _TestOnlyVolatileStudentStateStorage implements StudentStateLocalStorage {
-  final Map<String, String> _states = {};
-  final Map<String, String> _events = {};
-
-  @override
-  void deleteEvents(String lessonLocalId) {
-    _events.remove(lessonLocalId);
-  }
-
-  @override
-  void deleteState(String lessonLocalId) {
-    _states.remove(lessonLocalId);
-  }
-
-  @override
-  List<String> listStateIds() => _states.keys.toList();
-
-  @override
-  String? readEvents(String lessonLocalId) => _events[lessonLocalId];
-
-  @override
-  String? readState(String lessonLocalId) => _states[lessonLocalId];
-
-  @override
-  void writeEvents(String lessonLocalId, String encoded) {
-    _events[lessonLocalId] = encoded;
-  }
-
-  @override
-  void writeState(String lessonLocalId, String encoded) {
-    _states[lessonLocalId] = encoded;
-  }
-}
-
-class _TestOnlyVolatilePaymentReturnStorage implements PaymentReturnStorage {
-  final Map<String, String> _values = {};
-
-  @override
-  String? read(String key) => _values[key];
-
-  @override
-  void remove(String key) {
-    _values.remove(key);
-  }
-
-  @override
-  void write(String key, String value) {
-    _values[key] = value;
-  }
-}
-
-class _TestOnlyVolatileAudioPreferenceStorage
-    implements AudioPreferenceStorage {
-  final Map<String, String> _values = {};
-
-  @override
-  String? read(String key) => _values[key];
-
-  @override
-  void write(String key, String value) {
-    _values[key] = value;
-  }
-}
-
-String safeReturnTo(String raw) {
-  if (!raw.startsWith('/')) return '/';
-  if (raw.startsWith('//')) return '/';
-  return raw;
 }
 
 String _deriveLessonLocalId(String objetivo, String idioma) {

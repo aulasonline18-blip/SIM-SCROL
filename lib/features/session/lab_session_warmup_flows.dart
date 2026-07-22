@@ -262,7 +262,13 @@ extension LabSessionWarmupFlowExtensions on LabSession {
             }
             _notifyFromChild();
           })
-          .catchError((Object _) {
+          .catchError((Object error, StackTrace stackTrace) {
+            _recordRuntimeAudit(
+              'PLACEMENT_PREFETCH_FAILURE',
+              source: 'LabSession.placement_prefetch',
+              error: error,
+              stackTrace: stackTrace,
+            );
             _notifyFromChild();
           }),
     );
@@ -369,19 +375,6 @@ extension LabSessionWarmupFlowExtensions on LabSession {
   ) async {
     await controller.startTest();
     _notifyFromChild();
-  }
-
-  bool _hasLocalOfficialAulaState() {
-    final id = lessonLocalId;
-    if (id == null || id.trim().isEmpty || prefs == null) return false;
-    try {
-      final organism = _organismForActiveLesson();
-      final state = organism.stateService.read(id);
-      return state?.curriculum?.items.isNotEmpty == true &&
-          (state?.current != null || state?.progress != null);
-    } catch (_) {
-      return false;
-    }
   }
 
   void _recordOnboardingFlowEvent(String type, {JsonMap payload = const {}}) {

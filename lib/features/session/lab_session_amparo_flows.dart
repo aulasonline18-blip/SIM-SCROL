@@ -70,7 +70,13 @@ extension LabSessionAmparoFlowExtensions on LabSession {
               }
               setAmparoRoom(resolved);
             })
-            .catchError((_) {
+            .catchError((Object error, StackTrace stackTrace) {
+              _recordRuntimeAudit(
+                'AMPARO_ROUTE_FAILURE',
+                source: 'LabSession.amparo_resolve',
+                error: error,
+                stackTrace: stackTrace,
+              );
               final current = amparoRoom;
               if (current == null) return;
               setAmparoRoom(
@@ -82,7 +88,13 @@ extension LabSessionAmparoFlowExtensions on LabSession {
               );
             }),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _recordRuntimeAudit(
+        'AMPARO_ROUTE_FAILURE',
+        source: 'LabSession.startAmparoRoom',
+        error: error,
+        stackTrace: stackTrace,
+      );
       setAmparoRoom(
         const AmparoRoomView(
           status: AmparoRoomStatus.failed,

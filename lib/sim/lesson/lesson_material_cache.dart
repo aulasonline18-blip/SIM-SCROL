@@ -221,6 +221,8 @@ class LessonMaterialCache {
         return legacyAudit;
       }
       return hydrateFromJson(raw);
+    } on LessonCacheStoreException catch (error) {
+      return _audit(false, error.code);
     } catch (_) {
       return _audit(false, 'CACHE_HYDRATE_FAILED');
     }
@@ -249,6 +251,9 @@ class LessonMaterialCache {
     final warmRaw = root['warm'] is Map ? root['warm'] as Map : root;
     final coldRaw = root['cold'] is Map ? root['cold'] as Map : const {};
     final now = DateTime.now().millisecondsSinceEpoch;
+    var rejectedSchema = 0;
+    var rejectedExpired = 0;
+    var rejectedContent = 0;
     for (final entry in coldRaw.entries) {
       final key = entry.key.toString();
       final cold = LessonColdCacheEntry.fromJson(entry.value);
@@ -256,25 +261,48 @@ class LessonMaterialCache {
           cold.hasValidatedLargeCurriculumPart &&
           now - cold.savedAt <= ttlMs) {
         _cold[key] = cold;
+      } else if (cold == null) {
+        rejectedSchema += 1;
+      } else if (!cold.hasValidatedLargeCurriculumPart) {
+        rejectedSchema += 1;
+      } else {
+        rejectedExpired += 1;
       }
     }
     for (final entry in warmRaw.entries) {
       final key = entry.key as String;
       if (key == 'version' || key == 'warm' || key == 'cold') continue;
       final value = entry.value;
-      if (value is! Map) continue;
+      if (value is! Map) {
+        rejectedSchema += 1;
+        continue;
+      }
       final savedAt = (value['savedAt'] as num?)?.toInt() ?? 0;
       final lastAccessedAt =
           (value['lastAccessedAt'] as num?)?.toInt() ?? savedAt;
       final lessonRaw = value['lesson'];
       if (now - lastAccessedAt > ttlMs) {
         _rememberColdFromJson(key, value, savedAt, status: 'cold-index');
+        rejectedExpired += 1;
         continue;
       }
-      if (lessonRaw is! Map) continue;
+      if (lessonRaw is! Map) {
+        rejectedSchema += 1;
+        continue;
+      }
       final lesson = _lessonFromJson(Map<String, dynamic>.from(lessonRaw));
-      if (lesson == null) continue;
-      if (!_hasUsableLessonMaterial(lesson)) continue;
+      if (lesson == null) {
+        if (lessonRaw['conteudo'] is Map) {
+          rejectedContent += 1;
+        } else {
+          rejectedSchema += 1;
+        }
+        continue;
+      }
+      if (!_hasUsableLessonMaterial(lesson)) {
+        rejectedContent += 1;
+        continue;
+      }
       _memory[key] = _CacheEntry(
         lesson: lesson,
         savedAt: savedAt,
@@ -283,7 +311,17 @@ class LessonMaterialCache {
       _rememberColdFromJson(key, value, savedAt);
     }
     _enforceWarmLimit(persist: false);
-    return _audit(true, 'CACHE_HYDRATED');
+    return _audit(
+      true,
+      'CACHE_HYDRATED',
+      details: {
+        'warmEntries': _memory.length,
+        'coldEntries': _cold.length,
+        'rejectedSchema': rejectedSchema,
+        'rejectedExpired': rejectedExpired,
+        'rejectedContent': rejectedContent,
+      },
+    );
   }
 
   // Peek sem promover LRU — não altera ordem de evicção.

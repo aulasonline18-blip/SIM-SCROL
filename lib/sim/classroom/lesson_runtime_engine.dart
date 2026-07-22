@@ -248,17 +248,18 @@ class LessonRuntimeEngine {
     return snapshot();
   }
 
-  void select(AnswerLetter letter) {
+  bool select(AnswerLetter letter) {
     final position = _position;
-    if (position == null) return;
+    if (position == null) return false;
     answerController.selecionar(position, letter);
+    return true;
   }
 
-  Future<void> signal(DecisionSignal signal) async {
+  Future<bool> signal(DecisionSignal signal) async {
     _refreshSessionFromState();
     final position = _position;
     final session = _session;
-    if (position == null || session == null) return;
+    if (position == null || session == null) return false;
     await answerController.enviarSinal(
       lessonLocalId: session.lessonLocalId,
       topic: session.curriculum?.topic ?? session.onboarding.objetivo,
@@ -266,15 +267,16 @@ class LessonRuntimeEngine {
       signal: signal,
       baseItems: session.baseItems,
     );
+    return true;
   }
 
-  Future<void> advance({
+  Future<bool> advance({
     void Function(ResolveLessonMaterialResult result)? onBackgroundResolved,
   }) async {
     _refreshSessionFromState();
     final position = _position;
     final session = _session;
-    if (position == null || session == null) return;
+    if (position == null || session == null) return false;
     await answerController.avancar(
       lessonLocalId: session.lessonLocalId,
       topic: session.curriculum?.topic ?? session.onboarding.objetivo,
@@ -284,6 +286,7 @@ class LessonRuntimeEngine {
       academic: session.academic,
       onBackgroundResolved: onBackgroundResolved,
     );
+    return true;
   }
 
   bool reavaliarAvancoPendente({bool recoverFailedJobs = true}) {

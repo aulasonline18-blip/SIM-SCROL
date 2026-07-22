@@ -15,10 +15,9 @@ void main() {
 
   test('P2: runtime produtivo nao usa servidor como gate do toque simples', () {
     final organism = read('lib/sim/organism/sim_organism.dart');
-    final session = [
-      read('lib/features/session/lab_session.dart'),
-      read('lib/features/session/lab_session_flows.dart'),
-    ].join('\n');
+    final session = dartFilesUnder(
+      'lib/features/session',
+    ).map((file) => file.readAsStringSync()).join('\n');
     final materialController = read(
       'lib/sim/classroom/lesson_material_controller.dart',
     );
@@ -53,7 +52,10 @@ void main() {
       isNot(contains('A primeira aula foi liberada, mas a tela nao encontrou')),
     );
     expect(materialService, contains('this.allowRemoteOrder = false'));
-    expect(materialService, contains("this.remoteOrderPriority = 'background'"));
+    expect(
+      materialService,
+      contains("this.remoteOrderPriority = 'background'"),
+    );
     expect(materialService, contains('priority: input.remoteOrderPriority'));
     expect(materialController, contains("remoteOrderPriority: 'hot-local'"));
     expect(experienceEngine, isNot(contains('T02 obrigatorio')));

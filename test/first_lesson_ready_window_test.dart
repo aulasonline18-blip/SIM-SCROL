@@ -2713,17 +2713,19 @@ void main() {
 
     final state = service.read('cyber-window-dedupe');
     expect(state?.queuedActions, hasLength(1));
-    final hotJob = state?.queuedActions.firstWhere(
+    final localeIdentity = state!.localeContract.cacheIdentity();
+    final hotJob = state.queuedActions.firstWhere(
       (job) =>
-          job['idempotency_key'] == 'ready-window:cyber-window-dedupe:0:M1:L1',
+          job['idempotency_key'] ==
+          'ready-window:cyber-window-dedupe:$localeIdentity:0:M1:L1',
     );
     expect(
-      hotJob?['idempotency_key'],
-      'ready-window:cyber-window-dedupe:0:M1:L1',
+      hotJob['idempotency_key'],
+      'ready-window:cyber-window-dedupe:$localeIdentity:0:M1:L1',
     );
-    expect(hotJob?['payload']?['maxSlots'], offlineWarmCacheSize);
+    expect(hotJob['payload']?['maxSlots'], offlineWarmCacheSize);
     expect(
-      state?.events.where((event) => event.type == 'CACHE_WINDOW_UPDATED'),
+      state.events.where((event) => event.type == 'CACHE_WINDOW_UPDATED'),
       hasLength(2),
     );
 
@@ -2743,7 +2745,8 @@ void main() {
     final upgraded = service.read('cyber-window-dedupe')?.queuedActions;
     final upgradedHot = upgraded?.firstWhere(
       (job) =>
-          job['idempotency_key'] == 'ready-window:cyber-window-dedupe:0:M1:L1',
+          job['idempotency_key'] ==
+          'ready-window:cyber-window-dedupe:$localeIdentity:0:M1:L1',
     );
     expect(upgraded, hasLength(1));
     expect(upgradedHot?['priority'], 'hot-local');
@@ -3188,112 +3191,109 @@ void main() {
     },
   );
 
-  test(
-    'moving position refills hot window and prunes passed ready material',
-    () {
-      final service = StudentLearningStateService(
-        seed: {
-          'cyber-refill-window': _stateWithFiveItems().copyWith(
-            lessonLocalId: 'cyber-refill-window',
-            current: const LessonCurrent(
-              itemIdx: 1,
-              marker: 'M2',
-              layer: LessonLayer.l1,
-              amparoLvl: 0,
-            ),
-            progress: const LessonProgress(
-              itemIdx: 1,
-              layer: LessonLayer.l1,
-              erros: 0,
-              amparoLvl: 0,
-              historia: [],
-              mainAdvances: 1,
-              concluidos: ['M1'],
-              pendentesMarkers: [],
-              totalItems: 5,
-              pctAvanco: 20,
-            ),
-            readyLessonMaterials: {
-              preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): {
-                'text_status': 'ready',
-                'for_itemIdx': 0,
-                'for_marker': 'M1',
-                'for_layer': LessonLayer.l1.name,
-              },
-              preparedLessonMaterialKey(1, 'M2', LessonLayer.l1): {
-                'text_status': 'ready',
-                'for_itemIdx': 1,
-                'for_marker': 'M2',
-                'for_layer': LessonLayer.l1.name,
-              },
-            },
+  test('moving position refills hot window and prunes passed ready material', () {
+    final service = StudentLearningStateService(
+      seed: {
+        'cyber-refill-window': _stateWithFiveItems().copyWith(
+          lessonLocalId: 'cyber-refill-window',
+          current: const LessonCurrent(
+            itemIdx: 1,
+            marker: 'M2',
+            layer: LessonLayer.l1,
+            amparoLvl: 0,
           ),
-        },
-      );
-      final orchestrator = LessonOrchestrator(
-        t02Client: FakeT02Client(),
-        cache: LessonMaterialCache(),
-        bus: LessonEventBus(),
-      );
-      final materialService = StudentLessonMaterialService(
-        stateService: service,
-        orchestrator: orchestrator,
-        readyWindowEngine: DopamineReadyWindowEngine(
-          service: service,
-          orchestrator: orchestrator,
+          progress: const LessonProgress(
+            itemIdx: 1,
+            layer: LessonLayer.l1,
+            erros: 0,
+            amparoLvl: 0,
+            historia: [],
+            mainAdvances: 1,
+            concluidos: ['M1'],
+            pendentesMarkers: [],
+            totalItems: 5,
+            pctAvanco: 20,
+          ),
+          readyLessonMaterials: {
+            preparedLessonMaterialKey(0, 'M1', LessonLayer.l1): {
+              'text_status': 'ready',
+              'for_itemIdx': 0,
+              'for_marker': 'M1',
+              'for_layer': LessonLayer.l1.name,
+            },
+            preparedLessonMaterialKey(1, 'M2', LessonLayer.l1): {
+              'text_status': 'ready',
+              'for_itemIdx': 1,
+              'for_marker': 'M2',
+              'for_layer': LessonLayer.l1.name,
+            },
+          },
         ),
-      );
+      },
+    );
+    final orchestrator = LessonOrchestrator(
+      t02Client: FakeT02Client(),
+      cache: LessonMaterialCache(),
+      bus: LessonEventBus(),
+    );
+    final materialService = StudentLessonMaterialService(
+      stateService: service,
+      orchestrator: orchestrator,
+      readyWindowEngine: DopamineReadyWindowEngine(
+        service: service,
+        orchestrator: orchestrator,
+      ),
+    );
 
-      materialService.maintainLessonReadyWindow(
-        lessonLocalId: 'cyber-refill-window',
-        topic: 'Objetivo offline',
-        itemIdx: 1,
-        layer: LessonLayer.l1,
-        source: 'test-refill-after-advance',
-        priority: 'hot-local',
-        items: const [
-          DopamineWindowItem(text: 'Item 1', marker: 'M1'),
-          DopamineWindowItem(text: 'Item 2', marker: 'M2'),
-          DopamineWindowItem(text: 'Item 3', marker: 'M3'),
-          DopamineWindowItem(text: 'Item 4', marker: 'M4'),
-          DopamineWindowItem(text: 'Item 5', marker: 'M5'),
-        ],
-      );
+    materialService.maintainLessonReadyWindow(
+      lessonLocalId: 'cyber-refill-window',
+      topic: 'Objetivo offline',
+      itemIdx: 1,
+      layer: LessonLayer.l1,
+      source: 'test-refill-after-advance',
+      priority: 'hot-local',
+      items: const [
+        DopamineWindowItem(text: 'Item 1', marker: 'M1'),
+        DopamineWindowItem(text: 'Item 2', marker: 'M2'),
+        DopamineWindowItem(text: 'Item 3', marker: 'M3'),
+        DopamineWindowItem(text: 'Item 4', marker: 'M4'),
+        DopamineWindowItem(text: 'Item 5', marker: 'M5'),
+      ],
+    );
 
-      final state = service.read('cyber-refill-window');
-      expect(
-        state?.readyLessonMaterials.keys,
-        isNot(contains(preparedLessonMaterialKey(0, 'M1', LessonLayer.l1))),
-      );
-      expect(
-        state?.readyLessonMaterials.keys,
-        contains(preparedLessonMaterialKey(1, 'M2', LessonLayer.l1)),
-      );
-      final event = state?.events.lastWhere(
-        (event) => event.type == 'CACHE_WINDOW_UPDATED',
-      );
-      expect(event?.payload['windowMarkers'], [
-        {'marker': 'M2', 'layer': 1, 'offset': 0},
-        {'marker': 'M2', 'layer': 2, 'offset': 1},
-        {'marker': 'M2', 'layer': 3, 'offset': 2},
-        {'marker': 'M3', 'layer': 1, 'offset': 3},
-        {'marker': 'M3', 'layer': 2, 'offset': 4},
-        {'marker': 'M3', 'layer': 3, 'offset': 5},
-        {'marker': 'M4', 'layer': 1, 'offset': 6},
-        {'marker': 'M4', 'layer': 2, 'offset': 7},
-        {'marker': 'M4', 'layer': 3, 'offset': 8},
-        {'marker': 'M5', 'layer': 1, 'offset': 9},
-        {'marker': 'M5', 'layer': 2, 'offset': 10},
-        {'marker': 'M5', 'layer': 3, 'offset': 11},
-      ]);
-      final hotJob = state?.queuedActions.firstWhere(
-        (job) =>
-            job['idempotency_key'] ==
-            'ready-window:cyber-refill-window:1:M2:L1',
-      );
-      expect(hotJob?['priority'], 'hot-local');
-    },
-  );
+    final state = service.read('cyber-refill-window');
+    expect(
+      state?.readyLessonMaterials.keys,
+      isNot(contains(preparedLessonMaterialKey(0, 'M1', LessonLayer.l1))),
+    );
+    expect(
+      state?.readyLessonMaterials.keys,
+      contains(preparedLessonMaterialKey(1, 'M2', LessonLayer.l1)),
+    );
+    final event = state?.events.lastWhere(
+      (event) => event.type == 'CACHE_WINDOW_UPDATED',
+    );
+    expect(event?.payload['windowMarkers'], [
+      {'marker': 'M2', 'layer': 1, 'offset': 0},
+      {'marker': 'M2', 'layer': 2, 'offset': 1},
+      {'marker': 'M2', 'layer': 3, 'offset': 2},
+      {'marker': 'M3', 'layer': 1, 'offset': 3},
+      {'marker': 'M3', 'layer': 2, 'offset': 4},
+      {'marker': 'M3', 'layer': 3, 'offset': 5},
+      {'marker': 'M4', 'layer': 1, 'offset': 6},
+      {'marker': 'M4', 'layer': 2, 'offset': 7},
+      {'marker': 'M4', 'layer': 3, 'offset': 8},
+      {'marker': 'M5', 'layer': 1, 'offset': 9},
+      {'marker': 'M5', 'layer': 2, 'offset': 10},
+      {'marker': 'M5', 'layer': 3, 'offset': 11},
+    ]);
+    final hotJob = state?.queuedActions.firstWhere(
+      (job) =>
+          job['idempotency_key'] ==
+          'ready-window:cyber-refill-window:${state.localeContract.cacheIdentity()}:1:M2:L1',
+    );
+    expect(hotJob?['priority'], 'hot-local');
+  });
 
   test('invalid persistent cache entries are ignored', () async {
     SharedPreferences.setMockInitialValues({

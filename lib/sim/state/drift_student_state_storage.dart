@@ -48,12 +48,14 @@ class StudentStateDriftDatabase extends GeneratedDatabase {
   }
 }
 
-class DriftStudentStateLocalStorage implements DurableStudentStateLocalStorage {
+class DriftStudentStateLocalStorage
+    implements DurableStudentStateLocalStorage, StudentStateQuarantineStorage {
   DriftStudentStateLocalStorage._(this._db);
 
   final StudentStateDriftDatabase _db;
   final Map<String, String> _states = {};
   final Map<String, String> _events = {};
+  final Map<String, String> _quarantine = {};
   String? _lastStateLessonId;
   String? _lastStatePayload;
   String? _lastEventsLessonId;
@@ -121,6 +123,24 @@ class DriftStudentStateLocalStorage implements DurableStudentStateLocalStorage {
     _states.remove(lessonLocalId);
     _lastDeletedLessonId = lessonLocalId;
     unawaited(deleteStateDurably(lessonLocalId));
+  }
+
+  @override
+  void quarantinePayload({
+    required StudentStateIntegrityKind kind,
+    required String lessonLocalId,
+    required String payload,
+    required String code,
+  }) {
+    _quarantine[_quarantineKey(kind, lessonLocalId)] = payload;
+  }
+
+  @override
+  String? readQuarantinedPayload({
+    required StudentStateIntegrityKind kind,
+    required String lessonLocalId,
+  }) {
+    return _quarantine[_quarantineKey(kind, lessonLocalId)];
   }
 
   Future<void> writeStateDurably(String lessonLocalId, String encoded) {
@@ -225,4 +245,7 @@ class DriftStudentStateLocalStorage implements DurableStudentStateLocalStorage {
       }
     }
   }
+
+  String _quarantineKey(StudentStateIntegrityKind kind, String lessonLocalId) =>
+      '${kind.name}:$lessonLocalId';
 }

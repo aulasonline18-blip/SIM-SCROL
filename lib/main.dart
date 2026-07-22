@@ -289,18 +289,17 @@ class _SimAppState extends State<SimApp> {
     setSimActiveLanguage(simUiCodeForLocaleTag(interfaceLocale));
     Widget screen;
     final requestedRoute = Uri.tryParse(session.route)?.path ?? session.route;
-    final hasActiveLesson = (session.lessonLocalId ?? '').trim().isNotEmpty;
-    final hasResolvedLanguage =
-        (session.selectedLanguageCode ?? session.stableLang ?? '')
-            .trim()
-            .isNotEmpty ||
-        hasActiveLesson;
     final routeDecision = const SimOrganismRouter().resolve(
       path: requestedRoute,
       authed: session.authed,
-      hasLanguage: hasResolvedLanguage,
-      hasObjective: hasActiveLesson,
+      hasLanguage: session.hasResolvedLanguageForNavigation,
+      hasObjective: session.hasObjectiveForNavigation,
     );
+    if (!routeDecision.allowed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) session.applyRouteDecision(routeDecision);
+      });
+    }
     final routePath = routeDecision.destination;
     switch (routePath) {
       case '/login':
@@ -389,6 +388,12 @@ Widget _guardActiveLesson(LabSession session, {required Widget child}) {
   if (guarded != child) return guarded;
   final id = session.lessonLocalId;
   if (id == null || id.trim().isEmpty) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      session.navigationState.openRoute(
+        '/cyber/objeto',
+        fallbackReason: 'active_lesson_missing_id',
+      );
+    });
     return ConversationalEntryScreen(session: session);
   }
   return child;

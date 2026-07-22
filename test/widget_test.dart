@@ -17,6 +17,9 @@ void main() {
     final session = LabSession()
       ..authed = true
       ..authReady = true
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'pt-BR'
+      ..freeText = 'Estudar matematica'
       ..route = '/cyber/aula'
       ..lessonLocalId = 'lesson-chat-route';
 
@@ -32,6 +35,8 @@ void main() {
     final session = LabSession()
       ..authed = true
       ..authReady = true
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'pt-BR'
       ..route = '/cyber/aula';
 
     await tester.pumpWidget(SimMobileApp(initialSession: session));
@@ -39,6 +44,24 @@ void main() {
 
     expect(find.byType(ChatAulaScreen), findsNothing);
     expect(find.byType(ConversationalEntryScreen), findsOneWidget);
+    expect(session.route, '/cyber/objeto');
+  });
+
+  testWidgets('lessonLocalId alone does not bypass language and objective', (
+    tester,
+  ) async {
+    final session = LabSession()
+      ..authed = true
+      ..authReady = true
+      ..route = '/cyber/aula'
+      ..lessonLocalId = 'legacy-incomplete-route';
+
+    await tester.pumpWidget(SimMobileApp(initialSession: session));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatAulaScreen), findsNothing);
+    expect(find.byType(ConversationalEntryScreen), findsOneWidget);
+    expect(session.route, '/cyber/idioma');
   });
 
   testWidgets('portao de nivelamento renderiza conteudo e nao tela branca', (
@@ -134,6 +157,9 @@ void main() {
     final session = LabSession(prefs: prefs)
       ..authed = true
       ..authReady = true
+      ..selectedLanguageCode = 'pt'
+      ..stableLang = 'pt-BR'
+      ..freeText = 'Estudar historia'
       ..route = '/cyber/aula'
       ..lessonLocalId = 'lesson-dark-classroom';
 

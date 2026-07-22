@@ -4,9 +4,11 @@ import 'package:sim_mobile/sim/media/audio_preference.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_state_store.dart';
 
-class MemoryStudentStateLocalStorage implements StudentStateLocalStorage {
+class MemoryStudentStateLocalStorage
+    implements StudentStateLocalStorage, StudentStateQuarantineStorage {
   final Map<String, String> states = {};
   final Map<String, String> events = {};
+  final Map<String, String> quarantine = {};
 
   @override
   String? readEvents(String lessonLocalId) => events[lessonLocalId];
@@ -35,6 +37,24 @@ class MemoryStudentStateLocalStorage implements StudentStateLocalStorage {
   @override
   void deleteState(String lessonLocalId) {
     states.remove(lessonLocalId);
+  }
+
+  @override
+  void quarantinePayload({
+    required StudentStateIntegrityKind kind,
+    required String lessonLocalId,
+    required String payload,
+    required String code,
+  }) {
+    quarantine['${kind.name}:$lessonLocalId'] = payload;
+  }
+
+  @override
+  String? readQuarantinedPayload({
+    required StudentStateIntegrityKind kind,
+    required String lessonLocalId,
+  }) {
+    return quarantine['${kind.name}:$lessonLocalId'];
   }
 }
 
