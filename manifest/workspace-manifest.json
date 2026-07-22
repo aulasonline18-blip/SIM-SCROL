@@ -1,0 +1,32 @@
+{
+  "version": "1.0.0",
+  "app": {
+    "path": "/root/SIM-SCROL",
+    "remote": "https://github.com/aulasonline18-blip/SIM-SCROL.git",
+    "expectedBranch": "main"
+  },
+  "server": {
+    "path": "/root/sim-work/sim-api",
+    "remote": "https://github.com/aulasonline18-blip/sim-api-server.git",
+    "expectedBranch": "main"
+  },
+  "apkPublicRepo": {
+    "path": null,
+    "status": "not_configured"
+  },
+  "scripts": {
+    "appAnalyze": "flutter analyze",
+    "appTest": "flutter test",
+    "appCoverage": "bash scripts/coverage.sh",
+    "appIntegration": "bash scripts/run-integration-tests.sh",
+    "appProductionBuild": "scripts/build-sim-scroll-production-apk.sh",
+    "serverTest": "npm test",
+    "serverGuardAudit": "npm run check:guardas-antigasto"
+  },
+  "docs": {
+    "appIndex": "docs/INDEX.md",
+    "serverIndex": "/root/sim-work/sim-api/docs/INDEX.md",
+    "serverOpenApi": "/root/sim-work/sim-api/docs/openapi.yaml",
+    "guardasAntigasto": "/root/sim-work/sim-api/docs/LEI_GUARDAS_ANTIGASTO_SIM.md"
+  }
+}
