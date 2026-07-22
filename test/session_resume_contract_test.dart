@@ -31,6 +31,7 @@ void main() {
       await tester.pump();
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
 
       expect(session.route, '/cyber/aula');
       expect(find.text('Explicacao persistida.'), findsAtLeastNWidgets(1));
@@ -38,6 +39,8 @@ void main() {
       final key = prefs.getKeys().singleWhere(
         (key) => key.startsWith('sim.chat_aula.conversation.v1.'),
       );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
       await prefs.setString(
         key,
         '{"version":1,"lessonKey":"other-lesson","archiveSeq":1,"messages":[]}',

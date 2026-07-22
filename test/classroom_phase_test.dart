@@ -3,9 +3,14 @@ import 'dart:convert';
 import 'support/memory_test_stores.dart';
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sim_mobile/features/classroom/chat_aula_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sim_mobile/features/classroom/chat_aula_messages.dart';
+import 'package:sim_mobile/features/classroom/chat_aula_timeline_builder.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
+import 'package:sim_mobile/shared/widgets/shared_widgets.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_answer_progress_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_hydration_engine.dart';
@@ -14,6 +19,8 @@ import 'package:sim_mobile/sim/classroom/lesson_material_controller.dart';
 import 'package:sim_mobile/sim/classroom/lesson_position_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_runtime_engine.dart';
 import 'package:sim_mobile/sim/classroom/lesson_session_engine.dart';
+import 'package:sim_mobile/sim/cloud/cloud_functions.dart';
+import 'package:sim_mobile/sim/cloud/supabase_client_contract.dart';
 import 'package:sim_mobile/sim/lesson/dopamine_ready_window_engine.dart';
 import 'package:sim_mobile/sim/cache/secure_lesson_cache_store.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
@@ -22,11 +29,13 @@ import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
 import 'package:sim_mobile/sim/lesson/student_lesson_material_service.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
+import 'package:sim_mobile/sim/runtime/sim_runtime_audit.dart';
 import 'package:sim_mobile/sim/state/live_entry_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 import 'package:sim_mobile/sim/state/student_learning_state_service.dart';
 import 'package:sim_mobile/sim/state/student_state_store.dart';
 import 'package:sim_mobile/sim/state/student_state_store_adapter.dart';
+import 'package:sim_mobile/sim/ui/sim_i18n.dart';
 
 class FakeClassroomT02 implements T02LessonClient {
   int calls = 0;
@@ -108,6 +117,51 @@ class BlockingClassroomT02 implements T02LessonClient {
   @override
   Future<T02LessonMaterial> placement(T02LessonRequest request) =>
       completeLesson(request);
+}
+
+class _AcceptingStudentStateCloud implements StudentStateCloudFunctions {
+  int persistCalls = 0;
+
+  @override
+  Future<void> deleteStudentStateByLesson(
+    String lessonLocalId,
+    SupabaseSession session,
+  ) async {}
+
+  @override
+  Future<StudentStateRow?> getStudentStateByLesson(
+    String lessonLocalId,
+    SupabaseSession session,
+  ) async => null;
+
+  @override
+  Future<List<StudentStateRow>> listStudentStates(
+    SupabaseSession session,
+  ) async => const [];
+
+  @override
+  Future<List<StudentStateSummaryRow>> listStudentStateSummaries(
+    SupabaseSession session,
+  ) async => const [];
+
+  @override
+  Future<PersistStudentStateResult> persistStudentState(
+    PersistStudentStateInput input,
+    SupabaseSession session,
+  ) async {
+    persistCalls += 1;
+    return PersistStudentStateResult.accepted(
+      lessonLocalId: input.lessonLocalId,
+      highWaterMark: input.clientScore,
+      schemaVersion: input.schemaVersion,
+    );
+  }
+}
+
+class _StaticSupabaseSessionProvider implements SupabaseSessionProvider {
+  @override
+  Future<SupabaseSession?> currentSession() async =>
+      const SupabaseSession(accessToken: 'token', userId: 'user');
 }
 
 StudentLearningState _classroomState() {
@@ -1484,6 +1538,404 @@ void main() {
     },
   );
 
+  test(
+    'A/B/C usa LabSession SimOrganismProvider e LessonRuntimeEngine reais',
+    () async {
+      for (final letter in AnswerLetter.values) {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final store = _storeWithState(
+          _classroomStateWithPreparedCurrent('lesson-real-${letter.name}'),
+        );
+        final session = LabSession(canonicalStore: store, prefs: prefs)
+          ..authed = true
+          ..authReady = true
+          ..lessonLocalId = 'lesson-real-${letter.name}'
+          ..route = '/cyber/aula';
+
+        await session.openAulaRuntime();
+        expect(session.canSelectVisibleAulaAnswer, isTrue);
+
+        await session.chooseAulaAnswer(letter.name);
+
+        expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.expandida);
+        expect(session.aulaSnapshot?.phase.letter, letter);
+        final messages = buildChatLessonMessages(
+          ChatLessonTimelineInput(
+            snapshot: session.aulaSnapshot,
+            lessonLocalId: session.lessonLocalId,
+            canSelectCurrentAnswer: session.canSelectVisibleAulaAnswer,
+          ),
+        );
+        final options = messages.singleWhere(
+          (message) => message.kind == ChatLessonMessageKind.options,
+        );
+        expect(options.selectedAnswer, letter);
+        expect(options.signals, hasLength(3));
+        expect(options.signals.every((signal) => signal.enabled), isTrue);
+      }
+    },
+  );
+
+  test('retomada reconstrói runtime vazio antes de aceitar A/B/C', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final store = _storeWithState(
+      _classroomStateWithPreparedCurrent('lesson-resume-empty-runtime'),
+    );
+    final opened = LabSession(canonicalStore: store, prefs: prefs)
+      ..authed = true
+      ..authReady = true
+      ..lessonLocalId = 'lesson-resume-empty-runtime'
+      ..route = '/cyber/aula';
+    await opened.openAulaRuntime();
+    final visibleSnapshot = opened.aulaSnapshot;
+    expect(visibleSnapshot?.conteudo, isNotNull);
+
+    final resumed = LabSession(canonicalStore: store, prefs: prefs)
+      ..authed = true
+      ..authReady = true
+      ..lessonLocalId = 'lesson-resume-empty-runtime'
+      ..route = '/cyber/aula'
+      ..aulaSnapshot = visibleSnapshot;
+    expect(resumed.canSelectVisibleAulaAnswer, isFalse);
+    expect(
+      buildChatLessonMessages(
+            ChatLessonTimelineInput(
+              snapshot: resumed.aulaSnapshot,
+              lessonLocalId: resumed.lessonLocalId,
+              canSelectCurrentAnswer: resumed.canSelectVisibleAulaAnswer,
+            ),
+          )
+          .singleWhere(
+            (message) => message.kind == ChatLessonMessageKind.options,
+          )
+          .isActionable,
+      isFalse,
+    );
+
+    await resumed.chooseAulaAnswer('B');
+
+    expect(resumed.canSelectVisibleAulaAnswer, isTrue);
+    expect(resumed.aulaSnapshot?.phase.type, ClassroomPhaseType.expandida);
+    expect(resumed.aulaSnapshot?.phase.letter, AnswerLetter.B);
+  });
+
+  test(
+    'toque após troca de lessonLocalId não usa organismo da aula anterior',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = StudentStateStore(local: MemoryStudentStateLocalStorage())
+        ..writeState(_classroomStateWithPreparedCurrent('lesson-touch-a'))
+        ..writeState(
+          _classroomStateWithPreparedCurrent('lesson-touch-b').copyWith(
+            profile: const StudentProfile(
+              objetivo: 'Aula B',
+              stableLang: 'pt-BR',
+              nivel: 'base',
+            ),
+          ),
+        );
+      final session = LabSession(canonicalStore: store, prefs: prefs)
+        ..authed = true
+        ..authReady = true
+        ..lessonLocalId = 'lesson-touch-a'
+        ..route = '/cyber/aula';
+
+      await session.openAulaRuntime();
+      final organismA = session.simOrganismProvider.forLesson('lesson-touch-a');
+      final phaseABefore = organismA.lessonRuntimeEngine.snapshot().phase.type;
+      expect(phaseABefore, ClassroomPhaseType.lendo);
+
+      session.lessonLocalId = 'lesson-touch-b';
+      await session.chooseAulaAnswer('A');
+
+      expect(session.lessonLocalId, 'lesson-touch-b');
+      expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.expandida);
+      expect(
+        organismA.lessonRuntimeEngine.snapshot().phase.type,
+        ClassroomPhaseType.lendo,
+      );
+    },
+  );
+
+  test(
+    'duplo rebuild coalesce uma única abertura real da mesma aula',
+    () async {
+      SimRuntimeAudit.clearForTesting();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = _storeWithState(
+        _classroomStateWithPreparedCurrent('lesson-concurrent-open'),
+      );
+      final session = LabSession(canonicalStore: store, prefs: prefs)
+        ..authed = true
+        ..authReady = true
+        ..lessonLocalId = 'lesson-concurrent-open'
+        ..route = '/cyber/aula';
+
+      await Future.wait([session.openAulaRuntime(), session.openAulaRuntime()]);
+
+      expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.lendo);
+      expect(session.canSelectVisibleAulaAnswer, isTrue);
+      final openEvents = SimRuntimeAudit.events
+          .where((event) => event.code == 'aula_runtime_open_executed')
+          .toList(growable: false);
+      expect(openEvents, hasLength(1));
+      expect(
+        openEvents.single.details['lessonLocalId'],
+        'lesson-concurrent-open',
+      );
+    },
+  );
+
+  test('aberturas de aulas diferentes não são coalescidas', () async {
+    SimRuntimeAudit.clearForTesting();
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final store = StudentStateStore(local: MemoryStudentStateLocalStorage())
+      ..writeState(_classroomStateWithPreparedCurrent('lesson-open-a'))
+      ..writeState(_classroomStateWithPreparedCurrent('lesson-open-b'));
+    final session = LabSession(canonicalStore: store, prefs: prefs)
+      ..authed = true
+      ..authReady = true
+      ..lessonLocalId = 'lesson-open-a'
+      ..route = '/cyber/aula';
+
+    final first = session.openAulaRuntime();
+    session.lessonLocalId = 'lesson-open-b';
+    final second = session.openAulaRuntime();
+    await Future.wait([first, second]);
+
+    final openIds = SimRuntimeAudit.events
+        .where((event) => event.code == 'aula_runtime_open_executed')
+        .map((event) => event.details['lessonLocalId'])
+        .toList(growable: false);
+    expect(openIds, containsAll(<String>['lesson-open-a', 'lesson-open-b']));
+    expect(openIds.length, 2);
+  });
+
+  test('LessonRuntimeEngine.select respeita fases canônicas', () async {
+    final service = StudentLearningStateService(
+      seed: {
+        'phase-lesson': _classroomStateWithPreparedCurrent('phase-lesson'),
+      },
+    );
+    final t02 = FakeClassroomT02();
+    final runtime = _runtime(service, t02);
+    await runtime.open(lessonLocalId: 'phase-lesson');
+
+    expect(runtime.select(AnswerLetter.A), isTrue);
+    expect(runtime.snapshot().phase.letter, AnswerLetter.A);
+    expect(runtime.select(AnswerLetter.B), isTrue);
+    expect(runtime.snapshot().phase.letter, AnswerLetter.B);
+
+    void expectRejectedPhase(ClassroomPhase phase) {
+      final before = runtime.snapshot().copyWith(phase: phase);
+      runtime.restoreTransientSnapshot(before);
+      final callsBefore = t02.calls;
+      expect(runtime.select(AnswerLetter.C), isFalse);
+      final after = runtime.snapshot();
+      expect(after.phase.type, before.phase.type);
+      expect(after.phase.letter, before.phase.letter);
+      expect(after.phase.message, before.phase.message);
+      expect(t02.calls, callsBefore);
+    }
+
+    expectRejectedPhase(
+      const ClassroomPhase.processing(AnswerLetter.B, DecisionSignal.one),
+    );
+    expectRejectedPhase(
+      const ClassroomPhase.completed(
+        message: 'Feedback preservado',
+        wasCorrect: true,
+        signal: DecisionSignal.one,
+      ),
+    );
+    expectRejectedPhase(
+      const ClassroomPhase.advancePending(
+        message: 'Avanco em preparo',
+        letter: AnswerLetter.B,
+        signal: DecisionSignal.two,
+      ),
+    );
+    expectRejectedPhase(const ClassroomPhase.engineError('Erro preservado'));
+    expectRejectedPhase(const ClassroomPhase.doneEnd());
+  });
+
+  testWidgets(
+    'conversa persistida restaura A/B/C inerte e toque real funciona após runtime vivo',
+    (tester) async {
+      setSimActiveLanguage('pt-BR');
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final lessonState = _classroomStateWithPreparedCurrent(
+        'lesson-widget-restore',
+      );
+      final store = _storeWithState(lessonState);
+      final cloud = _AcceptingStudentStateCloud();
+      final sessionProvider = _StaticSupabaseSessionProvider();
+      final firstSession =
+          LabSession(
+              canonicalStore: store,
+              prefs: prefs,
+              cloudQueueStorage: MemoryCloudQueueStorage(),
+              drawerCloudFunctions: cloud,
+              drawerSessionProvider: sessionProvider,
+            )
+            ..authed = true
+            ..authReady = true
+            ..lessonLocalId = 'lesson-widget-restore'
+            ..route = '/cyber/aula';
+      await firstSession.openAulaRuntime();
+      expect(firstSession.hasLiveRuntimeForVisibleSnapshot, isTrue);
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: firstSession)),
+      );
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+      await tester.tap(find.text(t('aula_practice_foundation')));
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump();
+      expect(find.byKey(const Key('chat-answer-card-A')), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+      firstSession.dispose();
+
+      final resumedStore = StudentStateStore(
+        local: MemoryStudentStateLocalStorage(),
+      );
+      final restoredSession =
+          LabSession(
+              canonicalStore: resumedStore,
+              prefs: prefs,
+              cloudQueueStorage: MemoryCloudQueueStorage(),
+              drawerCloudFunctions: cloud,
+              drawerSessionProvider: sessionProvider,
+            )
+            ..authed = true
+            ..authReady = true
+            ..lessonLocalId = 'lesson-widget-restore'
+            ..route = '/cyber/aula';
+
+      await tester.pumpWidget(
+        MaterialApp(home: ChatAulaScreen(session: restoredSession)),
+      );
+      await tester.pumpAndSettle();
+
+      final restoredA = find.byKey(const Key('chat-answer-card-A'));
+      expect(restoredA, findsOneWidget);
+      expect(tester.widget<AnswerButton>(restoredA).enabled, isFalse);
+
+      resumedStore.writeState(lessonState);
+      await restoredSession.ensureAulaRuntimeForVisibleLesson(
+        source: 'test.persisted-conversation.runtime-ready',
+      );
+      await tester.pumpAndSettle();
+      expect(restoredSession.hasLiveRuntimeForVisibleSnapshot, isTrue);
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+      if (find.text(t('aula_practice_foundation')).evaluate().isNotEmpty) {
+        await tester.tap(find.text(t('aula_practice_foundation')));
+        await tester.pump(const Duration(milliseconds: 250));
+        await tester.pump();
+      }
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('chat-answer-card-A')),
+        120,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.ensureVisible(find.byKey(const Key('chat-answer-card-A')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('chat-answer-card-A')));
+      await tester.pump();
+
+      final selectedA = tester.widget<AnswerButton>(
+        find.byKey(const Key('chat-answer-card-A')).last,
+      );
+      expect(selectedA.selected, isTrue);
+      expect(find.text('1'), findsWidgets);
+      expect(find.text('2'), findsWidgets);
+      expect(find.text('3'), findsWidgets);
+      expect(restoredSession.lessonLocalId, 'lesson-widget-restore');
+      expect(
+        restoredSession.aulaSnapshot?.itemMarker,
+        restoredSession.simOrganismProvider
+            .forLesson('lesson-widget-restore')
+            .lessonRuntimeEngine
+            .snapshot()
+            .itemMarker,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+      restoredSession.dispose();
+    },
+  );
+
+  test(
+    'retomada com runtime vivo em fases ocupadas não reabre nem troca posição',
+    () async {
+      final phases = <String, ClassroomPhase>{
+        'processando': const ClassroomPhase.processing(
+          AnswerLetter.A,
+          DecisionSignal.one,
+        ),
+        'concluido': const ClassroomPhase.completed(
+          message: 'Feedback preservado',
+          wasCorrect: true,
+          signal: DecisionSignal.one,
+        ),
+        'avancoPendente': const ClassroomPhase.advancePending(
+          message: 'Avanco pendente preservado',
+          letter: AnswerLetter.A,
+          signal: DecisionSignal.two,
+        ),
+      };
+
+      for (final entry in phases.entries) {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final lessonId = 'lesson-resume-${entry.key}';
+        final store = _storeWithState(
+          _classroomStateWithPreparedCurrent(lessonId),
+        );
+        final session = LabSession(canonicalStore: store, prefs: prefs)
+          ..authed = true
+          ..authReady = true
+          ..lessonLocalId = lessonId
+          ..route = '/cyber/aula';
+        await session.openAulaRuntime();
+        final organism = session.simOrganismProvider.forLesson(lessonId);
+        final beforeMarker = session.aulaSnapshot?.itemMarker;
+        organism.lessonRuntimeEngine.restoreTransientSnapshot(
+          session.aulaSnapshot!.copyWith(phase: entry.value),
+        );
+        session.aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+        expect(session.hasLiveRuntimeForVisibleSnapshot, isTrue);
+        expect(session.canSelectVisibleAulaAnswer, isFalse);
+
+        SimRuntimeAudit.clearForTesting();
+        await session.ensureAulaRuntimeForVisibleLesson(
+          source: 'test.explicit.resume.${entry.key}',
+        );
+
+        expect(
+          SimRuntimeAudit.events.where(
+            (event) => event.code == 'aula_runtime_open_executed',
+          ),
+          isEmpty,
+        );
+        expect(session.aulaSnapshot?.phase.type, entry.value.type);
+        expect(session.aulaSnapshot?.itemMarker, beforeMarker);
+
+        session.dispose();
+      }
+    },
+  );
+
   test('M7 avanca cinco posicoes usando cache local sem novo T02', () async {
     final service = StudentLearningStateService(
       seed: {'cyber-class': _classroomState()},
@@ -2442,7 +2894,7 @@ void main() {
   );
 
   test(
-    'repeated signal remains local and does not create remote retry',
+    'repeated signal after completion is rejected without remote retry',
     () async {
       final service = StudentLearningStateService(
         seed: {'cyber-class': _classroomState()},
@@ -2456,12 +2908,12 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
 
-      runtime.select(AnswerLetter.A);
+      expect(runtime.select(AnswerLetter.A), isFalse);
       await runtime.signal(DecisionSignal.one);
       await Future<void>.delayed(Duration.zero);
       expect(runtime.snapshot().phase.type, ClassroomPhaseType.concluido);
       expect(service.read('cyber-class')?.progress?.layer, LessonLayer.l3);
-      expect(service.read('cyber-class')?.attempts, hasLength(2));
+      expect(service.read('cyber-class')?.attempts, hasLength(1));
       expect(
         service
             .read('cyber-class')

@@ -161,6 +161,8 @@ void main() {
       MaterialApp(home: ChatAulaScreen(session: session)),
     );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
 
     expect(find.text(t('aula_gen_fail')), findsOneWidget);
     expect(find.text(t('aula_try_again_2')), findsOneWidget);

@@ -785,12 +785,85 @@ extension LabSessionFlowExtensions on LabSession {
     bool menuOpenPriority = false,
     bool suppressReadyWindowUntilVisibleLessonReady = false,
     AulaOpenOperationKind operationKind = AulaOpenOperationKind.open,
-  }) => _openAulaRuntimeOnce(
-    menuOpenPriority: menuOpenPriority,
-    suppressReadyWindowUntilVisibleLessonReady:
-        suppressReadyWindowUntilVisibleLessonReady,
-    operationKind: operationKind,
-  );
+  }) {
+    final id = lessonLocalId?.trim();
+    final inFlight = _aulaRuntimeOpenInFlight;
+    if (inFlight != null && _aulaRuntimeOpenInFlightLessonId == id) {
+      return inFlight;
+    }
+    final opened = _openAulaRuntimeOnce(
+      menuOpenPriority: menuOpenPriority,
+      suppressReadyWindowUntilVisibleLessonReady:
+          suppressReadyWindowUntilVisibleLessonReady,
+      operationKind: operationKind,
+    );
+    _aulaRuntimeOpenInFlight = opened.whenComplete(() {
+      if (_aulaRuntimeOpenInFlightLessonId == id) {
+        _aulaRuntimeOpenInFlight = null;
+        _aulaRuntimeOpenInFlightLessonId = null;
+      }
+    });
+    _aulaRuntimeOpenInFlightLessonId = id;
+    return _aulaRuntimeOpenInFlight!;
+  }
+
+  bool get hasLiveRuntimeForVisibleSnapshot {
+    final id = lessonLocalId?.trim();
+    final snapshot = aulaSnapshot;
+    if (prefs == null) {
+      return _allowDevAulaHarness && snapshot?.conteudo != null;
+    }
+    if (id == null || id.isEmpty) return false;
+    if (snapshot?.conteudo == null) return false;
+    final organism = _activeOrganism;
+    if (organism == null || organism.lessonLocalId != id) return false;
+    return organism.lessonRuntimeEngine.hasLivePositionForSnapshot(
+      lessonLocalId: id,
+      snapshot: snapshot,
+    );
+  }
+
+  bool get canSelectVisibleAulaAnswer {
+    final snapshot = aulaSnapshot;
+    final phase = snapshot?.phase.type;
+    return hasLiveRuntimeForVisibleSnapshot &&
+        !aulaRuntimeLoading &&
+        snapshot?.conteudo != null &&
+        (phase == ClassroomPhaseType.lendo ||
+            phase == ClassroomPhaseType.expandida);
+  }
+
+  Future<void> ensureAulaRuntimeForVisibleLesson({
+    String source = 'LabSession.ensureAulaRuntimeForVisibleLesson',
+  }) async {
+    if (prefs == null) {
+      if (aulaSnapshot == null &&
+          (aulaRuntimeError ?? '').trim().isEmpty &&
+          _allowDevAulaHarness) {
+        await openAulaRuntime();
+      }
+      return;
+    }
+    final id = lessonLocalId?.trim();
+    if (id == null || id.isEmpty) return;
+    final canonical = canonicalStore?.readState(id);
+    if (canonical?.curriculum == null ||
+        (canonical?.curriculum?.items.isEmpty ?? true)) {
+      _recordRuntimeAudit(
+        'AULA_RUNTIME_RECONCILE_WITHOUT_CANONICAL_STATE',
+        source: source,
+        details: {'lessonLocalId': id},
+      );
+      return;
+    }
+    if (hasLiveRuntimeForVisibleSnapshot) return;
+    _recordRuntimeAudit(
+      'AULA_RUNTIME_RECONCILE_REQUESTED',
+      source: source,
+      details: {'lessonLocalId': id},
+    );
+    await openAulaRuntime(suppressReadyWindowUntilVisibleLessonReady: true);
+  }
 
   Future<void> _openAulaRuntimeOnce({
     required bool menuOpenPriority,
@@ -811,6 +884,11 @@ extension LabSessionFlowExtensions on LabSession {
       if (id == null || id.trim().isEmpty) return;
     }
     final runtimeGeneration = ++_aulaRuntimeGeneration;
+    _recordRuntimeAudit(
+      'AULA_RUNTIME_OPEN_EXECUTED',
+      source: 'LabSession.openAulaRuntime',
+      details: {'lessonLocalId': id, 'generation': runtimeGeneration},
+    );
     if (operationKind == AulaOpenOperationKind.retry) {
       aulaOpeningTransition = AulaOpeningTransition(
         targetLessonLocalId: id,
@@ -1094,7 +1172,7 @@ extension LabSessionFlowExtensions on LabSession {
     _drainPendingAulaIntents(organism);
   }
 
-  void chooseAulaAnswer(String letter) {
+  Future<void> chooseAulaAnswer(String letter) async {
     final snapshot = aulaSnapshot;
     if (snapshot?.conteudo == null ||
         snapshot?.phase.type == ClassroomPhaseType.processando) {
@@ -1107,7 +1185,6 @@ extension LabSessionFlowExtensions on LabSession {
       );
       return;
     }
-    stopActiveAudio();
     final normalizedLetter = letter.trim().toUpperCase();
     final answer = switch (normalizedLetter) {
       'A' => AnswerLetter.A,
@@ -1125,7 +1202,19 @@ extension LabSessionFlowExtensions on LabSession {
       );
       return;
     }
-    if (prefs == null || _runningUnderFlutterTest) {
+    final phase = snapshot?.phase.type;
+    if (phase != ClassroomPhaseType.lendo &&
+        phase != ClassroomPhaseType.expandida) {
+      _recordRuntimeAudit(
+        'ANSWER_BLOCKED_BY_PHASE',
+        details: {'letter': answer.name, 'phase': phase?.name},
+        source: 'LabSession.chooseAulaAnswer',
+        notify: true,
+      );
+      return;
+    }
+    stopActiveAudio();
+    if (prefs == null) {
       if (!_allowDevAulaHarness) {
         aulaRuntimeError = 'Aula de desenvolvimento bloqueada em production.';
         _notifyFromChild();
@@ -1135,8 +1224,78 @@ extension LabSessionFlowExtensions on LabSession {
       _notifyFromChild();
       return;
     }
-    final organism = _activeOrganism ?? _organismForActiveLesson();
-    organism.lessonRuntimeEngine.select(answer);
+    final id = lessonLocalId?.trim();
+    if (id == null || id.isEmpty) {
+      aulaRuntimeError =
+          'Nao consegui localizar esta aula para registrar a resposta.';
+      _recordRuntimeAudit(
+        'ANSWER_BLOCKED_WITHOUT_LESSON_ID',
+        details: {'letter': answer.name},
+        source: 'LabSession.chooseAulaAnswer',
+        notify: true,
+      );
+      return;
+    }
+    var organism = _activeOrganism;
+    if (organism == null || organism.lessonLocalId != id) {
+      await ensureAulaRuntimeForVisibleLesson(
+        source: 'LabSession.chooseAulaAnswer.identity',
+      );
+      organism = _activeOrganism;
+    }
+    if (organism == null ||
+        organism.lessonLocalId != id ||
+        !organism.lessonRuntimeEngine.hasLivePositionForSnapshot(
+          lessonLocalId: id,
+          snapshot: snapshot,
+        )) {
+      await ensureAulaRuntimeForVisibleLesson(
+        source: 'LabSession.chooseAulaAnswer.position',
+      );
+      organism = _activeOrganism;
+    }
+    if (organism == null ||
+        organism.lessonLocalId != id ||
+        !organism.lessonRuntimeEngine.hasLivePositionForSnapshot(
+          lessonLocalId: id,
+          snapshot: aulaSnapshot,
+        )) {
+      aulaRuntimeError =
+          'A aula ainda esta preparando. Aguarde um instante para responder.';
+      _recordRuntimeAudit(
+        'ANSWER_BLOCKED_RUNTIME_NOT_READY',
+        details: {'letter': answer.name, 'lessonLocalId': id},
+        source: 'LabSession.chooseAulaAnswer',
+        notify: true,
+      );
+      return;
+    }
+    var selected = organism.lessonRuntimeEngine.select(answer);
+    if (!selected) {
+      await ensureAulaRuntimeForVisibleLesson(
+        source: 'LabSession.chooseAulaAnswer.select_false',
+      );
+      organism = _activeOrganism;
+      selected =
+          organism != null &&
+          organism.lessonLocalId == id &&
+          organism.lessonRuntimeEngine.hasLivePositionForSnapshot(
+            lessonLocalId: id,
+            snapshot: aulaSnapshot,
+          ) &&
+          organism.lessonRuntimeEngine.select(answer);
+    }
+    if (!selected || organism == null) {
+      aulaRuntimeError =
+          'A aula ainda esta preparando. Aguarde um instante para responder.';
+      _recordRuntimeAudit(
+        'ANSWER_BLOCKED_RUNTIME_NOT_READY',
+        details: {'letter': answer.name, 'lessonLocalId': id},
+        source: 'LabSession.chooseAulaAnswer',
+        notify: true,
+      );
+      return;
+    }
     aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
     final accepted =
         aulaSnapshot?.phase.type == ClassroomPhaseType.expandida &&
@@ -1145,7 +1304,7 @@ extension LabSessionFlowExtensions on LabSession {
       aulaRuntimeError =
           'Nao consegui registrar a resposta nesta posicao. Tente novamente.';
       _recordRuntimeAudit(
-        'ANSWER_REJECTED_NO_POSITION',
+        'ANSWER_BLOCKED_RUNTIME_MISMATCH',
         details: {'letter': answer.name},
         source: 'LabSession.chooseAulaAnswer',
       );

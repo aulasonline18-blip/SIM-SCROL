@@ -1,7 +1,8 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_messages.dart';
 import 'package:sim_mobile/features/classroom/chat_aula_timeline_builder.dart';
+import 'package:sim_mobile/features/classroom/chat_aula_widgets.dart';
 import 'package:sim_mobile/features/session/lab_session.dart';
 import 'package:sim_mobile/sim/classroom/classroom_models.dart';
 import 'package:sim_mobile/sim/classroom/lesson_main_view_model.dart';
@@ -73,6 +74,67 @@ void main() {
 
     expect(options.isActionable, isTrue);
     expect(options.options.map((option) => option.enabled), everyElement(true));
+  });
+
+  test('visible A/B/C are inert while live runtime is rebuilding', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(),
+        canSelectCurrentAnswer: false,
+      ),
+    );
+
+    final options = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.options,
+    );
+
+    expect(options.isActionable, isFalse);
+    expect(
+      options.options.map((option) => option.enabled),
+      everyElement(false),
+    );
+    expect(options.signals, isEmpty);
+  });
+
+  testWidgets('historical conversation never responds to A/B/C tap', (
+    tester,
+  ) async {
+    var taps = 0;
+    final historical = ChatLessonMessage(
+      id: 'historical-options',
+      role: ChatLessonMessageRole.sim,
+      kind: ChatLessonMessageKind.options,
+      text: 'Pergunta antiga',
+      options: const [
+        ChatLessonOption(
+          letter: AnswerLetter.A,
+          text: 'Alternativa antiga',
+          selected: false,
+          enabled: false,
+        ),
+      ],
+      isHistorical: true,
+      isActionable: false,
+      deliveryStatus: ChatLessonDeliveryStatus.read,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatAulaTimeline(
+          messages: [historical],
+          onChooseAnswer: (_) => taps += 1,
+          onSignal: (_) {},
+          onRetry: () {},
+          onNext: () {},
+          onOpenDoubt: () {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-answer-card-A')));
+    await tester.pump();
+
+    expect(taps, 0);
   });
 
   test('invalid answer letter is rejected and does not become A', () {

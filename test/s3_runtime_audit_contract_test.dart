@@ -26,13 +26,15 @@ void main() {
     expect(session, isNot(contains("'message': error.toString()")));
   });
 
-  test('runtime select without position reports rejection test', () {
+  test('runtime select without position is reconciled before action test', () {
     final runtime = _read('lib/sim/classroom/lesson_runtime_engine.dart');
     final flows = _read('lib/features/session/lab_session_flows.dart');
 
     expect(runtime, contains('bool select(AnswerLetter letter)'));
     expect(runtime, contains('if (position == null) return false;'));
-    expect(flows, contains('ANSWER_REJECTED_NO_POSITION'));
+    expect(flows, contains('hasLivePositionForSnapshot'));
+    expect(flows, contains('ANSWER_BLOCKED_RUNTIME_NOT_READY'));
+    expect(flows, isNot(contains('ANSWER_REJECTED_NO_POSITION')));
   });
 
   test('invalid decision signal is rejected test', () {

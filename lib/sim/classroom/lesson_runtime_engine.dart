@@ -26,6 +26,8 @@ class LessonRuntimeSnapshot {
     this.imageMetadata,
     required this.itemMarker,
     required this.itemText,
+    this.itemIdx,
+    this.layer,
     this.itemUnit,
     this.itemTitle,
   });
@@ -42,6 +44,8 @@ class LessonRuntimeSnapshot {
   final LessonImageGenerationMetadata? imageMetadata;
   final String? itemMarker;
   final String? itemText;
+  final int? itemIdx;
+  final LessonLayer? layer;
   final String? itemUnit;
   final String? itemTitle;
 
@@ -60,6 +64,8 @@ class LessonRuntimeSnapshot {
     Object? imageMetadata = _unset,
     Object? itemMarker = _unset,
     Object? itemText = _unset,
+    Object? itemIdx = _unset,
+    Object? layer = _unset,
     Object? itemUnit = _unset,
     Object? itemTitle = _unset,
   }) {
@@ -86,6 +92,8 @@ class LessonRuntimeSnapshot {
       itemText: identical(itemText, _unset)
           ? this.itemText
           : itemText as String?,
+      itemIdx: identical(itemIdx, _unset) ? this.itemIdx : itemIdx as int?,
+      layer: identical(layer, _unset) ? this.layer : layer as LessonLayer?,
       itemUnit: identical(itemUnit, _unset)
           ? this.itemUnit
           : itemUnit as String?,
@@ -176,6 +184,49 @@ class LessonRuntimeEngine {
     position.imageMetadata = snapshot.imageMetadata;
   }
 
+  bool hasLivePositionForSnapshot({
+    required String lessonLocalId,
+    required LessonRuntimeSnapshot? snapshot,
+  }) {
+    _refreshSessionFromState();
+    final position = _position;
+    final session = _session;
+    final item = position?.itemAtivo;
+    final expectedContent = snapshot?.conteudo;
+    final actualContent = position?.conteudo;
+    if (position == null ||
+        session == null ||
+        item == null ||
+        expectedContent == null ||
+        actualContent == null) {
+      return false;
+    }
+    if (session.lessonLocalId != lessonLocalId) return false;
+    if (snapshot?.itemMarker != null && item.marker != snapshot!.itemMarker) {
+      return false;
+    }
+    if (snapshot?.itemText != null && item.text != snapshot!.itemText) {
+      return false;
+    }
+    if (snapshot?.itemIdx != null && position.itemIdx != snapshot!.itemIdx) {
+      return false;
+    }
+    if (snapshot?.layer != null && position.layer != snapshot!.layer) {
+      return false;
+    }
+    if (actualContent.question.trim().isEmpty ||
+        expectedContent.question != actualContent.question) {
+      return false;
+    }
+    for (final letter in AnswerLetter.values) {
+      if ((expectedContent.options[letter] ?? '') !=
+          (actualContent.options[letter] ?? '')) {
+        return false;
+      }
+    }
+    return expectedContent.correctAnswer == actualContent.correctAnswer;
+  }
+
   Future<LessonRuntimeSnapshot> open({
     required String lessonLocalId,
     bool authReady = true,
@@ -251,6 +302,10 @@ class LessonRuntimeEngine {
   bool select(AnswerLetter letter) {
     final position = _position;
     if (position == null) return false;
+    if (position.phase.type != ClassroomPhaseType.lendo &&
+        position.phase.type != ClassroomPhaseType.expandida) {
+      return false;
+    }
     answerController.selecionar(position, letter);
     return true;
   }
@@ -408,6 +463,8 @@ class LessonRuntimeEngine {
       imageMetadata: position.imageMetadata,
       itemMarker: position.itemAtivo?.marker,
       itemText: position.itemAtivo?.text,
+      itemIdx: position.itemIdx,
+      layer: position.layer,
       itemUnit: position.itemAtivo?.unit,
       itemTitle: position.itemAtivo?.title ?? position.itemAtivo?.text,
     );

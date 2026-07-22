@@ -22,6 +22,7 @@ class ChatLessonTimelineInput {
     this.lessonLocalId,
     this.menuLessonWaiting = false,
     this.menuLessonRetrying = false,
+    this.canSelectCurrentAnswer = true,
   });
 
   final LessonRuntimeSnapshot? snapshot;
@@ -37,6 +38,7 @@ class ChatLessonTimelineInput {
   final String? lessonLocalId;
   final bool menuLessonWaiting;
   final bool menuLessonRetrying;
+  final bool canSelectCurrentAnswer;
 }
 
 List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
@@ -45,8 +47,11 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
   final content = snapshot?.conteudo;
   final phase = snapshot?.phase;
   final marker = snapshot?.itemMarker;
-  final itemIdx = _itemIdxFromHeader(snapshot?.viewModel?.headerLabel);
-  final layer = _layerFromHeader(snapshot?.viewModel?.headerLabel);
+  final itemIdx =
+      snapshot?.itemIdx ?? _itemIdxFromHeader(snapshot?.viewModel?.headerLabel);
+  final layer =
+      snapshot?.layer?.value ??
+      _layerFromHeader(snapshot?.viewModel?.headerLabel);
 
   for (var i = 0; i < (snapshot?.history.length ?? 0); i++) {
     final entry = snapshot!.history[i];
@@ -325,7 +330,9 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     );
 
     final selected = phase?.letter;
-    final answerBusy = phase?.type == ClassroomPhaseType.processando;
+    final answerBusy =
+        phase?.type == ClassroomPhaseType.processando ||
+        !input.canSelectCurrentAnswer;
     messages.add(
       ChatLessonMessage(
         id: 'options-$activeId',

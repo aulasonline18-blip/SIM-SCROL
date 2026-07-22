@@ -203,6 +203,8 @@ class LabSession extends ChangeNotifier {
   Future<void>? _launchExperienceInFlight;
   int _experienceGeneration = 0;
   int _aulaRuntimeGeneration = 0;
+  Future<void>? _aulaRuntimeOpenInFlight;
+  String? _aulaRuntimeOpenInFlightLessonId;
   bool _entryOfficialLessonReady = false;
   late SimLocaleSettings localeSettings = SimLocaleSettings.load(prefs);
 

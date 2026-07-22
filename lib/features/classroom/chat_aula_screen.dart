@@ -51,6 +51,14 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     WidgetsBinding.instance.addObserver(this);
     widget.session.addListener(_onSessionChange);
     unawaited(_loadFontScaleLevel());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        widget.session.ensureAulaRuntimeForVisibleLesson(
+          source: 'ChatAulaScreen.initState',
+        ),
+      );
+    });
   }
 
   Future<void> _loadFontScaleLevel() async {
@@ -106,7 +114,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         _conversationLessonKey = lessonKey;
         _conversationMessages
           ..clear()
-          ..addAll(restored.messages);
+          ..addAll(_restoredMessagesAsProjection(restored.messages));
         _conversationArchiveSeq = restored.archiveSeq;
       });
     } catch (_) {
@@ -205,6 +213,12 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       final key = _conversationLessonKey;
       if (key != null) unawaited(_persistConversationSnapshot(key));
       widget.session.stopActiveAudio();
+    } else if (state == AppLifecycleState.resumed) {
+      unawaited(
+        widget.session.ensureAulaRuntimeForVisibleLesson(
+          source: 'ChatAulaScreen.lifecycle.resumed',
+        ),
+      );
     }
   }
 
@@ -309,6 +323,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
           menuLessonRetrying:
               session.aulaOpeningTransition?.status ==
               AulaOpeningStatus.retrying,
+          canSelectCurrentAnswer: session.canSelectVisibleAulaAnswer,
         ),
       ),
     );
@@ -421,6 +436,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       _insertConversationMessage(message, incoming, incomingIndex);
     }
     _removeStaleEphemeralMessages(incoming);
+    _markStalePedagogicalActionsInert(incoming);
 
     final messages = List<ChatLessonMessage>.unmodifiable(
       _messagesWithDeadPastFeedbackActions(),
@@ -429,6 +445,62 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       unawaited(_persistConversationSnapshot(lessonKey));
     }
     return messages;
+  }
+
+  List<ChatLessonMessage> _restoredMessagesAsProjection(
+    List<ChatLessonMessage> messages,
+  ) {
+    return messages.map(_inactivePedagogicalMessage).toList(growable: false);
+  }
+
+  void _markStalePedagogicalActionsInert(List<ChatLessonMessage> incoming) {
+    final liveIds = incoming.map((message) => message.id).toSet();
+    for (var i = 0; i < _conversationMessages.length; i++) {
+      final message = _conversationMessages[i];
+      if (liveIds.contains(message.id)) continue;
+      final inactive = _inactivePedagogicalMessage(message);
+      if (!identical(inactive, message)) _conversationMessages[i] = inactive;
+    }
+  }
+
+  ChatLessonMessage _inactivePedagogicalMessage(ChatLessonMessage message) {
+    final disablesAction = switch (message.kind) {
+      ChatLessonMessageKind.practiceAction ||
+      ChatLessonMessageKind.options ||
+      ChatLessonMessageKind.feedback => true,
+      _ => false,
+    };
+    final marksHistorical = switch (message.kind) {
+      ChatLessonMessageKind.practiceAction ||
+      ChatLessonMessageKind.question ||
+      ChatLessonMessageKind.options => true,
+      _ => false,
+    };
+    if (!disablesAction && !marksHistorical) return message;
+    return message.copyWith(
+      options: message.options
+          .map(
+            (option) => ChatLessonOption(
+              letter: option.letter,
+              text: option.text,
+              selected: option.selected,
+              enabled: false,
+            ),
+          )
+          .toList(growable: false),
+      signals: message.signals
+          .map(
+            (signal) => ChatLessonSignal(
+              value: signal.value,
+              labelKey: signal.labelKey,
+              enabled: false,
+            ),
+          )
+          .toList(growable: false),
+      deliveryStatus: ChatLessonDeliveryStatus.read,
+      isHistorical: marksHistorical ? true : message.isHistorical,
+      isActionable: disablesAction ? false : message.isActionable,
+    );
   }
 
   List<ChatLessonMessage> _messagesWithDeadPastFeedbackActions() {
