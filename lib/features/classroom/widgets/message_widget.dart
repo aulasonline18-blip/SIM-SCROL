@@ -24,6 +24,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
     required this.onSignal,
     required this.onRetry,
     required this.onNext,
+    required this.onPractice,
     required this.onOpenDoubt,
     this.pendingActionKeys = const {},
     this.session,
@@ -38,6 +39,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
   final void Function(int value) onSignal;
   final VoidCallback onRetry;
   final VoidCallback onNext;
+  final void Function(ChatLessonMessage message) onPractice;
   final VoidCallback onOpenDoubt;
   final Set<String> pendingActionKeys;
   final VoidCallback? onImageSettled;
@@ -78,6 +80,7 @@ class ChatAulaMessageBubble extends StatelessWidget {
                     block: AulaConversationBlock.fromMessage(message),
                     pendingActionKeys: pendingActionKeys,
                     onImageSettled: onImageSettled,
+                    onPractice: () => onPractice(message),
                     actions: AulaConversationActions(
                       chooseAnswer: onChooseAnswer,
                       submitSignal: onSignal,
@@ -102,6 +105,7 @@ class AulaConversationBlockRenderer extends StatelessWidget {
     required this.actions,
     this.pendingActionKeys = const {},
     this.onImageSettled,
+    this.onPractice,
     super.key,
   });
 
@@ -109,6 +113,7 @@ class AulaConversationBlockRenderer extends StatelessWidget {
   final AulaConversationActions actions;
   final Set<String> pendingActionKeys;
   final VoidCallback? onImageSettled;
+  final VoidCallback? onPractice;
 
   @override
   Widget build(BuildContext context) {
@@ -127,9 +132,13 @@ class AulaConversationBlockRenderer extends StatelessWidget {
         message: message,
         onImageSettled: onImageSettled,
       ),
+      AulaConversationBlockType.practiceAction => _ActionButton(
+        label: message.text ?? t('aula_practice_foundation'),
+        onPressed: onPractice ?? actions.advance,
+      ),
       AulaConversationBlockType.advanceAction => _ActionButton(
         label: message.text ?? t('continue'),
-        onPressed: actions.openDoubt,
+        onPressed: actions.advance,
       ),
       AulaConversationBlockType.recoverableError => Column(
         crossAxisAlignment: CrossAxisAlignment.start,

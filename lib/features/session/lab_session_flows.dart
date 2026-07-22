@@ -1095,8 +1095,9 @@ extension LabSessionFlowExtensions on LabSession {
   }
 
   void chooseAulaAnswer(String letter) {
-    if (aulaRuntimeLoading &&
-        !hasValidPedagogicalContent(aulaSnapshot?.conteudo)) {
+    final snapshot = aulaSnapshot;
+    if (snapshot?.conteudo == null ||
+        snapshot?.phase.type == ClassroomPhaseType.processando) {
       aulaRuntimeError = 'A aula ainda esta preparando. Aguarde um instante.';
       _recordRuntimeAudit(
         'ANSWER_BLOCKED_BY_LOADING',

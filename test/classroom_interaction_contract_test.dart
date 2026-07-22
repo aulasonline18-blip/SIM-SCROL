@@ -36,6 +36,32 @@ void main() {
     },
   );
 
+  test('visible A/B/C remain active when non-answer text is incomplete', () {
+    final messages = buildChatLessonMessages(
+      ChatLessonTimelineInput(
+        snapshot: _snapshot(
+          content: const LessonContent(
+            explanation: '',
+            question: 'Qual alternativa esta correta?',
+            options: {
+              AnswerLetter.A: 'Alternativa A',
+              AnswerLetter.B: 'Alternativa B',
+              AnswerLetter.C: 'Alternativa C',
+            },
+            correctAnswer: AnswerLetter.A,
+          ),
+        ),
+      ),
+    );
+
+    final options = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.options,
+    );
+
+    expect(options.isActionable, isTrue);
+    expect(options.options.map((option) => option.enabled), everyElement(true));
+  });
+
   test('valid content keeps A/B/C active while menu lesson is arriving', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(snapshot: _snapshot(), menuLessonWaiting: true),

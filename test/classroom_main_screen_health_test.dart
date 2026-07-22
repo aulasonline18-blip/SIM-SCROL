@@ -24,8 +24,10 @@ void main() {
     );
     await tester.pump();
 
+    await _pumpGuidedRoundIntro(tester);
     expect(find.textContaining('Observe o desenho'), findsOneWidget);
-    await _scrollOptionsIntoView(tester);
+    await _openGuidedQuestion(tester);
+    await _scrollGuidedOptionsIntoView(tester);
     expect(find.text('Linha reta'), findsOneWidget);
     expect(find.text('Curva'), findsOneWidget);
     expect(find.text('Ponto isolado'), findsOneWidget);
@@ -72,8 +74,10 @@ void main() {
     await tester.pump();
 
     expect(find.text(t('aula_advance_pending')), findsNothing);
+    await _pumpGuidedRoundIntro(tester);
     expect(find.text('Aula preparada apareceu.'), findsOneWidget);
-    await _scrollOptionsIntoView(tester);
+    await _openGuidedQuestion(tester);
+    await _scrollGuidedOptionsIntoView(tester);
     expect(find.text('Primeira'), findsOneWidget);
   });
 
@@ -102,8 +106,10 @@ void main() {
     );
     await tester.pump();
 
+    await _pumpGuidedRoundIntro(tester);
     expect(find.text('Texto ja renderizavel.'), findsOneWidget);
-    await _scrollOptionsIntoView(tester);
+    await _openGuidedQuestion(tester);
+    await _scrollGuidedOptionsIntoView(tester);
     expect(find.text('Opcao A'), findsOneWidget);
     expect(find.text(t('aula_advance_pending')), findsNothing);
     expect(find.text(t('aula_image_loading')), findsNothing);
@@ -194,7 +200,9 @@ void main() {
       MaterialApp(home: ChatAulaScreen(session: session)),
     );
     await tester.pump();
-    await _scrollOptionsIntoView(tester);
+    await _pumpGuidedRoundIntro(tester);
+    await _openGuidedQuestion(tester);
+    await _scrollGuidedOptionsIntoView(tester);
 
     expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.lendo);
     await tester.tap(find.byKey(const Key('chat-answer-card-A')));
@@ -248,7 +256,28 @@ void main() {
   });
 }
 
-Future<void> _scrollOptionsIntoView(WidgetTester tester) async {
+Future<void> _pumpGuidedRoundIntro(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 140));
+  await tester.pump(const Duration(milliseconds: 140));
+  await tester.pump(const Duration(milliseconds: 160));
+}
+
+Future<void> _openGuidedQuestion(WidgetTester tester) async {
+  final button = find.text(t('aula_practice_foundation'));
+  if (button.evaluate().isEmpty) {
+    await tester.drag(
+      find.byKey(const Key('chat-aula-timeline')),
+      const Offset(0, -280),
+    );
+    await tester.pump();
+  }
+  await tester.tap(button);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 220));
+  await tester.pump();
+}
+
+Future<void> _scrollGuidedOptionsIntoView(WidgetTester tester) async {
   await tester.drag(
     find.byKey(const Key('chat-aula-timeline')),
     const Offset(0, -260),

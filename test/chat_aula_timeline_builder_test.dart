@@ -27,6 +27,7 @@ void main() {
         ChatLessonMessageKind.itemIntro,
         ChatLessonMessageKind.explanation,
         ChatLessonMessageKind.image,
+        ChatLessonMessageKind.practiceAction,
         ChatLessonMessageKind.question,
         ChatLessonMessageKind.options,
       ]),
@@ -61,6 +62,7 @@ void main() {
         AulaConversationBlockType.itemIntro,
         AulaConversationBlockType.explanation,
         AulaConversationBlockType.visual,
+        AulaConversationBlockType.practiceAction,
         AulaConversationBlockType.question,
         AulaConversationBlockType.answerOptions,
       ]),
@@ -756,23 +758,27 @@ void main() {
     expect(rawHttpError.last.isActionable, isFalse);
   });
 
-  test('invalid visible content disables answer options', () {
-    final messages = buildChatLessonMessages(
-      ChatLessonTimelineInput(
-        snapshot: _snapshot(
-          phase: const ClassroomPhase.reading(),
-          explanation: 'Explicacao presente.',
-          question: '',
+  test(
+    'visible answer options never become inert because of adjacent text',
+    () {
+      final messages = buildChatLessonMessages(
+        ChatLessonTimelineInput(
+          snapshot: _snapshot(
+            phase: const ClassroomPhase.reading(),
+            explanation: 'Explicacao presente.',
+            question: '',
+          ),
         ),
-      ),
-    );
+      );
 
-    final options = messages.singleWhere(
-      (message) => message.kind == ChatLessonMessageKind.options,
-    );
-    expect(options.options.every((option) => option.enabled), isFalse);
-    expect(options.signals, isEmpty);
-  });
+      final options = messages.singleWhere(
+        (message) => message.kind == ChatLessonMessageKind.options,
+      );
+      expect(options.isActionable, isTrue);
+      expect(options.options.every((option) => option.enabled), isTrue);
+      expect(options.signals, isEmpty);
+    },
+  );
 
   test('chat messages carry universal conversational delivery states', () {
     final messages = buildChatLessonMessages(
