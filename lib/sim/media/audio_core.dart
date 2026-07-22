@@ -1,4 +1,5 @@
 import 'audio_preference.dart';
+import '../localization/sim_locale_contract.dart';
 
 class SpeakOptions {
   const SpeakOptions({
@@ -6,6 +7,11 @@ class SpeakOptions {
     this.rate = 1,
     this.lessonKey,
     this.voice = 'Charon',
+    this.localeContract,
+    this.audioLanguage,
+    this.targetLanguage,
+    this.explanationLanguage,
+    this.textHash,
     this.onStart,
     this.onEnd,
   });
@@ -14,6 +20,11 @@ class SpeakOptions {
   final double rate;
   final String? lessonKey;
   final String voice;
+  final SimLocaleContract? localeContract;
+  final String? audioLanguage;
+  final String? targetLanguage;
+  final String? explanationLanguage;
+  final String? textHash;
   final void Function()? onStart;
   final void Function()? onEnd;
 }
@@ -24,6 +35,11 @@ abstract interface class GeneratedAudioClient {
     required String lang,
     required String voice,
     required String lessonKey,
+    double speed = 1,
+    String? explanationLanguage,
+    String? targetLanguage,
+    SimLocaleContract? localeContract,
+    String? textHash,
   });
 }
 
@@ -112,6 +128,11 @@ class AudioCore {
       opts.onEnd?.call();
       return false;
     }
+    final audioLanguage = _explicitAudioLanguage(opts);
+    if (audioLanguage == null) {
+      opts.onEnd?.call();
+      return false;
+    }
     final key = audioCacheKey(clean, opts);
     final cached = _generatedAudioCache[key];
     if (cached != null && await playback.playDataUrl(cached, opts)) return true;
@@ -121,9 +142,17 @@ class AudioCore {
       try {
         generated = await client.generateAudio(
           text: clean,
-          lang: opts.lang ?? stableLangToBCP47(stableLangProvider?.call()),
+          lang: audioLanguage,
           voice: opts.voice,
           lessonKey: opts.lessonKey ?? key,
+          speed: opts.rate,
+          explanationLanguage:
+              opts.explanationLanguage ??
+              opts.localeContract?.explanationLanguage,
+          targetLanguage:
+              opts.targetLanguage ?? opts.localeContract?.targetLanguage,
+          localeContract: opts.localeContract,
+          textHash: opts.textHash ?? hashString(clean),
         );
       } catch (error) {
         onGeneratedAudioError?.call(error);
@@ -138,10 +167,15 @@ class AudioCore {
     return await playback.speakWithPlatformTts(
       clean,
       SpeakOptions(
-        lang: opts.lang ?? stableLangToBCP47(stableLangProvider?.call()),
+        lang: audioLanguage,
         rate: opts.rate,
         lessonKey: opts.lessonKey,
         voice: opts.voice,
+        localeContract: opts.localeContract,
+        audioLanguage: audioLanguage,
+        targetLanguage: opts.targetLanguage,
+        explanationLanguage: opts.explanationLanguage,
+        textHash: opts.textHash ?? hashString(clean),
         onStart: opts.onStart,
         onEnd: opts.onEnd,
       ),
@@ -171,10 +205,29 @@ class AudioCore {
   String audioCacheKey(String text, SpeakOptions opts) {
     return [
       opts.lessonKey ?? 'lesson',
-      opts.lang ?? stableLangToBCP47(stableLangProvider?.call()),
+      _explicitAudioLanguage(opts) ?? 'audio-language-missing',
       opts.voice,
-      hashString(text),
+      opts.rate.toStringAsFixed(2),
+      opts.localeContract?.mediaIdentity(
+            audioLanguage: _explicitAudioLanguage(opts),
+            voice: opts.voice,
+            speed: opts.rate,
+            textHash: opts.textHash ?? hashString(text),
+          ) ??
+          'media-locale:missing',
+      opts.textHash ?? hashString(text),
     ].join('|');
+  }
+
+  String? _explicitAudioLanguage(SpeakOptions opts) {
+    final explicit =
+        opts.audioLanguage ??
+        opts.lang ??
+        opts.localeContract?.explanationLanguage ??
+        stableLangProvider?.call();
+    final clean = explicit?.trim();
+    if (clean == null || clean.isEmpty) return null;
+    return stableLangToBCP47(clean);
   }
 }
 

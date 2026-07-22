@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../cache/secure_lesson_cache_store.dart';
+import '../localization/sim_locale_contract.dart';
 import '../media/lesson_image_api_contract.dart';
 import '../state/student_learning_state.dart';
 import 'lesson_content_validator.dart';
@@ -342,6 +343,9 @@ class LessonMaterialCache {
 
   bool putForParams(CompleteLessonParams params, CompleteLesson lesson) {
     if (!_hasUsableLessonMaterial(lesson)) return false;
+    final lessonWithLocale = lesson.localeContract == null
+        ? lesson.copyWith(localeContract: params.effectiveLocaleContract)
+        : lesson;
     final key = lessonKeyFor(params);
     final savedAt = DateTime.now().millisecondsSinceEpoch;
     final cold = LessonColdCacheEntry.fromParams(
@@ -352,7 +356,7 @@ class LessonMaterialCache {
     );
     if (!cold.hasValidatedLargeCurriculumPart) return false;
     _cold[key] = cold;
-    _put(key, lesson, savedAt: savedAt);
+    _put(key, lessonWithLocale, savedAt: savedAt);
     return true;
   }
 
@@ -526,6 +530,8 @@ class LessonMaterialCache {
         'imagem': lesson.imagem,
       if (lesson.imageMetadata != null && !lesson.imageMetadata!.isEmpty)
         'imageMetadata': lesson.imageMetadata!.toJson(),
+      if (lesson.localeContract != null)
+        'localeContract': lesson.localeContract!.toJson(),
     };
   }
 
@@ -544,6 +550,11 @@ class LessonMaterialCache {
         imageMetadata: LessonImageGenerationMetadata.fromJson(
           json['imageMetadata'],
         ),
+        localeContract: json['localeContract'] is Map
+            ? SimLocaleContract.fromJson(
+                Map<String, dynamic>.from(json['localeContract'] as Map),
+              )
+            : null,
       );
     } catch (_) {
       return null;

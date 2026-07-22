@@ -78,13 +78,14 @@ class AuxRoomT02Caller {
     int? amparoLevel,
     JsonMap auxContext = const {},
   }) {
+    final locale = profile.effectiveLocaleContract;
     return AuxRoomT02Payload(
       auxMode: mode,
       signal: signal,
       marker: marker,
       item: item,
       itemIdx: itemIdx,
-      stableLang: profile.stableLang ?? '',
+      stableLang: locale.explanationLanguage,
       academicLevel: profile.academicLevel ?? '',
       preferredName: profile.preferredName ?? '',
       notes: profile.notes ?? '',
@@ -144,12 +145,13 @@ class AuxRoomT02Caller {
     if (payload.item.trim().isEmpty) {
       return AuxRoomCallResult.aborted(reason: 'empty item', payload: payload);
     }
+    final locale = profile.effectiveLocaleContract;
 
     final material = await client.auxiliaryRoom(
       T02LessonRequest(
         lessonLocalId: lessonLocalId,
         item: payload.item,
-        lang: payload.stableLang.isEmpty ? 'Portuguese' : payload.stableLang,
+        lang: locale.explanationLanguage,
         academic: payload.academicLevel.isEmpty
             ? 'ensino_medio'
             : payload.academicLevel,
@@ -161,6 +163,13 @@ class AuxRoomT02Caller {
         profile: {
           ...profile.toJson(),
           ...payload.auxContext,
+          'localeContract': locale.toJson(),
+          'interfaceLocale': locale.interfaceLocale,
+          'learningLocale': locale.learningLocale,
+          'explanationLanguage': locale.explanationLanguage,
+          if (locale.targetLanguage != null)
+            'targetLanguage': locale.targetLanguage,
+          'mediaTextLanguage': locale.mediaTextLanguage,
           'aux_mode': mode.name,
           'mode': mode.name,
           'signal': payload.signal.value,
@@ -169,6 +178,11 @@ class AuxRoomT02Caller {
         addendum: payload.auxAddonReference,
         itemIdx: payload.itemIdx,
         amparoLvl: payload.amparoLevel,
+        interfaceLocale: locale.interfaceLocale,
+        learningLocale: locale.learningLocale,
+        explanationLanguage: locale.explanationLanguage,
+        targetLanguage: locale.targetLanguage,
+        localeContract: locale,
       ),
     );
     return AuxRoomCallResult.completed(

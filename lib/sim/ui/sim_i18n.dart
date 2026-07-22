@@ -1,33 +1,32 @@
 import 'package:flutter/widgets.dart';
 
+import '../localization/sim_locale_contract.dart';
+
 part 'sim_i18n_objective.dart';
 part 'sim_i18n_onboarding.dart';
+part 'sim_i18n_core_strings.dart';
 
 String _activeLanguageCode = 'pt';
+bool _debugStrictMissingLocalization = false;
+final Set<String> _debugMissingLocalizationKeys = <String>{};
+
+const List<String> simReadyUiLanguageCodes = ['pt', 'en', 'es'];
+const Map<String, String> simUiFallbackLanguageCodes = {
+  'fr': 'en',
+  'de': 'en',
+  'it': 'en',
+};
 
 String get simActiveLanguageCode => _activeLanguageCode;
 Locale get simActiveLocale => switch (_activeLanguageCode) {
   'pt' => const Locale('pt', 'BR'),
   'es' => const Locale('es'),
-  'fr' => const Locale('fr'),
-  'ja' => const Locale('ja'),
-  'ko' => const Locale('ko'),
   _ => const Locale('en'),
 };
 String normalizeSimLanguageCode(String? codeOrName) {
-  final raw = (codeOrName ?? '').trim().toLowerCase();
-  if (raw == 'pt' || raw == 'pt-br' || raw.contains('portugu')) return 'pt';
-  if (raw == 'es' || raw.contains('spanish') || raw.contains('españ')) {
-    return 'es';
-  }
-  if (raw == 'fr' || raw.contains('french') || raw.contains('franç')) {
-    return 'fr';
-  }
-  if (raw == 'ja' || raw.contains('japanese') || raw.contains('日本')) {
-    return 'ja';
-  }
-  if (raw == 'ko' || raw.contains('korean') || raw.contains('한국')) return 'ko';
-  return 'en';
+  final code = simUiCodeForLocaleTag(normalizeSimLocaleTag(codeOrName));
+  if (simReadyUiLanguageCodes.contains(code)) return code;
+  return simUiFallbackLanguageCodes[code] ?? 'en';
 }
 
 void setSimActiveLanguage(String? codeOrName) {
@@ -36,152 +35,110 @@ void setSimActiveLanguage(String? codeOrName) {
 
 String stableLangLabelFor(String code, String fallbackName) {
   final fallback = fallbackName.trim();
-  return switch (normalizeSimLanguageCode(code)) {
-    'pt' => 'Portuguese',
-    'es' => 'Spanish',
-    'fr' => 'French',
-    'ja' => 'Japanese',
-    'ko' => 'Korean',
-    _ => fallback.isEmpty ? 'English' : fallback,
+  if (code == 'other' && fallback.isNotEmpty) return fallback;
+  return simLanguageNameForLocale(code);
+}
+
+Map<String, List<String>> debugSimMissingLocalizationKeys({
+  Iterable<String> locales = simReadyUiLanguageCodes,
+}) {
+  final base = _baseLocalizationKeys();
+  return {
+    for (final locale in locales)
+      normalizeSimLanguageCode(locale): _missingKeysFor(
+        normalizeSimLanguageCode(locale),
+        base,
+      ).toList()..sort(),
   };
 }
 
-const _strings = <String, String>{
-  'loading': 'Carregando...',
-  'continue': 'Continuar',
-  'step_of': 'Passo {n} de {total}',
-  'cancel': 'Cancelar',
-  'save': 'Salvar',
-  'delete': 'Apagar',
-  'remove': 'Remover',
-  'menu': 'Menu',
-  'lesson': 'Aula',
-  'lesson_name': 'Nome da aula',
-  'rename_lesson': 'Renomear aula',
-  'delete_lesson': 'Apagar aula',
-  'delete_lesson_confirm':
-      'Apagar "{title}"? Essa ação remove a aula do histórico.',
-  'new_lesson': 'Nova aula',
-  'credits': 'Créditos',
-  'credits_unlimited': 'Ilimitado',
-  'backup_export': 'Exportar backup',
-  'backup_import': 'Importar backup',
-  'privacy': 'Privacidade',
-  'terms': 'Termos',
-  'logout': 'Sair da conta',
-  'theme_light': 'Tema claro',
-  'theme_dark': 'Tema escuro',
-  'portal_tagline': 'Smart Intelligence Mentor',
-  'portal_statement_p1': 'Aprenda de verdade com',
-  'portal_statement_real_learning': 'aprendizagem real',
-  'portal_statement_p2': ' do seu nível ao domínio,',
-  'portal_statement_p3': ' com',
-  'portal_statement_real_progress': 'progresso real',
-  'portal_btn_start': 'Começar',
-  'portal_btn_signin': 'Entrar para começar',
-  'portal_help_title': 'Precisa de ajuda?',
-  'portal_help_body': 'Fale com a gente pelo WhatsApp ou Messenger.',
-  'contact_whatsapp': 'WhatsApp',
-  'contact_messenger': 'Messenger',
-  'login_create_account': 'Criar conta',
-  'login_sign_in_title': 'Entrar',
-  'login_wait': 'Aguarde...',
-  'login_google': 'Continuar com Google',
-  'login_or': 'ou',
-  'login_name': 'Nome',
-  'login_password': 'Senha',
-  'login_create_free': 'Criar conta grátis',
-  'login_sign_in': 'Entrar',
-  'login_has_account': 'Já tenho conta',
-  'login_no_account': 'Criar nova conta',
-  'login_back_portal': 'Voltar',
-  'continue_arrow': 'Continuar',
-  'preparing_next_lesson': 'Preparando próxima aula',
-  'aula_advance_pending': 'Preparando próximo passo',
-  'aula_advance_preparing': 'Preparando próximo passo',
-  'aula_menu_lesson_arriving': 'Você escolheu esta aula. Estou buscando.',
-  'aula_menu_lesson_waiting': 'Ainda estou preparando sua aula.',
-  'aula_menu_lesson_slow': 'Continua preparando. A aula entra aqui.',
-  'aula_menu_lesson_still_working': 'A preparação segue ativa.',
-  'aula_menu_lesson_retrying': 'Tentando novamente...',
-  'aula_registering': 'Registrando sua resposta',
-  'aula_next': 'Próximo',
-  'aula_practice_foundation': 'Vamos fundamentar este item',
-  'aula_try_again_2': 'Tentar novamente',
-  'aula_doubt_processing': 'Respondendo sua dúvida',
-  'aula_choose_goal': 'Escolha um objetivo para começar.',
-  'aula_session_expired': 'Sessão expirada. Entre novamente.',
-  'aula_server_unavailable': 'Servidor indisponível. Tente novamente.',
-  'aula_gen_fail': 'Não consegui preparar a aula agora.',
-  'aula_audio_stop': 'Parar áudio',
-  'aula_audio_play': 'Tocar áudio da aula',
-  'aula_sig_certeza': 'Tenho certeza',
-  'aula_sig_duvida': 'Tenho dúvida',
-  'aula_sig_chute': 'Foi chute',
-  'aula_fb_correct': 'Correto. Você dominou este ponto.',
-  'aula_fb_correct_rev': 'Correto, mas vale revisar.',
-  'aula_fb_correct_dont_know': 'Correto. Vamos reforçar a confiança.',
-  'aula_fb_wrong_confident': 'Não foi dessa vez. Vamos corrigir a base.',
-  'aula_fb_wrong_uncertain': 'Quase. Vamos reforçar o caminho.',
-  'aula_fb_wrong_dont_know': 'Sem problema. Vamos retomar passo a passo.',
-  'aula_open_review': 'Revisar',
-  'aula_font_scale_label': 'Fonte {level}',
-  'aula_image_loading': 'Preparando imagem',
-  'aula_image_unavailable': 'Imagem indisponível',
-  'aula_image_unavailable_short': 'Imagem indisponível',
-  'aula_image_alt': 'Imagem pedagógica da aula',
-  'aula_image_expand': 'Ampliar imagem',
-  'aula_image_expand_lesson': 'Ampliar imagem da aula',
-  'aula_image_close': 'Fechar imagem',
-  'aula_no_curr_h1': 'Aula sem currículo',
-  'aula_no_curr_body': 'Volte ao objetivo para preparar a trilha.',
-  'aula_back_curr': 'Voltar ao objetivo',
-  'aux_review_button': 'Revisão',
-  'aux_review_done_msg': 'Revisão concluída',
-  'aux_recovery_title': 'Recuperação',
-  'aux_recovery_intro_msg': 'Preparando recuperação',
-  'aux_recovery_done_msg': 'Recuperação concluída',
-  'back_to_lesson': 'Voltar para aula',
-  'delete_account_request': 'Excluir conta',
-  'delete_account_body': 'Digite DELETAR para solicitar exclusão.',
-  'buy_credits_named': 'Comprar {credits} créditos',
-  'pay_google_play_provider':
-      'Compra protegida pelo Google Play no build Android de produção.',
-  'pay_checkout_provider': 'Compra protegida por checkout seguro.',
+Map<String, Object> debugSimLocalizationCoverage({
+  Iterable<String> locales = simReadyUiLanguageCodes,
+}) {
+  final base = _baseLocalizationKeys();
+  return {
+    'baseKeyCount': base.length,
+    'readyLocales': simReadyUiLanguageCodes,
+    'fallbackLocales': simUiFallbackLanguageCodes,
+    'missing': debugSimMissingLocalizationKeys(locales: locales),
+    'runtimeMissing': _debugMissingLocalizationKeys.toList()..sort(),
+  };
+}
+
+void debugAssertSimLocalizationComplete({
+  Iterable<String> locales = simReadyUiLanguageCodes,
+}) {
+  final missing = debugSimMissingLocalizationKeys(locales: locales);
+  final failures = missing.entries
+      .where((entry) => entry.value.isNotEmpty)
+      .map((entry) => '${entry.key}: ${entry.value.join(', ')}')
+      .join('\n');
+  if (failures.isNotEmpty) {
+    throw FlutterError('Missing SIM localization keys:\n$failures');
+  }
+}
+
+void debugSetSimStrictLocalization(bool value) {
+  _debugStrictMissingLocalization = value;
+}
+
+void debugClearSimMissingLocalizationLog() {
+  _debugMissingLocalizationKeys.clear();
+}
+
+List<String> debugSimRuntimeMissingLocalizationKeys() =>
+    _debugMissingLocalizationKeys.toList()..sort();
+
+Set<String> _baseLocalizationKeys() => {
+  ..._strings.keys,
+  ..._objectiveStrings.keys,
+  ..._onboardingStrings.keys,
 };
 
-const _localizedStrings = <String, Map<String, String>>{
-  'en': {'step_of': 'Step {n} of {total}'},
-};
+bool debugSimHasLocalizationKey(String key) =>
+    _baseLocalizationKeys().contains(key);
 
-Map<String, List<String>> debugSimMissingLocalizationKeys() => const {
-  'pt': [],
-  'en': [],
-};
+Iterable<String> _missingKeysFor(String locale, Set<String> base) sync* {
+  if (locale == 'pt') return;
+  final localized = {
+    if (_localizedStrings[locale] != null) ..._localizedStrings[locale]!.keys,
+    if (_objectiveLocalizedStrings[locale] != null)
+      ..._objectiveLocalizedStrings[locale]!.keys,
+    if (_onboardingLocalizedStrings[locale] != null)
+      ..._onboardingLocalizedStrings[locale]!.keys,
+  };
+  for (final key in base) {
+    if (!localized.contains(key)) yield key;
+  }
+}
 
 String debugSimLocalizedValue(String code, String key) =>
-    _strings[key] ??
-    _objectiveStrings[key] ??
-    _onboardingStrings[key] ??
-    _humanizeKey(key);
+    _localizedValue(normalizeSimLanguageCode(code), key) ??
+    _missingLocalizationValue(key);
 
 String t(String key, [Map<String, dynamic>? params]) {
   var value =
-      _localizedStrings[_activeLanguageCode]?[key] ??
-      _objectiveLocalizedStrings[_activeLanguageCode]?[key] ??
-      _strings[key] ??
-      _objectiveStrings[key] ??
-      _onboardingStrings[key] ??
-      _humanizeKey(key);
+      _localizedValue(_activeLanguageCode, key) ??
+      _missingLocalizationValue(key);
   params?.forEach((k, v) => value = value.replaceAll('{$k}', '$v'));
   return value;
 }
 
-String _humanizeKey(String key) {
-  final words = key
-      .replaceAll(RegExp(r'[_-]+'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
-  if (words.isEmpty) return key;
-  return words[0].toUpperCase() + words.substring(1);
+String? _localizedValue(String locale, String key) {
+  if (locale == 'pt') {
+    return _strings[key] ?? _objectiveStrings[key] ?? _onboardingStrings[key];
+  }
+  return _localizedStrings[locale]?[key] ??
+      _objectiveLocalizedStrings[locale]?[key] ??
+      _onboardingLocalizedStrings[locale]?[key];
+}
+
+String _missingLocalizationValue(String key) {
+  _debugMissingLocalizationKeys.add('$simActiveLanguageCode:$key');
+  if (_debugStrictMissingLocalization) {
+    throw FlutterError(
+      'Missing SIM localization key "$key" for "$simActiveLanguageCode".',
+    );
+  }
+  return '[$key]';
 }

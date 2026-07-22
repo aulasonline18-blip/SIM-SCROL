@@ -195,6 +195,8 @@ class StudentExperienceArgs {
       interfaceLocale: 'pt-BR',
       learningLocale: 'pt-BR',
       explanationLanguage: 'Portuguese',
+      mediaTextLanguage: 'Portuguese',
+      source: SimLocaleSource.fallback,
     ),
     this.onStage,
   });

@@ -85,7 +85,9 @@ class EncryptedFileLessonCacheStore implements LessonCacheStore {
     });
     final file = await _file();
     await file.parent.create(recursive: true);
-    final tmp = File('${file.path}.tmp');
+    final tmp = File(
+      '${file.path}.${DateTime.now().microsecondsSinceEpoch}.${_randomBytes(4).join()}.tmp',
+    );
     await tmp.writeAsString(encoded, flush: true);
     if (await file.exists()) await file.delete();
     await tmp.rename(file.path);

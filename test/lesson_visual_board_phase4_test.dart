@@ -200,15 +200,23 @@ void main() {
       for (final forbidden in const [
         'StudentStateStore',
         'LessonAnswerProgressController',
+        'WebView',
+        'BoxFit.cover',
+      ]) {
+        expect(board, isNot(contains(forbidden)), reason: forbidden);
+      }
+      for (final forbidden in const [
         'current',
         'progress',
         'attempts',
         'truth',
         'mastery',
-        'WebView',
-        'BoxFit.cover',
       ]) {
-        expect(board, isNot(contains(forbidden)), reason: forbidden);
+        expect(
+          board,
+          isNot(contains(RegExp('\\b$forbidden\\b'))),
+          reason: forbidden,
+        );
       }
     },
   );

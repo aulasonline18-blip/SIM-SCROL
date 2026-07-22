@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../config/sim_environment.dart';
+import '../localization/sim_locale_contract.dart';
 import '../media/lesson_image_api_contract.dart';
 import '../media/lesson_visual_pipeline.dart';
 import '../modules/pedagogical_module_contracts.dart';
@@ -233,6 +235,7 @@ class LessonOrchestrator {
       learningLocale: params.learningLocale,
       explanationLanguage: params.explanationLanguage,
       targetLanguage: params.targetLanguage,
+      localeContract: params.effectiveLocaleContract,
     );
   }
 
@@ -246,6 +249,8 @@ class LessonOrchestrator {
     final status = _cleanText(material.imageStatus);
     final error = _cleanText(material.imageError);
     final trigger = LessonVisualTrigger.fromJson(material.visualTrigger);
+    final locale = params.effectiveLocaleContract;
+    final visualTextPolicy = _visualTextPolicyFor(trigger);
     final s12 = imageDataUrl == null
         ? visualPipeline?.resolveLocal(
             S12VisualRequest(
@@ -254,10 +259,12 @@ class LessonOrchestrator {
               marker: params.marker,
               itemIdx: params.itemIdx,
               layer: params.layer,
-              idioma:
-                  params.learningLocale ??
-                  params.explanationLanguage ??
-                  params.lang,
+              idioma: locale.mediaTextLanguage,
+              localeContract: locale,
+              mediaTextLanguage: locale.mediaTextLanguage,
+              explanationLanguage: locale.explanationLanguage,
+              targetLanguage: locale.targetLanguage,
+              visualTextPolicy: visualTextPolicy,
               subject: params.topic,
               explanation: material.explanation,
               question: material.question,
@@ -277,6 +284,7 @@ class LessonOrchestrator {
       conteudo: conteudo,
       imagem: imageDataUrl ?? s12?.imageData,
       audioText: conteudo.audioText,
+      localeContract: params.effectiveLocaleContract,
       visualTrigger: trigger?.raw,
       imageMetadata:
           imageDataUrl == null && s12 == null && status == null && error == null
@@ -302,6 +310,11 @@ class LessonOrchestrator {
               marker: params.marker,
               itemIdx: params.itemIdx,
               layer: params.layer.value,
+              localeContract: locale,
+              mediaTextLanguage: locale.mediaTextLanguage,
+              explanationLanguage: locale.explanationLanguage,
+              targetLanguage: locale.targetLanguage,
+              visualTextPolicy: visualTextPolicy,
             ),
     );
   }
@@ -407,6 +420,8 @@ class LessonOrchestrator {
   ) async {
     final current = cache.peek(key);
     if (current == null) return;
+    final locale = params.effectiveLocaleContract;
+    final visualTextPolicy = _visualTextPolicyFor(trigger);
     final result = await visualPipeline!.resolveN3(
       S12VisualRequest(
         trigger: trigger,
@@ -414,8 +429,12 @@ class LessonOrchestrator {
         marker: params.marker,
         itemIdx: params.itemIdx,
         layer: params.layer,
-        idioma:
-            params.learningLocale ?? params.explanationLanguage ?? params.lang,
+        idioma: locale.mediaTextLanguage,
+        localeContract: locale,
+        mediaTextLanguage: locale.mediaTextLanguage,
+        explanationLanguage: locale.explanationLanguage,
+        targetLanguage: locale.targetLanguage,
+        visualTextPolicy: visualTextPolicy,
         subject: params.topic,
         explanation: current.conteudo.explanation,
         question: current.conteudo.question,
@@ -441,6 +460,11 @@ class LessonOrchestrator {
       source: 's12-n3',
       n2Reason: result.n2Reason,
       n3Reason: result.n3Reason,
+      localeContract: locale,
+      mediaTextLanguage: locale.mediaTextLanguage,
+      explanationLanguage: locale.explanationLanguage,
+      targetLanguage: locale.targetLanguage,
+      visualTextPolicy: visualTextPolicy,
     );
     final next = current.copyWith(
       imagem: result.isReady ? result.imageData : null,
@@ -480,11 +504,28 @@ class LessonOrchestrator {
       conteudo: conteudo,
       imagem: null,
       audioText: conteudo.audioText,
+      localeContract: params.effectiveLocaleContract,
     );
     cache.putForParams(params, lesson);
     bus.notify(key, lesson);
     queueAudioForReadyLesson(params, lesson);
     return lesson;
+  }
+
+  static String _visualTextPolicyFor(LessonVisualTrigger? trigger) {
+    final raw =
+        trigger?.raw['visualTextPolicy'] ??
+        trigger?.raw['visual_text_policy'] ??
+        trigger?.raw['textPolicy'] ??
+        trigger?.raw['text_policy'];
+    final text = raw?.toString().trim().toLowerCase();
+    if (text == 'target' ||
+        text == 'mixed' ||
+        text == 'no_text' ||
+        text == 'explanation') {
+      return text!;
+    }
+    return 'explanation';
   }
 }
 
@@ -494,6 +535,11 @@ JsonMap preparedMaterialFromLesson({
   required String? marker,
   required LessonLayer layer,
 }) {
+  final localeContract =
+      lesson.localeContract ??
+      (SimEnvironment.isProduction
+          ? null
+          : SimLocaleContract.fallbackForDevelopment());
   return {
     'text_status': 'ready',
     ...lesson.conteudo.toJson(),
@@ -504,6 +550,10 @@ JsonMap preparedMaterialFromLesson({
     'generated_at': DateTime.now().toIso8601String(),
     'model': 'T02_content',
     'prompt_contract_version': 'T02_content.v3',
+    if (localeContract != null) ...{
+      'localeContract': localeContract.toJson(),
+      'localeCacheIdentity': localeContract.cacheIdentity(),
+    },
     'for_itemIdx': itemIdx,
     'for_marker': marker,
     'for_layer': layer.name,

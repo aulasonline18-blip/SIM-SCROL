@@ -1,5 +1,6 @@
 import '../state/student_learning_state.dart';
 import '../media/lesson_image_api_contract.dart';
+import '../localization/sim_locale_contract.dart';
 
 enum LessonMode { session, simulado, reforco, amparo }
 
@@ -59,6 +60,7 @@ class CompleteLessonParams {
     this.learningLocale,
     this.explanationLanguage,
     this.targetLanguage,
+    this.localeContract,
   });
 
   final String lessonLocalId;
@@ -79,6 +81,17 @@ class CompleteLessonParams {
   final String? learningLocale;
   final String? explanationLanguage;
   final String? targetLanguage;
+  final SimLocaleContract? localeContract;
+
+  SimLocaleContract get effectiveLocaleContract =>
+      localeContract ??
+      SimLocaleContract.fromUserSelection(
+        interfaceLocale: interfaceLocale ?? lang,
+        learningLocale: learningLocale ?? lang,
+        explanationLanguage: explanationLanguage ?? lang,
+        targetLanguage: targetLanguage,
+        source: SimLocaleSource.migrated,
+      );
 }
 
 class CompleteLesson {
@@ -88,6 +101,7 @@ class CompleteLesson {
     required this.audioText,
     this.imageMetadata,
     this.visualTrigger,
+    this.localeContract,
   });
 
   final LessonContent conteudo;
@@ -95,6 +109,7 @@ class CompleteLesson {
   final String audioText;
   final LessonImageGenerationMetadata? imageMetadata;
   final JsonMap? visualTrigger;
+  final SimLocaleContract? localeContract;
 
   static const Object _unchanged = Object();
 
@@ -103,6 +118,7 @@ class CompleteLesson {
     Object? imagem = _unchanged,
     Object? imageMetadata = _unchanged,
     Object? visualTrigger = _unchanged,
+    Object? localeContract = _unchanged,
   }) {
     final nextConteudo = conteudo ?? this.conteudo;
     final imageChanged = !identical(imagem, _unchanged);
@@ -116,6 +132,9 @@ class CompleteLesson {
       visualTrigger: identical(visualTrigger, _unchanged)
           ? this.visualTrigger
           : visualTrigger as JsonMap?,
+      localeContract: identical(localeContract, _unchanged)
+          ? this.localeContract
+          : localeContract as SimLocaleContract?,
     );
   }
 }
@@ -123,17 +142,44 @@ class CompleteLesson {
 String lessonKeyFor(CompleteLessonParams params) {
   final amparo = params.mode == LessonMode.amparo ? params.amparoLvl ?? 0 : 0;
   return [
-    'lesson:v1:m2:v2',
+    'lesson:v2:m2:v2',
     params.lessonLocalId,
-    params.lang,
-    params.learningLocale ?? '',
-    params.explanationLanguage ?? '',
+    params.effectiveLocaleContract.cacheIdentity(),
     params.academic,
     params.layer.value,
     params.mode.name,
     amparo,
     params.item,
   ].join(':');
+}
+
+enum LessonLocaleValidationStatus { compatible, legacyLocale, staleLocale }
+
+SimLocaleContract? lessonLocaleContractFromJson(Object? raw) {
+  if (raw is! Map) return null;
+  return SimLocaleContract.fromJson(Map<String, dynamic>.from(raw));
+}
+
+SimLocaleContract? lessonLocaleContractFromMaterial(JsonMap material) {
+  return lessonLocaleContractFromJson(material['localeContract']);
+}
+
+LessonLocaleValidationStatus validateLessonLocaleContract({
+  required SimLocaleContract? actual,
+  required CompleteLessonParams params,
+}) {
+  if (actual == null) return LessonLocaleValidationStatus.legacyLocale;
+  return actual.isCompatibleWith(params.effectiveLocaleContract)
+      ? LessonLocaleValidationStatus.compatible
+      : LessonLocaleValidationStatus.staleLocale;
+}
+
+bool lessonLocaleMatchesParams({
+  required SimLocaleContract? actual,
+  required CompleteLessonParams params,
+}) {
+  return validateLessonLocaleContract(actual: actual, params: params) ==
+      LessonLocaleValidationStatus.compatible;
 }
 
 LessonContent lessonContentFromT02Material(dynamic material) {

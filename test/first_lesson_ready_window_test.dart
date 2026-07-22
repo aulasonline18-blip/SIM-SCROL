@@ -1309,8 +1309,8 @@ void main() {
     final cache = LessonMaterialCache();
     cache.put(
       lessonKeyFor(params),
-      const CompleteLesson(
-        conteudo: LessonContent(
+      CompleteLesson(
+        conteudo: const LessonContent(
           explanation: 'Texto offline preparado.',
           question: 'O que abre sem internet?',
           options: {
@@ -1322,6 +1322,7 @@ void main() {
         ),
         imagem: null,
         audioText: 'Texto offline preparado. O que abre sem internet?',
+        localeContract: params.effectiveLocaleContract,
       ),
     );
     final service = StudentLearningStateService(
@@ -3341,6 +3342,7 @@ void main() {
               'for_itemIdx': 0,
               'for_marker': 'M1',
               'for_layer': LessonLayer.l1.name,
+              'localeContract': params.effectiveLocaleContract.toJson(),
             },
           },
         ),

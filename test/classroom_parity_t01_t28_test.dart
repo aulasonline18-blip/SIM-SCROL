@@ -679,6 +679,15 @@ void main() {
   // -------------------------------------------------------------------------
   test('T21: material for_itemIdx=1 mas lido em idx=0 → null', () {
     final svc = StudentLearningStateService(seed: {'L1': _state0()});
+    const params = CompleteLessonParams(
+      lessonLocalId: 'L1',
+      item: 'Velocidade média',
+      lang: 'Portuguese',
+      academic: 'fundamental',
+      layer: LessonLayer.l1,
+      mode: LessonMode.session,
+      marker: 'M-1',
+    );
     svc.mutate('L1', (s) {
       return s.copyWith(
         readyLessonMaterials: {
@@ -691,6 +700,7 @@ void main() {
             'explanation': 'E',
             'options': {'A': 'a', 'B': 'b', 'C': 'c'},
             'correct_answer': 'A',
+            'localeContract': params.effectiveLocaleContract.toJson(),
           },
         },
       );
@@ -719,15 +729,7 @@ void main() {
         itemIdx: 0,
         marker: 'M-1',
         layer: LessonLayer.l1,
-        params: CompleteLessonParams(
-          lessonLocalId: 'L1',
-          item: 'Velocidade média',
-          lang: 'Portuguese',
-          academic: 'fundamental',
-          layer: LessonLayer.l1,
-          mode: LessonMode.session,
-          marker: 'M-1',
-        ),
+        params: params,
       ),
     );
     expect(result, isNull);
@@ -738,6 +740,15 @@ void main() {
   // -------------------------------------------------------------------------
   test('T22: material casa (idx=0, marker=M-1, layer=l1) → devolve', () {
     final svc = StudentLearningStateService(seed: {'L1': _state0()});
+    const params = CompleteLessonParams(
+      lessonLocalId: 'L1',
+      item: 'Velocidade média',
+      lang: 'Portuguese',
+      academic: 'fundamental',
+      layer: LessonLayer.l1,
+      mode: LessonMode.session,
+      marker: 'M-1',
+    );
     svc.mutate('L1', (s) {
       return s.copyWith(
         readyLessonMaterials: {
@@ -750,6 +761,7 @@ void main() {
             'explanation': 'E',
             'options': {'A': 'a', 'B': 'b', 'C': 'c'},
             'correct_answer': 'A',
+            'localeContract': params.effectiveLocaleContract.toJson(),
           },
         },
       );
@@ -777,15 +789,7 @@ void main() {
         itemIdx: 0,
         marker: 'M-1',
         layer: LessonLayer.l1,
-        params: CompleteLessonParams(
-          lessonLocalId: 'L1',
-          item: 'Velocidade média',
-          lang: 'Portuguese',
-          academic: 'fundamental',
-          layer: LessonLayer.l1,
-          mode: LessonMode.session,
-          marker: 'M-1',
-        ),
+        params: params,
       ),
     );
     expect(result, isNotNull);

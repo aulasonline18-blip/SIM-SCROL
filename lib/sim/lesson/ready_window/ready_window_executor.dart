@@ -89,7 +89,9 @@ class ReadyWindowExecutor {
         params: slot.params,
       );
       if (readiness.status == LessonReadinessStatus.stale ||
-          readiness.status == LessonReadinessStatus.invalid) {
+          readiness.status == LessonReadinessStatus.invalid ||
+          readiness.status == LessonReadinessStatus.staleLocale ||
+          readiness.status == LessonReadinessStatus.legacyLocale) {
         _discardStaleReadyMaterial(
           lessonLocalId: lessonLocalId,
           slot: slot,
@@ -358,6 +360,7 @@ class ReadyWindowExecutor {
         topic: topicSnapshot,
         itemIdx: items.indexOf(item),
         pedagogicalEnvelope: _pedagogicalEnvelope(profile),
+        localeContract: state.localeContract,
       ),
       maxSlots: _boundedWindowLimit(maxSlots, returnMode: returnMode),
     );

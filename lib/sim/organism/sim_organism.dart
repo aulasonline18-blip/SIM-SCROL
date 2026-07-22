@@ -363,6 +363,7 @@ class SimOrganism {
           lesson.conteudo.options[AnswerLetter.B],
           lesson.conteudo.options[AnswerLetter.C],
         ],
+        params.effectiveLocaleContract,
       );
     });
     final materialService = StudentLessonMaterialService(

@@ -135,6 +135,7 @@ extension LabSessionFlowExtensions on LabSession {
           : state;
       return base.copyWith(
         userId: userId,
+        localeContract: locale,
         profile: base.profile.copyWith(
           preferredName: preferredName.trim().isEmpty
               ? base.profile.preferredName
@@ -144,7 +145,12 @@ extension LabSessionFlowExtensions on LabSession {
           objetivo: objective,
           targetTopic: objective,
           sessionGoal: objective,
-          extra: {...base.profile.extra, ...guided, ...locale.toJson()},
+          extra: {
+            ...base.profile.extra,
+            ...guided,
+            ...locale.toJson(),
+            'localeContract': locale.toJson(),
+          },
         ),
       );
     }, allowLocalHousekeeping: true);
@@ -155,6 +161,7 @@ extension LabSessionFlowExtensions on LabSession {
         'objective_length': objective.length,
         'language': language,
         ...locale.toJson(),
+        'localeContract': locale.toJson(),
       },
       source: 'lab_session',
       userId: userId,
@@ -182,7 +189,7 @@ extension LabSessionFlowExtensions on LabSession {
     return [
       objective,
       if (guidedSummary.trim().isNotEmpty)
-        '--- Ficha guiada da travessia ---\n$guidedSummary',
+        '--- guided_entry_profile ---\n$guidedSummary',
       if (attachments.trim().isNotEmpty) attachments,
     ].join('\n\n').trim();
   }
@@ -549,8 +556,7 @@ extension LabSessionFlowExtensions on LabSession {
           generatedAudioClient: testAudio
               ? null
               : SimServerGeneratedAudioClient(config: _serverConfig()),
-          stableLangProvider: () =>
-              stableLang ?? selectedLanguageCode ?? 'pt-BR',
+          stableLangProvider: () => localeContract.explanationLanguage,
         ),
         readState: (lessonLocalId) =>
             store?.readState(lessonLocalId) ??
@@ -576,7 +582,7 @@ extension LabSessionFlowExtensions on LabSession {
         generatedAudioClient: testAudio
             ? null
             : SimServerGeneratedAudioClient(config: _serverConfig()),
-        stableLangProvider: () => stableLang ?? selectedLanguageCode ?? 'pt-BR',
+        stableLangProvider: () => localeContract.explanationLanguage,
         onGeneratedAudioError: (_) {
           audioError = 'Áudio remoto indisponível.';
           _notifyFromChild();

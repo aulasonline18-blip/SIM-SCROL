@@ -36,6 +36,29 @@ void main() {
     expect(contract.learningLocale, 'pt-BR');
     expect(contract.explanationLanguage, 'Portuguese');
     expect(contract.targetLanguage, 'English');
+    expect(contract.mediaTextLanguage, 'Portuguese');
+  });
+
+  test('escolha simples nao apaga targetLanguage anterior', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final session = LabSession(prefs: prefs);
+
+    await session.setLearningLanguage(
+      localeTag: 'pt-BR',
+      targetLanguage: 'English',
+    );
+    session.chooseLanguage('en', 'English');
+
+    expect(session.localeContract.interfaceLocale, 'en');
+    expect(session.localeContract.learningLocale, 'en');
+    expect(session.localeContract.targetLanguage, 'English');
+    expect(
+      session.localeContract.source,
+      SimLocaleSource.userSelectedSingleLanguage,
+    );
+
+    session.dispose();
   });
 
   test(
@@ -59,6 +82,14 @@ void main() {
       expect(state?.profile.language, 'pt-BR');
       expect(state?.profile.extra['interfaceLocale'], 'pt-BR');
       expect(state?.profile.extra['learningLocale'], 'pt-BR');
+      expect(
+        state?.localeContract.toJson(),
+        state?.profile.extra['localeContract'],
+      );
+      expect(
+        state?.profile.extra['pedagogical_entry_ficha']['localeContract'],
+        isNotNull,
+      );
 
       session.dispose();
     },

@@ -30,6 +30,8 @@ void main() {
           learningLocale: 'pt-BR',
           explanationLanguage: 'Portuguese',
           targetLanguage: 'Portuguese',
+          mediaTextLanguage: 'Portuguese',
+          source: SimLocaleSource.userSelected,
         ),
         onboarding: {
           'objetivo': 'Matemática financeira para concurso',
@@ -120,6 +122,8 @@ void main() {
           learningLocale: 'pt-BR',
           explanationLanguage: 'Portuguese',
           targetLanguage: 'Portuguese',
+          mediaTextLanguage: 'Portuguese',
+          source: SimLocaleSource.userSelected,
         ),
         onboarding: {
           'objetivo': 'Matemática financeira para concurso',

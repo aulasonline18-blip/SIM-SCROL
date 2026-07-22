@@ -6562,6 +6562,36 @@
       "officialPaths": []
     },
     {
+      "path": "lib/sim/ui/sim_i18n_core_strings.dart",
+      "layer": "UI",
+      "category": "ui",
+      "owner": "sim-ui",
+      "logicalOwner": "sim-ui",
+      "inputs": [
+        "catalogo base",
+        "idioma ativo"
+      ],
+      "outputs": [
+        "strings localizadas",
+        "cobertura auditavel"
+      ],
+      "tests": [
+        "test/ui_i18n_catalog_contract_test.dart",
+        "test/language_localization_test.dart"
+      ],
+      "decision": "manter",
+      "engines": [],
+      "contentEngines": [],
+      "contracts": [
+        "i18n",
+        "fallback auditavel"
+      ],
+      "stateMachines": [
+        "idioma"
+      ],
+      "officialPaths": []
+    },
+    {
       "path": "lib/sim/ui/sim_i18n_objective.dart",
       "layer": "UI",
       "category": "ui",

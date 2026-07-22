@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../sim/external_ai/sim_ai_server_config.dart';
 import '../sim/external_ai/sim_server_attachment_client.dart';
+import '../sim/localization/sim_locale_contract.dart';
 import '../sim/ui/sim_i18n.dart';
 
 const entryFormMaxFreeText = 1500;
@@ -303,7 +304,18 @@ class EntryFormState extends ChangeNotifier {
     required String lessonLocale,
     required String explanationLanguage,
     String? targetLanguage,
+    SimLocaleContract? localeContract,
   }) {
+    final locale =
+        (localeContract ??
+                SimLocaleContract.fromUserSelection(
+                  interfaceLocale: appLocale,
+                  learningLocale: lessonLocale,
+                  explanationLanguage: explanationLanguage,
+                  targetLanguage: targetLanguage,
+                  source: SimLocaleSource.migrated,
+                ))
+            .normalized();
     final materialReceived = <String, dynamic>{
       'types': [
         if (materialType.trim().isNotEmpty) materialType.trim(),
@@ -323,23 +335,32 @@ class EntryFormState extends ChangeNotifier {
       if (attachmentsText.trim().isNotEmpty) 'extractedText': attachmentsText,
       if (freeText.trim().isNotEmpty) 'freeText': freeText.trim(),
     };
+    final pedagogicalEntry = _structuredPedagogicalEntry(
+      locale: locale,
+      materialReceived: materialReceived,
+    );
     final ficha =
         <String, dynamic>{
           'preferred_name': preferredName.trim(),
           'app_locale': appLocale,
-          'interfaceLocale': appLocale,
-          'lesson_locale': lessonLocale,
-          'learningLocale': lessonLocale,
-          'explanationLanguage': explanationLanguage,
-          if ((targetLanguage ?? '').trim().isNotEmpty)
-            'targetLanguage': targetLanguage!.trim(),
+          'interfaceLocale': locale.interfaceLocale,
+          'lesson_locale': locale.learningLocale,
+          'learningLocale': locale.learningLocale,
+          'explanationLanguage': locale.explanationLanguage,
+          'mediaTextLanguage': locale.mediaTextLanguage,
+          if ((locale.targetLanguage ?? '').trim().isNotEmpty)
+            'targetLanguage': locale.targetLanguage!.trim(),
+          'localeContract': locale.toJson(),
+          'human_summary_locale': locale.explanationLanguage,
           'age_range': ageRange.trim(),
           'student_age': studentAge.trim(),
           if (profileAgeSubmitted) 'age_declared': !ageNotDeclared,
           'profile_difficulties': profileDifficulties,
           'profile_observation': profileObservation.trim(),
-          'profile_summary': _profileSummary(),
-          'initial_adaptation_guidance': _initialAdaptationGuidance(),
+          'profile_summary': _profileSummary(locale),
+          'profile_summary_locale': locale.explanationLanguage,
+          'initial_adaptation_guidance': _initialAdaptationGuidance(locale),
+          'initial_adaptation_guidance_locale': locale.explanationLanguage,
           'entry_path': entryPath.trim(),
           'subject_status': subject.trim().isEmpty
               ? 'not_informed'
@@ -354,9 +375,13 @@ class EntryFormState extends ChangeNotifier {
           'country_curriculum': countryCurriculum.trim(),
           'objective': freeText.trim(),
           'learning_goal': _effectiveLearningGoal,
+          'student_goal': pedagogicalEntry['student_goal'],
           'traversal_goal': traversalGoal.trim(),
           'traversal_goal_custom': traversalGoalCustom.trim(),
-          'goal_summary': _goalSummary(),
+          'goal_summary': _goalSummary(locale),
+          'goal_summary_locale': locale.explanationLanguage,
+          'goal_type': _goalType['code'],
+          'goal_type_source': _goalType['source'],
           if (_isExamGoal) 'exam_goal': _effectiveTraversalGoal,
           if (_isRealUseGoal) 'real_use_goal': _effectiveTraversalGoal,
           'deadline': deadline.trim(),
@@ -365,6 +390,8 @@ class EntryFormState extends ChangeNotifier {
           'expected_result': expectedResult.trim(),
           'difficulties': difficulties.trim(),
           'learning_preference': learningPreference.trim(),
+          'pedagogical_entry': pedagogicalEntry,
+          'pedagogical_entry_ficha': pedagogicalEntry,
         }..removeWhere((key, value) {
           if (value == null) return true;
           if (value is String) return value.trim().isEmpty;
@@ -399,43 +426,50 @@ class EntryFormState extends ChangeNotifier {
         ? profileDifficulty
         : (ficha['difficulties'] ?? '').toString().trim();
     final preference = (ficha['learning_preference'] ?? '').toString().trim();
+    final locale = _summaryLocaleFromFicha(ficha);
     return [
       [name, age].where((value) => value.isNotEmpty).join(' · '),
       [
-        if (app.isNotEmpty) 'Idioma do app: $app',
-        if (lesson.isNotEmpty) 'Idioma da aula: $lesson',
+        if (app.isNotEmpty) '${_summaryLabel(locale, 'interface')}: $app',
+        if (lesson.isNotEmpty) '${_summaryLabel(locale, 'lesson')}: $lesson',
       ].join(' · '),
       if (objective.isNotEmpty)
         deadlineValue.isEmpty
-            ? 'Objetivo: $objective'
-            : 'Objetivo: $objective · Prazo: $deadlineValue',
-      if (goal.isNotEmpty) 'Alvo real: $goal',
-      if (difficulty.isNotEmpty) 'Dificuldade: $difficulty',
-      if (preference.isNotEmpty) 'Preferencia: $preference',
+            ? '${_summaryLabel(locale, 'objective')}: $objective'
+            : '${_summaryLabel(locale, 'objective')}: $objective · ${_summaryLabel(locale, 'deadline')}: $deadlineValue',
+      if (goal.isNotEmpty) '${_summaryLabel(locale, 'realGoal')}: $goal',
+      if (difficulty.isNotEmpty)
+        '${_summaryLabel(locale, 'difficulty')}: $difficulty',
+      if (preference.isNotEmpty)
+        '${_summaryLabel(locale, 'preference')}: $preference',
     ].where((line) => line.trim().isNotEmpty).join('\n');
   }
 
-  String _profileSummary() {
+  String _profileSummary(SimLocaleContract locale) {
     return [
-      if (preferredName.trim().isNotEmpty) 'Nome: ${preferredName.trim()}',
-      if (studentAge.trim().isNotEmpty) 'Idade: ${studentAge.trim()}',
-      if (ageNotDeclared) 'Idade: nao declarada',
+      if (preferredName.trim().isNotEmpty)
+        '${_summaryLabel(locale.explanationLanguage, 'name')}: ${preferredName.trim()}',
+      if (studentAge.trim().isNotEmpty)
+        '${_summaryLabel(locale.explanationLanguage, 'age')}: ${studentAge.trim()}',
+      if (ageNotDeclared)
+        '${_summaryLabel(locale.explanationLanguage, 'age')}: ${_summaryLabel(locale.explanationLanguage, 'notDeclared')}',
       if (profileDifficulties.isNotEmpty)
-        'Dificuldades: ${profileDifficulties.join(', ')}',
+        '${_summaryLabel(locale.explanationLanguage, 'difficulties')}: ${profileDifficulties.join(', ')}',
       if (profileObservation.trim().isNotEmpty)
-        'Observacao: ${profileObservation.trim()}',
+        '${_summaryLabel(locale.explanationLanguage, 'observation')}: ${profileObservation.trim()}',
     ].join('\n');
   }
 
-  String _initialAdaptationGuidance() {
+  String _initialAdaptationGuidance(SimLocaleContract locale) {
     final guidance = <String>[
       if (profileDifficulties.isNotEmpty)
-        'Adaptar condução para: ${profileDifficulties.join(', ')}.',
+        '${_summarySentence(locale.explanationLanguage, 'adaptFor')} ${profileDifficulties.join(', ')}.',
       if (studentAge.trim().isNotEmpty)
-        'Considerar idade informada pelo aluno: ${studentAge.trim()}.',
-      if (ageNotDeclared) 'Não inferir idade; usar linguagem neutra.',
+        '${_summarySentence(locale.explanationLanguage, 'considerAge')} ${studentAge.trim()}.',
+      if (ageNotDeclared)
+        _summarySentence(locale.explanationLanguage, 'doNotInferAge'),
       if (profileObservation.trim().isNotEmpty)
-        'Usar observação livre como contexto leve, sem diagnóstico.',
+        _summarySentence(locale.explanationLanguage, 'useObservation'),
     ];
     return guidance.join(' ');
   }
@@ -458,30 +492,204 @@ class EntryFormState extends ChangeNotifier {
     return deadline.trim();
   }
 
+  Map<String, String> get _goalType {
+    final custom = traversalGoalCustom.trim();
+    if (custom.isNotEmpty) {
+      return const {'code': 'custom', 'source': 'student_free_text'};
+    }
+    final exact = traversalGoal.trim().toLowerCase();
+    const known = {
+      'prova': 'exam',
+      'exam': 'exam',
+      'examen': 'exam',
+      'lição de casa': 'homework',
+      'licao de casa': 'homework',
+      'homework': 'homework',
+      'deberes': 'homework',
+      'trabalho/prática': 'real_use',
+      'trabalho/pratica': 'real_use',
+      'work/practice': 'real_use',
+      'trabajo/práctica': 'real_use',
+      'trabajo/practica': 'real_use',
+      'curiosidade própria': 'self_study',
+      'curiosidade propria': 'self_study',
+      'self-study': 'self_study',
+      'curiosidad propia': 'self_study',
+      'concurso': 'contest',
+      'contest': 'contest',
+      'oposición': 'contest',
+      'oposicion': 'contest',
+      'ainda não sei': 'unknown',
+      'ainda nao sei': 'unknown',
+      'not sure yet': 'unknown',
+      'todavía no sé': 'unknown',
+      'todavia no se': 'unknown',
+    };
+    final code = known[exact];
+    if (code == null) {
+      return const {'code': 'unspecified', 'source': 'not_inferred'};
+    }
+    return {'code': code, 'source': 'explicit_choice'};
+  }
+
   bool get _isExamGoal {
-    final goal = traversalGoal.trim().toLowerCase();
-    return goal.contains('prova') ||
-        goal.contains('teste') ||
-        goal.contains('exame') ||
-        goal.contains('vestibular') ||
-        goal.contains('certificação') ||
-        goal.contains('certificacao');
+    final code = _goalType['code'];
+    return code == 'exam' || code == 'contest';
   }
 
   bool get _isRealUseGoal {
-    final goal = traversalGoal.trim().toLowerCase();
-    return goal.contains('trabalho') || goal.contains('prática');
+    return _goalType['code'] == 'real_use';
   }
 
-  String _goalSummary() {
+  String _goalSummary(SimLocaleContract locale) {
     return [
-      if (topic.trim().isNotEmpty) 'Conteudo: ${topic.trim()}',
+      if (topic.trim().isNotEmpty)
+        '${_summaryLabel(locale.explanationLanguage, 'content')}: ${topic.trim()}',
       if (_effectiveTraversalGoal.isNotEmpty)
-        'Objetivo real: $_effectiveTraversalGoal',
-      if (_effectiveDeadline.isNotEmpty) 'Prazo: $_effectiveDeadline',
+        '${_summaryLabel(locale.explanationLanguage, 'realGoal')}: $_effectiveTraversalGoal',
+      if (_effectiveDeadline.isNotEmpty)
+        '${_summaryLabel(locale.explanationLanguage, 'deadline')}: $_effectiveDeadline',
       if (expectedResult.trim().isNotEmpty)
-        'Resultado esperado: ${expectedResult.trim()}',
+        '${_summaryLabel(locale.explanationLanguage, 'expectedResult')}: ${expectedResult.trim()}',
     ].join('\n');
+  }
+
+  Map<String, dynamic> _structuredPedagogicalEntry({
+    required SimLocaleContract locale,
+    required Map<String, dynamic> materialReceived,
+  }) {
+    return <String, dynamic>{
+      'version': 1,
+      'localeContract': locale.toJson(),
+      'student_goal': {
+        'objective': freeText.trim(),
+        'learning_goal': _effectiveLearningGoal,
+        'subject': subject.trim(),
+        'subject_status': subject.trim().isEmpty ? 'not_informed' : 'informed',
+        'topic': topic.trim(),
+        'topic_status': topic.trim().isEmpty ? 'not_informed' : 'informed',
+        'goal_type': _goalType,
+        'deadline': _effectiveDeadline,
+        'expected_result': expectedResult.trim(),
+      }..removeWhere((_, value) => value is String && value.trim().isEmpty),
+      'academic_context': {
+        'academic_level': academicLevel.trim(),
+        'country_curriculum': countryCurriculum.trim(),
+      }..removeWhere((_, value) => value.trim().isEmpty),
+      'material': {
+        'description_only': describeMaterialWithoutAttachment,
+        'material_type': materialType.trim(),
+        'received': materialReceived,
+      },
+      'student_profile':
+          {
+            'preferred_name': preferredName.trim(),
+            'student_age': studentAge.trim(),
+            if (profileAgeSubmitted) 'age_declared': !ageNotDeclared,
+            'age_not_declared': ageNotDeclared,
+            'difficulties': profileDifficulties,
+            'observation': profileObservation.trim(),
+            'learning_preference': learningPreference.trim(),
+          }..removeWhere((_, value) {
+            if (value is String) return value.trim().isEmpty;
+            if (value is List) return value.isEmpty;
+            return false;
+          }),
+      'entry_path': entryPath.trim().isEmpty ? 'guided_path' : entryPath.trim(),
+    };
+  }
+
+  String _summaryLocaleFromFicha(Map<String, dynamic> ficha) {
+    final locale =
+        ficha['human_summary_locale'] ?? ficha['explanationLanguage'];
+    return locale?.toString() ?? 'Portuguese';
+  }
+
+  String _summaryLabel(String locale, String key) {
+    final language = locale.toLowerCase();
+    final en = language.startsWith('english') || language == 'en';
+    final es = language.startsWith('spanish') || language == 'es';
+    final labels = en
+        ? const {
+            'interface': 'Interface language',
+            'lesson': 'Lesson language',
+            'objective': 'Objective',
+            'deadline': 'Deadline',
+            'realGoal': 'Real goal',
+            'difficulty': 'Difficulty',
+            'preference': 'Preference',
+            'name': 'Name',
+            'age': 'Age',
+            'notDeclared': 'not declared',
+            'difficulties': 'Difficulties',
+            'observation': 'Observation',
+            'content': 'Content',
+            'expectedResult': 'Expected result',
+          }
+        : es
+        ? const {
+            'interface': 'Idioma de la interfaz',
+            'lesson': 'Idioma de la clase',
+            'objective': 'Objetivo',
+            'deadline': 'Plazo',
+            'realGoal': 'Meta real',
+            'difficulty': 'Dificultad',
+            'preference': 'Preferencia',
+            'name': 'Nombre',
+            'age': 'Edad',
+            'notDeclared': 'no declarada',
+            'difficulties': 'Dificultades',
+            'observation': 'Observación',
+            'content': 'Contenido',
+            'expectedResult': 'Resultado esperado',
+          }
+        : const {
+            'interface': 'Idioma do app',
+            'lesson': 'Idioma da aula',
+            'objective': 'Objetivo',
+            'deadline': 'Prazo',
+            'realGoal': 'Alvo real',
+            'difficulty': 'Dificuldade',
+            'preference': 'Preferencia',
+            'name': 'Nome',
+            'age': 'Idade',
+            'notDeclared': 'nao declarada',
+            'difficulties': 'Dificuldades',
+            'observation': 'Observacao',
+            'content': 'Conteudo',
+            'expectedResult': 'Resultado esperado',
+          };
+    return labels[key] ?? key;
+  }
+
+  String _summarySentence(String locale, String key) {
+    final language = locale.toLowerCase();
+    final en = language.startsWith('english') || language == 'en';
+    final es = language.startsWith('spanish') || language == 'es';
+    final labels = en
+        ? const {
+            'adaptFor': 'Adapt guidance for:',
+            'considerAge': 'Consider the age declared by the student:',
+            'doNotInferAge': 'Do not infer age; use neutral language.',
+            'useObservation':
+                'Use the free observation as light context, without diagnosis.',
+          }
+        : es
+        ? const {
+            'adaptFor': 'Adaptar la conducción para:',
+            'considerAge': 'Considerar la edad informada por el estudiante:',
+            'doNotInferAge': 'No inferir edad; usar lenguaje neutral.',
+            'useObservation':
+                'Usar la observación libre como contexto leve, sin diagnóstico.',
+          }
+        : const {
+            'adaptFor': 'Adaptar conducao para:',
+            'considerAge': 'Considerar idade informada pelo aluno:',
+            'doNotInferAge': 'Nao inferir idade; usar linguagem neutra.',
+            'useObservation':
+                'Usar observacao livre como contexto leve, sem diagnostico.',
+          };
+    return labels[key] ?? key;
   }
 
   void updateLanguage(String code, String name) {
@@ -607,9 +815,9 @@ class EntryFormState extends ChangeNotifier {
         .map((a) {
           final text = a.extractedText?.trim() ?? '';
           final clipped = text.length > 8000
-              ? '${text.substring(0, 8000)}\n[...truncado em 8000 chars]'
+              ? '${text.substring(0, 8000)}\n[...truncated_at_8000_chars]'
               : text;
-          return '--- Anexo: ${a.name} ---\n$clipped';
+          return '--- attachment: ${a.name} ---\n$clipped';
         })
         .join('\n\n');
   }

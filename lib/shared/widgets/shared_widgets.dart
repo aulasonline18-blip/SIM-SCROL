@@ -483,7 +483,8 @@ const supportedLangs = <SupportedLang>[
   SupportedLang(code: 'en', name: 'English', native: 'English', flag: 'US'),
   SupportedLang(code: 'es', name: 'Spanish', native: 'Español', flag: 'ES'),
   SupportedLang(code: 'fr', name: 'French', native: 'Français', flag: 'FR'),
-  SupportedLang(code: 'ja', name: 'Japanese', native: '日本語', flag: 'JP'),
+  SupportedLang(code: 'de', name: 'German', native: 'Deutsch', flag: 'DE'),
+  SupportedLang(code: 'it', name: 'Italian', native: 'Italiano', flag: 'IT'),
 ];
 
 class LanguageButton extends StatelessWidget {

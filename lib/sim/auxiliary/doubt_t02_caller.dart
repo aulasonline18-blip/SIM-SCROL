@@ -34,12 +34,13 @@ class DoubtT02Caller {
       question: currentQuestion,
       options: currentOptions,
     );
+    final locale = profile.effectiveLocaleContract;
     final profilePayload = profile.toJson();
     final material = await client.doubt(
       T02LessonRequest(
         lessonLocalId: lessonLocalId,
         item: itemText,
-        lang: profile.stableLang ?? 'Portuguese',
+        lang: locale.explanationLanguage,
         academic: profile.academicLevel ?? 'ensino_medio',
         layer: layer,
         mode: AuxRoomMode.doubt.name,
@@ -51,7 +52,14 @@ class DoubtT02Caller {
           'lessonLocalId': lessonLocalId,
           'mode': AuxRoomMode.doubt.name,
           'aux_mode': AuxRoomMode.doubt.name,
-          'stable_lang': profile.stableLang ?? 'Portuguese',
+          'stable_lang': locale.explanationLanguage,
+          'localeContract': locale.toJson(),
+          'interfaceLocale': locale.interfaceLocale,
+          'learningLocale': locale.learningLocale,
+          'explanationLanguage': locale.explanationLanguage,
+          if (locale.targetLanguage != null)
+            'targetLanguage': locale.targetLanguage,
+          'mediaTextLanguage': locale.mediaTextLanguage,
           'academic_level': profile.academicLevel ?? 'ensino_medio',
           if (profile.preferredName != null)
             'preferred_name': profile.preferredName,
@@ -79,6 +87,11 @@ class DoubtT02Caller {
         },
         addendum: addon,
         itemIdx: itemIdx,
+        interfaceLocale: locale.interfaceLocale,
+        learningLocale: locale.learningLocale,
+        explanationLanguage: locale.explanationLanguage,
+        targetLanguage: locale.targetLanguage,
+        localeContract: locale,
       ),
     );
     final explanation = material.explanation.trim();

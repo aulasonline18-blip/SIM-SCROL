@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../experience/curriculum_utils.dart';
+import '../localization/sim_locale_contract.dart';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';
 import '../state/student_learning_state_service.dart';
@@ -56,6 +57,7 @@ class ResolveLessonMaterialResult {
     required this.source,
     required this.waitedMs,
     this.imageMetadata,
+    this.localeContract,
   });
 
   final LessonContent conteudo;
@@ -63,6 +65,7 @@ class ResolveLessonMaterialResult {
   final LessonMaterialSource source;
   final int waitedMs;
   final LessonImageGenerationMetadata? imageMetadata;
+  final SimLocaleContract? localeContract;
 }
 
 class StudentLessonMaterialService {
@@ -110,9 +113,9 @@ class StudentLessonMaterialService {
     final stateReadiness = _readinessResolver.resolveFromState(
       state: stateService.read(input.lessonLocalId),
       identity: _identityFor(input),
+      params: input.params,
     );
-    if (stateReadiness.status == LessonReadinessStatus.invalid ||
-        stateReadiness.status == LessonReadinessStatus.stale) {
+    if (_shouldDiscardReadiness(stateReadiness)) {
       _discardUnreadableReadyMaterial(input, stateReadiness);
     }
     final readyFromState = stateReadiness.lesson;
@@ -143,6 +146,7 @@ class StudentLessonMaterialService {
         source: LessonMaterialSource.studentState,
         waitedMs: 0,
         imageMetadata: visualReady.imageMetadata,
+        localeContract: visualReady.localeContract,
       );
     }
     final cacheReadiness = _readinessResolver.resolveFromMemoryCache(
@@ -175,6 +179,7 @@ class StudentLessonMaterialService {
       source: LessonMaterialSource.memoryCacheFromMotor,
       waitedMs: 0,
       imageMetadata: visualReady.imageMetadata,
+      localeContract: visualReady.localeContract,
     );
   }
 
@@ -227,6 +232,7 @@ class StudentLessonMaterialService {
                 source: LessonMaterialSource.studentStateAfterWait,
                 waitedMs: DateTime.now().millisecondsSinceEpoch - startedAt,
                 imageMetadata: lesson.imageMetadata,
+                localeContract: lesson.localeContract,
               );
               _appendLessonTextReady(
                 input,
@@ -285,6 +291,7 @@ class StudentLessonMaterialService {
       source: LessonMaterialSource.studentStateAfterWait,
       waitedMs: waitedMs,
       imageMetadata: lesson.imageMetadata,
+      localeContract: lesson.localeContract,
     );
   }
 
@@ -619,9 +626,9 @@ class StudentLessonMaterialService {
     final result = _readinessResolver.resolveFromState(
       state: stateService.read(input.lessonLocalId),
       identity: _identityFor(input),
+      params: input.params,
     );
-    if (result.status == LessonReadinessStatus.invalid ||
-        result.status == LessonReadinessStatus.stale) {
+    if (_shouldDiscardReadiness(result)) {
       _discardUnreadableReadyMaterial(input, result);
     }
     return result.status == LessonReadinessStatus.readyFromState
@@ -759,9 +766,9 @@ class StudentLessonMaterialService {
     final stateResult = _readinessResolver.resolveFromState(
       state: stateService.read(input.lessonLocalId),
       identity: _identityFor(input),
+      params: input.params,
     );
-    if (stateResult.status == LessonReadinessStatus.invalid ||
-        stateResult.status == LessonReadinessStatus.stale) {
+    if (_shouldDiscardReadiness(stateResult)) {
       _discardUnreadableReadyMaterial(input, stateResult);
     }
     if (stateResult.isReady) return true;
@@ -803,11 +810,19 @@ class StudentLessonMaterialService {
               'marker': input.marker,
               'layer': input.layer.value,
               'error': result.safeReason ?? result.status.name,
+              'status': result.status.name,
             },
           ),
         ],
       );
     });
+  }
+
+  bool _shouldDiscardReadiness(LessonReadinessResult result) {
+    return result.status == LessonReadinessStatus.invalid ||
+        result.status == LessonReadinessStatus.stale ||
+        result.status == LessonReadinessStatus.staleLocale ||
+        result.status == LessonReadinessStatus.legacyLocale;
   }
 
   void _prepareLessonAudio(
@@ -827,6 +842,7 @@ class StudentLessonMaterialService {
         content.options[AnswerLetter.B],
         content.options[AnswerLetter.C],
       ],
+      input.params.effectiveLocaleContract,
     );
   }
 
@@ -848,23 +864,31 @@ class StudentLessonMaterialService {
         _mediaPositionFor(params, input: _inputFor(params)),
         cacheKey: lessonKeyFor(params),
         imageUrl: lesson.imagem,
+        localeContract: params.effectiveLocaleContract,
+        visualTextPolicy:
+            lesson.imageMetadata?.visualTextPolicy ?? 'explanation',
       );
 
   void _markImageStarted(CompleteLessonParams params, CompleteLesson lesson) =>
       mediaService?.markLessonImageStarted(
         _mediaPositionFor(params, input: _inputFor(params)),
         cacheKey: lessonKeyFor(params),
+        localeContract: params.effectiveLocaleContract,
+        visualTextPolicy:
+            lesson.imageMetadata?.visualTextPolicy ?? 'explanation',
       );
 
   void _markImageFailed(CompleteLessonParams params, CompleteLesson lesson) =>
       mediaService?.markLessonImageFailed(
         _mediaPositionFor(params, input: _inputFor(params)),
         error: lesson.imageMetadata?.n3Reason ?? 'VISUAL_ROUTE_FAILED',
+        localeContract: params.effectiveLocaleContract,
       );
 
   void _markNoImage(CompleteLessonParams params, CompleteLesson lesson) =>
       mediaService?.markLessonNoImage(
         _mediaPositionFor(params, input: _inputFor(params)),
         reason: lesson.imageMetadata?.n2Reason,
+        localeContract: params.effectiveLocaleContract,
       );
 }

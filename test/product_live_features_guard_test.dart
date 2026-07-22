@@ -112,8 +112,15 @@ void main() {
       expect(t00Adapter, contains(field), reason: field);
       expect(t02Adapter, contains(field), reason: field);
     }
-    expect(audio, contains("payload['language'] = language"));
+    expect(audio, contains("payload['language'] = audioLanguage"));
+    expect(
+      audio,
+      contains("payload['localeContract'] = localeContract.toJson()"),
+    );
+    expect(audio, contains('audioLanguage: audioLanguage'));
     expect(visual, contains("'idioma': idioma"));
+    expect(visual, contains("'mediaTextLanguage': resolvedMediaTextLanguage"));
+    expect(visual, contains("'visualTextPolicy': visualTextPolicy"));
   });
 
   test('screen inventory keeps the live product surfaces present', () {

@@ -120,6 +120,7 @@ extension LabSessionEntryFlows on LabSession {
         'objetivo': freeText.trim(),
         'free_text': freeText.trim(),
         ...localeContract.toJson(),
+        'localeContract': localeContract.toJson(),
         'idioma': explanationLanguage,
         'language': learningLocaleTag,
         'stableLang': explanationLanguage,

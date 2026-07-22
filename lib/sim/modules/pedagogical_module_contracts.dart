@@ -1,4 +1,5 @@
 import '../state/student_learning_state.dart';
+import '../localization/sim_locale_contract.dart';
 
 class T00BootstrapRequest {
   const T00BootstrapRequest({
@@ -10,6 +11,7 @@ class T00BootstrapRequest {
     this.learningLocale,
     this.explanationLanguage,
     this.targetLanguage,
+    this.localeContract,
   });
 
   final String lessonLocalId;
@@ -20,6 +22,7 @@ class T00BootstrapRequest {
   final String? learningLocale;
   final String? explanationLanguage;
   final String? targetLanguage;
+  final SimLocaleContract? localeContract;
 }
 
 class T00BootstrapChunk {
@@ -54,6 +57,7 @@ class T02LessonRequest {
     this.learningLocale,
     this.explanationLanguage,
     this.targetLanguage,
+    this.localeContract,
   });
 
   final String lessonLocalId;
@@ -75,6 +79,7 @@ class T02LessonRequest {
   final String? learningLocale;
   final String? explanationLanguage;
   final String? targetLanguage;
+  final SimLocaleContract? localeContract;
 }
 
 class T02LessonMaterial {

@@ -31,6 +31,8 @@ void main() {
             interfaceLocale: 'pt-BR',
             learningLocale: 'en',
             explanationLanguage: 'English',
+            mediaTextLanguage: 'English',
+            source: SimLocaleSource.userSelected,
           ),
           academic: 'adulto',
         ),

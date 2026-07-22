@@ -1,3 +1,5 @@
+import '../localization/sim_locale_contract.dart';
+
 const String lessonVisualSupportRule =
     'Toda aula precisa de um apoio visual pedagogico util, adequado ao '
     'conteudo, leve, seguro, acessivel e nao decorativo.';
@@ -751,6 +753,11 @@ class LessonImageGenerationMetadata {
     this.createdAt,
     this.n2Reason,
     this.n3Reason,
+    this.localeContract,
+    this.mediaTextLanguage,
+    this.explanationLanguage,
+    this.targetLanguage,
+    this.visualTextPolicy,
   });
 
   final String? cacheKey;
@@ -772,6 +779,11 @@ class LessonImageGenerationMetadata {
   final String? createdAt;
   final String? n2Reason;
   final String? n3Reason;
+  final SimLocaleContract? localeContract;
+  final String? mediaTextLanguage;
+  final String? explanationLanguage;
+  final String? targetLanguage;
+  final String? visualTextPolicy;
 
   bool get isEmpty =>
       cacheKey == null &&
@@ -792,7 +804,12 @@ class LessonImageGenerationMetadata {
       source == null &&
       createdAt == null &&
       n2Reason == null &&
-      n3Reason == null;
+      n3Reason == null &&
+      localeContract == null &&
+      mediaTextLanguage == null &&
+      explanationLanguage == null &&
+      targetLanguage == null &&
+      visualTextPolicy == null;
 
   Map<String, Object?> toJson() => {
     'cacheKeyHash': cacheKeyHash ?? _hashString(cacheKey),
@@ -811,6 +828,11 @@ class LessonImageGenerationMetadata {
     'createdAt': createdAt,
     'n2Reason': n2Reason,
     'n3Reason': n3Reason,
+    if (localeContract != null) 'localeContract': localeContract!.toJson(),
+    'mediaTextLanguage': mediaTextLanguage,
+    'explanationLanguage': explanationLanguage,
+    'targetLanguage': targetLanguage,
+    'visualTextPolicy': visualTextPolicy,
   };
 
   LessonImageGenerationMetadata withSlot({
@@ -841,6 +863,11 @@ class LessonImageGenerationMetadata {
       createdAt: createdAt ?? this.createdAt,
       n2Reason: n2Reason,
       n3Reason: n3Reason,
+      localeContract: localeContract,
+      mediaTextLanguage: mediaTextLanguage,
+      explanationLanguage: explanationLanguage,
+      targetLanguage: targetLanguage,
+      visualTextPolicy: visualTextPolicy,
     );
   }
 
@@ -864,6 +891,11 @@ class LessonImageGenerationMetadata {
       createdAt: raw['createdAt']?.toString(),
       n2Reason: raw['n2Reason']?.toString(),
       n3Reason: raw['n3Reason']?.toString(),
+      localeContract: _localeContractFromJson(raw['localeContract']),
+      mediaTextLanguage: raw['mediaTextLanguage']?.toString(),
+      explanationLanguage: raw['explanationLanguage']?.toString(),
+      targetLanguage: raw['targetLanguage']?.toString(),
+      visualTextPolicy: raw['visualTextPolicy']?.toString(),
     );
     return metadata.isEmpty ? null : metadata;
   }
@@ -876,6 +908,11 @@ String? _hashString(String? input) {
     hash = ((hash << 5) + hash) ^ unit;
   }
   return (hash & 0xffffffff).toRadixString(36);
+}
+
+SimLocaleContract? _localeContractFromJson(Object? raw) {
+  if (raw is! Map) return null;
+  return SimLocaleContract.fromJson(Map<String, dynamic>.from(raw));
 }
 
 String? _normalizeVisualToken(Object? raw) {

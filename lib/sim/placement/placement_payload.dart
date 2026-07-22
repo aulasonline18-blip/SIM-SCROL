@@ -1,4 +1,5 @@
 import '../state/student_learning_state.dart';
+import '../localization/sim_locale_contract.dart';
 
 class PlacementContext {
   const PlacementContext({
@@ -28,18 +29,25 @@ PlacementContext? buildPlacementContext(StudentLearningState? state) {
     return null;
   }
   final profile = state.profile.toJson();
-  final lang =
-      (profile['stableLang'] ??
-              profile['STABLE_LANG'] ??
-              profile['language'] ??
-              profile['idioma'] ??
-              'English')
-          .toString();
+  final locale = SimLocaleContract.fromLegacyState({
+    'localeContract': state.localeContract.toJson(),
+    'profile': profile,
+  }).normalized();
+  final lang = locale.explanationLanguage;
+  final enrichedProfile = <String, dynamic>{
+    ...profile,
+    ...locale.toJson(),
+    'localeContract': locale.toJson(),
+    'language': locale.learningLocale,
+    'language_semantics': 'learningLocale',
+    'stableLang': locale.explanationLanguage,
+    'stableLang_semantics': 'explanationLanguage',
+  };
   return PlacementContext(
     lessonLocalId: state.lessonLocalId,
     language: lang,
-    objetivo: (profile['objetivo'] ?? curriculum.topic).toString(),
-    profile: profile,
+    objetivo: (enrichedProfile['objetivo'] ?? curriculum.topic).toString(),
+    profile: JsonMap.from(enrichedProfile),
     academicLevel: (profile['academic_level'] ?? profile['ACADEMIC_LEVEL'])
         ?.toString(),
     studentProfileInternal: profile['student_profile_internal'],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../sim_i18n.dart';
 import '../sim_theme.dart';
 
 class LessonAvatar extends StatefulWidget {
@@ -47,7 +48,7 @@ class _LessonAvatarState extends State<LessonAvatar>
     final palette = SimThemeScope.paletteOf(context);
     return Semantics(
       image: true,
-      label: widget.speaking ? 'SIM falando' : 'SIM',
+      label: widget.speaking ? t('a11y_sim_speaking') : 'SIM',
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

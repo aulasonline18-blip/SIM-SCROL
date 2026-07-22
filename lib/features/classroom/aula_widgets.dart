@@ -317,7 +317,7 @@ class _LessonVisualBoardState extends State<LessonVisualBoard> {
                 children: [
                   SimIconAction(
                     icon: Icons.chevron_left,
-                    semanticLabel: 'Voltar etapa do quadro visual',
+                    semanticLabel: t('visual_board_previous'),
                     onPressed: _stepIndex == 0 ? null : () => _advanceStep(-1),
                     size: 40,
                   ),
@@ -325,13 +325,13 @@ class _LessonVisualBoardState extends State<LessonVisualBoard> {
                   Expanded(
                     child: SimProgressRail(
                       value: (_stepIndex + 1) / _stepCount,
-                      semanticLabel: 'Progresso do quadro visual',
+                      semanticLabel: t('visual_board_progress'),
                     ),
                   ),
                   const SizedBox(width: SimSpacing.sm),
                   SimIconAction(
                     icon: Icons.chevron_right,
-                    semanticLabel: 'Avançar etapa do quadro visual',
+                    semanticLabel: t('visual_board_next'),
                     onPressed: _stepIndex >= _stepCount - 1
                         ? null
                         : () => _advanceStep(1),
@@ -354,12 +354,12 @@ class _LessonVisualBoardState extends State<LessonVisualBoard> {
                 ),
                 const SizedBox(width: SimSpacing.xs),
                 Tooltip(
-                  message: 'Descrição do quadro visual',
+                  message: t('visual_board_description'),
                   child: SimIconAction(
                     icon: _descriptionExpanded
                         ? Icons.unfold_less
                         : Icons.notes_outlined,
-                    semanticLabel: 'Mostrar descrição do quadro visual',
+                    semanticLabel: t('visual_board_show_description'),
                     onPressed: () => setState(
                       () => _descriptionExpanded = !_descriptionExpanded,
                     ),
@@ -422,11 +422,11 @@ _LessonBoardVisualKind _kindForVisualData(String data) {
 }
 
 String _titleForVisualKind(_LessonBoardVisualKind kind) => switch (kind) {
-  _LessonBoardVisualKind.comparison => 'Quadro de comparação',
-  _LessonBoardVisualKind.table => 'Quadro em tabela',
-  _LessonBoardVisualKind.stepByStep => 'Quadro passo a passo',
-  _LessonBoardVisualKind.conceptMap => 'Mapa de ideias',
-  _ => 'Quadro visual da aula',
+  _LessonBoardVisualKind.comparison => t('visual_board_title_comparison'),
+  _LessonBoardVisualKind.table => t('visual_board_title_table'),
+  _LessonBoardVisualKind.stepByStep => t('visual_board_title_step_by_step'),
+  _LessonBoardVisualKind.conceptMap => t('visual_board_title_concept_map'),
+  _ => t('visual_board_title_default'),
 };
 
 class _VisualBoardOverlay extends StatelessWidget {

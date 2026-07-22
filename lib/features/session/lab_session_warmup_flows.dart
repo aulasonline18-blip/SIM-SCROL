@@ -464,6 +464,7 @@ extension LabSessionDoubtFlowExtensions on LabSession {
             profile?.academicLevel ?? profile?.nivel ?? 'ensino_medio',
         preferredName: profile?.preferredName ?? preferredName,
         notes: studentProfileNotes.isNotEmpty ? studentProfileNotes : null,
+        localeContract: localeContract,
         extra: profile?.extra ?? const {},
       ),
       itemText: snapshot?.itemText ?? content.question,
@@ -533,7 +534,8 @@ extension LabSessionDoubtFlowExtensions on LabSession {
       unawaited(
         _doubtAudioFor().speakDoubt(
           text,
-          lang: lang,
+          lang: lang ?? localeContract.explanationLanguage,
+          localeContract: localeContract,
           lessonKey: '$id:${marker ?? 'item'}',
         ),
       );

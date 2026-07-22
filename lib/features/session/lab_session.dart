@@ -270,12 +270,9 @@ class LabSession extends ChangeNotifier {
       entryForm.selectedLanguageCode = value;
   String? get stableLang => entryForm.stableLang;
   set stableLang(String? value) => entryForm.stableLang = value;
-  String get interfaceLocaleTag =>
-      localeSettings.resolveInterfaceLocale(PlatformDispatcher.instance.locale);
-  String get learningLocaleTag =>
-      normalizeSimLocaleTag(localeSettings.learningLocale);
-  String get explanationLanguage =>
-      simLanguageNameForLocale(localeSettings.learningLocale);
+  String get interfaceLocaleTag => localeContract.interfaceLocale;
+  String get learningLocaleTag => localeContract.learningLocale;
+  String get explanationLanguage => localeContract.explanationLanguage;
   SimLocaleContract get localeContract =>
       localeSettings.contract(PlatformDispatcher.instance.locale);
   String get otherLanguage => entryForm.otherLanguage;
@@ -494,7 +491,12 @@ class LabSession extends ChangeNotifier {
       followDeviceInterface: false,
       manualInterfaceLocale: localeTag,
       learningLocale: localeTag,
-      targetLanguage: null,
+      targetLanguage:
+          localeSettings.targetLanguage ??
+          (code == 'other' && !isSupportedSimLocale(stableLabel)
+              ? stableLabel
+              : null),
+      source: SimLocaleSource.userSelectedSingleLanguage,
     );
     final p = prefs;
     if (p != null) unawaited(localeSettings.save(p));
@@ -516,6 +518,9 @@ class LabSession extends ChangeNotifier {
       manualInterfaceLocale: followDevice
           ? null
           : normalizeSimLocaleTag(localeTag),
+      source: followDevice
+          ? SimLocaleSource.systemDefault
+          : SimLocaleSource.userSelected,
     );
     final p = prefs ?? await SharedPreferences.getInstance();
     await localeSettings.save(p);
@@ -530,7 +535,8 @@ class LabSession extends ChangeNotifier {
     final normalized = normalizeSimLocaleTag(localeTag);
     localeSettings = localeSettings.copyWith(
       learningLocale: normalized,
-      targetLanguage: targetLanguage,
+      targetLanguage: targetLanguage ?? localeSettings.targetLanguage,
+      source: SimLocaleSource.userSelected,
     );
     final p = prefs ?? await SharedPreferences.getInstance();
     await localeSettings.save(p);
@@ -597,6 +603,7 @@ class LabSession extends ChangeNotifier {
       lessonLocale: learningLocaleTag,
       explanationLanguage: explanationLanguage,
       targetLanguage: localeContract.targetLanguage,
+      localeContract: localeContract,
       objectiveOverride: objectiveOverride,
     );
   }
@@ -929,7 +936,8 @@ class LabSession extends ChangeNotifier {
     try {
       await _doubtAudioFor().speakText(
         parts,
-        lang: stableLang ?? selectedLanguageCode,
+        lang: localeContract.explanationLanguage,
+        localeContract: localeContract,
         lessonKey: '$id:$source',
       );
     } catch (_) {
@@ -966,7 +974,8 @@ class LabSession extends ChangeNotifier {
         _currentLessonContentForAudio(),
         snapshot?.itemMarker ?? 'item-1',
         currentAulaLayer,
-        language: stableLang,
+        language: localeContract.explanationLanguage,
+        localeContract: localeContract,
       );
       audioPlaying = started && controller.falando;
       if (!started) {

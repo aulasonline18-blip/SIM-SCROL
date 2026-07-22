@@ -17,6 +17,7 @@ import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_event_bus.dart';
 import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
+import 'package:sim_mobile/sim/localization/sim_locale_contract.dart';
 import 'package:sim_mobile/sim/media/audio_core.dart';
 import 'package:sim_mobile/sim/media/audio_preference.dart';
 import 'package:sim_mobile/sim/media/doubt_audio.dart';
@@ -46,6 +47,11 @@ class FakeGeneratedAudioClient implements GeneratedAudioClient {
     required String lang,
     required String voice,
     required String lessonKey,
+    double speed = 1,
+    String? explanationLanguage,
+    String? targetLanguage,
+    SimLocaleContract? localeContract,
+    String? textHash,
   }) async {
     calls += 1;
     lastLang = lang;
@@ -63,6 +69,11 @@ class ThrowingGeneratedAudioClient implements GeneratedAudioClient {
     required String lang,
     required String voice,
     required String lessonKey,
+    double speed = 1,
+    String? explanationLanguage,
+    String? targetLanguage,
+    SimLocaleContract? localeContract,
+    String? textHash,
   }) async {
     calls += 1;
     throw StateError('remote down');
@@ -78,6 +89,11 @@ class InvalidGeneratedAudioClient implements GeneratedAudioClient {
     required String lang,
     required String voice,
     required String lessonKey,
+    double speed = 1,
+    String? explanationLanguage,
+    String? targetLanguage,
+    SimLocaleContract? localeContract,
+    String? textHash,
   }) async {
     calls += 1;
     return 'data:audio/wav;base64,@@@@';
@@ -416,11 +432,17 @@ void main() {
     );
 
     expect(
-      await core.speak('Audio invalido', const SpeakOptions(lessonKey: 'k')),
+      await core.speak(
+        'Audio invalido',
+        const SpeakOptions(lessonKey: 'k', lang: 'pt-BR'),
+      ),
       true,
     );
     expect(
-      await core.speak('Audio invalido', const SpeakOptions(lessonKey: 'k')),
+      await core.speak(
+        'Audio invalido',
+        const SpeakOptions(lessonKey: 'k', lang: 'pt-BR'),
+      ),
       true,
     );
     expect(client.calls, 2);
@@ -471,7 +493,10 @@ void main() {
       );
 
       expect(
-        await core.speak('Fallback local', const SpeakOptions(lessonKey: 'k')),
+        await core.speak(
+          'Fallback local',
+          const SpeakOptions(lessonKey: 'k', lang: 'pt-BR'),
+        ),
         true,
       );
       expect(client.calls, 1);
@@ -508,7 +533,15 @@ void main() {
       correctAnswer: AnswerLetter.A,
     );
 
-    expect(await controller.playConteudo(content, 'M1', LessonLayer.l1), true);
+    expect(
+      await controller.playConteudo(
+        content,
+        'M1',
+        LessonLayer.l1,
+        language: 'pt-BR',
+      ),
+      true,
+    );
     expect(
       states['l1']!.events.map((event) => event.type),
       contains('AUDIO_STARTED'),
@@ -520,45 +553,56 @@ void main() {
     expect(states['l1']!.audio.status, 'ready');
   });
 
-  test('lesson audio state stays playing until playback end callback', () async {
-    final states = {'l1': seedState()};
-    final playback = ControlledEndPlaybackAdapter();
-    final media = StudentLessonMediaService(
-      audioCore: AudioCore(
+  test(
+    'lesson audio state stays playing until playback end callback',
+    () async {
+      final states = {'l1': seedState()};
+      final playback = ControlledEndPlaybackAdapter();
+      final media = StudentLessonMediaService(
+        audioCore: AudioCore(
+          preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
+          playback: playback,
+        ),
+        readState: (id) => states[id]!,
+        writeState: (state) => states[state.lessonLocalId] = state,
+      );
+      final controller = LessonAudioController(
+        lessonLocalId: 'l1',
+        mediaService: media,
         preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
-        playback: playback,
-      ),
-      readState: (id) => states[id]!,
-      writeState: (state) => states[state.lessonLocalId] = state,
-    );
-    final controller = LessonAudioController(
-      lessonLocalId: 'l1',
-      mediaService: media,
-      preference: AudioPreference(storage: MemoryAudioPreferenceStorage()),
-    );
-    const content = LessonContent(
-      explanation: 'Explicacao',
-      question: 'Pergunta',
-      options: {AnswerLetter.A: 'A1'},
-      correctAnswer: AnswerLetter.A,
-    );
+      );
+      const content = LessonContent(
+        explanation: 'Explicacao',
+        question: 'Pergunta',
+        options: {AnswerLetter.A: 'A1'},
+        correctAnswer: AnswerLetter.A,
+      );
 
-    expect(await controller.playConteudo(content, 'M1', LessonLayer.l1), true);
-    expect(states['l1']!.audio.status, 'playing');
-    expect(states['l1']!.audio.playing, true);
-    expect(states['l1']!.events.map((event) => event.type), [
-      'AUDIO_STARTED',
-    ]);
+      expect(
+        await controller.playConteudo(
+          content,
+          'M1',
+          LessonLayer.l1,
+          language: 'pt-BR',
+        ),
+        true,
+      );
+      expect(states['l1']!.audio.status, 'playing');
+      expect(states['l1']!.audio.playing, true);
+      expect(states['l1']!.events.map((event) => event.type), [
+        'AUDIO_STARTED',
+      ]);
 
-    playback.pendingEnd?.call();
+      playback.pendingEnd?.call();
 
-    expect(states['l1']!.audio.status, 'ready');
-    expect(states['l1']!.audio.playing, false);
-    expect(states['l1']!.events.map((event) => event.type), [
-      'AUDIO_STARTED',
-      'AUDIO_READY',
-    ]);
-  });
+      expect(states['l1']!.audio.status, 'ready');
+      expect(states['l1']!.audio.playing, false);
+      expect(states['l1']!.events.map((event) => event.type), [
+        'AUDIO_STARTED',
+        'AUDIO_READY',
+      ]);
+    },
+  );
 
   test(
     'lesson audio failure clears playing state and records recoverable error',
@@ -590,7 +634,12 @@ void main() {
       );
 
       expect(
-        await controller.playConteudo(content, 'M1', LessonLayer.l1),
+        await controller.playConteudo(
+          content,
+          'M1',
+          LessonLayer.l1,
+          language: 'pt-BR',
+        ),
         false,
       );
       expect(states['l1']!.audio.status, 'failed');
@@ -641,6 +690,7 @@ void main() {
           lesson.conteudo.options[AnswerLetter.B],
           lesson.conteudo.options[AnswerLetter.C],
         ],
+        params.effectiveLocaleContract,
       );
     });
 
@@ -671,8 +721,14 @@ void main() {
       preference: preference,
     );
 
-    expect(await audio.speakDoubt('Duvida', lessonKey: 'l1:M1'), true);
-    expect(await audio.speakText('Revisao', lessonKey: 'l1:review:0'), true);
+    expect(
+      await audio.speakDoubt('Duvida', lang: 'pt-BR', lessonKey: 'l1:M1'),
+      true,
+    );
+    expect(
+      await audio.speakText('Revisao', lang: 'pt-BR', lessonKey: 'l1:review:0'),
+      true,
+    );
     preference.setAudioEnabled(false);
     expect(await audio.speakDoubt('Duvida', lessonKey: 'l1:M1'), false);
     expect(

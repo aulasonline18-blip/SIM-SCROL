@@ -167,6 +167,7 @@ class StudentExperienceT00Adapter {
           learningLocale: args.localeContract.learningLocale,
           explanationLanguage: args.localeContract.explanationLanguage,
           targetLanguage: args.localeContract.targetLanguage,
+          localeContract: args.localeContract,
         ),
       )) {
         switch (chunk.type) {

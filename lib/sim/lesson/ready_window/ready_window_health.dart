@@ -18,6 +18,8 @@ class DopamineReadyWindowHealth {
     required this.warmRunningCount,
     required this.warmMissingCount,
     required this.warmInvalidCount,
+    required this.invalidLocaleCount,
+    required this.invalidMediaLocaleCount,
     required this.warmMediaPendingCount,
     required this.warmMediaReadyCount,
     required this.warmMediaFailedCount,
@@ -44,6 +46,8 @@ class DopamineReadyWindowHealth {
   final int warmRunningCount;
   final int warmMissingCount;
   final int warmInvalidCount;
+  final int invalidLocaleCount;
+  final int invalidMediaLocaleCount;
   final int warmMediaPendingCount;
   final int warmMediaReadyCount;
   final int warmMediaFailedCount;
@@ -81,6 +85,8 @@ class DopamineReadyWindowHealth {
     'warmRunningCount': warmRunningCount,
     'warmMissingCount': warmMissingCount,
     'warmInvalidCount': warmInvalidCount,
+    'invalidLocaleCount': invalidLocaleCount,
+    'invalidMediaLocaleCount': invalidMediaLocaleCount,
     'warmMediaPendingCount': warmMediaPendingCount,
     'warmMediaReadyCount': warmMediaReadyCount,
     'warmMediaFailedCount': warmMediaFailedCount,
@@ -126,6 +132,8 @@ class ReadyWindowHealth {
     var warmRunningCount = 0;
     var warmMissingCount = 0;
     var warmInvalidCount = 0;
+    var invalidLocaleCount = 0;
+    var invalidMediaLocaleCount = 0;
     var warmMediaPendingCount = 0;
     var warmMediaReadyCount = 0;
     var warmMediaFailedCount = 0;
@@ -151,6 +159,9 @@ class ReadyWindowHealth {
       if (result.isReady && result.lesson != null) {
         ready.add({...slotJson, 'source': result.status.name});
         if (isHot) hotTextReadyCount += 1;
+        if (slotHasInvalidMediaLocale(state, slot)) {
+          invalidMediaLocaleCount += 1;
+        }
         final mediaState = _mediaStateFor(result.lesson!);
         switch (mediaState) {
           case _ReadyWindowMediaState.ready:
@@ -177,15 +188,22 @@ class ReadyWindowHealth {
       }
       if (isHot && queuedForSlot) hotQueuedCount += 1;
       if (result.status == LessonReadinessStatus.stale ||
-          result.status == LessonReadinessStatus.invalid) {
+          result.status == LessonReadinessStatus.invalid ||
+          result.status == LessonReadinessStatus.staleLocale ||
+          result.status == LessonReadinessStatus.legacyLocale) {
         final detail = {
           ...slotJson,
           if (result.discardedKey != null) 'discardedKey': result.discardedKey,
           if (result.safeReason != null) 'reason': result.safeReason,
+          'status': result.status.name,
         };
         stale.add(detail);
         wrongIdentity.add(detail);
         warmInvalidCount += 1;
+        if (result.status == LessonReadinessStatus.staleLocale ||
+            result.status == LessonReadinessStatus.legacyLocale) {
+          invalidLocaleCount += 1;
+        }
       }
       if (!queuedForSlot) {
         missing.add(slotJson);
@@ -211,6 +229,8 @@ class ReadyWindowHealth {
       warmRunningCount: warmRunningCount,
       warmMissingCount: warmMissingCount,
       warmInvalidCount: warmInvalidCount,
+      invalidLocaleCount: invalidLocaleCount,
+      invalidMediaLocaleCount: invalidMediaLocaleCount,
       warmMediaPendingCount: warmMediaPendingCount,
       warmMediaReadyCount: warmMediaReadyCount,
       warmMediaFailedCount: warmMediaFailedCount,
@@ -282,6 +302,8 @@ class ReadyWindowHealth {
       'warmRunningCount': health.warmRunningCount,
       'warmMissingCount': health.warmMissingCount,
       'warmInvalidCount': health.warmInvalidCount,
+      'invalidLocaleCount': health.invalidLocaleCount,
+      'invalidMediaLocaleCount': health.invalidMediaLocaleCount,
       'warmMediaPendingCount': health.warmMediaPendingCount,
       'warmMediaReadyCount': health.warmMediaReadyCount,
       'warmMediaFailedCount': health.warmMediaFailedCount,

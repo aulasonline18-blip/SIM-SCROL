@@ -35,6 +35,7 @@ extension LabSessionAmparoFlowExtensions on LabSession {
         academicLevel: state.profile.academicLevel ?? state.profile.nivel,
         preferredName: state.profile.preferredName,
         notes: state.profile.extra['student_profile_internal']?.toString(),
+        localeContract: localeContract,
         extra: state.profile.toJson(),
       ),
       currentExplanation: content?.explanation ?? '',

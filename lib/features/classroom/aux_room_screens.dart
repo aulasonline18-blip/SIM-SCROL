@@ -512,7 +512,7 @@ class _AuxRoomFrame extends StatelessWidget {
           padding: const EdgeInsets.only(left: SimSpacing.xs),
           child: SimIconAction(
             icon: Icons.arrow_back_rounded,
-            semanticLabel: 'Voltar',
+            semanticLabel: t('guard_back'),
             onPressed: onClose,
           ),
         ),

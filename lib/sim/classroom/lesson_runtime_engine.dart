@@ -140,6 +140,7 @@ class LessonRuntimeEngine {
       topic: currentState?.profile.objetivo ?? currentState?.curriculum?.topic,
       itemIdx: position.itemIdx,
       pedagogicalEnvelope: currentState?.profile.toJson() ?? const {},
+      localeContract: currentState?.localeContract,
     );
   }
 

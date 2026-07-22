@@ -190,6 +190,7 @@ bool slotMediaAlreadyRequested(
   SlotMediaType mediaType,
 ) {
   final expectedKey = slotMediaKey(slot.params.lessonLocalId, slot, mediaType);
+  final expectedLocale = slot.params.effectiveLocaleContract;
   final acceptedTypes = mediaType == SlotMediaType.audio
       ? const {'AUDIO_STARTED', 'AUDIO_READY'}
       : const {'IMAGE_STARTED', 'IMAGE_READY', 'NO_IMAGE'};
@@ -201,6 +202,9 @@ bool slotMediaAlreadyRequested(
       return true;
     }
     if (payload['mediaKey'] == expectedKey) return true;
+    if (!_eventLocaleCompatible(payload, slotMedia, expectedLocale)) {
+      return false;
+    }
     final marker = payload['marker'] ?? payload['itemMarker'];
     final rawLayer = payload['layer'];
     final layer = rawLayer is num
@@ -228,5 +232,67 @@ String slotMediaKey(
     itemIdx: slot.itemIdx,
     layer: slot.layer,
     mediaType: mediaType,
+    localeContract: slot.params.effectiveLocaleContract,
+    mediaTextLanguage: mediaType == SlotMediaType.image
+        ? slot.params.effectiveLocaleContract.mediaTextLanguage
+        : null,
+    audioLanguage: mediaType == SlotMediaType.audio
+        ? slot.params.effectiveLocaleContract.explanationLanguage
+        : null,
+    targetLanguage: slot.params.effectiveLocaleContract.targetLanguage,
+    explanationLanguage:
+        slot.params.effectiveLocaleContract.explanationLanguage,
   );
+}
+
+bool slotHasInvalidMediaLocale(
+  StudentLearningState? state,
+  DopamineReadySlot slot,
+) {
+  return (state?.events ?? const <StudentLearningEvent>[]).any((event) {
+    if (event.type != 'AUDIO_READY' &&
+        event.type != 'IMAGE_READY' &&
+        event.type != 'NO_IMAGE') {
+      return false;
+    }
+    final payload = event.payload;
+    final marker = payload['marker'] ?? payload['itemMarker'];
+    final rawLayer = payload['layer'];
+    final layer = rawLayer is num
+        ? rawLayer.toInt()
+        : int.tryParse(rawLayer?.toString() ?? '');
+    final rawItemIdx = payload['itemIdx'];
+    final itemIdx = rawItemIdx is num
+        ? rawItemIdx.toInt()
+        : int.tryParse(rawItemIdx?.toString() ?? '');
+    final sameMarker = marker == null || marker == slot.marker;
+    final sameLayer = layer == null || layer == slot.layer.value;
+    final sameItem = itemIdx == null || itemIdx == slot.itemIdx;
+    if (!sameMarker || !sameLayer || !sameItem) return false;
+    return !_eventLocaleCompatible(
+      payload,
+      payload['slotMedia'],
+      slot.params.effectiveLocaleContract,
+    );
+  });
+}
+
+bool _eventLocaleCompatible(
+  JsonMap payload,
+  Object? slotMedia,
+  SimLocaleContract expected,
+) {
+  final payloadLocale = _payloadLocaleContract(payload['localeContract']);
+  if (payloadLocale != null) return payloadLocale.isCompatibleWith(expected);
+  if (slotMedia is Map) {
+    final slotLocale = _payloadLocaleContract(slotMedia['localeContract']);
+    if (slotLocale != null) return slotLocale.isCompatibleWith(expected);
+    if (slotMedia['legacyLocale'] == true) return false;
+  }
+  return false;
+}
+
+SimLocaleContract? _payloadLocaleContract(Object? raw) {
+  if (raw is! Map) return null;
+  return SimLocaleContract.fromJson(Map<String, dynamic>.from(raw));
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'sim_i18n.dart';
 import 'sim_theme.dart';
 
 enum SimVisualState { success, warning, danger, disabled, focus }
@@ -73,7 +74,7 @@ class SimAccessibility {
         background: palette.successSurface,
         border: palette.success,
         icon: Icons.check_circle_outline,
-        semanticLabel: 'sucesso',
+        semanticLabel: t('a11y_success'),
       ),
       SimVisualState.warning => SimStateVisualToken(
         state: state,
@@ -81,7 +82,7 @@ class SimAccessibility {
         background: palette.warningSurface,
         border: palette.warning,
         icon: Icons.warning_amber_rounded,
-        semanticLabel: 'alerta',
+        semanticLabel: t('a11y_warning'),
       ),
       SimVisualState.danger => SimStateVisualToken(
         state: state,
@@ -89,7 +90,7 @@ class SimAccessibility {
         background: palette.dangerSurface,
         border: palette.danger,
         icon: Icons.error_outline,
-        semanticLabel: 'erro',
+        semanticLabel: t('a11y_error'),
       ),
       SimVisualState.disabled => SimStateVisualToken(
         state: state,
@@ -97,7 +98,7 @@ class SimAccessibility {
         background: palette.surfaceSoft,
         border: palette.disabled,
         icon: Icons.block,
-        semanticLabel: 'indisponivel',
+        semanticLabel: t('a11y_unavailable'),
       ),
       SimVisualState.focus => SimStateVisualToken(
         state: state,
@@ -105,7 +106,7 @@ class SimAccessibility {
         background: palette.selectedSurface,
         border: palette.focus,
         icon: Icons.radio_button_checked,
-        semanticLabel: 'foco',
+        semanticLabel: t('a11y_focus'),
         borderWidth: 2,
       ),
     };

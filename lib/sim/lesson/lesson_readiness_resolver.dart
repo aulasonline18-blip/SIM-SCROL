@@ -10,6 +10,8 @@ enum LessonReadinessStatus {
   readyFromMemoryCache,
   missing,
   stale,
+  staleLocale,
+  legacyLocale,
   invalid,
 }
 
@@ -52,6 +54,20 @@ class LessonReadinessResult {
   const LessonReadinessResult.stale(String key)
     : this._(status: LessonReadinessStatus.stale, discardedKey: key);
 
+  const LessonReadinessResult.staleLocale(String key, String reason)
+    : this._(
+        status: LessonReadinessStatus.staleLocale,
+        discardedKey: key,
+        safeReason: reason,
+      );
+
+  const LessonReadinessResult.legacyLocale(String key, String reason)
+    : this._(
+        status: LessonReadinessStatus.legacyLocale,
+        discardedKey: key,
+        safeReason: reason,
+      );
+
   const LessonReadinessResult.invalid(String key, String reason)
     : this._(
         status: LessonReadinessStatus.invalid,
@@ -78,10 +94,16 @@ class LessonReadinessResolver {
     required LessonReadinessIdentity identity,
     required CompleteLessonParams params,
   }) {
-    final fromState = resolveFromState(state: state, identity: identity);
+    final fromState = resolveFromState(
+      state: state,
+      identity: identity,
+      params: params,
+    );
     if (fromState.status == LessonReadinessStatus.readyFromState ||
         fromState.status == LessonReadinessStatus.invalid ||
-        fromState.status == LessonReadinessStatus.stale) {
+        fromState.status == LessonReadinessStatus.stale ||
+        fromState.status == LessonReadinessStatus.staleLocale ||
+        fromState.status == LessonReadinessStatus.legacyLocale) {
       return fromState;
     }
     final cached = orchestrator.peekCachedLesson(lessonKeyFor(params));
@@ -90,6 +112,22 @@ class LessonReadinessResolver {
         return LessonReadinessResult.invalid(
           identity.preparedKey,
           'cached lesson text incomplete',
+        );
+      }
+      final localeStatus = validateLessonLocaleContract(
+        actual: cached.localeContract,
+        params: params,
+      );
+      if (localeStatus == LessonLocaleValidationStatus.legacyLocale) {
+        return LessonReadinessResult.legacyLocale(
+          lessonKeyFor(params),
+          'cached lesson locale metadata missing',
+        );
+      }
+      if (localeStatus == LessonLocaleValidationStatus.staleLocale) {
+        return LessonReadinessResult.staleLocale(
+          lessonKeyFor(params),
+          'cached lesson locale incompatible',
         );
       }
       return LessonReadinessResult.readyFromMemoryCache(cached);
@@ -113,6 +151,30 @@ class LessonReadinessResolver {
           'cached lesson text incomplete',
         );
       }
+      final localeStatus = validateLessonLocaleContract(
+        actual: cached.localeContract,
+        params: params,
+      );
+      if (localeStatus == LessonLocaleValidationStatus.legacyLocale) {
+        return LessonReadinessResult.legacyLocale(
+          preparedLessonMaterialKey(
+            params.itemIdx ?? -1,
+            params.marker,
+            params.layer,
+          ),
+          'cached lesson locale metadata missing',
+        );
+      }
+      if (localeStatus == LessonLocaleValidationStatus.staleLocale) {
+        return LessonReadinessResult.staleLocale(
+          preparedLessonMaterialKey(
+            params.itemIdx ?? -1,
+            params.marker,
+            params.layer,
+          ),
+          'cached lesson locale incompatible',
+        );
+      }
       return LessonReadinessResult.readyFromMemoryCache(cached);
     }
     return const LessonReadinessResult.missing();
@@ -121,6 +183,7 @@ class LessonReadinessResolver {
   LessonReadinessResult resolveFromState({
     required StudentLearningState? state,
     required LessonReadinessIdentity identity,
+    required CompleteLessonParams params,
   }) {
     final key = identity.preparedKey;
     final material = state?.readyLessonMaterials[key];
@@ -133,6 +196,23 @@ class LessonReadinessResolver {
         (material['for_marker'] as String?) != identity.marker) {
       return LessonReadinessResult.stale(key);
     }
+    final localeContract = lessonLocaleContractFromMaterial(material);
+    final localeStatus = validateLessonLocaleContract(
+      actual: localeContract,
+      params: params,
+    );
+    if (localeStatus == LessonLocaleValidationStatus.legacyLocale) {
+      return LessonReadinessResult.legacyLocale(
+        key,
+        'state lesson locale metadata missing',
+      );
+    }
+    if (localeStatus == LessonLocaleValidationStatus.staleLocale) {
+      return LessonReadinessResult.staleLocale(
+        key,
+        'state lesson locale incompatible',
+      );
+    }
     try {
       final content = validatedLessonContentFromJson(JsonMap.from(material));
       return LessonReadinessResult.readyFromState(
@@ -143,6 +223,7 @@ class LessonReadinessResolver {
           imageMetadata: LessonImageGenerationMetadata.fromJson(
             material['imageMetadata'],
           ),
+          localeContract: localeContract,
         ),
       );
     } on LessonContentValidationException catch (error) {

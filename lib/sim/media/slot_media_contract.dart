@@ -1,4 +1,5 @@
 import '../state/student_learning_state.dart';
+import '../localization/sim_locale_contract.dart';
 
 enum SlotMediaType { image, audio }
 
@@ -13,6 +14,15 @@ class SlotMediaContract {
     required this.source,
     required this.createdAt,
     required this.cacheKey,
+    this.localeContract,
+    this.mediaTextLanguage,
+    this.audioLanguage,
+    this.targetLanguage,
+    this.explanationLanguage,
+    this.voice,
+    this.speed,
+    this.sourceVersion = 'slot-media.v2',
+    this.legacyLocale = false,
     this.error,
   });
 
@@ -25,6 +35,15 @@ class SlotMediaContract {
   final String source;
   final String createdAt;
   final String cacheKey;
+  final SimLocaleContract? localeContract;
+  final String? mediaTextLanguage;
+  final String? audioLanguage;
+  final String? targetLanguage;
+  final String? explanationLanguage;
+  final String? voice;
+  final double? speed;
+  final String sourceVersion;
+  final bool legacyLocale;
   final JsonMap? error;
 
   bool matchesSlot({
@@ -58,6 +77,15 @@ class SlotMediaContract {
     'source': source,
     'createdAt': createdAt,
     'cacheKey': cacheKey,
+    if (localeContract != null) 'localeContract': localeContract!.toJson(),
+    if (mediaTextLanguage != null) 'mediaTextLanguage': mediaTextLanguage,
+    if (audioLanguage != null) 'audioLanguage': audioLanguage,
+    if (targetLanguage != null) 'targetLanguage': targetLanguage,
+    if (explanationLanguage != null) 'explanationLanguage': explanationLanguage,
+    if (voice != null) 'voice': voice,
+    if (speed != null) 'speed': speed,
+    'sourceVersion': sourceVersion,
+    if (legacyLocale) 'legacyLocale': true,
     if (error != null) 'error': error,
   };
 
@@ -75,6 +103,17 @@ class SlotMediaContract {
     if (layerValue < 1 || layerValue > 3) {
       throw const FormatException('layer invalido');
     }
+    final locale = json['localeContract'] is Map
+        ? SimLocaleContract.fromJson(
+            Map<String, dynamic>.from(json['localeContract'] as Map),
+          )
+        : null;
+    final hasLocaleFields =
+        locale != null ||
+        _text(json['mediaTextLanguage']).isNotEmpty ||
+        _text(json['audioLanguage']).isNotEmpty ||
+        _text(json['targetLanguage']).isNotEmpty ||
+        _text(json['explanationLanguage']).isNotEmpty;
     final slot = SlotMediaContract(
       lessonLocalId: _requiredText(json['lessonLocalId'], 'lessonLocalId'),
       marker: _requiredText(json['marker'], 'marker'),
@@ -85,6 +124,15 @@ class SlotMediaContract {
       source: _requiredText(json['source'], 'source'),
       createdAt: _requiredText(json['createdAt'], 'createdAt'),
       cacheKey: _requiredText(json['cacheKey'], 'cacheKey'),
+      localeContract: locale,
+      mediaTextLanguage: _optionalText(json['mediaTextLanguage']),
+      audioLanguage: _optionalText(json['audioLanguage']),
+      targetLanguage: _optionalText(json['targetLanguage']),
+      explanationLanguage: _optionalText(json['explanationLanguage']),
+      voice: _optionalText(json['voice']),
+      speed: _optionalDouble(json['speed']),
+      sourceVersion: _optionalText(json['sourceVersion']) ?? 'slot-media.v1',
+      legacyLocale: json['legacyLocale'] == true || !hasLocaleFields,
       error: json['error'] is Map ? JsonMap.from(json['error'] as Map) : null,
     );
     if (slot.layer.value < 1) {
@@ -100,6 +148,16 @@ String slotMediaCacheKey({
   required int itemIdx,
   required LessonLayer layer,
   required SlotMediaType mediaType,
+  SimLocaleContract? localeContract,
+  String? mediaTextLanguage,
+  String? audioLanguage,
+  String? targetLanguage,
+  String? explanationLanguage,
+  String? voice,
+  double? speed,
+  String? textHash,
+  String? visualTextPolicy,
+  String sourceVersion = 'slot-media.v2',
 }) => [
   'slot-media',
   lessonLocalId,
@@ -107,6 +165,28 @@ String slotMediaCacheKey({
   'I$itemIdx',
   'L${layer.value}',
   mediaType.name,
+  localeContract?.mediaIdentity(
+        mediaTextLanguage: mediaTextLanguage,
+        audioLanguage: audioLanguage,
+        voice: voice,
+        speed: speed,
+        textHash: textHash,
+        visualTextPolicy: visualTextPolicy,
+        sourceVersion: sourceVersion,
+      ) ??
+      [
+        'media-locale',
+        'legacy',
+        mediaTextLanguage ?? '-',
+        audioLanguage ?? '-',
+        targetLanguage ?? '-',
+        explanationLanguage ?? '-',
+        voice ?? '-',
+        speed == null ? '-' : speed.toStringAsFixed(2),
+        textHash ?? '-',
+        visualTextPolicy ?? '-',
+        sourceVersion,
+      ].join(':'),
 ].join(':');
 
 String mediaHumanError(SlotMediaType type) => type == SlotMediaType.audio
@@ -114,6 +194,16 @@ String mediaHumanError(SlotMediaType type) => type == SlotMediaType.audio
     : 'Não foi possível carregar a imagem desta aula agora.';
 
 String _text(Object? value) => (value ?? '').toString().trim();
+
+String? _optionalText(Object? value) {
+  final out = _text(value);
+  return out.isEmpty ? null : out;
+}
+
+double? _optionalDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(_text(value));
+}
 
 String _requiredText(Object? value, String field) {
   final out = _text(value);

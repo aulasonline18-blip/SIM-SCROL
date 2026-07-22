@@ -72,6 +72,7 @@ class StudentExperienceT02Adapter {
       learningLocale: args.localeContract.learningLocale,
       explanationLanguage: args.localeContract.explanationLanguage,
       targetLanguage: args.localeContract.targetLanguage,
+      localeContract: args.localeContract,
       pedagogicalEnvelope: _pedagogicalEnvelope(mergedOnboarding),
     );
 
@@ -150,6 +151,16 @@ class StudentExperienceT02Adapter {
     }
 
     final envelope = <String, dynamic>{};
+    put(envelope, 'localeContract', ['localeContract']);
+    put(envelope, 'interfaceLocale', ['interfaceLocale']);
+    put(envelope, 'learningLocale', ['learningLocale']);
+    put(envelope, 'explanationLanguage', ['explanationLanguage']);
+    put(envelope, 'targetLanguage', ['targetLanguage']);
+    put(envelope, 'mediaTextLanguage', ['mediaTextLanguage']);
+    put(envelope, 'pedagogical_entry', [
+      'pedagogical_entry',
+      'pedagogical_entry_ficha',
+    ]);
     put(envelope, 'stable_lang', [
       'stable_lang',
       'stableLang',
@@ -158,11 +169,18 @@ class StudentExperienceT02Adapter {
     ]);
     put(envelope, 'language', [
       'language',
+      'learningLocale',
       'stable_lang',
       'stableLang',
       'STABLE_LANG',
       'idioma',
     ]);
+    if (envelope['language'] != null) {
+      envelope['language_semantics'] = 'learningLocale';
+    }
+    if (envelope['stable_lang'] != null) {
+      envelope['stable_lang_semantics'] = 'explanationLanguage';
+    }
     put(envelope, 'preferred_name', ['preferred_name']);
     put(envelope, 'student_age', ['student_age']);
     put(envelope, 'age_range', ['age_range']);
@@ -172,6 +190,9 @@ class StudentExperienceT02Adapter {
     put(envelope, 'subject', ['subject']);
     put(envelope, 'target_topic', ['target_topic', 'TARGET_TOPIC']);
     put(envelope, 'learning_goal', ['learning_goal']);
+    put(envelope, 'student_goal', ['student_goal']);
+    put(envelope, 'goal_type', ['goal_type']);
+    put(envelope, 'goal_type_source', ['goal_type_source']);
     put(envelope, 'exam_goal', ['exam_goal']);
     put(envelope, 'real_use_goal', ['real_use_goal']);
     put(envelope, 'prior_knowledge', ['prior_knowledge']);
@@ -184,6 +205,10 @@ class StudentExperienceT02Adapter {
     put(envelope, 'calculation_level', ['calculation_level']);
     put(envelope, 'learning_care_notes', ['learning_care_notes']);
     put(envelope, 'student_profile_notes', ['student_profile_notes']);
+    put(envelope, 'student_profile_notes_locale', [
+      'student_profile_notes_locale',
+    ]);
+    put(envelope, 'human_summary_locale', ['human_summary_locale']);
     put(envelope, 'student_profile_internal', ['student_profile_internal']);
     put(envelope, 'guidance_for_T02', [
       'guidance_for_T02',

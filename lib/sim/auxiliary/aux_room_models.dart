@@ -1,4 +1,5 @@
 import '../lesson/lesson_models.dart';
+import '../localization/sim_locale_contract.dart';
 import '../state/student_learning_state.dart';
 
 enum AuxRoomMode { review, recovery, doubt, amparo }
@@ -42,6 +43,7 @@ class AuxRoomProfile {
     this.academicLevel,
     this.preferredName,
     this.notes,
+    this.localeContract,
     this.extra = const {},
   });
 
@@ -49,6 +51,7 @@ class AuxRoomProfile {
   final String? academicLevel;
   final String? preferredName;
   final String? notes;
+  final SimLocaleContract? localeContract;
   final JsonMap extra;
 
   JsonMap toJson() => {
@@ -57,7 +60,17 @@ class AuxRoomProfile {
     if (academicLevel != null) 'academicLevel': academicLevel,
     if (preferredName != null) 'preferredName': preferredName,
     if (notes != null) 'notes': notes,
+    if (localeContract != null) 'localeContract': localeContract!.toJson(),
   };
+
+  SimLocaleContract get effectiveLocaleContract =>
+      localeContract ??
+      SimLocaleContract.fromUserSelection(
+        interfaceLocale: stableLang ?? simDefaultInterfaceLocaleTag,
+        learningLocale: stableLang ?? simDefaultLearningLocaleTag,
+        explanationLanguage: stableLang,
+        source: SimLocaleSource.migrated,
+      );
 }
 
 class AuxRoomItem {

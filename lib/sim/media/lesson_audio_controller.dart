@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../lesson/lesson_models.dart';
+import '../localization/sim_locale_contract.dart';
 import '../state/student_learning_state.dart';
 import 'audio_preference.dart';
 import 'student_lesson_media_service.dart';
@@ -26,6 +27,7 @@ class LessonAudioController {
     String? itemMarker,
     LessonLayer layer, {
     String? language,
+    SimLocaleContract? localeContract,
   }) async {
     if (conteudo == null) return false;
     if (!preference.getAudioEnabled()) return false;
@@ -50,6 +52,7 @@ class LessonAudioController {
       onStart: () => falando = true,
       onEnd: () => falando = false,
       language: language,
+      localeContract: localeContract,
     );
     if (!started) falando = false;
     return started;
@@ -60,12 +63,19 @@ class LessonAudioController {
     String? itemMarker,
     LessonLayer layer, {
     String? language,
+    SimLocaleContract? localeContract,
   }) async {
     if (falando) {
       pararAudio();
       return;
     }
-    await playConteudo(conteudo, itemMarker, layer, language: language);
+    await playConteudo(
+      conteudo,
+      itemMarker,
+      layer,
+      language: language,
+      localeContract: localeContract,
+    );
   }
 
   Future<bool> autoSpeakLesson(
@@ -73,9 +83,16 @@ class LessonAudioController {
     String? itemMarker,
     LessonLayer layer, {
     String? language,
+    SimLocaleContract? localeContract,
   }) {
     if (falando) return Future.value(false);
-    return playConteudo(conteudo, itemMarker, layer, language: language);
+    return playConteudo(
+      conteudo,
+      itemMarker,
+      layer,
+      language: language,
+      localeContract: localeContract,
+    );
   }
 
   void pararAudio() {

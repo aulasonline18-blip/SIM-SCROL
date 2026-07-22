@@ -59,6 +59,7 @@ class LessonHydrationEngine {
               state?.profile.toJson() ?? const {},
               item,
             ),
+            localeContract: state?.localeContract,
           ),
         ),
       );

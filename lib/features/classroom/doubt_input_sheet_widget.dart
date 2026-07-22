@@ -44,6 +44,15 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
   String? _error;
   double _lastBottomInset = -1;
 
+  String _localizedValidation(String message) {
+    if (message == emptyDoubtMessage) return t('doubt_error_empty');
+    if (message == imageOnlyMessage) return t('doubt_error_image_only');
+    if (message == imageTooLargeMessage) {
+      return t('doubt_error_image_too_large');
+    }
+    return message;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -80,12 +89,12 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
       );
       final validation = DoubtInputDraft(image: payload).validate();
       if (validation != null && validation != emptyDoubtMessage) {
-        setState(() => _error = validation);
+        setState(() => _error = _localizedValidation(validation));
         return;
       }
       setState(() => _image = payload);
     } catch (_) {
-      setState(() => _error = imageOnlyMessage);
+      setState(() => _error = t('doubt_error_image_only'));
     }
   }
 
@@ -93,7 +102,7 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
     final draft = DoubtInputDraft(text: widget.controller.text, image: _image);
     final validation = draft.validate();
     if (validation != null) {
-      setState(() => _error = validation);
+      setState(() => _error = _localizedValidation(validation));
       return;
     }
     widget.onSubmit(draft);
@@ -186,7 +195,7 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Enviar dúvida',
+                          t('doubt_sheet_title'),
                           style: SimTypography.title.copyWith(
                             color: palette.text,
                             fontSize: 20,
@@ -194,7 +203,7 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Escreva sua dúvida ou envie uma foto do exercício, resolução, fórmula, gráfico ou tabela.',
+                          t('doubt_sheet_body'),
                           style: SimTypography.caption.copyWith(
                             color: palette.muted,
                           ),
@@ -208,7 +217,9 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    'Foto: ${_image!.name}',
+                                    t('doubt_photo_name', {
+                                      'name': _image!.name,
+                                    }),
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: palette.text,

@@ -10,6 +10,7 @@ import 'package:sim_mobile/sim/lesson/lesson_material_cache.dart';
 import 'package:sim_mobile/sim/lesson/lesson_models.dart';
 import 'package:sim_mobile/sim/lesson/lesson_orchestrator.dart';
 import 'package:sim_mobile/sim/lesson/lesson_readiness_resolver.dart';
+import 'package:sim_mobile/sim/localization/sim_locale_contract.dart';
 import 'package:sim_mobile/sim/modules/pedagogical_module_contracts.dart';
 import 'package:sim_mobile/sim/organism/sim_organism.dart';
 import 'package:sim_mobile/sim/state/live_entry_state.dart';
@@ -75,6 +76,7 @@ void main() {
           marker: 'M1',
           layer: LessonLayer.l1,
         ),
+        params: _params(marker: 'M1', itemIdx: 0),
       );
       final stale = resolver.resolveFromState(
         state: state,
@@ -84,6 +86,7 @@ void main() {
           marker: 'M2',
           layer: LessonLayer.l1,
         ),
+        params: _params(marker: 'M2', itemIdx: 1),
       );
 
       expect(ready.status, LessonReadinessStatus.readyFromState);
@@ -136,6 +139,7 @@ void main() {
           marker: 'M1',
           layer: LessonLayer.l1,
         ),
+        params: _params(marker: 'M1', itemIdx: 0),
       );
 
       expect(result.isReady, isTrue);
@@ -343,6 +347,7 @@ void main() {
 }
 
 CompleteLesson _lesson(String marker) {
+  final localeContract = SimLocaleContract.fallbackForDevelopment();
   return CompleteLesson(
     conteudo: LessonContent(
       explanation: 'Explicacao $marker',
@@ -358,6 +363,25 @@ CompleteLesson _lesson(String marker) {
     ),
     imagem: null,
     audioText: 'Explicacao $marker. Pergunta $marker?',
+    localeContract: localeContract,
+  );
+}
+
+CompleteLessonParams _params({
+  required String marker,
+  required int itemIdx,
+  LessonLayer layer = LessonLayer.l1,
+}) {
+  return CompleteLessonParams(
+    lessonLocalId: 'L1',
+    item: marker,
+    lang: 'pt-BR',
+    academic: 'base',
+    layer: layer,
+    mode: LessonMode.session,
+    marker: marker,
+    itemIdx: itemIdx,
+    localeContract: SimLocaleContract.fallbackForDevelopment(),
   );
 }
 

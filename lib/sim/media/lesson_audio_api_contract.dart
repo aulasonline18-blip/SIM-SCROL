@@ -1,15 +1,27 @@
+import '../localization/sim_locale_contract.dart';
+
 class GenerateLessonAudioRequest {
   const GenerateLessonAudioRequest({
     required this.text,
     required this.lessonKey,
     this.lang = '',
     this.voice = '',
+    this.speed = 1,
+    this.explanationLanguage,
+    this.targetLanguage,
+    this.localeContract,
+    this.textHash,
   });
 
   final String text;
   final String lang;
   final String lessonKey;
   final String voice;
+  final double speed;
+  final String? explanationLanguage;
+  final String? targetLanguage;
+  final SimLocaleContract? localeContract;
+  final String? textHash;
 
   GenerateLessonAudioRequest normalized() {
     final cleanText = text.trim();
@@ -27,6 +39,11 @@ class GenerateLessonAudioRequest {
           : lang.trim(),
       lessonKey: cleanLessonKey,
       voice: voice.trim().isEmpty ? voiceByLang(lang) : voice.trim(),
+      speed: speed <= 0 ? 1 : speed,
+      explanationLanguage: explanationLanguage?.trim(),
+      targetLanguage: targetLanguage?.trim(),
+      localeContract: localeContract?.normalized(),
+      textHash: textHash?.trim(),
     );
   }
 }

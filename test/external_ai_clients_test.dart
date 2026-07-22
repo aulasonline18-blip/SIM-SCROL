@@ -130,8 +130,20 @@ void main() {
       (transport.lastBody as Map)['ficha']['free_text'],
       'Aprender frações',
     );
-    expect((transport.lastBody as Map)['ficha']['language'], 'pt-BR');
+    expect((transport.lastBody as Map)['ficha']['language'], 'es');
+    expect(
+      (transport.lastBody as Map)['ficha']['language_semantics'],
+      'learningLocale',
+    );
     expect((transport.lastBody as Map)['ficha']['stableLang'], 'Spanish');
+    expect(
+      (transport.lastBody as Map)['ficha']['localeContract'],
+      containsPair('learningLocale', 'es'),
+    );
+    expect(
+      (transport.lastBody as Map)['ficha']['localeContract'],
+      containsPair('explanationLanguage', 'Spanish'),
+    );
     expect(chunks.map((chunk) => chunk.type), [
       't00_profile',
       't00_item_partial',
@@ -345,57 +357,71 @@ void main() {
     );
     expect((transport.lastBody as Map)['lessonLocalId'], 'lesson-1');
     expect((transport.lastBody as Map)['mode'], 'lesson');
-    expect((transport.lastBody as Map)['idempotencyKey'], startsWith('t02:lesson:lesson-1:'));
+    expect(
+      (transport.lastBody as Map)['idempotencyKey'],
+      startsWith('t02:lesson:lesson-1:'),
+    );
     expect((transport.lastBody as Map)['interfaceLocale'], 'en');
     expect((transport.lastBody as Map)['learningLocale'], 'es');
     expect((transport.lastBody as Map)['explanationLanguage'], 'Spanish');
+    expect(
+      (transport.lastBody as Map)['localeContract'],
+      containsPair('learningLocale', 'es'),
+    );
+    expect(
+      (transport.lastBody as Map)['localeContract'],
+      containsPair('explanationLanguage', 'Spanish'),
+    );
     expect((transport.lastBody as Map).containsKey('adopt'), isFalse);
     expect(material.question, 'Pergunta?');
     expect(material.source, 'sim-server-t02');
     expect(material.imageDataUrl, isNull);
   });
 
-  test('T02 preserva Retry-After do servidor para nao reabrir tempestade', () async {
-    final transport = RecordingTransport()
-      ..statusCode = 429
-      ..responseHeaders = const {'retry-after': '7'}
-      ..jsonBody = '{"ok":false,"error":"AI_RATE_LIMIT","retryable":true}';
-    final client = SimServerT02Client(
-      config: SimAiServerConfig(
-        baseUrl: 'https://sim.example',
-        t02Path: '/api/complete-lesson',
-      ),
-      transport: transport,
-    );
-
-    await expectLater(
-      client.completeLesson(
-        const T02LessonRequest(
-          lessonLocalId: 'lesson-rate',
-          item: 'Função de primeiro grau',
-          lang: 'pt-BR',
-          academic: 'ano 9',
-          layer: LessonLayer.l1,
-          mode: 'session',
-          errCount: 0,
-          history: [],
-          marker: 'M1',
-          itemIdx: 0,
+  test(
+    'T02 preserva Retry-After do servidor para nao reabrir tempestade',
+    () async {
+      final transport = RecordingTransport()
+        ..statusCode = 429
+        ..responseHeaders = const {'retry-after': '7'}
+        ..jsonBody = '{"ok":false,"error":"AI_RATE_LIMIT","retryable":true}';
+      final client = SimServerT02Client(
+        config: SimAiServerConfig(
+          baseUrl: 'https://sim.example',
+          t02Path: '/api/complete-lesson',
         ),
-      ),
-      throwsA(
-        isA<SimExternalAiException>()
-            .having((error) => error.statusCode, 'status', 429)
-            .having((error) => error.code, 'code', 'AI_RATE_LIMIT')
-            .having((error) => error.retryable, 'retryable', true)
-            .having(
-              (error) => error.retryAfter,
-              'retryAfter',
-              const Duration(seconds: 7),
-            ),
-      ),
-    );
-  });
+        transport: transport,
+      );
+
+      await expectLater(
+        client.completeLesson(
+          const T02LessonRequest(
+            lessonLocalId: 'lesson-rate',
+            item: 'Função de primeiro grau',
+            lang: 'pt-BR',
+            academic: 'ano 9',
+            layer: LessonLayer.l1,
+            mode: 'session',
+            errCount: 0,
+            history: [],
+            marker: 'M1',
+            itemIdx: 0,
+          ),
+        ),
+        throwsA(
+          isA<SimExternalAiException>()
+              .having((error) => error.statusCode, 'status', 429)
+              .having((error) => error.code, 'code', 'AI_RATE_LIMIT')
+              .having((error) => error.retryable, 'retryable', true)
+              .having(
+                (error) => error.retryAfter,
+                'retryAfter',
+                const Duration(seconds: 7),
+              ),
+        ),
+      );
+    },
+  );
 
   test('T02 usa timeout oficial maior que o orçamento do servidor', () async {
     final transport = RecordingTransport()

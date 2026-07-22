@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../localization/sim_locale_contract.dart';
 import 'student_learning_state.dart';
 import 'student_state_contract.dart';
 
@@ -749,12 +750,14 @@ class StudentStateStore implements StudentStateRepository {
     }
     if (event.type == 'OBJECTIVE_SUBMITTED') {
       final objetivo = event.payload['objetivo']?.toString();
-      final language = event.payload['language']?.toString();
+      final locale = SimLocaleContract.fromLegacyState(event.payload);
       return state.copyWith(
+        localeContract: locale,
         profile: state.profile.copyWith(
           objetivo: objetivo,
-          language: language,
-          stableLang: language,
+          language: locale.learningLocale,
+          stableLang: locale.explanationLanguage,
+          extra: {...state.profile.extra, ...locale.toJson()},
         ),
       );
     }

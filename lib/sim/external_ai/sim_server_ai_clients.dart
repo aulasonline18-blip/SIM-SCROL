@@ -35,6 +35,7 @@ class SimServerT00Client implements T00BootstrapClient {
       learningLocale: request.learningLocale,
       explanationLanguage: request.explanationLanguage ?? request.lang,
       targetLanguage: request.targetLanguage,
+      localeContract: request.localeContract,
     );
     final ficha = {
       ...request.onboarding,
@@ -89,16 +90,29 @@ class SimServerGeneratedAudioClient implements GeneratedAudioClient {
     required String lang,
     required String voice,
     required String lessonKey,
+    double speed = 1,
+    String? explanationLanguage,
+    String? targetLanguage,
+    SimLocaleContract? localeContract,
+    String? textHash,
   }) async {
     final locale = _localeFields(
       learningLocale: lang,
-      explanationLanguage: simLanguageNameForLocale(lang),
+      explanationLanguage:
+          explanationLanguage ?? simLanguageNameForLocale(lang),
+      targetLanguage: targetLanguage,
+      localeContract: localeContract,
     );
     final request = GenerateLessonAudioRequest(
       text: text,
       lang: lang,
       lessonKey: lessonKey,
       voice: voice,
+      speed: speed,
+      explanationLanguage: explanationLanguage,
+      targetLanguage: targetLanguage,
+      localeContract: localeContract,
+      textHash: textHash,
     ).normalized();
     final requestId = _mediaRequestId(
       'aud',
@@ -113,9 +127,13 @@ class SimServerGeneratedAudioClient implements GeneratedAudioClient {
       body: {
         'text': request.text,
         'lang': request.lang,
+        'audioLanguage': request.lang,
         ...locale,
         'lessonKey': request.lessonKey,
         'voice': request.voice,
+        'speed': request.speed,
+        if (request.textHash != null && request.textHash!.isNotEmpty)
+          'textHash': request.textHash,
       },
       timeout: timeout,
       requestId: requestId,
@@ -175,11 +193,13 @@ String _stableHash(String input) {
 }
 
 Map<String, Object?> _localeFieldsForT02(T02LessonRequest request) {
+  final requestLocale = request.localeContract?.toJson();
   return _localeFieldsFromMap(request.profile, {
     'interfaceLocale': request.interfaceLocale,
     'learningLocale': request.learningLocale ?? request.lang,
     'explanationLanguage': request.explanationLanguage ?? request.lang,
     'targetLanguage': request.targetLanguage,
+    'localeContract': ?requestLocale,
   });
 }
 
@@ -187,6 +207,13 @@ Map<String, Object?> _localeFieldsFromMap(
   Map<String, dynamic>? primary, [
   Map<String, dynamic>? secondary,
 ]) {
+  final contract = primary?['localeContract'] ?? secondary?['localeContract'];
+  if (contract is Map) {
+    final normalized = SimLocaleContract.fromJson(
+      contract.map((key, value) => MapEntry(key.toString(), value)),
+    ).normalized();
+    return {...normalized.toJson(), 'localeContract': normalized.toJson()};
+  }
   Object? pick(String key) => primary?[key] ?? secondary?[key];
   return _localeFields(
     interfaceLocale: pick('interfaceLocale')?.toString(),
@@ -201,19 +228,26 @@ Map<String, Object?> _localeFields({
   String? learningLocale,
   String? explanationLanguage,
   String? targetLanguage,
+  SimLocaleContract? localeContract,
 }) {
-  final learning = normalizeSimLocaleTag(learningLocale ?? explanationLanguage);
-  final iface = normalizeSimLocaleTag(interfaceLocale);
-  final explanation = (explanationLanguage ?? '').trim().isEmpty
-      ? simLanguageNameForLocale(learning)
-      : explanationLanguage!.trim();
-  return {
-    'interfaceLocale': iface,
-    'learningLocale': learning,
-    'explanationLanguage': explanation,
-    if (targetLanguage != null && targetLanguage.trim().isNotEmpty)
-      'targetLanguage': targetLanguage.trim(),
-  };
+  final normalized =
+      localeContract ??
+      SimLocaleContract.fromUserSelection(
+        interfaceLocale:
+            interfaceLocale ??
+            learningLocale ??
+            explanationLanguage ??
+            simDefaultInterfaceLocaleTag,
+        learningLocale:
+            learningLocale ??
+            explanationLanguage ??
+            simDefaultLearningLocaleTag,
+        explanationLanguage: explanationLanguage,
+        targetLanguage: targetLanguage,
+        source: SimLocaleSource.migrated,
+      );
+  final contract = normalized.normalized();
+  return {...contract.toJson(), 'localeContract': contract.toJson()};
 }
 
 class SimServerT02Client implements T02LessonClient {
@@ -274,6 +308,7 @@ class SimServerT02Client implements T02LessonClient {
         config.uri(path),
         headers: await config.jsonHeaders(),
         body: {
+          ...request.profile,
           'idempotencyKey': idempotencyKey,
           'mode': mode,
           'lessonLocalId': request.lessonLocalId,
@@ -282,6 +317,9 @@ class SimServerT02Client implements T02LessonClient {
           if (request.topic != null) 'topic': request.topic,
           if (request.itemIdx != null) 'itemIdx': request.itemIdx,
           'stable_lang': locale['explanationLanguage'] ?? request.lang,
+          'language': locale['learningLocale'] ?? request.lang,
+          'language_semantics': 'learningLocale',
+          'stable_lang_semantics': 'explanationLanguage',
           'academic_level': request.academic,
           'layer': request.layer.value,
           'err_count': request.errCount,
@@ -292,7 +330,6 @@ class SimServerT02Client implements T02LessonClient {
           if (request.amparoLvl != null) 'amparo_level': request.amparoLvl,
           if (request.curriculumItems.isNotEmpty)
             'curriculumItems': request.curriculumItems,
-          ...request.profile,
         },
         timeout: timeout,
       );

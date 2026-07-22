@@ -1,5 +1,7 @@
 // ignore_for_file: prefer_initializing_formals
 
+import '../localization/sim_locale_contract.dart';
+
 part 'domain/student_profile.dart';
 part 'domain/student_curriculum.dart';
 part 'domain/student_progress.dart';
@@ -450,6 +452,7 @@ class StudentLearningState {
     required this.createdAt,
     required this.updatedAt,
     required this.profile,
+    required this.localeContract,
     required this.curriculum,
     this.curriculumStatus,
     required this.current,
@@ -481,6 +484,7 @@ class StudentLearningState {
   final int createdAt;
   final int updatedAt;
   final StudentProfile profile;
+  final SimLocaleContract localeContract;
   final StudentCurriculum? curriculum;
   final StudentCurriculumStatus? curriculumStatus;
   final LessonCurrent? current;
@@ -534,6 +538,7 @@ class StudentLearningState {
     int? createdAt,
     int? updatedAt,
     StudentProfile? profile,
+    SimLocaleContract? localeContract,
     StudentCurriculum? curriculum,
     StudentCurriculumStatus? curriculumStatus,
     LessonCurrent? current,
@@ -560,6 +565,7 @@ class StudentLearningState {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       profile: profile ?? this.profile,
+      localeContract: localeContract ?? this.localeContract,
       curriculum: curriculum ?? this.curriculum,
       curriculumStatus: curriculumStatus ?? this.curriculumStatus,
       current: current ?? this.current,
@@ -596,6 +602,7 @@ class StudentLearningState {
       createdAt: ts,
       updatedAt: ts,
       profile: const StudentProfile(),
+      localeContract: SimLocaleContract.fallbackForDevelopment(),
       curriculum: null,
       curriculumStatus: null,
       current: null,
@@ -624,6 +631,7 @@ class StudentLearningState {
     'createdAt': createdAt,
     'updatedAt': updatedAt,
     'profile': profile.toJson(),
+    'localeContract': localeContract.toJson(),
     'curriculum': curriculum?.toJson(),
     'curriculumStatus': curriculumStatus?.toJson(),
     'current': current?.toJson(),
@@ -680,6 +688,7 @@ class StudentLearningState {
           'createdAt',
           'updatedAt',
           'profile',
+          'localeContract',
           'curriculum',
           'curriculumStatus',
           'current',
@@ -706,6 +715,11 @@ class StudentLearningState {
               (key, value) =>
                   MapEntry(key.toString(), JsonMap.from(value as Map)),
             );
+    final localeContract = json['localeContract'] is Map
+        ? SimLocaleContract.fromJson(
+            JsonMap.from(json['localeContract'] as Map),
+          )
+        : SimLocaleContract.fromLegacyState(json);
     return StudentLearningState(
       stateVersion:
           (json['stateVersion'] as num?)?.toInt() ??
@@ -718,6 +732,7 @@ class StudentLearningState {
       profile: json['profile'] is Map
           ? StudentProfile.fromJson(JsonMap.from(json['profile'] as Map))
           : const StudentProfile(),
+      localeContract: localeContract,
       curriculum: json['curriculum'] is Map
           ? StudentCurriculum.fromJson(JsonMap.from(json['curriculum'] as Map))
           : null,

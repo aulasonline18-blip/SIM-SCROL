@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import '../experience/curriculum_utils.dart';
+// ignore: unused_import
+import '../localization/sim_locale_contract.dart';
 import '../media/slot_media_contract.dart';
 import '../state/live_entry_state.dart';
 import '../state/student_learning_state.dart';

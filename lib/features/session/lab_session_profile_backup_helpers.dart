@@ -16,12 +16,12 @@ extension LabSessionProfileBackupHelpers on LabSession {
     final start = value('start');
 
     final summaryLines = [
-      if (purpose != null) 'Objetivo real: $purpose',
-      if (level != null) 'Nivel percebido: $level',
-      if (blocker != null) 'Onde trava: $blocker',
-      if (deadline != null) 'Prazo/prova: $deadline',
-      if (style != null) 'Como prefere ser conduzido: $style',
-      if (start != null) 'Ponto de partida desejado: $start',
+      if (purpose != null) 'real_goal: $purpose',
+      if (level != null) 'perceived_level: $level',
+      if (blocker != null) 'learning_blocker: $blocker',
+      if (deadline != null) 'deadline_or_exam: $deadline',
+      if (style != null) 'preferred_guidance: $style',
+      if (start != null) 'desired_starting_point: $start',
     ];
     final guidedSummary = summaryLines.join('\n');
 

@@ -78,12 +78,13 @@ void main() {
         layer: LessonLayer.l1,
         mode: LessonMode.session,
         marker: 'M1',
+        itemIdx: 0,
       );
 
-      cache.putForParams(
+      final stored = cache.putForParams(
         params,
-        const CompleteLesson(
-          conteudo: LessonContent(
+        CompleteLesson(
+          conteudo: const LessonContent(
             explanation: 'Perfil sensivel do aluno teste@example.com',
             question: 'Qual resposta sensivel?',
             options: {
@@ -95,8 +96,10 @@ void main() {
           ),
           imagem: null,
           audioText: 'Perfil sensivel do aluno teste@example.com',
+          localeContract: params.effectiveLocaleContract,
         ),
       );
+      expect(stored, isTrue);
       await cache.persistNow();
 
       final files = temp.listSync(recursive: true).whereType<File>().toList();

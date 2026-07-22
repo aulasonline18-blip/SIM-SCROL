@@ -478,8 +478,7 @@ String? studentFacingRuntimeError(String? raw) {
       lower.contains('error')) {
     return t('aula_gen_fail');
   }
-  final translated = t(text);
-  if (translated != text) return translated;
+  if (debugSimHasLocalizationKey(text)) return t(text);
   if (lower.contains('socketexception') ||
       lower.contains('failed host lookup') ||
       lower.contains('connection') ||

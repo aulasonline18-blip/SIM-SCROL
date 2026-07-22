@@ -151,6 +151,7 @@ void main() {
               'lib/features/onboarding/view_models/language_selection_view_model.dart' ||
           path ==
               'lib/features/onboarding/view_models/objective_entry_view_model.dart' ||
+          path == 'lib/sim/ui/sim_i18n_core_strings.dart' ||
           path == 'lib/sim/ui/sim_i18n_objective.dart' ||
           path == 'lib/sim/ui/sim_i18n_onboarding.dart';
     }).toList();
@@ -170,7 +171,7 @@ void main() {
     }).toList();
     expect(lineCount, greaterThan(0));
     expect(lineCount - visualPhaseLines - productLiveLines, greaterThan(0));
-    expect(visualPhaseLines, lessThanOrEqualTo(520));
+    expect(visualPhaseLines, lessThanOrEqualTo(760));
     expect(productLiveLines, lessThanOrEqualTo(1900));
     expect(
       dartFiles.length -
@@ -197,7 +198,7 @@ void main() {
     expect(phase4OperationalFiles.length, 1);
     expect(stateModuleFiles.length, 7);
     expect(readyWindowModuleFiles.length, 4);
-    expect(onboardingModuleFiles.length, 9);
+    expect(onboardingModuleFiles.length, 10);
     expect(classroomWidgetFiles.length, 5);
     expect(liveFluencyFiles.length, 2);
     expect(

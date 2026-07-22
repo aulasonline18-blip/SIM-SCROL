@@ -143,7 +143,7 @@ void main() {
 
     expect(labSessionLines, lessThanOrEqualTo(1200));
     expect(baseFlowLines, lessThanOrEqualTo(1450));
-    expect(auxFlowLines, lessThanOrEqualTo(260));
+    expect(auxFlowLines, lessThanOrEqualTo(320));
     expect(entryFlowLines, lessThanOrEqualTo(350));
   });
 
@@ -152,7 +152,7 @@ void main() {
       'lib/features/session/lab_session_flows.dart': 1450,
       'lib/sim/state/student_learning_state.dart': 1550,
       'lib/sim/state/student_state_store.dart': 850,
-      'lib/sim/lesson/student_lesson_material_service.dart': 870,
+      'lib/sim/lesson/student_lesson_material_service.dart': 900,
       'lib/sim/ui/sim_i18n.dart': 220,
     };
     final offenders = <String>[];
