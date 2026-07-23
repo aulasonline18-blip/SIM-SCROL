@@ -387,9 +387,15 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     }
   }
 
-  if (phase?.type == ClassroomPhaseType.erroEngine ||
-      (input.runtimeError ?? '').trim().isNotEmpty) {
-    final runtimeError = phase?.message ?? input.runtimeError;
+  final runtimeErrorText = (input.runtimeError ?? '').trim();
+  final shouldShowRuntimeError =
+      phase?.type == ClassroomPhaseType.erroEngine ||
+      (runtimeErrorText.isNotEmpty &&
+          phase?.type != ClassroomPhaseType.concluido);
+  if (shouldShowRuntimeError) {
+    final runtimeError = phase?.type == ClassroomPhaseType.erroEngine
+        ? phase?.message
+        : input.runtimeError;
     final sessionRuntimeError = input.runtimeError;
     messages.add(
       ChatLessonMessage(

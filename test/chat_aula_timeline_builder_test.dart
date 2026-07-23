@@ -277,6 +277,7 @@ void main() {
           ),
         ),
         runtimeLoading: true,
+        runtimeError: 'Toque novamente. A aula terminou de sincronizar.',
       ),
     );
 
@@ -293,6 +294,10 @@ void main() {
     expect(
       messages.map((message) => message.text),
       isNot(contains(t('preparing_next_lesson'))),
+    );
+    expect(
+      messages.where((message) => message.kind == ChatLessonMessageKind.error),
+      isEmpty,
     );
   });
 

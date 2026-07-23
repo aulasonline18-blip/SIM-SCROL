@@ -97,6 +97,8 @@ void main() {
     final flows = _read('lib/features/session/lab_session_flows.dart');
 
     expect(flows, contains('AUTO_ADVANCE_DEFERRED_BY_LOADING'));
+    expect(flows, contains('deferredAlreadyAudited'));
+    expect(flows, contains('_tryConsumePendingAutoAdvance('));
     expect(flows, contains('_drainPendingAulaIntents(active)'));
   });
 

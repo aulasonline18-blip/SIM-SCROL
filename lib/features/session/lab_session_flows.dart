@@ -1601,6 +1601,7 @@ extension LabSessionFlowExtensions on LabSession {
           final organism = await _ensureVisibleAnswerSelectedForSignal(
             visibleSnapshot,
             pending.letter,
+            surfaceErrors: false,
           );
           if (_pendingLocalSignal?.generation != generation) continue;
           if (organism == null) return;
@@ -1635,17 +1636,20 @@ extension LabSessionFlowExtensions on LabSession {
 
   Future<SimOrganism?> _ensureVisibleAnswerSelectedForSignal(
     LessonRuntimeSnapshot visibleSnapshot,
-    AnswerLetter visibleLetter,
-  ) async {
+    AnswerLetter visibleLetter, {
+    bool surfaceErrors = true,
+  }) async {
     final id = lessonLocalId?.trim();
     if (id == null || id.isEmpty) {
-      aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      if (surfaceErrors) {
+        aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      }
       _recordRuntimeAudit(
         'SIGNAL_BLOCKED_WITHOUT_LESSON_ID',
         source: 'LabSession.submitAulaSignal',
         details: {'letter': visibleLetter.name},
       );
-      _notifyFromChild();
+      if (surfaceErrors) _notifyFromChild();
       return null;
     }
     var organism = _activeOrganism;
@@ -1656,13 +1660,15 @@ extension LabSessionFlowExtensions on LabSession {
       organism = _activeOrganism;
     }
     if (organism == null || organism.lessonLocalId != id) {
-      aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      if (surfaceErrors) {
+        aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      }
       _recordRuntimeAudit(
         'SIGNAL_BLOCKED_RUNTIME_NOT_READY',
         source: 'LabSession.submitAulaSignal',
         details: {'letter': visibleLetter.name, 'lessonLocalId': id},
       );
-      _notifyFromChild();
+      if (surfaceErrors) _notifyFromChild();
       return null;
     }
     final sameQuestion = organism.lessonRuntimeEngine
@@ -1671,13 +1677,15 @@ extension LabSessionFlowExtensions on LabSession {
           snapshot: visibleSnapshot,
         );
     if (!sameQuestion) {
-      aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      if (surfaceErrors) {
+        aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      }
       _recordRuntimeAudit(
         'SIGNAL_BLOCKED_QUESTION_MISMATCH',
         source: 'LabSession.submitAulaSignal',
         details: {'letter': visibleLetter.name, 'lessonLocalId': id},
       );
-      _notifyFromChild();
+      if (surfaceErrors) _notifyFromChild();
       return null;
     }
     var engineSnapshot = organism.lessonRuntimeEngine.snapshot();
@@ -1688,13 +1696,15 @@ extension LabSessionFlowExtensions on LabSession {
     }
     if (engineSnapshot.phase.type != ClassroomPhaseType.expandida ||
         engineSnapshot.phase.letter != visibleLetter) {
-      aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      if (surfaceErrors) {
+        aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      }
       _recordRuntimeAudit(
         'SIGNAL_BLOCKED_ENGINE_NOT_EXPANDED',
         source: 'LabSession.submitAulaSignal',
         details: {'letter': visibleLetter.name, 'lessonLocalId': id},
       );
-      _notifyFromChild();
+      if (surfaceErrors) _notifyFromChild();
       return null;
     }
     _setAulaSnapshotPreservingPendingAnswer(
@@ -1779,8 +1789,9 @@ extension LabSessionFlowExtensions on LabSession {
 
   Future<void> _tryConsumePendingAutoAdvance(
     SimOrganism organism,
-    int generation,
-  ) async {
+    int generation, {
+    bool deferredAlreadyAudited = false,
+  }) async {
     final canAdvance =
         !_disposed &&
         _pendingAutoAdvanceAfterFeedback &&
@@ -1790,10 +1801,21 @@ extension LabSessionFlowExtensions on LabSession {
         aulaSnapshot?.phase.type == ClassroomPhaseType.concluido;
     if (!canAdvance) return;
     if (aulaRuntimeLoading) {
-      _recordRuntimeAudit(
-        'AUTO_ADVANCE_DEFERRED_BY_LOADING',
-        source: 'LabSession.auto_advance',
-        details: {'generation': generation},
+      if (!deferredAlreadyAudited) {
+        _recordRuntimeAudit(
+          'AUTO_ADVANCE_DEFERRED_BY_LOADING',
+          source: 'LabSession.auto_advance',
+          details: {'generation': generation},
+        );
+      }
+      unawaited(
+        Future<void>.delayed(_autoAdvanceAfterFeedbackDelay, () {
+          return _tryConsumePendingAutoAdvance(
+            organism,
+            generation,
+            deferredAlreadyAudited: true,
+          );
+        }),
       );
       return;
     }
