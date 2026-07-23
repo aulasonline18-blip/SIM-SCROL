@@ -1570,9 +1570,14 @@ void main() {
         final options = messages.singleWhere(
           (message) => message.kind == ChatLessonMessageKind.options,
         );
+        final signals = messages.singleWhere(
+          (message) => message.kind == ChatLessonMessageKind.signals,
+        );
         expect(options.selectedAnswer, letter);
-        expect(options.signals, hasLength(3));
-        expect(options.signals.every((signal) => signal.enabled), isTrue);
+        expect(options.signals, isEmpty);
+        expect(signals.selectedAnswer, letter);
+        expect(signals.signals, hasLength(3));
+        expect(signals.signals.every((signal) => signal.enabled), isTrue);
       }
     },
   );

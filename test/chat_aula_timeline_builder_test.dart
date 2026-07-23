@@ -190,7 +190,7 @@ void main() {
     expect(errorBlock.action, isNull);
   });
 
-  test('expanded phase opens signal choices under the selected option', () {
+  test('expanded phase opens qualifier choices after the selected option', () {
     final messages = buildChatLessonMessages(
       ChatLessonTimelineInput(
         snapshot: _snapshot(phase: ClassroomPhase.expanded(AnswerLetter.B)),
@@ -199,13 +199,10 @@ void main() {
 
     expect(
       messages.map((message) => message.kind),
-      containsAllInOrder([ChatLessonMessageKind.options]),
-    );
-    expect(
-      messages.where(
-        (message) => message.kind == ChatLessonMessageKind.signals,
-      ),
-      isEmpty,
+      containsAllInOrder([
+        ChatLessonMessageKind.options,
+        ChatLessonMessageKind.signals,
+      ]),
     );
     expect(
       messages.where(
@@ -221,7 +218,18 @@ void main() {
       options.options.singleWhere((option) => option.selected).letter,
       AnswerLetter.B,
     );
-    expect(options.signals.map((signal) => signal.value), [1, 2, 3]);
+    expect(options.signals, isEmpty);
+
+    final signals = messages.singleWhere(
+      (message) => message.kind == ChatLessonMessageKind.signals,
+    );
+    expect(signals.selectedAnswer, AnswerLetter.B);
+    expect(signals.signals.map((signal) => signal.value), [1, 2, 3]);
+    expect(signals.isActionable, isTrue);
+    expect(
+      AulaConversationBlock.fromMessage(signals).action,
+      AulaConversationAction.submitSignal,
+    );
   });
 
   test('completed phase adds feedback without student signal echo', () {
@@ -244,6 +252,12 @@ void main() {
     expect(
       messages.where(
         (message) => message.kind == ChatLessonMessageKind.studentSignal,
+      ),
+      isEmpty,
+    );
+    expect(
+      messages.where(
+        (message) => message.kind == ChatLessonMessageKind.signals,
       ),
       isEmpty,
     );
