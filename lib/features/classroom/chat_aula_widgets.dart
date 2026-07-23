@@ -424,15 +424,6 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
     );
   }
 
-  final signalIndex = _lastIndexWhere(
-    messages,
-    (message) =>
-        message.kind == ChatLessonMessageKind.signals && !message.isHistorical,
-  );
-  if (signalIndex != null) {
-    return _target(messages, signalIndex, alignment: 0.58);
-  }
-
   final expandedOptionsIndex = _lastIndexWhere(
     messages,
     (message) =>
@@ -441,7 +432,16 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
         !message.isHistorical,
   );
   if (expandedOptionsIndex != null) {
-    return _target(messages, expandedOptionsIndex);
+    return _target(messages, expandedOptionsIndex, alignment: 0.58);
+  }
+
+  final signalIndex = _lastIndexWhere(
+    messages,
+    (message) =>
+        message.kind == ChatLessonMessageKind.signals && !message.isHistorical,
+  );
+  if (signalIndex != null) {
+    return _target(messages, signalIndex, alignment: 0.58);
   }
 
   final selectedOptionsIndex = _lastIndexWhere(

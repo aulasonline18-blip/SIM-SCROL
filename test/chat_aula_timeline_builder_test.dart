@@ -199,10 +199,7 @@ void main() {
 
     expect(
       messages.map((message) => message.kind),
-      containsAllInOrder([
-        ChatLessonMessageKind.options,
-        ChatLessonMessageKind.signals,
-      ]),
+      isNot(contains(ChatLessonMessageKind.signals)),
     );
     expect(
       messages.where(
@@ -218,17 +215,11 @@ void main() {
       options.options.singleWhere((option) => option.selected).letter,
       AnswerLetter.B,
     );
-    expect(options.signals, isEmpty);
-
-    final signals = messages.singleWhere(
-      (message) => message.kind == ChatLessonMessageKind.signals,
-    );
-    expect(signals.selectedAnswer, AnswerLetter.B);
-    expect(signals.signals.map((signal) => signal.value), [1, 2, 3]);
-    expect(signals.isActionable, isTrue);
+    expect(options.signals.map((signal) => signal.value), [1, 2, 3]);
+    expect(options.isActionable, isTrue);
     expect(
-      AulaConversationBlock.fromMessage(signals).action,
-      AulaConversationAction.submitSignal,
+      AulaConversationBlock.fromMessage(options).action,
+      AulaConversationAction.chooseAnswer,
     );
   });
 

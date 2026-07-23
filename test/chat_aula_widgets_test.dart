@@ -240,9 +240,18 @@ void main() {
           body: ChatAulaTimeline(
             messages: const [
               ChatLessonMessage(
-                id: 'signals',
+                id: 'options',
                 role: ChatLessonMessageRole.sim,
-                kind: ChatLessonMessageKind.signals,
+                kind: ChatLessonMessageKind.options,
+                selectedAnswer: AnswerLetter.A,
+                options: [
+                  ChatLessonOption(
+                    letter: AnswerLetter.A,
+                    text: 'A',
+                    selected: true,
+                    enabled: true,
+                  ),
+                ],
                 signals: [
                   ChatLessonSignal(
                     value: 1,
@@ -529,12 +538,6 @@ void main() {
                       enabled: true,
                     ),
                   ],
-                ),
-                ChatLessonMessage(
-                  id: 'signals',
-                  role: ChatLessonMessageRole.sim,
-                  kind: ChatLessonMessageKind.signals,
-                  selectedAnswer: AnswerLetter.B,
                   signals: [
                     ChatLessonSignal(
                       value: 1,
@@ -887,12 +890,6 @@ void main() {
               enabled: true,
             ),
           ],
-        ),
-        const ChatLessonMessage(
-          id: 'live-signals',
-          role: ChatLessonMessageRole.sim,
-          kind: ChatLessonMessageKind.signals,
-          selectedAnswer: AnswerLetter.B,
           signals: [
             ChatLessonSignal(
               value: 1,

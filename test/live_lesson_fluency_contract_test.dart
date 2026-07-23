@@ -117,12 +117,14 @@ void main() {
     final options = messages.singleWhere(
       (message) => message.kind == ChatLessonMessageKind.options,
     );
-    final signals = messages.singleWhere(
-      (message) => message.kind == ChatLessonMessageKind.signals,
-    );
     expect(options.options.every((option) => option.enabled), isTrue);
-    expect(options.signals, isEmpty);
-    expect(signals.signals.every((signal) => signal.enabled), isTrue);
+    expect(options.signals.every((signal) => signal.enabled), isTrue);
+    expect(
+      messages.where(
+        (message) => message.kind == ChatLessonMessageKind.signals,
+      ),
+      isEmpty,
+    );
     expect(timeline, contains('phase?.type == ClassroomPhaseType.processando'));
   });
 

@@ -333,6 +333,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
     final answerBusy =
         phase?.type == ClassroomPhaseType.processando ||
         !input.canSelectCurrentAnswer;
+    final signalBusy = phase?.type == ClassroomPhaseType.processando;
     messages.add(
       ChatLessonMessage(
         id: 'options-$activeId',
@@ -340,6 +341,9 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
         kind: ChatLessonMessageKind.options,
         selectedAnswer: selected,
         options: _options(content, selected: selected, enabled: !answerBusy),
+        signals: phase?.type == ClassroomPhaseType.expandida
+            ? _signals(enabled: !signalBusy)
+            : const [],
         lessonLocalId: input.lessonLocalId,
         marker: marker,
         itemIdx: itemIdx,
@@ -349,23 +353,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
       ),
     );
 
-    if (phase?.type == ClassroomPhaseType.expandida) {
-      messages.add(
-        ChatLessonMessage(
-          id: 'signals-$activeId',
-          role: ChatLessonMessageRole.sim,
-          kind: ChatLessonMessageKind.signals,
-          selectedAnswer: selected,
-          signals: _signals(enabled: !answerBusy),
-          lessonLocalId: input.lessonLocalId,
-          marker: marker,
-          itemIdx: itemIdx,
-          layer: layer,
-          isActionable: !answerBusy,
-          deliveryStatus: ChatLessonDeliveryStatus.delivered,
-        ),
-      );
-    } else if (phase?.type == ClassroomPhaseType.processando) {
+    if (phase?.type == ClassroomPhaseType.processando) {
       messages.add(
         ChatLessonMessage(
           id: 'processing-signal',
