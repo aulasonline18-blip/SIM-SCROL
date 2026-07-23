@@ -826,11 +826,26 @@ extension LabSessionFlowExtensions on LabSession {
   bool get canSelectVisibleAulaAnswer {
     final snapshot = aulaSnapshot;
     final phase = snapshot?.phase.type;
-    return hasLiveRuntimeForVisibleSnapshot &&
+    final live = hasLiveRuntimeForVisibleSnapshot;
+    final ok =
+        live &&
         !aulaRuntimeLoading &&
         snapshot?.conteudo != null &&
         (phase == ClassroomPhaseType.lendo ||
             phase == ClassroomPhaseType.expandida);
+    if (!ok) {
+      _recordRuntimeAudit(
+        'ANSWER_BUTTON_DISABLED',
+        source: 'LabSession.canSelectVisibleAulaAnswer',
+        details: {
+          'hasLive': live,
+          'loading': aulaRuntimeLoading,
+          'hasContent': snapshot?.conteudo != null,
+          'phase': phase?.name,
+        },
+      );
+    }
+    return ok;
   }
 
   Future<void> ensureAulaRuntimeForVisibleLesson({

@@ -192,39 +192,36 @@ class LessonRuntimeEngine {
     final position = _position;
     final session = _session;
     final item = position?.itemAtivo;
-    final expectedContent = snapshot?.conteudo;
-    final actualContent = position?.conteudo;
+    final expected = snapshot?.conteudo;
+    final actual = position?.conteudo;
     if (position == null ||
         session == null ||
         item == null ||
-        expectedContent == null ||
-        actualContent == null) {
+        expected == null ||
+        actual == null) {
       return false;
     }
     if (session.lessonLocalId != lessonLocalId) return false;
-    if (snapshot?.itemMarker != null && item.marker != snapshot!.itemMarker) {
-      return false;
-    }
-    if (snapshot?.itemText != null && item.text != snapshot!.itemText) {
-      return false;
-    }
-    if (snapshot?.itemIdx != null && position.itemIdx != snapshot!.itemIdx) {
-      return false;
-    }
-    if (snapshot?.layer != null && position.layer != snapshot!.layer) {
-      return false;
-    }
-    if (actualContent.question.trim().isEmpty ||
-        expectedContent.question != actualContent.question) {
-      return false;
-    }
+
+    String norm(String? value) => (value ?? '').trim();
+    bool eqStr(String? a, String? b) => norm(a) == norm(b);
+    bool eqIntNullable(int? a, int? b) =>
+        a == null || b == null ? true : a == b;
+    bool eqLayerNullable(Object? a, Object? b) =>
+        a == null || b == null ? true : a == b;
+
+    if (!eqStr(item.marker, snapshot?.itemMarker)) return false;
+    if (!eqIntNullable(position.itemIdx, snapshot?.itemIdx)) return false;
+    if (!eqLayerNullable(position.layer, snapshot?.layer)) return false;
+
+    if (norm(actual.question).isEmpty) return false;
+    if (!eqStr(actual.question, expected.question)) return false;
     for (final letter in AnswerLetter.values) {
-      if ((expectedContent.options[letter] ?? '') !=
-          (actualContent.options[letter] ?? '')) {
+      if (!eqStr(actual.options[letter], expected.options[letter])) {
         return false;
       }
     }
-    return expectedContent.correctAnswer == actualContent.correctAnswer;
+    return expected.correctAnswer == actual.correctAnswer;
   }
 
   Future<LessonRuntimeSnapshot> open({

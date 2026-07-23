@@ -1770,6 +1770,60 @@ void main() {
     expectRejectedPhase(const ClassroomPhase.doneEnd());
   });
 
+  test(
+    'LessonRuntimeEngine aceita drift benigno sem matar A/B/C visivel',
+    () async {
+      final service = StudentLearningStateService(
+        seed: {
+          'drift-lesson': _classroomStateWithPreparedCurrent('drift-lesson'),
+        },
+      );
+      final runtime = _runtime(service, FakeClassroomT02());
+      final live = await runtime.open(lessonLocalId: 'drift-lesson');
+      final content = live.conteudo!;
+
+      final benignDrift = live.copyWith(
+        itemIdx: null,
+        layer: null,
+        itemMarker: ' ${live.itemMarker} ',
+        conteudo: LessonContent(
+          explanation: content.explanation,
+          question: ' ${content.question}\n',
+          options: {
+            AnswerLetter.A: ' ${content.options[AnswerLetter.A]} ',
+            AnswerLetter.B: '${content.options[AnswerLetter.B]}\n',
+            AnswerLetter.C: '\t${content.options[AnswerLetter.C]}',
+          },
+          correctAnswer: content.correctAnswer,
+        ),
+      );
+
+      expect(
+        runtime.hasLivePositionForSnapshot(
+          lessonLocalId: 'drift-lesson',
+          snapshot: benignDrift,
+        ),
+        isTrue,
+      );
+
+      final wrongQuestion = live.copyWith(
+        conteudo: LessonContent(
+          explanation: content.explanation,
+          question: '${content.question} diferente',
+          options: content.options,
+          correctAnswer: content.correctAnswer,
+        ),
+      );
+      expect(
+        runtime.hasLivePositionForSnapshot(
+          lessonLocalId: 'drift-lesson',
+          snapshot: wrongQuestion,
+        ),
+        isFalse,
+      );
+    },
+  );
+
   testWidgets(
     'conversa persistida restaura A/B/C inerte e toque real funciona após runtime vivo',
     (tester) async {
