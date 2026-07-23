@@ -59,6 +59,8 @@ PedagogicalEventLog eventLog(int count) => PedagogicalEventLog([
 List<String> eventIds(Iterable<PedagogicalEvent> events) =>
     events.map((event) => event.eventId).toList();
 
+String eventKey(PedagogicalEvent event) => event.idempotencyKey;
+
 Map<String, Object?> decoded(Object value) =>
     jsonDecode(jsonEncode(value)) as Map<String, Object?>;
 
@@ -87,6 +89,10 @@ void main() {
 
   test('GameSyncResult e final class', () {
     expect(source(), contains('final class GameSyncResult'));
+  });
+
+  test('GameSyncEnqueueResult e final class', () {
+    expect(source(), contains('final class GameSyncEnqueueResult'));
   });
 
   test('arquivo produtivo possui exatamente os imports permitidos', () {
@@ -241,34 +247,51 @@ void main() {
       qualifiedEvent(3),
     ]);
 
-    client.enqueueFromLog(log);
+    final result = client.enqueueFromLog(log);
 
     expect(eventIds(client.pendingEvents), ['event-1', 'event-2', 'event-3']);
+    expect(result.addedEventIds, {'event-1', 'event-2', 'event-3'});
+    expect(result.ignoredPendingEventIds, isEmpty);
     expect(client.status, GameSyncStatus.ready);
   });
 
-  test('enqueueFromLog nao duplica evento ja pendente', () {
+  test('enqueueFromLog nao duplica evento ja pendente e relata', () {
     final client = GameSyncClient();
     final log = eventLog(2);
 
     client.enqueueFromLog(log);
-    client.enqueueFromLog(log);
+    final result = client.enqueueFromLog(log);
 
     expect(client.pendingCount, 2);
     expect(eventIds(client.pendingEvents), ['event-0', 'event-1']);
+    expect(result.addedEventIds, isEmpty);
+    expect(result.ignoredPendingEventIds, {'event-0', 'event-1'});
   });
 
-  test('enqueueFromLog nao re-enfileira evento aceito', () {
+  test('enqueueFromLog nao re-enfileira evento aceito e relata', () {
     final client = GameSyncClient();
     final log = eventLog(1);
     client.enqueueFromLog(log);
     final batch = client.prepareBatch(batchId: 'batch-1', createdAtMs: 1);
     client.applyAck(batch, acceptedEventIds: {'event-0'});
 
-    client.enqueueFromLog(log);
+    final result = client.enqueueFromLog(log);
 
     expect(client.pendingEvents, isEmpty);
     expect(client.acceptedEventIds, {'event-0'});
+    expect(result.addedEventIds, isEmpty);
+    expect(result.ignoredAcceptedEventIds, {'event-0'});
+  });
+
+  test('enqueueFromLog relata duplicata por idempotencyKey pendente', () {
+    final client = GameSyncClient()..enqueueFromLog(eventLog(1));
+    final duplicateKey = validEvent(index: 0, eventId: 'event-other');
+
+    final result = client.enqueueFromLog(PedagogicalEventLog([duplicateKey]));
+
+    expect(client.pendingCount, 1);
+    expect(result.addedEventIds, isEmpty);
+    expect(result.ignoredDuplicateIdempotencyKeys, {eventKey(duplicateKey)});
   });
 
   test('prepareBatch falha sem pendentes', () {
@@ -326,6 +349,59 @@ void main() {
     expect(client.acceptedEventIds, beforeAccepted);
   });
 
+  test('applyAck rejeita batch fabricado fora do client', () {
+    final client = GameSyncClient()..enqueueFromLog(eventLog(1));
+    final batch = GameSyncBatch(
+      batchId: 'batch-1',
+      events: [validEvent(index: 9)],
+      createdAtMs: 1,
+    );
+
+    expectSyncFailure(
+      () => client.applyAck(batch, acceptedEventIds: const {}),
+      'batch fabricado',
+    );
+
+    expect(eventIds(client.pendingEvents), ['event-0']);
+    expect(client.acceptedEventIds, isEmpty);
+  });
+
+  test('applyAck rejeita batch com eventId que nao esta pendente', () {
+    final client = GameSyncClient()..enqueueFromLog(eventLog(1));
+    final event = validEvent(index: 0, eventId: 'event-other');
+    final batch = GameSyncBatch(
+      batchId: 'batch-1',
+      events: [event],
+      createdAtMs: 1,
+    );
+
+    expectSyncFailure(
+      () => client.applyAck(batch, acceptedEventIds: const {}),
+      'eventId nao pendente',
+    );
+
+    expect(eventIds(client.pendingEvents), ['event-0']);
+    expect(client.acceptedEventIds, isEmpty);
+  });
+
+  test('applyAck rejeita batch com idempotencyKey que nao esta pendente', () {
+    final client = GameSyncClient()..enqueueFromLog(eventLog(1));
+    final event = validEvent(index: 9, eventId: 'event-0');
+    final batch = GameSyncBatch(
+      batchId: 'batch-1',
+      events: [event],
+      createdAtMs: 1,
+    );
+
+    expectSyncFailure(
+      () => client.applyAck(batch, acceptedEventIds: const {}),
+      'idempotencyKey nao pendente',
+    );
+
+    expect(eventIds(client.pendingEvents), ['event-0']);
+    expect(client.acceptedEventIds, isEmpty);
+  });
+
   test('applyAck com batch invalido nao altera estado', () {
     final client = GameSyncClient()..enqueueFromLog(eventLog(1));
     final beforePending = eventIds(client.pendingEvents);
@@ -359,6 +435,16 @@ void main() {
     expect(client.pendingEvents, isEmpty);
   });
 
+  test('depois de ACK total status acked e isIdle falso', () {
+    final client = GameSyncClient()..enqueueFromLog(eventLog(1));
+    final batch = client.prepareBatch(batchId: 'batch-1', createdAtMs: 1);
+
+    client.applyAck(batch, acceptedEventIds: {'event-0'});
+
+    expect(client.status, GameSyncStatus.acked);
+    expect(client.isIdle, isFalse);
+  });
+
   test('applyAck com nada aceito retorna rejected', () {
     final client = GameSyncClient()..enqueueFromLog(eventLog(2));
     final batch = client.prepareBatch(batchId: 'batch-1', createdAtMs: 1);
@@ -377,7 +463,19 @@ void main() {
     client.clearAccepted();
 
     expect(client.acceptedEventIds, isEmpty);
+    expect(client.acceptedIdempotencyKeys, isEmpty);
     expect(eventIds(client.pendingEvents), ['event-1']);
+  });
+
+  test('depois de clearAccepted status volta para idle sem pendentes', () {
+    final client = GameSyncClient()..enqueueFromLog(eventLog(1));
+    final batch = client.prepareBatch(batchId: 'batch-1', createdAtMs: 1);
+    client.applyAck(batch, acceptedEventIds: {'event-0'});
+
+    client.clearAccepted();
+
+    expect(client.status, GameSyncStatus.idle);
+    expect(client.isIdle, isTrue);
   });
 
   test('clearAll limpa tudo', () {
@@ -389,6 +487,7 @@ void main() {
 
     expect(client.pendingEvents, isEmpty);
     expect(client.acceptedEventIds, isEmpty);
+    expect(client.acceptedIdempotencyKeys, isEmpty);
     expect(client.isIdle, isTrue);
   });
 
@@ -410,6 +509,16 @@ void main() {
     expect(client.acceptedEventIds, {'event-0'});
   });
 
+  test('Client nao expoe acceptedIdempotencyKeys vivo', () {
+    final client = GameSyncClient()..enqueueFromLog(eventLog(1));
+    final batch = client.prepareBatch(batchId: 'batch-1', createdAtMs: 1);
+    client.applyAck(batch, acceptedEventIds: {'event-0'});
+    final exposed = client.acceptedIdempotencyKeys;
+
+    expect(() => exposed.add('x'), throwsUnsupportedError);
+    expect(client.acceptedIdempotencyKeys, {eventKey(validEvent(index: 0))});
+  });
+
   test('Result nao expoe sets vivos', () {
     final result = GameSyncResult(
       status: GameSyncStatus.partial,
@@ -423,6 +532,127 @@ void main() {
     expect(() => result.pendingEventIds.add('x'), throwsUnsupportedError);
   });
 
+  test('EnqueueResult nao expoe sets vivos', () {
+    final result = GameSyncEnqueueResult(
+      addedEventIds: {'event-1'},
+      ignoredPendingEventIds: {'event-2'},
+      ignoredAcceptedEventIds: {'event-3'},
+      ignoredAcceptedIdempotencyKeys: {'key-1'},
+      ignoredDuplicateIdempotencyKeys: {'key-2'},
+    );
+
+    expect(() => result.addedEventIds.add('x'), throwsUnsupportedError);
+    expect(
+      () => result.ignoredPendingEventIds.add('x'),
+      throwsUnsupportedError,
+    );
+    expect(
+      () => result.ignoredAcceptedEventIds.add('x'),
+      throwsUnsupportedError,
+    );
+    expect(
+      () => result.ignoredAcceptedIdempotencyKeys.add('x'),
+      throwsUnsupportedError,
+    );
+    expect(
+      () => result.ignoredDuplicateIdempotencyKeys.add('x'),
+      throwsUnsupportedError,
+    );
+  });
+
+  test('GameSyncResult status acked com rejeitado falha', () {
+    expectSyncFailure(
+      () => GameSyncResult(
+        status: GameSyncStatus.acked,
+        acceptedEventIds: {'event-1'},
+        rejectedEventIds: {'event-2'},
+        pendingEventIds: {'event-2'},
+      ),
+      'acked incoerente',
+    );
+  });
+
+  test('GameSyncResult status rejected com aceito falha', () {
+    expectSyncFailure(
+      () => GameSyncResult(
+        status: GameSyncStatus.rejected,
+        acceptedEventIds: {'event-1'},
+        rejectedEventIds: {'event-2'},
+        pendingEventIds: {'event-2'},
+      ),
+      'rejected incoerente',
+    );
+  });
+
+  test('GameSyncResult status partial sem aceitos falha', () {
+    expectSyncFailure(
+      () => GameSyncResult(
+        status: GameSyncStatus.partial,
+        acceptedEventIds: const {},
+        rejectedEventIds: {'event-2'},
+        pendingEventIds: {'event-2'},
+      ),
+      'partial sem aceitos',
+    );
+  });
+
+  test('GameSyncResult status partial sem rejeitados falha', () {
+    expectSyncFailure(
+      () => GameSyncResult(
+        status: GameSyncStatus.partial,
+        acceptedEventIds: {'event-1'},
+        rejectedEventIds: const {},
+        pendingEventIds: const {},
+      ),
+      'partial sem rejeitados',
+    );
+  });
+
+  test('GameSyncResult status idle falha', () {
+    expectSyncFailure(
+      () => GameSyncResult(
+        status: GameSyncStatus.idle,
+        acceptedEventIds: const {},
+        rejectedEventIds: const {},
+        pendingEventIds: const {},
+      ),
+      'idle nao e resultado',
+    );
+  });
+
+  test('GameSyncResult status ready falha', () {
+    expectSyncFailure(
+      () => GameSyncResult(
+        status: GameSyncStatus.ready,
+        acceptedEventIds: const {},
+        rejectedEventIds: const {},
+        pendingEventIds: const {},
+      ),
+      'ready nao e resultado',
+    );
+  });
+
+  test('GameSyncResult rejeita sobreposicao indevida', () {
+    expectSyncFailure(
+      () => GameSyncResult(
+        status: GameSyncStatus.partial,
+        acceptedEventIds: {'event-1'},
+        rejectedEventIds: {'event-1', 'event-2'},
+        pendingEventIds: {'event-2'},
+      ),
+      'accepted rejected overlap',
+    );
+    expectSyncFailure(
+      () => GameSyncResult(
+        status: GameSyncStatus.acked,
+        acceptedEventIds: {'event-1'},
+        rejectedEventIds: const {},
+        pendingEventIds: {'event-1'},
+      ),
+      'accepted pending overlap',
+    );
+  });
+
   test('toJson fromJson preserva estado leve e ordem', () {
     final client = GameSyncClient()..enqueueFromLog(eventLog(3));
     final batch = client.prepareBatch(batchId: 'batch-1', createdAtMs: 1);
@@ -432,6 +662,17 @@ void main() {
 
     expect(eventIds(roundtrip.pendingEvents), ['event-1', 'event-2']);
     expect(roundtrip.acceptedEventIds, {'event-0'});
+    expect(roundtrip.acceptedIdempotencyKeys, {eventKey(validEvent(index: 0))});
+  });
+
+  test('toJson fromJson preserva acceptedIdempotencyKeys', () {
+    final client = GameSyncClient()..enqueueFromLog(eventLog(1));
+    final batch = client.prepareBatch(batchId: 'batch-1', createdAtMs: 1);
+    client.applyAck(batch, acceptedEventIds: {'event-0'});
+
+    final roundtrip = GameSyncClient.fromJson(decoded(client.toJson()));
+
+    expect(roundtrip.acceptedIdempotencyKeys, {eventKey(validEvent(index: 0))});
   });
 
   test('toJson chama validate', () {
@@ -485,6 +726,7 @@ void main() {
           },
         ],
         'acceptedEventIds': const [],
+        'acceptedIdempotencyKeys': const [],
       }),
       'evento invalido',
     );
@@ -497,6 +739,7 @@ void main() {
       () => GameSyncClient.fromJson({
         'pendingEvents': [event, event],
         'acceptedEventIds': const [],
+        'acceptedIdempotencyKeys': const [],
       }),
       'duplicata',
     );
@@ -507,6 +750,7 @@ void main() {
       () => GameSyncClient.fromJson({
         'pendingEvents': [validEvent().toJson()],
         'acceptedEventIds': ['event-0'],
+        'acceptedIdempotencyKeys': const [],
       }),
       'aceito nao pode estar pendente',
     );
@@ -517,9 +761,43 @@ void main() {
       () => GameSyncClient.fromJson({
         'pendingEvents': const [],
         'acceptedEventIds': ['event-1', 'event-1'],
+        'acceptedIdempotencyKeys': const [],
       }),
       'duplicata aceita',
     );
+  });
+
+  test('acceptedIdempotencyKeys duplicadas ou vazias no JSON falham', () {
+    expectSyncFailure(
+      () => GameSyncClient.fromJson({
+        'pendingEvents': const [],
+        'acceptedEventIds': const [],
+        'acceptedIdempotencyKeys': ['key-1', 'key-1'],
+      }),
+      'duplicata key',
+    );
+    expectSyncFailure(
+      () => GameSyncClient.fromJson({
+        'pendingEvents': const [],
+        'acceptedEventIds': const [],
+        'acceptedIdempotencyKeys': [' '],
+      }),
+      'key vazia',
+    );
+  });
+
+  test('aceito por idempotencyKey nao e reenfileirado', () {
+    final client = GameSyncClient()..enqueueFromLog(eventLog(1));
+    final batch = client.prepareBatch(batchId: 'batch-1', createdAtMs: 1);
+    final acceptedKey = eventKey(validEvent(index: 0));
+    client.applyAck(batch, acceptedEventIds: {'event-0'});
+
+    final result = client.enqueueFromLog(
+      PedagogicalEventLog([validEvent(index: 0, eventId: 'event-other')]),
+    );
+
+    expect(client.pendingEvents, isEmpty);
+    expect(result.ignoredAcceptedIdempotencyKeys, {acceptedKey});
   });
 
   test('enqueueFromLog com log invalido nao altera estado', () {
@@ -579,7 +857,7 @@ void main() {
   test('arquivo produtivo nao contem termos proibidos', () {
     final text = source();
     final allowedClientHits = RegExp(r'GameSyncClient');
-    final allowedQueueHits = RegExp(r'enqueueFromLog');
+    final allowedQueueHits = RegExp(r'GameSyncEnqueueResult|enqueueFromLog');
     final forbidden = [
       token(['h', 'ttp']),
       token(['d', 'io']),
@@ -661,8 +939,9 @@ void main() {
       final queueMatches = RegExp('queue').allMatches(source()).toList();
 
       expect(matches.length, 3);
-      expect(queueMatches.length, 1);
+      expect(queueMatches.length, 5);
       expect(source(), contains('final class GameSyncClient'));
+      expect(source(), contains('final class GameSyncEnqueueResult'));
       expect(source(), contains('enqueueFromLog'));
     },
   );

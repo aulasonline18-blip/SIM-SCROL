@@ -85,6 +85,9 @@ final class GameSyncResult {
   final Set<String> pendingEventIds;
 
   void validate() {
+    if (status == GameSyncStatus.idle || status == GameSyncStatus.ready) {
+      throw const GameSyncContractException('ack_status_required');
+    }
     for (final id in acceptedEventIds) {
       _requiredString(id, 'acceptedEventId_required');
     }
@@ -94,12 +97,84 @@ final class GameSyncResult {
     for (final id in pendingEventIds) {
       _requiredString(id, 'pendingEventId_required');
     }
+    if (acceptedEventIds.any(rejectedEventIds.contains)) {
+      throw const GameSyncContractException('accepted_rejected_overlap');
+    }
+    if (acceptedEventIds.any(pendingEventIds.contains)) {
+      throw const GameSyncContractException('accepted_pending_overlap');
+    }
+    switch (status) {
+      case GameSyncStatus.acked:
+        if (acceptedEventIds.isEmpty || rejectedEventIds.isNotEmpty) {
+          throw const GameSyncContractException('acked_result_incoherent');
+        }
+      case GameSyncStatus.rejected:
+        if (acceptedEventIds.isNotEmpty || rejectedEventIds.isEmpty) {
+          throw const GameSyncContractException('rejected_result_incoherent');
+        }
+      case GameSyncStatus.partial:
+        if (acceptedEventIds.isEmpty || rejectedEventIds.isEmpty) {
+          throw const GameSyncContractException('partial_result_incoherent');
+        }
+      case GameSyncStatus.idle:
+      case GameSyncStatus.ready:
+        throw const GameSyncContractException('ack_status_required');
+    }
+  }
+}
+
+final class GameSyncEnqueueResult {
+  GameSyncEnqueueResult({
+    required Set<String> addedEventIds,
+    required Set<String> ignoredPendingEventIds,
+    required Set<String> ignoredAcceptedEventIds,
+    required Set<String> ignoredAcceptedIdempotencyKeys,
+    required Set<String> ignoredDuplicateIdempotencyKeys,
+  }) : addedEventIds = Set<String>.unmodifiable(addedEventIds),
+       ignoredPendingEventIds = Set<String>.unmodifiable(
+         ignoredPendingEventIds,
+       ),
+       ignoredAcceptedEventIds = Set<String>.unmodifiable(
+         ignoredAcceptedEventIds,
+       ),
+       ignoredAcceptedIdempotencyKeys = Set<String>.unmodifiable(
+         ignoredAcceptedIdempotencyKeys,
+       ),
+       ignoredDuplicateIdempotencyKeys = Set<String>.unmodifiable(
+         ignoredDuplicateIdempotencyKeys,
+       ) {
+    validate();
+  }
+
+  final Set<String> addedEventIds;
+  final Set<String> ignoredPendingEventIds;
+  final Set<String> ignoredAcceptedEventIds;
+  final Set<String> ignoredAcceptedIdempotencyKeys;
+  final Set<String> ignoredDuplicateIdempotencyKeys;
+
+  void validate() {
+    for (final id in addedEventIds) {
+      _requiredString(id, 'addedEventId_required');
+    }
+    for (final id in ignoredPendingEventIds) {
+      _requiredString(id, 'ignoredPendingEventId_required');
+    }
+    for (final id in ignoredAcceptedEventIds) {
+      _requiredString(id, 'ignoredAcceptedEventId_required');
+    }
+    for (final key in ignoredAcceptedIdempotencyKeys) {
+      _requiredString(key, 'ignoredAcceptedIdempotencyKey_required');
+    }
+    for (final key in ignoredDuplicateIdempotencyKeys) {
+      _requiredString(key, 'ignoredDuplicateIdempotencyKey_required');
+    }
   }
 }
 
 final class GameSyncClient {
   final List<PedagogicalEvent> _pendingEvents = [];
   final Set<String> _acceptedEventIds = {};
+  final Set<String> _acceptedIdempotencyKeys = {};
 
   List<PedagogicalEvent> get pendingEvents =>
       List<PedagogicalEvent>.unmodifiable(_pendingEvents);
@@ -107,37 +182,67 @@ final class GameSyncClient {
   Set<String> get acceptedEventIds =>
       Set<String>.unmodifiable(_acceptedEventIds);
 
+  Set<String> get acceptedIdempotencyKeys =>
+      Set<String>.unmodifiable(_acceptedIdempotencyKeys);
+
   int get pendingCount => _pendingEvents.length;
 
   int get acceptedCount => _acceptedEventIds.length;
 
   bool get isIdle => _pendingEvents.isEmpty && _acceptedEventIds.isEmpty;
 
-  GameSyncStatus get status =>
-      _pendingEvents.isEmpty ? GameSyncStatus.idle : GameSyncStatus.ready;
+  GameSyncStatus get status {
+    if (_pendingEvents.isNotEmpty) {
+      return GameSyncStatus.ready;
+    }
+    if (_acceptedEventIds.isNotEmpty) {
+      return GameSyncStatus.acked;
+    }
+    return GameSyncStatus.idle;
+  }
 
-  void enqueueFromLog(PedagogicalEventLog log) {
+  GameSyncEnqueueResult enqueueFromLog(PedagogicalEventLog log) {
     log.validate();
     final candidate = List<PedagogicalEvent>.of(_pendingEvents);
+    final added = <String>{};
+    final ignoredPending = <String>{};
+    final ignoredAccepted = <String>{};
+    final ignoredAcceptedKeys = <String>{};
+    final ignoredDuplicateKeys = <String>{};
     for (final event in log.events) {
       event.validate();
       if (_acceptedEventIds.contains(event.eventId)) {
+        ignoredAccepted.add(event.eventId);
+        continue;
+      }
+      if (_acceptedIdempotencyKeys.contains(event.idempotencyKey)) {
+        ignoredAcceptedKeys.add(event.idempotencyKey);
         continue;
       }
       if (candidate.any((pending) => pending.eventId == event.eventId)) {
+        ignoredPending.add(event.eventId);
         continue;
       }
       if (candidate.any(
         (pending) => pending.idempotencyKey == event.idempotencyKey,
       )) {
+        ignoredDuplicateKeys.add(event.idempotencyKey);
         continue;
       }
       candidate.add(event);
+      added.add(event.eventId);
     }
     _validateEvents(candidate);
     _pendingEvents
       ..clear()
       ..addAll(candidate);
+    return GameSyncEnqueueResult(
+      addedEventIds: added,
+      ignoredPendingEventIds: ignoredPending,
+      ignoredAcceptedEventIds: ignoredAccepted,
+      ignoredAcceptedIdempotencyKeys: ignoredAcceptedKeys,
+      ignoredDuplicateIdempotencyKeys: ignoredDuplicateKeys,
+    );
   }
 
   GameSyncBatch prepareBatch({
@@ -160,6 +265,18 @@ final class GameSyncClient {
   }) {
     batch.validate();
     final batchIds = batch.events.map((event) => event.eventId).toSet();
+    final pendingById = {
+      for (final event in _pendingEvents) event.eventId: event.idempotencyKey,
+    };
+    final pendingKeys = _pendingEvents
+        .map((event) => event.idempotencyKey)
+        .toSet();
+    for (final event in batch.events) {
+      if (pendingById[event.eventId] != event.idempotencyKey ||
+          !pendingKeys.contains(event.idempotencyKey)) {
+        throw const GameSyncContractException('batch_event_not_pending');
+      }
+    }
     final accepted = Set<String>.unmodifiable(acceptedEventIds);
     for (final id in accepted) {
       _requiredString(id, 'acceptedEventId_required');
@@ -170,6 +287,12 @@ final class GameSyncClient {
     final rejected = batchIds.difference(accepted);
     final candidateAccepted = Set<String>.of(_acceptedEventIds)
       ..addAll(accepted);
+    final candidateAcceptedKeys = Set<String>.of(_acceptedIdempotencyKeys)
+      ..addAll(
+        batch.events
+            .where((event) => accepted.contains(event.eventId))
+            .map((event) => event.idempotencyKey),
+      );
     final candidatePending = _pendingEvents
         .where((event) => !accepted.contains(event.eventId))
         .toList();
@@ -180,6 +303,9 @@ final class GameSyncClient {
     _acceptedEventIds
       ..clear()
       ..addAll(candidateAccepted);
+    _acceptedIdempotencyKeys
+      ..clear()
+      ..addAll(candidateAcceptedKeys);
     return GameSyncResult(
       status: _statusFor(batchIds.length, accepted.length),
       acceptedEventIds: accepted,
@@ -190,11 +316,13 @@ final class GameSyncClient {
 
   void clearAccepted() {
     _acceptedEventIds.clear();
+    _acceptedIdempotencyKeys.clear();
   }
 
   void clearAll() {
     _pendingEvents.clear();
     _acceptedEventIds.clear();
+    _acceptedIdempotencyKeys.clear();
   }
 
   void validate() {
@@ -207,6 +335,14 @@ final class GameSyncClient {
         );
       }
     }
+    for (final key in _acceptedIdempotencyKeys) {
+      _requiredString(key, 'acceptedIdempotencyKey_required');
+      if (_pendingEvents.any((event) => event.idempotencyKey == key)) {
+        throw const GameSyncContractException(
+          'acceptedIdempotencyKey_must_not_be_pending',
+        );
+      }
+    }
   }
 
   Map<String, Object?> toJson() {
@@ -214,6 +350,7 @@ final class GameSyncClient {
     return {
       'pendingEvents': _pendingEvents.map((event) => event.toJson()).toList(),
       'acceptedEventIds': _acceptedEventIds.toList(),
+      'acceptedIdempotencyKeys': _acceptedIdempotencyKeys.toList(),
     };
   }
 
@@ -221,14 +358,22 @@ final class GameSyncClient {
     if (value is! Map) {
       throw const GameSyncContractException('sync_client_must_be_object');
     }
-    _rejectUnknownKeys(value, const {'pendingEvents', 'acceptedEventIds'});
+    _rejectUnknownKeys(value, const {
+      'pendingEvents',
+      'acceptedEventIds',
+      'acceptedIdempotencyKeys',
+    });
     final rawPending = value['pendingEvents'];
     final rawAccepted = value['acceptedEventIds'];
+    final rawAcceptedKeys = value['acceptedIdempotencyKeys'];
     if (rawPending is! List) {
       throw const GameSyncContractException('pendingEvents_required');
     }
     if (rawAccepted is! List) {
       throw const GameSyncContractException('acceptedEventIds_required');
+    }
+    if (rawAcceptedKeys is! List) {
+      throw const GameSyncContractException('acceptedIdempotencyKeys_required');
     }
     final accepted = <String>{};
     for (final id in rawAccepted) {
@@ -237,9 +382,19 @@ final class GameSyncClient {
         throw const GameSyncContractException('acceptedEventId_duplicated');
       }
     }
+    final acceptedKeys = <String>{};
+    for (final key in rawAcceptedKeys) {
+      final parsed = _requiredString(key, 'acceptedIdempotencyKey_required');
+      if (!acceptedKeys.add(parsed)) {
+        throw const GameSyncContractException(
+          'acceptedIdempotencyKey_duplicated',
+        );
+      }
+    }
     final client = GameSyncClient();
     client._pendingEvents.addAll(rawPending.map(PedagogicalEvent.fromJson));
     client._acceptedEventIds.addAll(accepted);
+    client._acceptedIdempotencyKeys.addAll(acceptedKeys);
     client.validate();
     return client;
   }
