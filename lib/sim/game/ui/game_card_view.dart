@@ -86,12 +86,7 @@ final class GameCardView extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            LinearProgressIndicator(
-              value: (controller.currentIndex == null)
-                  ? null
-                  : (controller.currentIndex! + 1) /
-                        (controller.currentIndex! + 1),
-            ),
+            LinearProgressIndicator(value: null),
             const SizedBox(height: 16),
             Text(
               card.explanation,
@@ -195,11 +190,15 @@ final class GameCardView extends StatelessWidget {
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
-              child: IconButton(
-                key: const Key('sim_game_doubt_button'),
-                tooltip: 'Abrir dúvida',
-                onPressed: onOpenDoubt,
-                icon: const Icon(Icons.help_outline),
+              child: Semantics(
+                label: 'Abrir dúvida',
+                button: true,
+                child: IconButton(
+                  key: const Key('sim_game_doubt_button'),
+                  tooltip: 'Abrir dúvida',
+                  onPressed: onOpenDoubt,
+                  icon: const Icon(Icons.help_outline),
+                ),
               ),
             ),
           ],
@@ -229,10 +228,10 @@ final class GameCardView extends StatelessWidget {
   void _advance() {
     try {
       controller.advanceToNextCard(clientTimestampMs: nowMs());
+      onChanged?.call();
       if (controller.needsMicrodeck) {
         onNeedMicrodeck?.call();
       }
-      onChanged?.call();
     } catch (error) {
       _report(error);
     }
@@ -297,11 +296,15 @@ final class _MediaBlock extends StatelessWidget {
             ),
           if (hasImage && hasAudio) const SizedBox(width: 8),
           if (hasAudio)
-            IconButton(
-              key: const Key('sim_game_audio_button'),
-              tooltip: 'Áudio',
-              onPressed: onToggleAudio,
-              icon: const Icon(Icons.volume_up),
+            Semantics(
+              label: 'Áudio',
+              button: true,
+              child: IconButton(
+                key: const Key('sim_game_audio_button'),
+                tooltip: 'Áudio',
+                onPressed: onToggleAudio,
+                icon: const Icon(Icons.volume_up),
+              ),
             ),
         ],
       ),

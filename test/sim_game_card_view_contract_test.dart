@@ -35,6 +35,18 @@ void main() {
       expect(find.byKey(const Key('sim_game_answer_C')), findsOneWidget);
     });
 
+    testWidgets('answer buttons expose semantics labels', (tester) async {
+      final handle = tester.ensureSemantics();
+      final controller = _loadedController();
+
+      await tester.pumpHarness(controller);
+
+      expect(find.bySemanticsLabel('Alternativa A'), findsOneWidget);
+      expect(find.bySemanticsLabel('Alternativa B'), findsOneWidget);
+      expect(find.bySemanticsLabel('Alternativa C'), findsOneWidget);
+      handle.dispose();
+    });
+
     testWidgets('A/B/C taps use AnswerLetter and rebuild through onChanged', (
       tester,
     ) async {
@@ -109,6 +121,42 @@ void main() {
       }
     });
 
+    testWidgets('qualifier taps call onChanged for each DecisionSignal', (
+      tester,
+    ) async {
+      for (final keyName in const [
+        'sim_game_qualifier_1',
+        'sim_game_qualifier_2',
+        'sim_game_qualifier_3',
+      ]) {
+        final controller = _loadedController();
+        var changed = 0;
+
+        await tester.pumpHarness(controller, onChanged: () => changed += 1);
+        await tester.tap(find.byKey(const Key('sim_game_answer_A')));
+        await tester.pump();
+        await tester.tap(find.byKey(Key(keyName)));
+        await tester.pump();
+
+        expect(changed, 2);
+        expect(find.byKey(const Key('sim_game_feedback')), findsOneWidget);
+      }
+    });
+
+    testWidgets('qualifier buttons expose semantics labels', (tester) async {
+      final handle = tester.ensureSemantics();
+      final controller = _loadedController();
+
+      await tester.pumpHarness(controller);
+      await tester.tap(find.byKey(const Key('sim_game_answer_A')));
+      await tester.pump();
+
+      expect(find.bySemanticsLabel('Sinal 1'), findsOneWidget);
+      expect(find.bySemanticsLabel('Sinal 2'), findsOneWidget);
+      expect(find.bySemanticsLabel('Sinal 3'), findsOneWidget);
+      handle.dispose();
+    });
+
     testWidgets(
       'empty state shows no answer, qualifier, feedback, or advance',
       (tester) async {
@@ -167,11 +215,18 @@ void main() {
       final controller = _loadedController(cardCount: 1);
       var needs = 0;
       var changed = 0;
+      final order = <String>[];
 
       await tester.pumpHarness(
         controller,
-        onNeedMicrodeck: () => needs += 1,
-        onChanged: () => changed += 1,
+        onNeedMicrodeck: () {
+          needs += 1;
+          order.add('need');
+        },
+        onChanged: () {
+          changed += 1;
+          order.add('changed');
+        },
       );
 
       await tester.tap(find.byKey(const Key('sim_game_answer_A')));
@@ -187,6 +242,8 @@ void main() {
       expect(find.byKey(const Key('sim_game_continue_button')), findsNothing);
       expect(find.byKey(const Key('sim_game_answer_A')), findsNothing);
       expect(changed, 3);
+      expect(order.take(2), ['changed', 'changed']);
+      expect(order.skip(2), ['changed', 'need']);
     });
 
     testWidgets('continue can advance to a prepared next card', (tester) async {
@@ -260,6 +317,31 @@ void main() {
       expect(find.byKey(const Key('sim_game_feedback')), findsNothing);
     });
 
+    testWidgets('advance failure calls onError and not onChanged', (
+      tester,
+    ) async {
+      final controller = _loadedController();
+      final errors = <Object>[];
+      var changed = 0;
+
+      await tester.pumpHarness(
+        controller,
+        onError: errors.add,
+        onChanged: () => changed += 1,
+      );
+
+      await tester.tap(find.byKey(const Key('sim_game_answer_A')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('sim_game_qualifier_1')));
+      await tester.pump();
+      controller.clear();
+      await tester.tap(find.byKey(const Key('sim_game_continue_button')));
+      await tester.pump();
+
+      expect(errors, hasLength(1));
+      expect(changed, 2);
+    });
+
     testWidgets('after feedback, A/B/C does not accept silent change', (
       tester,
     ) async {
@@ -279,6 +361,7 @@ void main() {
     });
 
     testWidgets('media is lightweight and optional', (tester) async {
+      final handle = tester.ensureSemantics();
       final controller = _loadedController(withMedia: true);
       var audio = 0;
       var doubt = 0;
@@ -295,6 +378,9 @@ void main() {
       );
       expect(find.textContaining('image-key-1'), findsOneWidget);
       expect(find.byKey(const Key('sim_game_audio_button')), findsOneWidget);
+      expect(find.bySemanticsLabel('Áudio'), findsOneWidget);
+      expect(find.bySemanticsLabel('Abrir dúvida'), findsOneWidget);
+      handle.dispose();
 
       await tester.tap(find.byKey(const Key('sim_game_audio_button')));
       await tester.tap(find.byKey(const Key('sim_game_doubt_button')));
@@ -352,6 +438,14 @@ void main() {
         "import '../game_runtime_controller.dart';",
         "import '../pedagogical_card.dart';",
       ]);
+    });
+
+    test('product file does not contain fake progress math or error state', () {
+      final source = _source();
+
+      expect(source, isNot(contains('(controller.currentIndex! + 1) /')));
+      expect(source, isNot(contains('(controller.currentIndex! + 1),')));
+      expect(source, isNot(contains('sim_game_card_error')));
     });
 
     test('product file avoids forbidden architecture and media tokens', () {
