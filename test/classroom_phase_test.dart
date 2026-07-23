@@ -1616,7 +1616,7 @@ void main() {
     },
   );
 
-  test('retomada reconstrói runtime vazio antes de aceitar A/B/C', () async {
+  test('retomada com snapshot visivel aceita A/B/C local-first', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final store = _storeWithState(
@@ -1637,7 +1637,8 @@ void main() {
       ..lessonLocalId = 'lesson-resume-empty-runtime'
       ..route = '/cyber/aula'
       ..aulaSnapshot = visibleSnapshot;
-    expect(resumed.canSelectVisibleAulaAnswer, isFalse);
+    expect(resumed.hasLiveRuntimeForVisibleSnapshot, isFalse);
+    expect(resumed.canSelectVisibleAulaAnswer, isTrue);
     expect(
       buildChatLessonMessages(
             ChatLessonTimelineInput(
@@ -1650,7 +1651,7 @@ void main() {
             (message) => message.kind == ChatLessonMessageKind.options,
           )
           .isActionable,
-      isFalse,
+      isTrue,
     );
 
     await resumed.chooseAulaAnswer('B');

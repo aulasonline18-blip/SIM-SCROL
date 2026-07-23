@@ -828,8 +828,6 @@ extension LabSessionFlowExtensions on LabSession {
     final phase = snapshot?.phase.type;
     final live = hasLiveRuntimeForVisibleSnapshot;
     final ok =
-        live &&
-        !aulaRuntimeLoading &&
         snapshot?.conteudo != null &&
         (phase == ClassroomPhaseType.lendo ||
             phase == ClassroomPhaseType.expandida);
@@ -1229,25 +1227,23 @@ extension LabSessionFlowExtensions on LabSession {
       return;
     }
     stopActiveAudio();
+    aulaSnapshot = snapshot!.copyWith(phase: ClassroomPhase.expanded(answer));
+    aulaRuntimeError = null;
+    _notifyFromChild();
     if (prefs == null) {
       if (!_allowDevAulaHarness) {
         aulaRuntimeError = 'Aula de desenvolvimento bloqueada em production.';
         _notifyFromChild();
         return;
       }
-      aulaSnapshot = _devAulaSnapshot(phase: ClassroomPhase.expanded(answer));
-      _notifyFromChild();
       return;
     }
     final id = lessonLocalId?.trim();
     if (id == null || id.isEmpty) {
-      aulaRuntimeError =
-          'Nao consegui localizar esta aula para registrar a resposta.';
       _recordRuntimeAudit(
         'ANSWER_BLOCKED_WITHOUT_LESSON_ID',
         details: {'letter': answer.name},
-        source: 'LabSession.chooseAulaAnswer',
-        notify: true,
+        source: 'LabSession.chooseAulaAnswer.background',
       );
       return;
     }
@@ -1259,33 +1255,28 @@ extension LabSessionFlowExtensions on LabSession {
       organism = _activeOrganism;
     }
     if (organism == null || organism.lessonLocalId != id) {
-      aulaRuntimeError =
-          'A aula ainda esta preparando. Aguarde um instante para responder.';
       _recordRuntimeAudit(
         'ANSWER_BLOCKED_RUNTIME_NOT_READY',
         details: {'letter': answer.name, 'lessonLocalId': id},
-        source: 'LabSession.chooseAulaAnswer',
-        notify: true,
+        source: 'LabSession.chooseAulaAnswer.background',
       );
       return;
     }
     final selected = organism.lessonRuntimeEngine.select(answer);
-    aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+    final engineSnapshot = organism.lessonRuntimeEngine.snapshot();
     final accepted =
         selected &&
-        aulaSnapshot?.phase.type == ClassroomPhaseType.expandida &&
-        aulaSnapshot?.phase.letter == answer;
+        engineSnapshot.phase.type == ClassroomPhaseType.expandida &&
+        engineSnapshot.phase.letter == answer;
     if (!accepted) {
-      aulaRuntimeError =
-          'Nao consegui registrar a resposta nesta posicao. Tente novamente.';
       _recordRuntimeAudit(
         'ANSWER_BLOCKED_RUNTIME_MISMATCH',
         details: {'letter': answer.name},
-        source: 'LabSession.chooseAulaAnswer',
+        source: 'LabSession.chooseAulaAnswer.background',
       );
-      _notifyFromChild();
       return;
     }
+    aulaSnapshot = engineSnapshot;
     aulaRuntimeError = null;
     _notifyFromChild();
     _bindActiveLessonMedia(organism);
