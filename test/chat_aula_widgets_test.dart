@@ -529,6 +529,12 @@ void main() {
                       enabled: true,
                     ),
                   ],
+                ),
+                ChatLessonMessage(
+                  id: 'signals',
+                  role: ChatLessonMessageRole.sim,
+                  kind: ChatLessonMessageKind.signals,
+                  selectedAnswer: AnswerLetter.B,
                   signals: [
                     ChatLessonSignal(
                       value: 1,
@@ -881,6 +887,12 @@ void main() {
               enabled: true,
             ),
           ],
+        ),
+        const ChatLessonMessage(
+          id: 'live-signals',
+          role: ChatLessonMessageRole.sim,
+          kind: ChatLessonMessageKind.signals,
+          selectedAnswer: AnswerLetter.B,
           signals: [
             ChatLessonSignal(
               value: 1,

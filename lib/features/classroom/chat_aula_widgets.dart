@@ -430,7 +430,7 @@ _PedagogicalScrollTarget? _selectPedagogicalScrollTarget(
         message.kind == ChatLessonMessageKind.signals && !message.isHistorical,
   );
   if (signalIndex != null) {
-    return _target(messages, signalIndex);
+    return _target(messages, signalIndex, alignment: 0.58);
   }
 
   final expandedOptionsIndex = _lastIndexWhere(
@@ -527,6 +527,7 @@ String _activeRoundSuffix(String id) {
     'practice-action-',
     'question-',
     'options-',
+    'signals-',
     'feedback-',
   ];
   for (final prefix in prefixes) {
@@ -543,6 +544,7 @@ double _pedagogicalGapAfter(ChatLessonMessage message) {
     ChatLessonMessageKind.practiceAction => SimSpacing.xxl,
     ChatLessonMessageKind.question => SimSpacing.xl,
     ChatLessonMessageKind.options => SimSpacing.xl,
+    ChatLessonMessageKind.signals => SimSpacing.xl,
     ChatLessonMessageKind.feedback => SimSpacing.xxl,
     _ => SimSpacing.md,
   };

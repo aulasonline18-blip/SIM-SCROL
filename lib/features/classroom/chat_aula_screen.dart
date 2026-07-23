@@ -467,13 +467,15 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     final disablesAction = switch (message.kind) {
       ChatLessonMessageKind.practiceAction ||
       ChatLessonMessageKind.options ||
+      ChatLessonMessageKind.signals ||
       ChatLessonMessageKind.feedback => true,
       _ => false,
     };
     final marksHistorical = switch (message.kind) {
       ChatLessonMessageKind.practiceAction ||
       ChatLessonMessageKind.question ||
-      ChatLessonMessageKind.options => true,
+      ChatLessonMessageKind.options ||
+      ChatLessonMessageKind.signals => true,
       _ => false,
     };
     if (!disablesAction && !marksHistorical) return message;
