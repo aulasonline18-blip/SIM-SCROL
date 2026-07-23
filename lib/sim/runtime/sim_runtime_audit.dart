@@ -19,6 +19,8 @@ class SimRuntimeAuditEvent {
 class SimRuntimeAudit {
   const SimRuntimeAudit._();
 
+  static const int _maxInMemoryEvents = 200;
+
   @visibleForTesting
   static final List<SimRuntimeAuditEvent> events = <SimRuntimeAuditEvent>[];
 
@@ -41,6 +43,9 @@ class SimRuntimeAudit {
       details: sanitized,
     );
     events.add(event);
+    if (events.length > _maxInMemoryEvents) {
+      events.removeRange(0, events.length - _maxInMemoryEvents);
+    }
     if (error == null) return;
     FlutterError.reportError(
       FlutterErrorDetails(

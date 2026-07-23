@@ -125,23 +125,23 @@ void main() {
     expect(timeline, contains('phase?.type == ClassroomPhaseType.processando'));
   });
 
-  test('9. qualifier feedback is notified before auxiliary effects', () {
-    expect(
-      flows.indexOf('await organism.lessonRuntimeEngine.signal(signal)'),
-      greaterThan(-1),
+  test('9. qualifier feedback is local-first before auxiliary effects', () {
+    expect(flows, contains('_pendingLocalSignalFor'));
+    expect(flows, contains('unawaited(_reconcileSignalInBackground())'));
+    expect(flows, contains('await organism.lessonRuntimeEngine.signal'));
+    expect(flows, contains('unawaited(_openTriggeredAmparoIfNeeded'));
+
+    final localFeedback = flows.indexOf(
+      'aulaSnapshot = answerSnapshot.copyWith',
     );
-    expect(
-      flows.indexOf(
-        '_notifyFromChild();\n      _enqueueActiveLessonForRemoteVaultSync',
-      ),
-      greaterThan(-1),
+    final reconcile = flows.indexOf(
+      'unawaited(_reconcileSignalInBackground())',
     );
-    expect(
-      flows.indexOf(
-        '_notifyFromChild();\n      _enqueueActiveLessonForRemoteVaultSync',
-      ),
-      lessThan(flows.indexOf('prefetchAuxRoomsAfterMainEvidence')),
-    );
+    final aux = flows.indexOf('prefetchAuxRoomsAfterMainEvidence');
+
+    expect(localFeedback, greaterThan(-1));
+    expect(reconcile, greaterThan(localFeedback));
+    expect(aux, greaterThan(reconcile));
   });
 
   test('10. background failure becomes recoverable and retryable state', () {

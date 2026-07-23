@@ -28,6 +28,7 @@ import '../../sim/external_ai/sim_ai_server_config.dart';
 import '../../sim/external_ai/sim_server_ai_clients.dart';
 import '../../sim/external_ai/sim_server_attachment_client.dart';
 import '../../sim/classroom/classroom_models.dart';
+import '../../sim/classroom/lesson_answer_feedback.dart';
 import '../../sim/classroom/lesson_runtime_engine.dart';
 import '../../sim/classroom/lesson_main_view_model.dart';
 import '../../sim/classroom/pedagogical_slot_visibility.dart';
@@ -95,6 +96,49 @@ class _PendingLocalAnswer {
   final int? itemIdx;
   final LessonLayer? layer;
   final AnswerLetter letter;
+  final int generation;
+
+  bool sameQuestion({
+    required String? lessonLocalId,
+    required String? marker,
+    required int? itemIdx,
+    required LessonLayer? layer,
+  }) {
+    if (lessonLocalId?.trim() != this.lessonLocalId) return false;
+    if (this.marker != null && marker != null && this.marker != marker) {
+      return false;
+    }
+    if (this.itemIdx != null && itemIdx != null && this.itemIdx != itemIdx) {
+      return false;
+    }
+    if (this.layer != null && layer != null && this.layer != layer) {
+      return false;
+    }
+    return true;
+  }
+}
+
+class _PendingLocalSignal {
+  const _PendingLocalSignal({
+    required this.lessonLocalId,
+    required this.marker,
+    required this.itemIdx,
+    required this.layer,
+    required this.letter,
+    required this.signal,
+    required this.wasCorrect,
+    required this.message,
+    required this.generation,
+  });
+
+  final String lessonLocalId;
+  final String? marker;
+  final int? itemIdx;
+  final LessonLayer? layer;
+  final AnswerLetter letter;
+  final DecisionSignal signal;
+  final bool wasCorrect;
+  final String message;
   final int generation;
 
   bool sameQuestion({
@@ -266,8 +310,12 @@ class LabSession extends ChangeNotifier {
   bool _pendingManualAdvance = false;
   _PendingLocalAnswer? _pendingLocalAnswer;
   int _pendingLocalAnswerGeneration = 0;
+  _PendingLocalSignal? _pendingLocalSignal;
+  int _pendingLocalSignalGeneration = 0;
   bool _answerReconciling = false;
   bool _answerReconcileRerunRequested = false;
+  bool _signalReconciling = false;
+  bool _signalReconcileRerunRequested = false;
   int _doubtRequestSeq = 0;
   bool _disposed = false;
   bool _notifyScheduled = false;

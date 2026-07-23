@@ -637,6 +637,7 @@ extension LabSessionFlowExtensions on LabSession {
     if (clearSnapshot) {
       aulaSnapshot = null;
       _pendingLocalAnswer = null;
+      _pendingLocalSignal = null;
     }
   }
 
@@ -880,10 +881,78 @@ extension LabSessionFlowExtensions on LabSession {
     );
   }
 
+  _PendingLocalSignal? _pendingLocalSignalFor(
+    DecisionSignal signal,
+    LessonRuntimeSnapshot snapshot,
+    AnswerLetter letter,
+  ) {
+    final id = lessonLocalId?.trim();
+    final content = snapshot.conteudo;
+    if (id == null || id.isEmpty || content == null) return null;
+    final wasCorrect = letter == content.correctAnswer;
+    return _PendingLocalSignal(
+      lessonLocalId: id,
+      marker: snapshot.itemMarker,
+      itemIdx: snapshot.itemIdx,
+      layer: snapshot.layer,
+      letter: letter,
+      signal: signal,
+      wasCorrect: wasCorrect,
+      message: buildLessonAnswerFeedback(
+        correct: wasCorrect,
+        signal: signal,
+        isReview: snapshot.itemMarker?.trim().startsWith('R-') ?? false,
+      ),
+      generation: ++_pendingLocalSignalGeneration,
+    );
+  }
+
+  bool _pendingSignalMatchesSnapshot(
+    _PendingLocalSignal pending,
+    LessonRuntimeSnapshot snapshot,
+  ) {
+    return pending.sameQuestion(
+      lessonLocalId: lessonLocalId,
+      marker: snapshot.itemMarker,
+      itemIdx: snapshot.itemIdx,
+      layer: snapshot.layer,
+    );
+  }
+
   LessonRuntimeSnapshot _snapshotPreservingPendingLocalAnswer(
     LessonRuntimeSnapshot next, {
     required String source,
   }) {
+    final pendingSignal = _pendingLocalSignal;
+    if (pendingSignal != null &&
+        _pendingSignalMatchesSnapshot(pendingSignal, next)) {
+      final phase = next.phase;
+      final confirmed =
+          phase.type == ClassroomPhaseType.concluido &&
+          phase.signal == pendingSignal.signal &&
+          phase.wasCorrect == pendingSignal.wasCorrect;
+      if (!confirmed) {
+        _recordRuntimeAudit(
+          'LOCAL_SIGNAL_PRESERVED_OVER_LATE_SNAPSHOT',
+          source: source,
+          details: {
+            'letter': pendingSignal.letter.name,
+            'signal': pendingSignal.signal.value,
+            'incomingPhase': phase.type.name,
+            'marker': pendingSignal.marker,
+            'itemIdx': pendingSignal.itemIdx,
+            'layer': pendingSignal.layer?.value,
+          },
+        );
+        return next.copyWith(
+          phase: ClassroomPhase.completed(
+            message: pendingSignal.message,
+            wasCorrect: pendingSignal.wasCorrect,
+            signal: pendingSignal.signal,
+          ),
+        );
+      }
+    }
     final pending = _pendingLocalAnswer;
     if (pending == null || !_pendingAnswerMatchesSnapshot(pending, next)) {
       return next;
@@ -1345,62 +1414,80 @@ extension LabSessionFlowExtensions on LabSession {
         final answer = pending.letter;
         final generation = pending.generation;
 
-        var organism = _activeOrganism;
-        if (organism == null || organism.lessonLocalId != id) {
-          await ensureAulaRuntimeForVisibleLesson(
-            source: 'LabSession.chooseAulaAnswer.identity',
-          );
-          organism = _activeOrganism;
-        }
-        if (_pendingLocalAnswer?.generation != generation) continue;
-        if (organism == null || organism.lessonLocalId != id) {
-          aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
-          _recordRuntimeAudit(
-            'ANSWER_BLOCKED_RUNTIME_NOT_READY',
-            details: {'letter': answer.name, 'lessonLocalId': id},
-            source: 'LabSession.chooseAulaAnswer.background',
-          );
-          _notifyFromChild();
-          return;
-        }
-
-        final selected = organism.lessonRuntimeEngine.select(answer);
-        final engineSnapshot = organism.lessonRuntimeEngine.snapshot();
-        if (_pendingLocalAnswer?.generation != generation) continue;
-        final accepted =
-            selected &&
-            engineSnapshot.phase.type == ClassroomPhaseType.expandida &&
-            engineSnapshot.phase.letter == answer &&
-            pending.sameQuestion(
-              lessonLocalId: id,
-              marker: engineSnapshot.itemMarker,
-              itemIdx: engineSnapshot.itemIdx,
-              layer: engineSnapshot.layer,
+        try {
+          var organism = _activeOrganism;
+          if (organism == null || organism.lessonLocalId != id) {
+            await ensureAulaRuntimeForVisibleLesson(
+              source: 'LabSession.chooseAulaAnswer.identity',
             );
-        if (!accepted) {
-          aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
-          _recordRuntimeAudit(
-            'ANSWER_BLOCKED_RUNTIME_MISMATCH',
-            details: {'letter': answer.name},
+            organism = _activeOrganism;
+          }
+          if (_pendingLocalAnswer?.generation != generation) continue;
+          if (organism == null || organism.lessonLocalId != id) {
+            aulaRuntimeError =
+                'Toque novamente. A aula terminou de sincronizar.';
+            _recordRuntimeAudit(
+              'ANSWER_BLOCKED_RUNTIME_NOT_READY',
+              details: {'letter': answer.name, 'lessonLocalId': id},
+              source: 'LabSession.chooseAulaAnswer.background',
+            );
+            _notifyFromChild();
+            return;
+          }
+
+          final selected = organism.lessonRuntimeEngine.select(answer);
+          final engineSnapshot = organism.lessonRuntimeEngine.snapshot();
+          if (_pendingLocalAnswer?.generation != generation) continue;
+          final accepted =
+              selected &&
+              engineSnapshot.phase.type == ClassroomPhaseType.expandida &&
+              engineSnapshot.phase.letter == answer &&
+              pending.sameQuestion(
+                lessonLocalId: id,
+                marker: engineSnapshot.itemMarker,
+                itemIdx: engineSnapshot.itemIdx,
+                layer: engineSnapshot.layer,
+              );
+          if (!accepted) {
+            aulaRuntimeError =
+                'Toque novamente. A aula terminou de sincronizar.';
+            _recordRuntimeAudit(
+              'ANSWER_BLOCKED_RUNTIME_MISMATCH',
+              details: {'letter': answer.name},
+              source: 'LabSession.chooseAulaAnswer.background',
+            );
+            _notifyFromChild();
+            return;
+          }
+
+          _setAulaSnapshotPreservingPendingAnswer(
+            engineSnapshot,
             source: 'LabSession.chooseAulaAnswer.background',
+          );
+          aulaRuntimeError = null;
+          _notifyFromChild();
+          _bindActiveLessonMedia(organism);
+          _enqueueActiveLessonForRemoteVaultSync(
+            reason: 'active_lesson_changed',
+          );
+          _keepActiveAulaOfflineWindowWarm(
+            organism,
+            source: 'cyber.aula.answer-selected',
+          );
+          if (!_answerReconcileRerunRequested) return;
+        } catch (error, stackTrace) {
+          if (_pendingLocalAnswer?.generation != generation) continue;
+          aulaRuntimeError = humanErrorMessage(error);
+          _recordRuntimeAudit(
+            'ANSWER_RECONCILE_ERROR_CLASSIFIED',
+            source: 'LabSession.chooseAulaAnswer.background',
+            details: {'retryable': true, 'letter': answer.name},
+            error: error,
+            stackTrace: stackTrace,
           );
           _notifyFromChild();
           return;
         }
-
-        _setAulaSnapshotPreservingPendingAnswer(
-          engineSnapshot,
-          source: 'LabSession.chooseAulaAnswer.background',
-        );
-        aulaRuntimeError = null;
-        _notifyFromChild();
-        _bindActiveLessonMedia(organism);
-        _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
-        _keepActiveAulaOfflineWindowWarm(
-          organism,
-          source: 'cyber.aula.answer-selected',
-        );
-        if (!_answerReconcileRerunRequested) return;
       }
     } finally {
       _answerReconciling = false;
@@ -1457,28 +1544,93 @@ extension LabSessionFlowExtensions on LabSession {
       );
       return;
     }
+    final pending = _pendingLocalSignalFor(
+      signal,
+      answerSnapshot,
+      visibleLetter,
+    );
+    if (pending == null) {
+      aulaRuntimeError = 'Toque novamente na alternativa antes de qualificar.';
+      _recordRuntimeAudit(
+        'SIGNAL_BLOCKED_WITHOUT_PENDING_IDENTITY',
+        details: {'value': value, 'letter': visibleLetter.name},
+        source: 'LabSession.submitAulaSignal',
+        notify: true,
+      );
+      return;
+    }
+    aulaSnapshot = answerSnapshot.copyWith(
+      phase: ClassroomPhase.completed(
+        message: pending.message,
+        wasCorrect: pending.wasCorrect,
+        signal: pending.signal,
+      ),
+    );
+    aulaRuntimeError = null;
+    _pendingLocalSignal = pending;
+    _notifyFromChild();
     if (prefs == null) {
       if (!_allowDevAulaHarness) {
         aulaRuntimeError = 'Aula de desenvolvimento bloqueada em production.';
         _notifyFromChild();
         return;
       }
-      aulaSnapshot = _devAulaSnapshot(
-        phase: ClassroomPhase.completed(
-          message: 'aula_fb_correct',
-          wasCorrect: true,
-          signal: signal,
-        ),
-      );
-      _notifyFromChild();
       return;
     }
-    final organism = await _ensureVisibleAnswerSelectedForSignal(
-      answerSnapshot,
-      visibleLetter,
-    );
-    if (organism == null) return;
-    await _doSignal(organism, signal);
+    if (_signalReconciling) {
+      _signalReconcileRerunRequested = true;
+      return;
+    }
+    unawaited(_reconcileSignalInBackground());
+  }
+
+  Future<void> _reconcileSignalInBackground() async {
+    if (_signalReconciling) {
+      _signalReconcileRerunRequested = true;
+      return;
+    }
+    _signalReconciling = true;
+    try {
+      while (!_disposed) {
+        _signalReconcileRerunRequested = false;
+        final pending = _pendingLocalSignal;
+        final visibleSnapshot = aulaSnapshot;
+        if (pending == null || visibleSnapshot == null) return;
+        final generation = pending.generation;
+        try {
+          final organism = await _ensureVisibleAnswerSelectedForSignal(
+            visibleSnapshot,
+            pending.letter,
+          );
+          if (_pendingLocalSignal?.generation != generation) continue;
+          if (organism == null) return;
+          await _doSignal(organism, pending);
+          if (!_signalReconcileRerunRequested) return;
+        } catch (error, stackTrace) {
+          if (_pendingLocalSignal?.generation != generation) continue;
+          aulaRuntimeError = humanErrorMessage(error);
+          _recordRuntimeAudit(
+            'SIGNAL_RECONCILE_ERROR_CLASSIFIED',
+            source: 'LabSession.submitAulaSignal.background',
+            details: {
+              'retryable': true,
+              'signal': pending.signal.value,
+              'letter': pending.letter.name,
+            },
+            error: error,
+            stackTrace: stackTrace,
+          );
+          _notifyFromChild();
+          return;
+        }
+      }
+    } finally {
+      _signalReconciling = false;
+      if (_signalReconcileRerunRequested && !_disposed) {
+        _signalReconcileRerunRequested = false;
+        unawaited(_reconcileSignalInBackground());
+      }
+    }
   }
 
   Future<SimOrganism?> _ensureVisibleAnswerSelectedForSignal(
@@ -1552,22 +1704,48 @@ extension LabSessionFlowExtensions on LabSession {
     return organism;
   }
 
-  Future<void> _doSignal(SimOrganism organism, DecisionSignal signal) async {
+  Future<void> _doSignal(
+    SimOrganism organism,
+    _PendingLocalSignal pending,
+  ) async {
     aulaRuntimeError = null;
     _notifyFromChild();
     try {
-      await organism.lessonRuntimeEngine.signal(signal);
-      _setAulaSnapshotPreservingPendingAnswer(
-        organism.lessonRuntimeEngine.snapshot(),
-        source: 'LabSession.submitAulaSignal.success',
-      );
+      await organism.lessonRuntimeEngine.signal(pending.signal);
+      if (_pendingLocalSignal?.generation != pending.generation) return;
+      final engineSnapshot = organism.lessonRuntimeEngine.snapshot();
+      final accepted =
+          engineSnapshot.phase.type == ClassroomPhaseType.concluido &&
+          engineSnapshot.phase.signal == pending.signal &&
+          engineSnapshot.phase.wasCorrect == pending.wasCorrect &&
+          pending.sameQuestion(
+            lessonLocalId: organism.lessonLocalId,
+            marker: engineSnapshot.itemMarker,
+            itemIdx: engineSnapshot.itemIdx,
+            layer: engineSnapshot.layer,
+          );
+      if (!accepted) {
+        aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+        _recordRuntimeAudit(
+          'SIGNAL_BLOCKED_RUNTIME_MISMATCH',
+          source: 'LabSession.submitAulaSignal.background',
+          details: {
+            'letter': pending.letter.name,
+            'signal': pending.signal.value,
+            'incomingPhase': engineSnapshot.phase.type.name,
+          },
+        );
+        _notifyFromChild();
+        return;
+      }
+      aulaSnapshot = engineSnapshot;
       _pendingLocalAnswer = null;
       _bindActiveLessonMedia(organism);
       _notifyFromChild();
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
       _keepActiveAulaOfflineWindowWarm(organism, source: 'cyber.aula.signal');
       prefetchAuxRoomsAfterMainEvidence(organism);
-      await _openTriggeredAmparoIfNeeded(organism);
+      unawaited(_openTriggeredAmparoIfNeeded(organism));
       _scheduleAutoAdvanceAfterFeedback(organism);
     } catch (error) {
       _setAulaSnapshotPreservingPendingAnswer(
@@ -1578,7 +1756,7 @@ extension LabSessionFlowExtensions on LabSession {
       _recordRuntimeAudit(
         'SIGNAL_ERROR_CLASSIFIED',
         source: 'LabSession.submitAulaSignal',
-        details: {'retryable': true, 'signal': signal.value},
+        details: {'retryable': true, 'signal': pending.signal.value},
         error: error,
       );
     } finally {
@@ -1588,8 +1766,7 @@ extension LabSessionFlowExtensions on LabSession {
 
   void _scheduleAutoAdvanceAfterFeedback(SimOrganism organism) {
     final phase = aulaSnapshot?.phase;
-    if (phase?.type != ClassroomPhaseType.concluido ||
-        phase?.wasCorrect != true) {
+    if (phase?.type != ClassroomPhaseType.concluido) {
       return;
     }
     final generation = ++_autoAdvanceAulaGeneration;
@@ -1610,8 +1787,7 @@ extension LabSessionFlowExtensions on LabSession {
         generation == _pendingAutoAdvanceGeneration &&
         generation == _autoAdvanceAulaGeneration &&
         _activeOrganism == organism &&
-        aulaSnapshot?.phase.type == ClassroomPhaseType.concluido &&
-        aulaSnapshot?.phase.wasCorrect == true;
+        aulaSnapshot?.phase.type == ClassroomPhaseType.concluido;
     if (!canAdvance) return;
     if (aulaRuntimeLoading) {
       _recordRuntimeAudit(
@@ -1675,6 +1851,7 @@ extension LabSessionFlowExtensions on LabSession {
     }
     _pendingManualAdvance = false;
     _autoAdvanceAulaGeneration++;
+    _pendingLocalSignal = null;
     var crossedToNextPart = false;
     var blockedByRecovery = false;
     SimOrganism? organism;

@@ -79,6 +79,12 @@ class _DoubtInputSheetState extends State<DoubtInputSheet> {
     try {
       final picked = await _picker.pickImage(source: source);
       if (picked == null) return;
+      const maxRawImageBytes = doubtImageMaxDataUrlLength * 3 ~/ 4;
+      final size = await picked.length();
+      if (size > maxRawImageBytes) {
+        setState(() => _error = _localizedValidation(imageTooLargeMessage));
+        return;
+      }
       final bytes = await picked.readAsBytes();
       final mime = picked.mimeType ?? 'image/jpeg';
       final payload = DoubtImagePayload(
