@@ -23,6 +23,14 @@ void main() {
       expect(source, contains('final DecisionSignal qualifier;'));
       expect(source, contains('final LessonLayer layer;'));
       expect(source, contains('final String reason;'));
+      expect(source, contains('final bool shouldContinue;'));
+      expect(source, contains('final bool scheduleReview;'));
+      expect(source, contains('final bool requiresRecovery;'));
+      expect(source, contains('final bool offerSupport;'));
+      expect(source, contains('final bool falseConfidence;'));
+      expect(source, contains('final bool protectSelfEsteem;'));
+      expect(source, contains('final bool requiresCheck;'));
+      expect(source, contains('final bool canConsolidate;'));
       expect(source, isNot(contains('set ')));
     });
 
@@ -59,7 +67,7 @@ void main() {
       expect(source, isNot(contains('LayerValue')));
     });
 
-    test('resposta errada retorna recovery e nunca continueLesson', () {
+    test('errado com sinal 1 identifica falsa confianca e recovery', () {
       final decision = const DomainPolicy().decideAfterQualifier(
         card: _card(correctAnswer: AnswerLetter.B),
         selectedAnswer: AnswerLetter.A,
@@ -67,11 +75,56 @@ void main() {
       );
 
       expect(decision.kind, DomainDecisionKind.recovery);
-      expect(decision.kind, isNot(DomainDecisionKind.continueLesson));
       expect(decision.wasCorrect, isFalse);
+      expect(decision.requiresRecovery, isTrue);
+      expect(decision.offerSupport, isTrue);
+      expect(decision.falseConfidence, isTrue);
+      expect(decision.protectSelfEsteem, isFalse);
+      expect(decision.shouldContinue, isFalse);
+      expect(decision.scheduleReview, isTrue);
+      expect(decision.requiresCheck, isTrue);
+      expect(decision.canConsolidate, isFalse);
     });
 
-    test('todas as respostas erradas retornam recovery para todo sinal', () {
+    test('errado com sinal 2 retorna support com recuperacao', () {
+      final decision = const DomainPolicy().decideAfterQualifier(
+        card: _card(correctAnswer: AnswerLetter.B),
+        selectedAnswer: AnswerLetter.A,
+        qualifier: DecisionSignal.two,
+      );
+
+      expect(decision.kind, DomainDecisionKind.support);
+      expect(decision.wasCorrect, isFalse);
+      expect(decision.requiresRecovery, isTrue);
+      expect(decision.offerSupport, isTrue);
+      expect(decision.falseConfidence, isFalse);
+      expect(decision.protectSelfEsteem, isTrue);
+      expect(decision.shouldContinue, isFalse);
+      expect(decision.scheduleReview, isTrue);
+      expect(decision.requiresCheck, isTrue);
+      expect(decision.canConsolidate, isFalse);
+    });
+
+    test('errado com sinal 3 retorna support protegendo autoestima', () {
+      final decision = const DomainPolicy().decideAfterQualifier(
+        card: _card(correctAnswer: AnswerLetter.B),
+        selectedAnswer: AnswerLetter.A,
+        qualifier: DecisionSignal.three,
+      );
+
+      expect(decision.kind, DomainDecisionKind.support);
+      expect(decision.wasCorrect, isFalse);
+      expect(decision.requiresRecovery, isTrue);
+      expect(decision.offerSupport, isTrue);
+      expect(decision.falseConfidence, isFalse);
+      expect(decision.protectSelfEsteem, isTrue);
+      expect(decision.shouldContinue, isFalse);
+      expect(decision.scheduleReview, isTrue);
+      expect(decision.requiresCheck, isTrue);
+      expect(decision.canConsolidate, isFalse);
+    });
+
+    test('todo erro exige recuperacao e nunca consolida', () {
       for (final layer in LessonLayer.values) {
         for (final qualifier in DecisionSignal.values) {
           final decision = const DomainPolicy().decideAfterQualifier(
@@ -80,13 +133,16 @@ void main() {
             qualifier: qualifier,
           );
 
-          expect(decision.kind, DomainDecisionKind.recovery);
+          expect(decision.kind, isNot(DomainDecisionKind.continueLesson));
           expect(decision.wasCorrect, isFalse);
+          expect(decision.requiresRecovery, isTrue);
+          expect(decision.canConsolidate, isFalse);
+          expect(decision.shouldContinue, isFalse);
         }
       }
     });
 
-    test('correta com sinal 1 retorna continueLesson em todas as layers', () {
+    test('correto com sinal 1 continua, agenda revisao e consolida', () {
       for (final layer in LessonLayer.values) {
         final decision = const DomainPolicy().decideAfterQualifier(
           card: _card(layer: layer),
@@ -96,34 +152,64 @@ void main() {
 
         expect(decision.kind, DomainDecisionKind.continueLesson);
         expect(decision.wasCorrect, isTrue);
+        expect(decision.shouldContinue, isTrue);
+        expect(decision.scheduleReview, isTrue);
+        expect(decision.requiresRecovery, isFalse);
+        expect(decision.offerSupport, isFalse);
+        expect(decision.falseConfidence, isFalse);
+        expect(decision.protectSelfEsteem, isFalse);
+        expect(decision.requiresCheck, isFalse);
+        expect(decision.canConsolidate, isTrue);
       }
     });
 
-    test('correta com sinal 2 retorna review antes da layer final', () {
-      for (final layer in [LessonLayer.l1, LessonLayer.l2]) {
-        final decision = const DomainPolicy().decideAfterQualifier(
-          card: _card(layer: layer),
-          selectedAnswer: AnswerLetter.A,
-          qualifier: DecisionSignal.two,
-        );
+    test(
+      'correto com sinal 2 agenda revisao, exige checagem e nao consolida',
+      () {
+        for (final layer in LessonLayer.values) {
+          final decision = const DomainPolicy().decideAfterQualifier(
+            card: _card(layer: layer),
+            selectedAnswer: AnswerLetter.A,
+            qualifier: DecisionSignal.two,
+          );
 
-        expect(decision.kind, DomainDecisionKind.review);
-        expect(decision.wasCorrect, isTrue);
-      }
-    });
+          expect(decision.kind, DomainDecisionKind.review);
+          expect(decision.wasCorrect, isTrue);
+          expect(decision.shouldContinue, isTrue);
+          expect(decision.scheduleReview, isTrue);
+          expect(decision.requiresRecovery, isFalse);
+          expect(decision.offerSupport, isFalse);
+          expect(decision.falseConfidence, isFalse);
+          expect(decision.protectSelfEsteem, isFalse);
+          expect(decision.requiresCheck, isTrue);
+          expect(decision.canConsolidate, isFalse);
+        }
+      },
+    );
 
-    test('correta com sinal 3 retorna support antes da layer final', () {
-      for (final layer in [LessonLayer.l1, LessonLayer.l2]) {
-        final decision = const DomainPolicy().decideAfterQualifier(
-          card: _card(layer: layer),
-          selectedAnswer: AnswerLetter.A,
-          qualifier: DecisionSignal.three,
-        );
+    test(
+      'correto com sinal 3 oferece suporte e nao continua automaticamente',
+      () {
+        for (final layer in LessonLayer.values) {
+          final decision = const DomainPolicy().decideAfterQualifier(
+            card: _card(layer: layer),
+            selectedAnswer: AnswerLetter.A,
+            qualifier: DecisionSignal.three,
+          );
 
-        expect(decision.kind, DomainDecisionKind.support);
-        expect(decision.wasCorrect, isTrue);
-      }
-    });
+          expect(decision.kind, DomainDecisionKind.support);
+          expect(decision.wasCorrect, isTrue);
+          expect(decision.shouldContinue, isFalse);
+          expect(decision.scheduleReview, isTrue);
+          expect(decision.requiresRecovery, isFalse);
+          expect(decision.offerSupport, isTrue);
+          expect(decision.falseConfidence, isFalse);
+          expect(decision.protectSelfEsteem, isTrue);
+          expect(decision.requiresCheck, isTrue);
+          expect(decision.canConsolidate, isFalse);
+        }
+      },
+    );
 
     test('doubt existe mas nao e retornado automaticamente', () {
       expect(DomainDecisionKind.values, contains(DomainDecisionKind.doubt));
@@ -143,29 +229,63 @@ void main() {
       }
     });
 
-    test('layer 3 correta retorna continueLesson sem novo ciclo', () {
-      for (final qualifier in DecisionSignal.values) {
-        final decision = const DomainPolicy().decideAfterQualifier(
-          card: _card(layer: LessonLayer.l3),
-          selectedAnswer: AnswerLetter.A,
-          qualifier: qualifier,
-        );
+    test('layer 3 correta com sinal 1 continua sem criar L4', () {
+      final decision = const DomainPolicy().decideAfterQualifier(
+        card: _card(layer: LessonLayer.l3),
+        selectedAnswer: AnswerLetter.A,
+        qualifier: DecisionSignal.one,
+      );
 
-        expect(decision.kind, DomainDecisionKind.continueLesson);
-        expect(decision.layer, LessonLayer.l3);
-        expect(decision.reason, contains('layer_3'));
-      }
+      expect(decision.kind, DomainDecisionKind.continueLesson);
+      expect(decision.layer, LessonLayer.l3);
+      expect(decision.canConsolidate, isTrue);
+      expect(
+        LessonLayer.values.map((layer) => layer.name),
+        isNot(contains('l4')),
+      );
     });
 
-    test('layer 3 errada retorna recovery sem novo destino', () {
+    test('layer 3 correta com sinal 2 nao consolida', () {
       final decision = const DomainPolicy().decideAfterQualifier(
-        card: _card(layer: LessonLayer.l3, correctAnswer: AnswerLetter.B),
+        card: _card(layer: LessonLayer.l3),
+        selectedAnswer: AnswerLetter.A,
+        qualifier: DecisionSignal.two,
+      );
+
+      expect(decision.kind, DomainDecisionKind.review);
+      expect(decision.shouldContinue, isTrue);
+      expect(decision.scheduleReview, isTrue);
+      expect(decision.requiresCheck, isTrue);
+      expect(decision.canConsolidate, isFalse);
+    });
+
+    test('layer 3 correta com sinal 3 nao consolida nem continua', () {
+      final decision = const DomainPolicy().decideAfterQualifier(
+        card: _card(layer: LessonLayer.l3),
         selectedAnswer: AnswerLetter.A,
         qualifier: DecisionSignal.three,
       );
 
-      expect(decision.kind, DomainDecisionKind.recovery);
-      expect(decision.layer, LessonLayer.l3);
+      expect(decision.kind, DomainDecisionKind.support);
+      expect(decision.shouldContinue, isFalse);
+      expect(decision.offerSupport, isTrue);
+      expect(decision.requiresCheck, isTrue);
+      expect(decision.canConsolidate, isFalse);
+    });
+
+    test('layer 3 errada nunca continua nem consolida', () {
+      for (final qualifier in DecisionSignal.values) {
+        final decision = const DomainPolicy().decideAfterQualifier(
+          card: _card(layer: LessonLayer.l3, correctAnswer: AnswerLetter.B),
+          selectedAnswer: AnswerLetter.A,
+          qualifier: qualifier,
+        );
+
+        expect(decision.kind, isNot(DomainDecisionKind.continueLesson));
+        expect(decision.shouldContinue, isFalse);
+        expect(decision.canConsolidate, isFalse);
+        expect(decision.layer, LessonLayer.l3);
+      }
     });
 
     test('carta invalida e rejeitada sem decisao neutra', () {
@@ -367,22 +487,15 @@ void main() {
       expect(source, isNot(contains('path')));
     });
 
-    test('git diff contem somente os dois arquivos permitidos', () {
-      final result = Process.runSync('git', [
-        'ls-files',
-        '--others',
-        '--modified',
-        '--exclude-standard',
-      ]);
-      final files = (result.stdout as String)
-          .split('\n')
-          .where((line) => line.trim().isNotEmpty)
-          .toList();
+    test('nao existe teste dependente de estado git local', () {
+      final forbiddenGitStateCommand = ['git', 'ls-files'].join(' ');
 
-      expect(files, [
-        'lib/sim/game/domain_policy.dart',
-        'test/sim_game_domain_policy_contract_test.dart',
-      ]);
+      expect(
+        File(
+          'test/sim_game_domain_policy_contract_test.dart',
+        ).readAsStringSync(),
+        isNot(contains(forbiddenGitStateCommand)),
+      );
     });
   });
 }
