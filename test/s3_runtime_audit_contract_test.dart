@@ -34,6 +34,8 @@ void main() {
     expect(runtime, contains('if (position == null) return false;'));
     expect(flows, contains('hasLivePositionForSnapshot'));
     expect(flows, contains('ANSWER_BLOCKED_RUNTIME_NOT_READY'));
+    expect(flows, isNot(contains('LabSession.chooseAulaAnswer.position')));
+    expect(flows, isNot(contains('LabSession.chooseAulaAnswer.select_false')));
     expect(flows, isNot(contains('ANSWER_REJECTED_NO_POSITION')));
   });
 

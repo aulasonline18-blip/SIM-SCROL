@@ -1258,23 +1258,7 @@ extension LabSessionFlowExtensions on LabSession {
       );
       organism = _activeOrganism;
     }
-    if (organism == null ||
-        organism.lessonLocalId != id ||
-        !organism.lessonRuntimeEngine.hasLivePositionForSnapshot(
-          lessonLocalId: id,
-          snapshot: snapshot,
-        )) {
-      await ensureAulaRuntimeForVisibleLesson(
-        source: 'LabSession.chooseAulaAnswer.position',
-      );
-      organism = _activeOrganism;
-    }
-    if (organism == null ||
-        organism.lessonLocalId != id ||
-        !organism.lessonRuntimeEngine.hasLivePositionForSnapshot(
-          lessonLocalId: id,
-          snapshot: aulaSnapshot,
-        )) {
+    if (organism == null || organism.lessonLocalId != id) {
       aulaRuntimeError =
           'A aula ainda esta preparando. Aguarde um instante para responder.';
       _recordRuntimeAudit(
@@ -1285,34 +1269,10 @@ extension LabSessionFlowExtensions on LabSession {
       );
       return;
     }
-    var selected = organism.lessonRuntimeEngine.select(answer);
-    if (!selected) {
-      await ensureAulaRuntimeForVisibleLesson(
-        source: 'LabSession.chooseAulaAnswer.select_false',
-      );
-      organism = _activeOrganism;
-      selected =
-          organism != null &&
-          organism.lessonLocalId == id &&
-          organism.lessonRuntimeEngine.hasLivePositionForSnapshot(
-            lessonLocalId: id,
-            snapshot: aulaSnapshot,
-          ) &&
-          organism.lessonRuntimeEngine.select(answer);
-    }
-    if (!selected || organism == null) {
-      aulaRuntimeError =
-          'A aula ainda esta preparando. Aguarde um instante para responder.';
-      _recordRuntimeAudit(
-        'ANSWER_BLOCKED_RUNTIME_NOT_READY',
-        details: {'letter': answer.name, 'lessonLocalId': id},
-        source: 'LabSession.chooseAulaAnswer',
-        notify: true,
-      );
-      return;
-    }
+    final selected = organism.lessonRuntimeEngine.select(answer);
     aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
     final accepted =
+        selected &&
         aulaSnapshot?.phase.type == ClassroomPhaseType.expandida &&
         aulaSnapshot?.phase.letter == answer;
     if (!accepted) {
@@ -1323,13 +1283,16 @@ extension LabSessionFlowExtensions on LabSession {
         details: {'letter': answer.name},
         source: 'LabSession.chooseAulaAnswer',
       );
+      _notifyFromChild();
+      return;
     }
+    aulaRuntimeError = null;
+    _notifyFromChild();
     _bindActiveLessonMedia(organism);
     _keepActiveAulaOfflineWindowWarm(
       organism,
       source: 'cyber.aula.answer-selected',
     );
-    _notifyFromChild();
   }
 
   Future<void> submitAulaSignal(int value) async {

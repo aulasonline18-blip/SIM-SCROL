@@ -1583,6 +1583,39 @@ void main() {
     },
   );
 
+  test(
+    'A/B/C expande localmente sem reconciliar posicao antes dos sinais',
+    () async {
+      SimRuntimeAudit.clearForTesting();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = _storeWithState(
+        _classroomStateWithPreparedCurrent('lesson-local-answer'),
+      );
+      final session = LabSession(canonicalStore: store, prefs: prefs)
+        ..authed = true
+        ..authReady = true
+        ..lessonLocalId = 'lesson-local-answer'
+        ..route = '/cyber/aula';
+
+      await session.openAulaRuntime();
+      SimRuntimeAudit.clearForTesting();
+
+      await session.chooseAulaAnswer('A');
+
+      expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.expandida);
+      expect(session.aulaSnapshot?.phase.letter, AnswerLetter.A);
+      expect(
+        SimRuntimeAudit.events.map((event) => event.source),
+        isNot(contains('LabSession.chooseAulaAnswer.position')),
+      );
+      expect(
+        File('lib/features/session/lab_session_flows.dart').readAsStringSync(),
+        isNot(contains('LabSession.chooseAulaAnswer.position')),
+      );
+    },
+  );
+
   test('retomada reconstrói runtime vazio antes de aceitar A/B/C', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
