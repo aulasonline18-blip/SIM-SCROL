@@ -120,6 +120,7 @@ void main() {
 
       expect(buildBody, isNot(contains('setState(')));
       expect(buildBody, isNot(contains('.call(')));
+      expect(buildBody, isNot(contains('actions:')));
       expect(buildBody, isNot(contains('loadMicrodeck')));
       expect(buildBody, isNot(contains('selectAnswer')));
       expect(buildBody, isNot(contains('selectQualifier')));
@@ -155,6 +156,8 @@ void main() {
       expect(find.byKey(const Key('sim_game_answer_A')), findsNothing);
       expect(find.byKey(const Key('sim_game_answer_B')), findsNothing);
       expect(find.byKey(const Key('sim_game_answer_C')), findsNothing);
+      expect(find.byKey(const Key('sim_game_audio_button')), findsNothing);
+      expect(find.byTooltip('Áudio'), findsNothing);
       expect(needs, 0);
     });
 
@@ -173,6 +176,58 @@ void main() {
         expect(find.textContaining('indice 1'), findsOneWidget);
       },
     );
+
+    testWidgets('card without audioKey has no audio button', (tester) async {
+      final controller = _loadedController();
+
+      await tester.pumpScreen(controller);
+
+      expect(find.byKey(const Key('sim_game_audio_button')), findsNothing);
+      expect(find.byTooltip('Áudio'), findsNothing);
+    });
+
+    testWidgets('card with audioKey and disabled audio has no audio button', (
+      tester,
+    ) async {
+      final controller = _loadedController(withMedia: true);
+
+      await tester.pumpScreen(controller, audioEnabled: false);
+
+      expect(find.byKey(const Key('sim_game_audio_button')), findsNothing);
+      expect(find.byTooltip('Áudio'), findsNothing);
+    });
+
+    testWidgets('card with enabled audio has one button inside GameCardView', (
+      tester,
+    ) async {
+      final controller = _loadedController(withMedia: true);
+
+      await tester.pumpScreen(controller, audioEnabled: true);
+
+      expect(find.byKey(const Key('sim_game_audio_button')), findsOneWidget);
+      expect(find.byTooltip('Áudio'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('sim_game_card_ready')),
+          matching: find.byKey(const Key('sim_game_audio_button')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.byKey(const Key('sim_game_audio_button')),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.byTooltip('Áudio'),
+        ),
+        findsNothing,
+      );
+    });
 
     testWidgets('A/B/C tap rebuilds status and shows qualifiers', (
       tester,
@@ -245,6 +300,10 @@ void main() {
         await tester.pump();
         await tester.tap(find.byKey(const Key('sim_game_continue_button')));
         order.add('after-tap');
+        expect(order, ['after-tap']);
+        expect(find.text('Feedback'), findsOneWidget);
+        expect(find.text('Preparando carta'), findsNothing);
+
         await tester.pump();
         order.add('after-pump');
 

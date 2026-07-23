@@ -43,15 +43,6 @@ final class _GameClassroomScreenState extends State<GameClassroomScreen> {
       appBar: AppBar(
         key: const Key('sim_game_classroom_header'),
         title: const Text('SIM Game'),
-        actions: [
-          IconButton(
-            tooltip: 'Áudio',
-            onPressed: widget.onToggleAudio,
-            icon: Icon(
-              widget.audioEnabled ? Icons.volume_up : Icons.volume_off,
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
         child: Padding(
