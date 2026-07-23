@@ -402,6 +402,23 @@ void main() {
     expect(client.acceptedEventIds, isEmpty);
   });
 
+  test('applyAck rejeita batch pendente fora do prefixo preparado', () {
+    final client = GameSyncClient()..enqueueFromLog(eventLog(3));
+    final batch = GameSyncBatch(
+      batchId: 'batch-1',
+      events: [validEvent(index: 2)],
+      createdAtMs: 1,
+    );
+
+    expectSyncFailure(
+      () => client.applyAck(batch, acceptedEventIds: {'event-2'}),
+      'batch fora do prefixo',
+    );
+
+    expect(eventIds(client.pendingEvents), ['event-0', 'event-1', 'event-2']);
+    expect(client.acceptedEventIds, isEmpty);
+  });
+
   test('applyAck com batch invalido nao altera estado', () {
     final client = GameSyncClient()..enqueueFromLog(eventLog(1));
     final beforePending = eventIds(client.pendingEvents);

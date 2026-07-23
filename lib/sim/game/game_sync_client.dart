@@ -271,6 +271,19 @@ final class GameSyncClient {
     final pendingKeys = _pendingEvents
         .map((event) => event.idempotencyKey)
         .toSet();
+    final expectedBatchEvents = _pendingEvents
+        .take(batch.events.length)
+        .toList();
+    for (var index = 0; index < batch.events.length; index += 1) {
+      final batchEvent = batch.events[index];
+      final expectedEvent = expectedBatchEvents[index];
+      if (batchEvent.eventId != expectedEvent.eventId ||
+          batchEvent.idempotencyKey != expectedEvent.idempotencyKey) {
+        throw const GameSyncContractException(
+          'batch_must_match_pending_prefix',
+        );
+      }
+    }
     for (final event in batch.events) {
       if (pendingById[event.eventId] != event.idempotencyKey ||
           !pendingKeys.contains(event.idempotencyKey)) {
