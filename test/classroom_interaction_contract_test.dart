@@ -186,17 +186,17 @@ void main() {
     },
   );
 
-  test('signal blocked by loading has visible state', () async {
+  test('signal without expanded answer has visible state', () async {
     final session = LabSession()
       ..aulaSnapshot = _snapshot(content: null)
       ..aulaRuntimeLoading = true;
 
     await session.submitAulaSignal(1);
 
-    expect(session.aulaRuntimeError?.toLowerCase(), contains('qualificar'));
+    expect(session.aulaRuntimeError?.toLowerCase(), contains('alternativa'));
     expect(
       SimRuntimeAudit.events.map((event) => event.code),
-      contains('signal_blocked_by_loading'),
+      contains('signal_blocked_without_visible_local_answer'),
     );
   });
 

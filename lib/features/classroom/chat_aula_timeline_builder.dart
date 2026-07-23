@@ -73,7 +73,7 @@ List<ChatLessonMessage> buildChatLessonMessages(ChatLessonTimelineInput input) {
                 ),
               )
               .toList(growable: false),
-          imageData: entry.imageUrl,
+          imageData: null,
           selectedAnswer: entry.chosenOptionId,
           isCorrect: entry.correct,
           lessonLocalId: input.lessonLocalId,

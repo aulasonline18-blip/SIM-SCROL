@@ -115,7 +115,7 @@ class LessonAnswerProgressController {
       ],
       chosenOptionId: letter,
       correct: correct,
-      imageUrl: position.imagem,
+      imageUrl: null,
       answeredAt: answeredAt,
     );
     // Prevent double-tap (only block if the immediately preceding entry is identical)

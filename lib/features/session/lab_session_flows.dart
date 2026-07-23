@@ -634,7 +634,10 @@ extension LabSessionFlowExtensions on LabSession {
     lessonUiState.imageCharged = null;
     lessonUiState.imageCacheHit = null;
     lessonUiState.imageRetryable = null;
-    if (clearSnapshot) aulaSnapshot = null;
+    if (clearSnapshot) {
+      aulaSnapshot = null;
+      _pendingLocalAnswer = null;
+    }
   }
 
   void _syncImageStateFromSnapshot() {
@@ -707,7 +710,10 @@ extension LabSessionFlowExtensions on LabSession {
         );
         return;
       }
-      aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+      _setAulaSnapshotPreservingPendingAnswer(
+        organism.lessonRuntimeEngine.snapshot(),
+        source: 'LabSession.lesson_media_listener',
+      );
       if (lesson.imagem != null && lesson.imagem!.trim().isNotEmpty) {
         imageStatus = 'ready';
         imageError = null;
@@ -846,6 +852,66 @@ extension LabSessionFlowExtensions on LabSession {
     return ok;
   }
 
+  _PendingLocalAnswer? _pendingLocalAnswerFor(
+    AnswerLetter answer,
+    LessonRuntimeSnapshot snapshot,
+  ) {
+    final id = lessonLocalId?.trim();
+    if (id == null || id.isEmpty) return null;
+    return _PendingLocalAnswer(
+      lessonLocalId: id,
+      marker: snapshot.itemMarker,
+      itemIdx: snapshot.itemIdx,
+      layer: snapshot.layer,
+      letter: answer,
+      generation: ++_pendingLocalAnswerGeneration,
+    );
+  }
+
+  bool _pendingAnswerMatchesSnapshot(
+    _PendingLocalAnswer pending,
+    LessonRuntimeSnapshot snapshot,
+  ) {
+    return pending.sameQuestion(
+      lessonLocalId: lessonLocalId,
+      marker: snapshot.itemMarker,
+      itemIdx: snapshot.itemIdx,
+      layer: snapshot.layer,
+    );
+  }
+
+  LessonRuntimeSnapshot _snapshotPreservingPendingLocalAnswer(
+    LessonRuntimeSnapshot next, {
+    required String source,
+  }) {
+    final pending = _pendingLocalAnswer;
+    if (pending == null || !_pendingAnswerMatchesSnapshot(pending, next)) {
+      return next;
+    }
+    final phase = next.phase;
+    if (phase.type == ClassroomPhaseType.lendo) {
+      _recordRuntimeAudit(
+        'LOCAL_ANSWER_PRESERVED_OVER_LATE_READING_SNAPSHOT',
+        source: source,
+        details: {
+          'letter': pending.letter.name,
+          'marker': pending.marker,
+          'itemIdx': pending.itemIdx,
+          'layer': pending.layer?.value,
+        },
+      );
+      return next.copyWith(phase: ClassroomPhase.expanded(pending.letter));
+    }
+    return next;
+  }
+
+  void _setAulaSnapshotPreservingPendingAnswer(
+    LessonRuntimeSnapshot next, {
+    required String source,
+  }) {
+    aulaSnapshot = _snapshotPreservingPendingLocalAnswer(next, source: source);
+  }
+
   Future<void> ensureAulaRuntimeForVisibleLesson({
     String source = 'LabSession.ensureAulaRuntimeForVisibleLesson',
   }) async {
@@ -945,7 +1011,10 @@ extension LabSessionFlowExtensions on LabSession {
         },
       );
       if (!_isCurrentAulaRuntime(id, runtimeGeneration)) return;
-      aulaSnapshot = snapshot;
+      _setAulaSnapshotPreservingPendingAnswer(
+        snapshot,
+        source: 'LabSession.openAulaRuntime',
+      );
       aulaOpeningTransition = null;
       if (_drawerAulaTextReady(snapshot)) aulaMenuLessonWaiting = false;
       _bindActiveLessonMedia(organism);
@@ -1016,7 +1085,10 @@ extension LabSessionFlowExtensions on LabSession {
       );
       return;
     }
-    aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+    _setAulaSnapshotPreservingPendingAnswer(
+      organism.lessonRuntimeEngine.snapshot(),
+      source: 'LabSession.background_resolved',
+    );
     aulaRuntimeLoading = false;
     aulaRuntimeError = null;
     aulaOpeningTransition = null;
@@ -1176,7 +1248,10 @@ extension LabSessionFlowExtensions on LabSession {
       );
       return;
     }
-    aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+    _setAulaSnapshotPreservingPendingAnswer(
+      organism.lessonRuntimeEngine.snapshot(),
+      source: 'LabSession.advance_reevaluation',
+    );
     if (_drawerAulaTextReady(aulaSnapshot)) aulaMenuLessonWaiting = false;
     aulaOpeningTransition = null;
     _bindActiveLessonMedia(organism);
@@ -1226,9 +1301,11 @@ extension LabSessionFlowExtensions on LabSession {
       );
       return;
     }
-    stopActiveAudio();
-    aulaSnapshot = snapshot!.copyWith(phase: ClassroomPhase.expanded(answer));
+    final pending = _pendingLocalAnswerFor(answer, snapshot!);
+    stopActiveAudio(notify: false);
+    aulaSnapshot = snapshot.copyWith(phase: ClassroomPhase.expanded(answer));
     aulaRuntimeError = null;
+    if (pending != null) _pendingLocalAnswer = pending;
     _notifyFromChild();
     if (prefs == null) {
       if (!_allowDevAulaHarness) {
@@ -1238,55 +1315,119 @@ extension LabSessionFlowExtensions on LabSession {
       }
       return;
     }
-    final id = lessonLocalId?.trim();
-    if (id == null || id.isEmpty) {
+    if (pending == null) {
       _recordRuntimeAudit(
-        'ANSWER_BLOCKED_WITHOUT_LESSON_ID',
+        'ANSWER_LOCAL_ONLY_WITHOUT_PENDING_IDENTITY',
         details: {'letter': answer.name},
         source: 'LabSession.chooseAulaAnswer.background',
       );
       return;
     }
-    var organism = _activeOrganism;
-    if (organism == null || organism.lessonLocalId != id) {
-      await ensureAulaRuntimeForVisibleLesson(
-        source: 'LabSession.chooseAulaAnswer.identity',
-      );
-      organism = _activeOrganism;
-    }
-    if (organism == null || organism.lessonLocalId != id) {
-      _recordRuntimeAudit(
-        'ANSWER_BLOCKED_RUNTIME_NOT_READY',
-        details: {'letter': answer.name, 'lessonLocalId': id},
-        source: 'LabSession.chooseAulaAnswer.background',
-      );
+    if (_answerReconciling) {
+      _answerReconcileRerunRequested = true;
       return;
     }
-    final selected = organism.lessonRuntimeEngine.select(answer);
-    final engineSnapshot = organism.lessonRuntimeEngine.snapshot();
-    final accepted =
-        selected &&
-        engineSnapshot.phase.type == ClassroomPhaseType.expandida &&
-        engineSnapshot.phase.letter == answer;
-    if (!accepted) {
-      _recordRuntimeAudit(
-        'ANSWER_BLOCKED_RUNTIME_MISMATCH',
-        details: {'letter': answer.name},
-        source: 'LabSession.chooseAulaAnswer.background',
-      );
+    unawaited(_reconcileAnswerInBackground());
+  }
+
+  Future<void> _reconcileAnswerInBackground() async {
+    if (_answerReconciling) {
+      _answerReconcileRerunRequested = true;
       return;
     }
-    aulaSnapshot = engineSnapshot;
-    aulaRuntimeError = null;
-    _notifyFromChild();
-    _bindActiveLessonMedia(organism);
-    _keepActiveAulaOfflineWindowWarm(
-      organism,
-      source: 'cyber.aula.answer-selected',
-    );
+    _answerReconciling = true;
+    try {
+      while (!_disposed) {
+        _answerReconcileRerunRequested = false;
+        final pending = _pendingLocalAnswer;
+        if (pending == null) return;
+        final id = pending.lessonLocalId;
+        final answer = pending.letter;
+        final generation = pending.generation;
+
+        var organism = _activeOrganism;
+        if (organism == null || organism.lessonLocalId != id) {
+          await ensureAulaRuntimeForVisibleLesson(
+            source: 'LabSession.chooseAulaAnswer.identity',
+          );
+          organism = _activeOrganism;
+        }
+        if (_pendingLocalAnswer?.generation != generation) continue;
+        if (organism == null || organism.lessonLocalId != id) {
+          aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+          _recordRuntimeAudit(
+            'ANSWER_BLOCKED_RUNTIME_NOT_READY',
+            details: {'letter': answer.name, 'lessonLocalId': id},
+            source: 'LabSession.chooseAulaAnswer.background',
+          );
+          _notifyFromChild();
+          return;
+        }
+
+        final selected = organism.lessonRuntimeEngine.select(answer);
+        final engineSnapshot = organism.lessonRuntimeEngine.snapshot();
+        if (_pendingLocalAnswer?.generation != generation) continue;
+        final accepted =
+            selected &&
+            engineSnapshot.phase.type == ClassroomPhaseType.expandida &&
+            engineSnapshot.phase.letter == answer &&
+            pending.sameQuestion(
+              lessonLocalId: id,
+              marker: engineSnapshot.itemMarker,
+              itemIdx: engineSnapshot.itemIdx,
+              layer: engineSnapshot.layer,
+            );
+        if (!accepted) {
+          aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+          _recordRuntimeAudit(
+            'ANSWER_BLOCKED_RUNTIME_MISMATCH',
+            details: {'letter': answer.name},
+            source: 'LabSession.chooseAulaAnswer.background',
+          );
+          _notifyFromChild();
+          return;
+        }
+
+        _setAulaSnapshotPreservingPendingAnswer(
+          engineSnapshot,
+          source: 'LabSession.chooseAulaAnswer.background',
+        );
+        aulaRuntimeError = null;
+        _notifyFromChild();
+        _bindActiveLessonMedia(organism);
+        _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
+        _keepActiveAulaOfflineWindowWarm(
+          organism,
+          source: 'cyber.aula.answer-selected',
+        );
+        if (!_answerReconcileRerunRequested) return;
+      }
+    } finally {
+      _answerReconciling = false;
+      if (_answerReconcileRerunRequested && !_disposed) {
+        _answerReconcileRerunRequested = false;
+        unawaited(_reconcileAnswerInBackground());
+      }
+    }
   }
 
   Future<void> submitAulaSignal(int value) async {
+    final visibleSnapshot = aulaSnapshot;
+    final visiblePhase = visibleSnapshot?.phase;
+    final visibleLetter = visiblePhase?.letter;
+    if (visibleSnapshot?.conteudo == null ||
+        visiblePhase?.type != ClassroomPhaseType.expandida ||
+        visibleLetter == null) {
+      aulaRuntimeError = 'Toque novamente na alternativa antes de qualificar.';
+      _recordRuntimeAudit(
+        'SIGNAL_BLOCKED_WITHOUT_VISIBLE_LOCAL_ANSWER',
+        source: 'LabSession.submitAulaSignal',
+        details: {'value': value, 'phase': visiblePhase?.type.name},
+        notify: true,
+      );
+      return;
+    }
+    final answerSnapshot = visibleSnapshot!;
     if (aulaRuntimeLoading &&
         !hasValidPedagogicalContent(aulaSnapshot?.conteudo)) {
       aulaRuntimeError =
@@ -1299,7 +1440,7 @@ extension LabSessionFlowExtensions on LabSession {
       );
       return;
     }
-    stopActiveAudio();
+    stopActiveAudio(notify: false);
     final signal = switch (value) {
       1 => DecisionSignal.one,
       2 => DecisionSignal.two,
@@ -1332,8 +1473,83 @@ extension LabSessionFlowExtensions on LabSession {
       _notifyFromChild();
       return;
     }
-    final organism = _activeOrganism ?? _organismForActiveLesson();
+    final organism = await _ensureVisibleAnswerSelectedForSignal(
+      answerSnapshot,
+      visibleLetter,
+    );
+    if (organism == null) return;
     await _doSignal(organism, signal);
+  }
+
+  Future<SimOrganism?> _ensureVisibleAnswerSelectedForSignal(
+    LessonRuntimeSnapshot visibleSnapshot,
+    AnswerLetter visibleLetter,
+  ) async {
+    final id = lessonLocalId?.trim();
+    if (id == null || id.isEmpty) {
+      aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      _recordRuntimeAudit(
+        'SIGNAL_BLOCKED_WITHOUT_LESSON_ID',
+        source: 'LabSession.submitAulaSignal',
+        details: {'letter': visibleLetter.name},
+      );
+      _notifyFromChild();
+      return null;
+    }
+    var organism = _activeOrganism;
+    if (organism == null || organism.lessonLocalId != id) {
+      await ensureAulaRuntimeForVisibleLesson(
+        source: 'LabSession.submitAulaSignal.identity',
+      );
+      organism = _activeOrganism;
+    }
+    if (organism == null || organism.lessonLocalId != id) {
+      aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      _recordRuntimeAudit(
+        'SIGNAL_BLOCKED_RUNTIME_NOT_READY',
+        source: 'LabSession.submitAulaSignal',
+        details: {'letter': visibleLetter.name, 'lessonLocalId': id},
+      );
+      _notifyFromChild();
+      return null;
+    }
+    final sameQuestion = organism.lessonRuntimeEngine
+        .hasLivePositionForSnapshot(
+          lessonLocalId: id,
+          snapshot: visibleSnapshot,
+        );
+    if (!sameQuestion) {
+      aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      _recordRuntimeAudit(
+        'SIGNAL_BLOCKED_QUESTION_MISMATCH',
+        source: 'LabSession.submitAulaSignal',
+        details: {'letter': visibleLetter.name, 'lessonLocalId': id},
+      );
+      _notifyFromChild();
+      return null;
+    }
+    var engineSnapshot = organism.lessonRuntimeEngine.snapshot();
+    if (engineSnapshot.phase.type != ClassroomPhaseType.expandida ||
+        engineSnapshot.phase.letter != visibleLetter) {
+      organism.lessonRuntimeEngine.select(visibleLetter);
+      engineSnapshot = organism.lessonRuntimeEngine.snapshot();
+    }
+    if (engineSnapshot.phase.type != ClassroomPhaseType.expandida ||
+        engineSnapshot.phase.letter != visibleLetter) {
+      aulaRuntimeError = 'Toque novamente. A aula terminou de sincronizar.';
+      _recordRuntimeAudit(
+        'SIGNAL_BLOCKED_ENGINE_NOT_EXPANDED',
+        source: 'LabSession.submitAulaSignal',
+        details: {'letter': visibleLetter.name, 'lessonLocalId': id},
+      );
+      _notifyFromChild();
+      return null;
+    }
+    _setAulaSnapshotPreservingPendingAnswer(
+      engineSnapshot,
+      source: 'LabSession.submitAulaSignal.preflight',
+    );
+    return organism;
   }
 
   Future<void> _doSignal(SimOrganism organism, DecisionSignal signal) async {
@@ -1341,7 +1557,11 @@ extension LabSessionFlowExtensions on LabSession {
     _notifyFromChild();
     try {
       await organism.lessonRuntimeEngine.signal(signal);
-      aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+      _setAulaSnapshotPreservingPendingAnswer(
+        organism.lessonRuntimeEngine.snapshot(),
+        source: 'LabSession.submitAulaSignal.success',
+      );
+      _pendingLocalAnswer = null;
       _bindActiveLessonMedia(organism);
       _notifyFromChild();
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
@@ -1350,7 +1570,10 @@ extension LabSessionFlowExtensions on LabSession {
       await _openTriggeredAmparoIfNeeded(organism);
       _scheduleAutoAdvanceAfterFeedback(organism);
     } catch (error) {
-      aulaSnapshot = organism.lessonRuntimeEngine.snapshot();
+      _setAulaSnapshotPreservingPendingAnswer(
+        organism.lessonRuntimeEngine.snapshot(),
+        source: 'LabSession.submitAulaSignal.error',
+      );
       aulaRuntimeError = humanErrorMessage(error);
       _recordRuntimeAudit(
         'SIGNAL_ERROR_CLASSIFIED',
@@ -1472,7 +1695,10 @@ extension LabSessionFlowExtensions on LabSession {
           );
         },
       );
-      aulaSnapshot = activeOrganism.lessonRuntimeEngine.snapshot();
+      _setAulaSnapshotPreservingPendingAnswer(
+        activeOrganism.lessonRuntimeEngine.snapshot(),
+        source: 'LabSession.advanceAula',
+      );
       _bindActiveLessonMedia(activeOrganism);
       _enqueueActiveLessonForRemoteVaultSync(reason: 'active_lesson_changed');
       _keepActiveAulaOfflineWindowWarm(

@@ -34,9 +34,41 @@ void main() {
     expect(runtime, contains('if (position == null) return false;'));
     expect(flows, contains('hasLivePositionForSnapshot'));
     expect(flows, contains('ANSWER_BLOCKED_RUNTIME_NOT_READY'));
+    expect(flows, contains('_PendingLocalAnswer'));
+    expect(flows, contains('_reconcileAnswerInBackground'));
     expect(flows, isNot(contains('LabSession.chooseAulaAnswer.position')));
     expect(flows, isNot(contains('LabSession.chooseAulaAnswer.select_false')));
     expect(flows, isNot(contains('ANSWER_REJECTED_NO_POSITION')));
+  });
+
+  test('chat merge is debounced and image fingerprints are light test', () {
+    final screen = _read('lib/features/classroom/chat_aula_screen.dart');
+
+    final mergeStart = screen.indexOf(
+      'List<ChatLessonMessage> _mergeConversationMessages',
+    );
+    final mergeEnd = screen.indexOf(
+      'List<ChatLessonMessage> _restoredMessagesAsProjection',
+    );
+    final merge = screen.substring(mergeStart, mergeEnd);
+
+    expect(screen, contains('_schedulePersistConversationSnapshot'));
+    expect(merge, isNot(contains('unawaited(_persistConversationSnapshot')));
+    expect(screen, contains('_imageFingerprint(message.imageData)'));
+    expect(screen, isNot(contains('message.imageData ??')));
+  });
+
+  test('answer history does not store inline images test', () {
+    final controller = _read(
+      'lib/sim/classroom/lesson_answer_progress_controller.dart',
+    );
+    final timeline = _read(
+      'lib/features/classroom/chat_aula_timeline_builder.dart',
+    );
+
+    expect(controller, isNot(contains('imageUrl: position.imagem')));
+    expect(controller, contains('imageUrl: null'));
+    expect(timeline, isNot(contains('imageData: entry.imageUrl')));
   });
 
   test('invalid decision signal is rejected test', () {

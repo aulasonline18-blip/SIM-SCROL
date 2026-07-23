@@ -486,58 +486,53 @@ void main() {
   );
 
   // -------------------------------------------------------------------------
-  // T15 – histórico 5 questões: imagens antigas continuam disponíveis no chat
+  // T15 – histórico 5 questões: imagens antigas não ficam inline no chat
   // -------------------------------------------------------------------------
-  test(
-    'T15: history 5 entries preserves all imageUrl values for chat scroll',
-    () {
-      final svc = StudentLearningStateService(seed: {'L1': _state0()});
-      final ctrl = _controller(svc);
-      final pos = LessonPositionState(
-        items: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
-        itemIdx: 0,
-        layer: LessonLayer.l1,
-        erros: 0,
-        historia: const [],
-        history: const [],
-        mainAdvances: 0,
-        loadingLayer: LessonLayer.l1,
-        conteudo: null,
-        phase: const ClassroomPhase.reading(),
-        imagem: null,
-        teoriaPronta: false,
+  test('T15: history 5 entries does not preserve inline imageUrl values', () {
+    final svc = StudentLearningStateService(seed: {'L1': _state0()});
+    final ctrl = _controller(svc);
+    final pos = LessonPositionState(
+      items: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
+      itemIdx: 0,
+      layer: LessonLayer.l1,
+      erros: 0,
+      historia: const [],
+      history: const [],
+      mainAdvances: 0,
+      loadingLayer: LessonLayer.l1,
+      conteudo: null,
+      phase: const ClassroomPhase.reading(),
+      imagem: null,
+      teoriaPronta: false,
+    );
+
+    for (var i = 0; i < 5; i++) {
+      pos.conteudo = LessonContent(
+        explanation: 'E$i',
+        question: 'Q$i',
+        options: const {
+          AnswerLetter.A: 'A',
+          AnswerLetter.B: 'B',
+          AnswerLetter.C: 'C',
+        },
+        correctAnswer: AnswerLetter.A,
       );
+      pos.imagem = 'http://img/$i.png';
+      pos.phase = ClassroomPhase.expanded(AnswerLetter.A);
+      ctrl.enviarSinal(
+        lessonLocalId: 'L1',
+        topic: 'Cinemática',
+        position: pos,
+        signal: DecisionSignal.one,
+        baseItems: const [PlannedItem(marker: 'M-1', text: 'Velocidade média')],
+      );
+    }
 
-      for (var i = 0; i < 5; i++) {
-        pos.conteudo = LessonContent(
-          explanation: 'E$i',
-          question: 'Q$i',
-          options: const {
-            AnswerLetter.A: 'A',
-            AnswerLetter.B: 'B',
-            AnswerLetter.C: 'C',
-          },
-          correctAnswer: AnswerLetter.A,
-        );
-        pos.imagem = 'http://img/$i.png';
-        pos.phase = ClassroomPhase.expanded(AnswerLetter.A);
-        ctrl.enviarSinal(
-          lessonLocalId: 'L1',
-          topic: 'Cinemática',
-          position: pos,
-          signal: DecisionSignal.one,
-          baseItems: const [
-            PlannedItem(marker: 'M-1', text: 'Velocidade média'),
-          ],
-        );
-      }
-
-      expect(pos.history, hasLength(5));
-      final withImage = pos.history.where((e) => e.imageUrl != null).length;
-      expect(withImage, 5);
-      expect(pos.history.first.imageUrl, isNotNull);
-    },
-  );
+    expect(pos.history, hasLength(5));
+    final withImage = pos.history.where((e) => e.imageUrl != null).length;
+    expect(withImage, 0);
+    expect(pos.history.first.imageUrl, isNull);
+  });
 
   // -------------------------------------------------------------------------
   // T16 – 5 enqueues em 500ms: drena 1 vez após debounce

@@ -44,6 +44,9 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   int _fontScaleLevel = ClassroomTextScale.defaultLevel;
   bool _doubtSheetOpen = false;
   final Set<String> _pendingConversationActions = <String>{};
+  Timer? _persistConversationTimer;
+  String? _pendingPersistConversationKey;
+  String? _lastPersistedConversationFingerprint;
 
   @override
   void initState() {
@@ -106,7 +109,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       final restored = result.snapshot;
       if (restored == null) {
         if (result.canMarkRestored) {
-          unawaited(_persistConversationSnapshot(lessonKey));
+          _schedulePersistConversationSnapshot(lessonKey);
         }
         return;
       }
@@ -126,6 +129,9 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
 
   Future<void> _persistConversationSnapshot(String lessonKey) async {
     if (!_restoredConversationKeys.contains(lessonKey)) return;
+    final fingerprint = _conversationPersistenceFingerprint();
+    if (fingerprint == _lastPersistedConversationFingerprint) return;
+    _lastPersistedConversationFingerprint = fingerprint;
     await _conversationStore.persist(
       lessonKey: lessonKey,
       archiveSeq: _conversationArchiveSeq,
@@ -133,6 +139,28 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
           .where((message) => !_isEphemeralRuntimeMessage(message))
           .toList(growable: false),
     );
+  }
+
+  void _schedulePersistConversationSnapshot(String lessonKey) {
+    if (!_restoredConversationKeys.contains(lessonKey)) return;
+    final fingerprint = _conversationPersistenceFingerprint();
+    if (fingerprint == _lastPersistedConversationFingerprint) return;
+    _pendingPersistConversationKey = lessonKey;
+    _persistConversationTimer?.cancel();
+    _persistConversationTimer = Timer(const Duration(milliseconds: 800), () {
+      final key = _pendingPersistConversationKey;
+      _pendingPersistConversationKey = null;
+      if (key == null || !mounted) return;
+      unawaited(_persistConversationSnapshot(key));
+    });
+  }
+
+  String _conversationPersistenceFingerprint() {
+    return [
+      _conversationArchiveSeq.toString(),
+      for (final message in _messagesWithDeadPastFeedbackActions())
+        if (!_isEphemeralRuntimeMessage(message)) _messageFingerprint(message),
+    ].join('\n');
   }
 
   void _openDoubtSheetFromChat() {
@@ -197,6 +225,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
   @override
   void dispose() {
     final key = _conversationLessonKey;
+    _persistConversationTimer?.cancel();
     if (key != null) unawaited(_persistConversationSnapshot(key));
     WidgetsBinding.instance.removeObserver(this);
     widget.session.removeListener(_onSessionChange);
@@ -211,6 +240,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
       final key = _conversationLessonKey;
+      _persistConversationTimer?.cancel();
       if (key != null) unawaited(_persistConversationSnapshot(key));
       widget.session.stopActiveAudio();
     } else if (state == AppLifecycleState.resumed) {
@@ -406,6 +436,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       _conversationLessonKey = lessonKey;
       _conversationMessages.clear();
       _conversationArchiveSeq = 0;
+      _lastPersistedConversationFingerprint = null;
     }
 
     for (
@@ -441,9 +472,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     final messages = List<ChatLessonMessage>.unmodifiable(
       _messagesWithDeadPastFeedbackActions(),
     );
-    if (_restoredConversationKeys.contains(lessonKey)) {
-      unawaited(_persistConversationSnapshot(lessonKey));
-    }
+    _schedulePersistConversationSnapshot(lessonKey);
     return messages;
   }
 
@@ -640,7 +669,7 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
     return [
       message.kind.name,
       message.text ?? '',
-      message.imageData ?? '',
+      _imageFingerprint(message.imageData),
       message.mediaName ?? '',
       message.mediaType ?? '',
       message.mediaSize?.toString() ?? '',
@@ -655,5 +684,16 @@ class _ChatAulaScreenState extends State<ChatAulaScreen>
       for (final signal in message.signals)
         '${signal.value}:${signal.labelKey}:${signal.enabled}',
     ].join('|');
+  }
+
+  String _imageFingerprint(String? imageData) {
+    final data = imageData?.trim();
+    if (data == null || data.isEmpty) return '';
+    const edge = 64;
+    final prefix = data.length <= edge ? data : data.substring(0, edge);
+    final suffix = data.length <= edge
+        ? ''
+        : data.substring(data.length - edge);
+    return '${data.length}:$prefix:$suffix';
   }
 }

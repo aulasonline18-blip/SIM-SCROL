@@ -1508,6 +1508,8 @@ void main() {
       expect(session.aulaSnapshot, isNotNull);
       expect(session.aulaSnapshot?.phase.type, ClassroomPhaseType.lendo);
       final snapshotBQuestion = session.aulaSnapshot?.conteudo?.question;
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
       final notifyBeforeLateA = notifyCount;
 
       _putPreparedMaterial(

@@ -76,10 +76,7 @@ void main() {
     expect(runtime, contains('onBackgroundResolved'));
     expect(materialController, contains('_applyMaterial(position, result)'));
     expect(flows, contains('_applyBackgroundResolvedLessonMaterial'));
-    expect(
-      flows,
-      contains('aulaSnapshot = organism.lessonRuntimeEngine.snapshot()'),
-    );
+    expect(flows, contains('_setAulaSnapshotPreservingPendingAnswer'));
     expect(flows, contains('_notifyFromChild()'));
   });
 

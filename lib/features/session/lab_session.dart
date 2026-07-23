@@ -80,6 +80,43 @@ enum AulaOpenOperationKind { open, retry }
 
 enum AulaOpeningStatus { openingFromMenu, hydrating, retrying }
 
+class _PendingLocalAnswer {
+  const _PendingLocalAnswer({
+    required this.lessonLocalId,
+    required this.marker,
+    required this.itemIdx,
+    required this.layer,
+    required this.letter,
+    required this.generation,
+  });
+
+  final String lessonLocalId;
+  final String? marker;
+  final int? itemIdx;
+  final LessonLayer? layer;
+  final AnswerLetter letter;
+  final int generation;
+
+  bool sameQuestion({
+    required String? lessonLocalId,
+    required String? marker,
+    required int? itemIdx,
+    required LessonLayer? layer,
+  }) {
+    if (lessonLocalId?.trim() != this.lessonLocalId) return false;
+    if (this.marker != null && marker != null && this.marker != marker) {
+      return false;
+    }
+    if (this.itemIdx != null && itemIdx != null && this.itemIdx != itemIdx) {
+      return false;
+    }
+    if (this.layer != null && layer != null && this.layer != layer) {
+      return false;
+    }
+    return true;
+  }
+}
+
 class AulaOpeningTransition {
   const AulaOpeningTransition({
     required this.targetLessonLocalId,
@@ -227,8 +264,13 @@ class LabSession extends ChangeNotifier {
   bool _pendingAutoAdvanceAfterFeedback = false;
   int _pendingAutoAdvanceGeneration = 0;
   bool _pendingManualAdvance = false;
+  _PendingLocalAnswer? _pendingLocalAnswer;
+  int _pendingLocalAnswerGeneration = 0;
+  bool _answerReconciling = false;
+  bool _answerReconcileRerunRequested = false;
   int _doubtRequestSeq = 0;
   bool _disposed = false;
+  bool _notifyScheduled = false;
 
   bool get hasPendingAutoAdvanceAfterFeedback =>
       _pendingAutoAdvanceAfterFeedback;
@@ -237,7 +279,13 @@ class LabSession extends ChangeNotifier {
 
   void _notifyFromChild() {
     if (_disposed) return;
-    notifyListeners();
+    if (_notifyScheduled) return;
+    _notifyScheduled = true;
+    scheduleMicrotask(() {
+      _notifyScheduled = false;
+      if (_disposed) return;
+      notifyListeners();
+    });
   }
 
   void _recordRuntimeAudit(

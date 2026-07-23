@@ -113,6 +113,7 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
       if (roundId == null || message.isHistorical) continue;
       _roundRevealStage.putIfAbsent(roundId, () => 0);
       if (_roundHasStudentAction(messages, roundId)) {
+        _roundRevealStage[roundId] = 3;
         _practiceUnlockedRounds.add(roundId);
         _optionsReadyRounds.add(roundId);
       }
@@ -126,6 +127,12 @@ class _ChatAulaTimelineState extends State<ChatAulaTimeline> {
     if (roundId == null) return;
     _revealTimer = Timer(_roundRevealStepDelay, () {
       if (!mounted) return;
+      if (_roundHasStudentAction(widget.messages, roundId)) {
+        setState(() => _roundRevealStage[roundId] = 3);
+        _schedulePedagogicalScroll();
+        _scheduleRevealTick();
+        return;
+      }
       setState(() {
         final current = _roundRevealStage[roundId] ?? 0;
         _roundRevealStage[roundId] = (current + 1).clamp(0, 3);

@@ -353,7 +353,7 @@ void main() {
     expect(messages.first.isHistorical, isTrue);
     expect(messages.first.isActionable, isFalse);
     expect(messages.first.createdAt, 1767344700000);
-    expect(messages.first.imageData, isNotNull);
+    expect(messages.first.imageData, isNull);
     expect(messages.first.options, hasLength(3));
     expect(
       messages.first.options.singleWhere((option) => option.selected).letter,
@@ -912,7 +912,7 @@ void main() {
     );
 
     expect(oldQuestion.text, 'Pergunta antiga?');
-    expect(oldQuestion.imageData, 'data:image/png;base64,ANTIGA');
+    expect(oldQuestion.imageData, isNull);
     expect(oldQuestion.options.map((option) => option.text), [
       'Alpha antiga',
       'Beta antiga',
