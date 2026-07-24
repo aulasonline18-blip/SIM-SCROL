@@ -140,7 +140,6 @@ final class GameMicrodeckAckRequest {
     'marker': request.marker,
     'itemIdx': request.itemIdx,
     'layer': request.layer,
-    'contractVersion': request.contractVersion,
     'mode': request.mode ?? 'microdeck',
     'item': request.item ?? request.targetTopic ?? '',
     'target_topic': request.targetTopic ?? request.item ?? '',

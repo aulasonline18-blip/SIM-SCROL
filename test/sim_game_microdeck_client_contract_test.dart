@@ -404,12 +404,12 @@ void main() {
       'marker': 'M1',
       'itemIdx': 0,
       'layer': 1,
-      'contractVersion': 1,
       'mode': 'microdeck',
       'item': 'equacao',
       'target_topic': 'equacao',
     });
     expect(ack.toJson().containsKey('operationKey'), isFalse);
+    expect(ack.toJson().containsKey('contractVersion'), isFalse);
   });
 
   test('ACK com mode ausente usa default microdeck confirmado no servidor', () {
@@ -478,6 +478,7 @@ void main() {
 
     for (final forbidden in [
       'operationKey',
+      'contractVersion',
       'prompt',
       'T00',
       'N3',
