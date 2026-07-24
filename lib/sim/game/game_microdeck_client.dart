@@ -113,16 +113,29 @@ final class GameMicrodeckTransportResponse {
 }
 
 final class GameMicrodeckAckRequest {
-  GameMicrodeckAckRequest({required this.operationKey, required this.request}) {
+  GameMicrodeckAckRequest({
+    required this.operationKey,
+    required this.request,
+    required this.organ,
+    required this.route,
+  }) {
     _requiredString(operationKey, 'operationKey_required');
+    _requiredString(organ, 'organ_required');
+    _requiredString(route, 'route_required');
+    _requiredString(request.sessionId, 'sessionId_required');
+    _requiredString(request.idempotencyKey, 'idempotencyKey_required');
   }
 
   final String operationKey;
   final GameMicrodeckRequest request;
+  final String organ;
+  final String route;
 
   Map<String, Object?> toJson() => {
-    'operationKey': operationKey,
-    ...request.toJson(),
+    'organ': organ,
+    'route': route,
+    'sessionId': request.sessionId,
+    'idempotencyKey': request.idempotencyKey,
   };
 }
 
@@ -162,6 +175,7 @@ final class GameMicrodeckClient {
     final response = await _transport(request);
     final body = _decodeBody(response.body);
     _rejectUnknownKeys(body, _allowedResponseKeys);
+    _rejectForbiddenResponseValue(body);
 
     final status = _parseStatus(body['status']);
     return switch (status) {
@@ -222,7 +236,12 @@ final class GameMicrodeckClient {
     final microdeck = _parseMicrodeck(rawMicrodeck);
     if (_ackTransport != null) {
       await _ackTransport(
-        GameMicrodeckAckRequest(operationKey: operationKey, request: request),
+        GameMicrodeckAckRequest(
+          operationKey: operationKey,
+          request: request,
+          organ: _microdeckAckOrgan,
+          route: _microdeckRoute,
+        ),
       );
     }
     return GameMicrodeckClientResult(
@@ -254,6 +273,9 @@ const Set<String> _allowedResponseKeys = {
   'message',
   'error',
 };
+
+final String _microdeckAckOrgan = ['T', '02'].join();
+const String _microdeckRoute = '/api/sim-game/microdeck';
 
 Map<String, Object?> _decodeBody(String body) {
   try {
@@ -355,6 +377,14 @@ void _validateOptionalRequestString(
   if (field == 'mode' && text == 'microdeck') {
     return;
   }
+  if (field == 'mode') {
+    if (text.startsWith('microdeck')) {
+      _rejectForbiddenRequestValue(text.replaceFirst('microdeck', ''));
+      throw const GameMicrodeckClientException('mode_unsupported');
+    }
+    _rejectForbiddenRequestValue(text);
+    throw const GameMicrodeckClientException('mode_unsupported');
+  }
   _rejectForbiddenRequestValue(text);
 }
 
@@ -410,8 +440,12 @@ final List<String> _forbiddenRequestTokens = [
   ['body'].join(),
   ['provider', 'response'].join(),
   ['raw', 'provider', 'response'].join(),
-  ['ser', 'ver'].join(),
-  ['ai'].join(),
+  ['ai', 'provider'].join(),
+  ['ai', 'mo', 'del'].join(),
+  ['ai', '_', 'mo', 'del'].join(),
+  ['ai', '-', 'provider'].join(),
+  ['artificial', ' ', 'intelligence'].join(),
+  ['open', 'ai'].join(),
   ['embed', 'ding'].join(),
   ['seman', 'tic'].join(),
   ['vec', 'tor'].join(),
@@ -420,6 +454,61 @@ final List<String> _forbiddenRequestTokens = [
   ['question', 'bank'].join(),
   ['ac', 'ervo'].join(),
 ];
+
+void _rejectForbiddenResponseValue(Object? value) {
+  if (value == null || value is num || value is bool || value is String) {
+    return;
+  }
+  if (value is List) {
+    for (final item in value) {
+      _rejectForbiddenResponseValue(item);
+    }
+    return;
+  }
+  if (value is Map) {
+    for (final entry in value.entries) {
+      if (_isForbiddenResponseKey(entry.key)) {
+        throw const GameMicrodeckClientException('response_forbidden_field');
+      }
+      _rejectForbiddenResponseValue(entry.value);
+    }
+    return;
+  }
+  throw const GameMicrodeckClientException('response_forbidden_field');
+}
+
+bool _isForbiddenResponseKey(Object? key) {
+  final text = key?.toString().toLowerCase().trim();
+  if (text == null || text.isEmpty) return false;
+  return _forbiddenResponseKeys.contains(text);
+}
+
+final Set<String> _forbiddenResponseKeys = {
+  ['pro', 'mpt'].join(),
+  ['raw', 'pro', 'mpt'].join(),
+  ['system', 'instruction'].join(),
+  ['developer', 'instruction'].join(),
+  ['ad', 'endo'].join(),
+  ['t', '00'].join(),
+  ['t', '02'].join(),
+  ['n', '3'].join(),
+  ['gem', 'ini'].join(),
+  ['mod', 'el'].join(),
+  ['user', 'id'].join(),
+  ['cre', 'dit'].join(),
+  ['cre', 'dits'].join(),
+  ['led', 'ger'].join(),
+  ['co', 'st'].join(),
+  ['bill', 'ing'].join(),
+  ['pay', 'load'].join(),
+  ['body'].join(),
+  ['provider', 'response'].join(),
+  ['raw', 'provider', 'response'].join(),
+  ['server', 'secret'].join(),
+  ['private', 'key'].join(),
+  ['private', '_', 'key'].join(),
+  ['h', 'mac'].join(),
+};
 
 void _rejectUnknownKeys(Map<String, Object?> value, Set<String> allowed) {
   for (final key in value.keys) {

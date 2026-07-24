@@ -134,6 +134,17 @@ void expectRequestForbidden(GameMicrodeckRequest Function() build) {
   expect(build, throwsClientCode('request_forbidden_field'));
 }
 
+Map<String, Object?> readyWithCardPatch(Map<String, Object?> patch) {
+  final card = validCardJson()..addAll(patch);
+  return readyBody(
+    microdeck: {
+      'microdeckId': 'microdeck:lesson-t02-microdeck-1:M1:0:1',
+      'currentIndex': 0,
+      'cards': [card],
+    },
+  );
+}
+
 void main() {
   test('GameMicrodeckClient e final class', () {
     expect(source(), contains('final class GameMicrodeckClient'));
@@ -211,6 +222,33 @@ void main() {
       'cards',
       'microdeck',
       'payload',
+    ]) {
+      expectRequestForbidden(() => requestWith(item: value));
+    }
+  });
+
+  test('Request nao bloqueia palavras pedagogicas normais', () {
+    expect(() => requestWith(item: 'mais raiz sinais'), returnsNormally);
+    expect(() => requestWith(targetTopic: 'pais e sinais'), returnsNormally);
+    expect(() => requestWith(item: 'baixar'), returnsNormally);
+    expect(() => requestWith(item: 'mais'), returnsNormally);
+    expect(() => requestWith(item: 'raiz'), returnsNormally);
+    expect(() => requestWith(item: 'sinais'), returnsNormally);
+    expect(() => requestWith(item: 'pais'), returnsNormally);
+  });
+
+  test('Request bloqueia tokens de IA especificos sem substring ai bruta', () {
+    for (final value in [
+      'openai',
+      'ai_model',
+      'aiProvider',
+      'artificial intelligence',
+      'prompt',
+      'T02',
+      'N3',
+      'model',
+      'credit',
+      'ledger',
     ]) {
       expectRequestForbidden(() => requestWith(item: value));
     }
@@ -294,6 +332,106 @@ void main() {
     });
   });
 
+  test('mode usa allowlist estrita', () {
+    expect(() => requestWith(mode: 'microdeck'), returnsNormally);
+    expect(
+      () => requestWith(mode: 'microdeck-v2'),
+      throwsClientCode('mode_unsupported'),
+    );
+    expectRequestForbidden(() => requestWith(mode: 'microdeck payload'));
+    expectRequestForbidden(() => requestWith(mode: 'T02'));
+    expectRequestForbidden(() => requestWith(mode: 'prompt'));
+    expectRequestForbidden(() => requestWith(mode: 'Gemini'));
+    expectRequestForbidden(() => requestWith(mode: 'openai'));
+    expectRequestForbidden(() => requestWith(mode: 'ai_model'));
+  });
+
+  test('ACK JSON bate com contrato real do servidor', () {
+    final ack = GameMicrodeckAckRequest(
+      operationKey: 'op-1',
+      request: validRequest(),
+      organ: 'T02',
+      route: '/api/sim-game/microdeck',
+    );
+
+    expect(ack.toJson(), {
+      'organ': 'T02',
+      'route': '/api/sim-game/microdeck',
+      'sessionId': 'session-1',
+      'idempotencyKey': 'idem-1',
+    });
+    expect(ack.toJson().containsKey('operationKey'), isFalse);
+  });
+
+  test('ACK exige identidade minima', () {
+    expect(
+      () => GameMicrodeckAckRequest(
+        operationKey: 'op-1',
+        request: validRequest(),
+        organ: ' ',
+        route: '/api/sim-game/microdeck',
+      ),
+      throwsClientCode('organ_required'),
+    );
+    expect(
+      () => GameMicrodeckAckRequest(
+        operationKey: 'op-1',
+        request: validRequest(),
+        organ: 'T02',
+        route: ' ',
+      ),
+      throwsClientCode('route_required'),
+    );
+    expect(
+      () => GameMicrodeckRequest(
+        lessonLocalId: 'lesson-t02-microdeck-1',
+        marker: 'M1',
+        itemIdx: 0,
+        layer: 1,
+        sessionId: ' ',
+        idempotencyKey: 'idem-1',
+      ),
+      throwsClientCode('sessionId_required'),
+    );
+    expect(
+      () => GameMicrodeckRequest(
+        lessonLocalId: 'lesson-t02-microdeck-1',
+        marker: 'M1',
+        itemIdx: 0,
+        layer: 1,
+        sessionId: 'session-1',
+        idempotencyKey: ' ',
+      ),
+      throwsClientCode('idempotencyKey_required'),
+    );
+  });
+
+  test('ACK nao contem campos proibidos do endpoint real', () {
+    final ack = GameMicrodeckAckRequest(
+      operationKey: 'op-1',
+      request: validRequest(),
+      organ: 'T02',
+      route: '/api/sim-game/microdeck',
+    ).toJson();
+
+    for (final forbidden in [
+      'operationKey',
+      'prompt',
+      'T00',
+      'N3',
+      'model',
+      'credit',
+      'ledger',
+      'cost',
+      'microdeck',
+      'cards',
+      'payload',
+      'body',
+    ]) {
+      expect(ack.containsKey(forbidden), isFalse, reason: forbidden);
+    }
+  });
+
   test(
     'ready estrutural com HMAC falha por assinatura nao verificavel',
     () async {
@@ -326,6 +464,39 @@ void main() {
     await expectLater(
       fetchWith({...readyBody()}..remove('microdeck')),
       throwsClientCode('microdeck_required'),
+    );
+  });
+
+  test('response ready rejeita campo perigoso dentro de card', () async {
+    for (final patch in [
+      {'prompt': 'x'},
+      {'model': 'x'},
+      {'credit': 1},
+      {'ledger': true},
+      {'providerResponse': 'raw'},
+    ]) {
+      await expectLater(
+        fetchWith(readyWithCardPatch(patch)),
+        throwsClientCode('response_forbidden_field'),
+      );
+    }
+  });
+
+  test('response ready rejeita campo perigoso dentro de media', () async {
+    final card = validCardJson();
+    card['media'] = {'imageKey': 'image/balance.png', 'privateKey': 'secret'};
+
+    await expectLater(
+      fetchWith(
+        readyBody(
+          microdeck: {
+            'microdeckId': 'microdeck:lesson-t02-microdeck-1:M1:0:1',
+            'currentIndex': 0,
+            'cards': [card],
+          },
+        ),
+      ),
+      throwsClientCode('response_forbidden_field'),
     );
   });
 
