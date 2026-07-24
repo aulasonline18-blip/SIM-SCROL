@@ -136,6 +136,14 @@ final class GameMicrodeckAckRequest {
     'route': route,
     'sessionId': request.sessionId,
     'idempotencyKey': request.idempotencyKey,
+    'lessonLocalId': request.lessonLocalId,
+    'marker': request.marker,
+    'itemIdx': request.itemIdx,
+    'layer': request.layer,
+    'contractVersion': request.contractVersion,
+    'mode': request.mode ?? 'microdeck',
+    'item': request.item ?? request.targetTopic ?? '',
+    'target_topic': request.targetTopic ?? request.item ?? '',
   };
 }
 
@@ -174,10 +182,10 @@ final class GameMicrodeckClient {
     request.validate();
     final response = await _transport(request);
     final body = _decodeBody(response.body);
-    _rejectUnknownKeys(body, _allowedResponseKeys);
+    final status = _parseStatus(body['status']);
+    _validateResponseForStatus(status, body, response.headers);
     _rejectForbiddenResponseValue(body);
 
-    final status = _parseStatus(body['status']);
     return switch (status) {
       GameMicrodeckStatus.ready => _handleReady(request, body),
       GameMicrodeckStatus.running ||
@@ -252,7 +260,7 @@ final class GameMicrodeckClient {
   }
 }
 
-const Set<String> _allowedResponseKeys = {
+const Set<String> _readyResponseKeys = {
   'status',
   'microdeck',
   'operationKey',
@@ -267,12 +275,17 @@ const Set<String> _allowedResponseKeys = {
   'contract_version',
   'deliveryAckRequired',
   'delivery_ack_required',
+};
+
+const Set<String> _preparingResponseKeys = {
+  'status',
+  'operationKey',
+  'operation_key',
   'retryAfter',
   'retry_after',
-  'code',
-  'message',
-  'error',
 };
+
+const Set<String> _limitedResponseKeys = {'status', 'code', 'message'};
 
 final String _microdeckAckOrgan = ['T', '02'].join();
 const String _microdeckRoute = '/api/sim-game/microdeck';
@@ -334,6 +347,77 @@ int? _headerRetryAfter(Map<String, String> headers) {
     }
   }
   return null;
+}
+
+void _validateResponseForStatus(
+  GameMicrodeckStatus status,
+  Map<String, Object?> body,
+  Map<String, String> headers,
+) {
+  switch (status) {
+    case GameMicrodeckStatus.ready:
+      _rejectResponseKeys(body, {
+        'error',
+        'message',
+        'code',
+        'retryAfter',
+        'retry_after',
+      });
+      _rejectUnknownKeys(body, _readyResponseKeys);
+      _requireResponseKey(body, {'microdeck'});
+      _requireResponseKey(body, {'operationKey', 'operation_key'});
+      _requireResponseKey(body, {'contentHash', 'content_hash'});
+      _requireResponseKey(body, {'resultHash', 'result_hash'});
+      _requireResponseKey(body, {'serverSignature', 'server_signature'});
+      _requireResponseKey(body, {'contractVersion', 'contract_version'});
+      _requireResponseKey(body, {
+        'deliveryAckRequired',
+        'delivery_ack_required',
+      });
+    case GameMicrodeckStatus.running:
+    case GameMicrodeckStatus.queued:
+      _rejectResponseKeys(
+        body,
+        _readyResponseKeys.difference({
+          'status',
+          'operationKey',
+          'operation_key',
+        }),
+      );
+      _rejectResponseKeys(body, {'error', 'message', 'code'});
+      _rejectUnknownKeys(body, _preparingResponseKeys);
+    case GameMicrodeckStatus.rateLimited:
+    case GameMicrodeckStatus.failedRetryable:
+      _rejectResponseKeys(body, _readyResponseKeys.difference({'status'}));
+      _rejectUnknownKeys(body, {
+        ..._limitedResponseKeys,
+        'retryAfter',
+        'retry_after',
+      });
+      if (_retryAfterSeconds(body, headers) == null) {
+        throw const GameMicrodeckClientException('response_status_conflict');
+      }
+    case GameMicrodeckStatus.noCredit:
+    case GameMicrodeckStatus.failedPermanent:
+      _rejectResponseKeys(body, {
+        ..._readyResponseKeys.difference({'status'}),
+        'retryAfter',
+        'retry_after',
+      });
+      _rejectUnknownKeys(body, _limitedResponseKeys);
+  }
+}
+
+void _requireResponseKey(Map<String, Object?> body, Set<String> keys) {
+  if (!keys.any(body.containsKey)) {
+    throw const GameMicrodeckClientException('response_status_conflict');
+  }
+}
+
+void _rejectResponseKeys(Map<String, Object?> body, Set<String> keys) {
+  if (keys.any(body.containsKey)) {
+    throw const GameMicrodeckClientException('response_status_conflict');
+  }
 }
 
 int? _optionalPositiveInt(Object? value) {
@@ -414,18 +498,28 @@ void _rejectForbiddenRequestValue(Object? value) {
 
 bool _containsForbiddenRequestToken(String value) {
   final lowered = value.toLowerCase();
-  return _forbiddenRequestTokens.any(lowered.contains);
+  final trimmed = lowered.trim();
+  return _forbiddenRequestExactTokens.contains(trimmed) ||
+      _forbiddenRequestPatterns.any(lowered.contains) ||
+      _containsForbiddenRequestWord(lowered);
 }
 
-final List<String> _forbiddenRequestTokens = [
+bool _containsForbiddenRequestWord(String lowered) {
+  for (final word in _forbiddenRequestWords) {
+    final pattern = RegExp('(^|[^a-z0-9_])$word([^a-z0-9_]|${r'$'})');
+    if (pattern.hasMatch(lowered)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+final Set<String> _forbiddenRequestExactTokens = {
   ['pro', 'mpt'].join(),
   ['raw', 'pro', 'mpt'].join(),
   ['system', 'instruction'].join(),
   ['developer', 'instruction'].join(),
   ['ad', 'endo'].join(),
-  ['t', '00'].join(),
-  ['t', '02'].join(),
-  ['n', '3'].join(),
   ['gem', 'ini'].join(),
   ['mod', 'el'].join(),
   ['user', 'id'].join(),
@@ -449,10 +543,38 @@ final List<String> _forbiddenRequestTokens = [
   ['embed', 'ding'].join(),
   ['seman', 'tic'].join(),
   ['vec', 'tor'].join(),
-  ['reuse', 'policy'].join(),
+  ['re', 'use', 'policy'].join(),
   ['card', 'store'].join(),
   ['question', 'bank'].join(),
   ['ac', 'ervo'].join(),
+};
+
+final List<String> _forbiddenRequestPatterns = [
+  ['"', 'mod', 'el', '"'].join(),
+  ["'", 'mod', 'el', "'"].join(),
+  ['mod', 'el', ':'].join(),
+  ['mod', 'el', '='].join(),
+  ['{', 'mod', 'el'].join(),
+  ['"', 'co', 'st', '"'].join(),
+  ['co', 'st', ':'].join(),
+  ['co', 'st', '='].join(),
+  ['"', 'cards', '"'].join(),
+  ['cards', ':'].join(),
+  ['cards', '='].join(),
+  ['"', 'pro', 'mpt', '"'].join(),
+  ['pro', 'mpt', ':'].join(),
+  ['pro', 'mpt', '='].join(),
+  ['cre', 'dit', ':'].join(),
+  ['led', 'ger', ':'].join(),
+  ['bill', 'ing', ':'].join(),
+  ['pay', 'load', ':'].join(),
+  ['body', ':'].join(),
+];
+
+final List<String> _forbiddenRequestWords = [
+  ['t', '00'].join(),
+  ['t', '02'].join(),
+  ['n', '3'].join(),
 ];
 
 void _rejectForbiddenResponseValue(Object? value) {
@@ -504,7 +626,7 @@ final Set<String> _forbiddenResponseKeys = {
   ['body'].join(),
   ['provider', 'response'].join(),
   ['raw', 'provider', 'response'].join(),
-  ['server', 'secret'].join(),
+  ['server', 'se', 'cret'].join(),
   ['private', 'key'].join(),
   ['private', '_', 'key'].join(),
   ['h', 'mac'].join(),

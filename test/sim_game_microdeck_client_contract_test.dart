@@ -20,6 +20,18 @@ GameMicrodeckRequest validRequest() => GameMicrodeckRequest(
   targetTopic: 'equacao',
 );
 
+GameMicrodeckRequest fullIdentityRequest() => GameMicrodeckRequest(
+  lessonLocalId: 'lesson-1',
+  marker: 'M1',
+  itemIdx: 0,
+  layer: 1,
+  sessionId: 'session-1',
+  idempotencyKey: 'idem-1',
+  item: 'equacao',
+  targetTopic: 'equacao',
+  mode: 'microdeck',
+);
+
 GameMicrodeckRequest requestWith({
   String? item,
   String? targetTopic,
@@ -222,6 +234,29 @@ void main() {
       'cards',
       'microdeck',
       'payload',
+      '"model"',
+      'model=pro',
+      '{model',
+      '"cost"',
+      'cost:',
+      'cost=',
+      '"cards"',
+      'cards:',
+      'cards=',
+      '"prompt"',
+      'prompt:',
+      'prompt=',
+      'openai',
+      'ai_model',
+      'aiProvider',
+      'artificial intelligence',
+      'credit:',
+      'ledger:',
+      'billing:',
+      'payload:',
+      'body:',
+      'providerResponse',
+      'rawProviderResponse',
     ]) {
       expectRequestForbidden(() => requestWith(item: value));
     }
@@ -235,6 +270,12 @@ void main() {
     expect(() => requestWith(item: 'raiz'), returnsNormally);
     expect(() => requestWith(item: 'sinais'), returnsNormally);
     expect(() => requestWith(item: 'pais'), returnsNormally);
+    expect(() => requestWith(item: 'modelo matematico'), returnsNormally);
+    expect(() => requestWith(item: 'modelo atomico'), returnsNormally);
+    expect(() => requestWith(item: 'custo de oportunidade'), returnsNormally);
+    expect(() => requestWith(item: 'costa brasileira'), returnsNormally);
+    expect(() => requestWith(item: 'cardiologia'), returnsNormally);
+    expect(() => requestWith(item: 'cartas de baralho'), returnsNormally);
   });
 
   test('Request bloqueia tokens de IA especificos sem substring ai bruta', () {
@@ -349,7 +390,7 @@ void main() {
   test('ACK JSON bate com contrato real do servidor', () {
     final ack = GameMicrodeckAckRequest(
       operationKey: 'op-1',
-      request: validRequest(),
+      request: fullIdentityRequest(),
       organ: 'T02',
       route: '/api/sim-game/microdeck',
     );
@@ -359,8 +400,29 @@ void main() {
       'route': '/api/sim-game/microdeck',
       'sessionId': 'session-1',
       'idempotencyKey': 'idem-1',
+      'lessonLocalId': 'lesson-1',
+      'marker': 'M1',
+      'itemIdx': 0,
+      'layer': 1,
+      'contractVersion': 1,
+      'mode': 'microdeck',
+      'item': 'equacao',
+      'target_topic': 'equacao',
     });
     expect(ack.toJson().containsKey('operationKey'), isFalse);
+  });
+
+  test('ACK com mode ausente usa default microdeck confirmado no servidor', () {
+    final ack = GameMicrodeckAckRequest(
+      operationKey: 'op-1',
+      request: validRequest(),
+      organ: 'T02',
+      route: '/api/sim-game/microdeck',
+    ).toJson();
+
+    expect(ack['mode'], 'microdeck');
+    expect(ack['item'], 'equacao');
+    expect(ack['target_topic'], 'equacao');
   });
 
   test('ACK exige identidade minima', () {
@@ -463,7 +525,7 @@ void main() {
   test('ready sem microdeck falha', () async {
     await expectLater(
       fetchWith({...readyBody()}..remove('microdeck')),
-      throwsClientCode('microdeck_required'),
+      throwsClientCode('response_status_conflict'),
     );
   });
 
@@ -508,7 +570,7 @@ void main() {
         {...readyBody()}..remove('serverSignature'),
         onAck: (_) => ackCount++,
       ),
-      throwsClientCode('serverSignature_required'),
+      throwsClientCode('response_status_conflict'),
     );
     expect(ackCount, 0);
   });
@@ -528,7 +590,7 @@ void main() {
         {...readyBody()}..remove('contractVersion'),
         onAck: (_) => ackCount++,
       ),
-      throwsClientCode('contractVersion_required'),
+      throwsClientCode('response_status_conflict'),
     );
     expect(ackCount, 0);
   });
@@ -616,6 +678,40 @@ void main() {
     expect(result.microdeck, isNull);
   });
 
+  test('schema por status rejeita respostas contraditorias', () async {
+    for (final body in [
+      {'status': 'running', 'microdeck': validMicrodeckJson()},
+      {'status': 'running', 'contentHash': 'hash'},
+      {'status': 'queued', 'microdeck': validMicrodeckJson()},
+      {'status': 'rate_limited', 'microdeck': validMicrodeckJson()},
+      {'status': 'failed_retryable'},
+      {'status': 'no_credit', 'microdeck': validMicrodeckJson()},
+      {'status': 'failed_permanent', 'retryAfter': 3},
+      {...readyBody(), 'error': 'x'},
+      {...readyBody(), 'message': 'x'},
+      {...readyBody(), 'retryAfter': 3},
+      {...readyBody()}..remove('serverSignature'),
+      {...readyBody()}..remove('contractVersion'),
+    ]) {
+      await expectLater(
+        fetchWith(body),
+        throwsClientCode('response_status_conflict'),
+        reason: body.toString(),
+      );
+    }
+  });
+
+  test('rate_limited e failed_retryable exigem Retry-After', () async {
+    await expectLater(
+      fetchWith({'status': 'rate_limited'}),
+      throwsClientCode('response_status_conflict'),
+    );
+    await expectLater(
+      fetchWith({'status': 'failed_retryable'}),
+      throwsClientCode('response_status_conflict'),
+    );
+  });
+
   test('rate_limited preserva Retry-After do header', () async {
     final result = await fetchWith(
       {'status': 'rate_limited'},
@@ -666,6 +762,25 @@ void main() {
     await expectLater(
       fetchWith({'status': 'running', 'unexpected': true}),
       throwsClientCode('response_unknown_field'),
+    );
+  });
+
+  test('response nao rejeita texto pedagogico normal por substring', () async {
+    final card = validCardJson()
+      ..['explanation'] =
+          'modelo matematico, custo de oportunidade e cardiologia.';
+
+    await expectLater(
+      fetchWith(
+        readyBody(
+          microdeck: {
+            'microdeckId': 'microdeck:lesson-t02-microdeck-1:M1:0:1',
+            'currentIndex': 0,
+            'cards': [card],
+          },
+        ),
+      ),
+      throwsClientCode('contentHash_mismatch'),
     );
   });
 
