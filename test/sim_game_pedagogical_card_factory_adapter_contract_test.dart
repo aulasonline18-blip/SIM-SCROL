@@ -531,6 +531,13 @@ void main() {
       'javascript:alert(1)',
       'blob:https://x',
       '//cdn.exemplo.com/img.png',
+      '/secret.png',
+      '/media/card.png',
+      'image//card.png',
+      'image/./card.png',
+      'image/',
+      'image/../secret.png',
+      './image.png',
       '../secret.png',
       'a/../secret.png',
       '<script></script>',
@@ -598,6 +605,13 @@ void main() {
       'javascript:alert(1)',
       'blob:https://x',
       '//cdn.example.test/image.png',
+      '/secret.png',
+      '/media/card.png',
+      'image//card.png',
+      'image/./card.png',
+      'image/',
+      'image/../secret.png',
+      './image.png',
       '../secret.png',
       'a/../secret.png',
       '<script></script>',
@@ -622,15 +636,15 @@ void main() {
   });
 
   test('construtor direto aceita midia leve valida', () {
-    for (final imageKey in ['image/balance.png', 'media/cards/card_01.webp']) {
+    for (final imageKey in ['image/card_01.webp', 'media/cards/card_01.webp']) {
       final source = completeSource(
         media: PedagogicalCardMedia(
           imageKey: imageKey,
-          audioKey: 'audio/equation.wav',
+          audioKey: 'audio/intro_01.wav',
         ),
       );
       expect(source.media?.imageKey, imageKey);
-      expect(source.media?.audioKey, 'audio/equation.wav');
+      expect(source.media?.audioKey, 'audio/intro_01.wav');
     }
   });
 

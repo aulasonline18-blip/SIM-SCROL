@@ -349,6 +349,13 @@ String? _optionalMediaKey(Object? value, String field) {
       lowered.startsWith(['ht', 'tps://'].join())) {
     throw PedagogicalCardFactoryAdapterException('${field}_must_be_light_key');
   }
+  final segments = key.split('/');
+  if (key.startsWith('/') ||
+      segments.any(
+        (segment) => segment.isEmpty || segment == '.' || segment == '..',
+      )) {
+    throw PedagogicalCardFactoryAdapterException('${field}_must_be_light_key');
+  }
   return key;
 }
 
