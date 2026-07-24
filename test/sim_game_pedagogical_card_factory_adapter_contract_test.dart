@@ -287,7 +287,32 @@ void main() {
     );
   });
 
-  test('lessonLocalId deckId cardId e marker com espaco falham', () {
+  test('tokens tecnicos com espaco interno falham', () {
+    for (final entry in {
+      'lessonLocalId': 'lessonLocalId_required',
+      'deckId': 'deckId_required',
+      'cardId': 'cardId_required',
+      'marker': 'marker_required',
+      'contentHash': 'contentHash_required',
+      'serverSignature': 'serverSignature_required',
+      'generationOperationId': 'generationOperationId_required',
+    }.entries) {
+      expectJsonPatchFails(
+        (json) => json[entry.key] = switch (entry.key) {
+          'lessonLocalId' => 'lesson 1',
+          'deckId' => 'deck 1',
+          'cardId' => 'card 1',
+          'marker' => 'M 1',
+          'contentHash' => 'hash com espaco',
+          'serverSignature' => 'assinatura com espaco',
+          _ => 'operation 1',
+        },
+        entry.value,
+      );
+    }
+  });
+
+  test('lessonLocalId deckId cardId e marker com espaco externo falham', () {
     expectJsonPatchFails(
       (json) => json['lessonLocalId'] = ' lesson-1 ',
       'lessonLocalId_required',
@@ -481,6 +506,15 @@ void main() {
     expect(omittedMedia.media, isNull);
     expect(withMedia.media?.imageKey, 'image/balance.png');
     expect(withMedia.media?.audioKey, 'audio/equation.wav');
+    final nestedMedia = PedagogicalCardSource.fromJson(
+      completeJson(
+        media: {
+          'imageKey': 'media/cards/card_01.webp',
+          'audioKey': 'audio/equation.wav',
+        },
+      ),
+    );
+    expect(nestedMedia.media?.imageKey, 'media/cards/card_01.webp');
   });
 
   test('midia pesada ou inline falha em imageKey e audioKey', () {
@@ -493,6 +527,17 @@ void main() {
       '<html></html>',
       'http://example.test/image.png',
       'https://example.test/image.png',
+      'file:///tmp/a.png',
+      'javascript:alert(1)',
+      'blob:https://x',
+      '//cdn.exemplo.com/img.png',
+      '../secret.png',
+      'a/../secret.png',
+      '<script></script>',
+      '<iframe></iframe>',
+      '<img src=x>',
+      'image com espaco.png',
+      'audio com espaco.wav',
       'x' * 513,
     ]) {
       expectJsonPatchFails(
@@ -506,6 +551,19 @@ void main() {
         value.length > PedagogicalCardMedia.maxKeyLength
             ? 'audioKey_too_large'
             : 'audioKey_must_be_light_key',
+      );
+    }
+  });
+
+  test('midia fora da allowlist falha', () {
+    for (final value in ['a\\secret.png', 'image?.png', 'audio#1.wav']) {
+      expectJsonPatchFails(
+        (json) => json['media'] = {'imageKey': value},
+        'imageKey_must_be_light_key',
+      );
+      expectJsonPatchFails(
+        (json) => json['media'] = {'audioKey': value},
+        'audioKey_must_be_light_key',
       );
     }
   });
@@ -541,6 +599,23 @@ void main() {
     expectJsonPatchFails(
       (json) => (json['media']! as Map)['inline'] = 'x',
       'unknown_field',
+    );
+  });
+
+  test('generationOperationId e validado no source mas nao entra na carta', () {
+    final cardSource = PedagogicalCardSource.fromJson(
+      completeJson()..['generationOperationId'] = 'operation-1',
+    );
+    final card = const PedagogicalCardFactoryAdapter().adapt(cardSource);
+
+    expect(cardSource.generationOperationId, 'operation-1');
+    expect(card.toJson().containsKey('generationOperationId'), isFalse);
+    expect(source().contains('final String generationOperationId;'), isTrue);
+    expect(
+      File(
+        'lib/sim/game/pedagogical_card.dart',
+      ).readAsStringSync().contains('generationOperationId'),
+      isFalse,
     );
   });
 

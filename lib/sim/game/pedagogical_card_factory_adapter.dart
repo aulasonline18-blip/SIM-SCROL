@@ -211,7 +211,7 @@ String _requiredToken(Object? value, String message) {
   if (value is! String) {
     throw PedagogicalCardFactoryAdapterException(message);
   }
-  if (value.trim().isEmpty || value != value.trim()) {
+  if (value.trim().isEmpty || RegExp(r'\s').hasMatch(value)) {
     throw PedagogicalCardFactoryAdapterException(message);
   }
   return value;
@@ -335,12 +335,16 @@ String? _optionalMediaKey(Object? value, String field) {
     throw PedagogicalCardFactoryAdapterException('${field}_too_large');
   }
   final lowered = key.toLowerCase();
-  if (lowered.startsWith('data:') ||
+  if (!RegExp(r'^[A-Za-z0-9._/-]+$').hasMatch(key) ||
+      lowered.contains('..') ||
+      lowered.contains('://') ||
+      lowered.contains(r'\') ||
+      lowered.startsWith('//') ||
+      lowered.startsWith('file:') ||
+      lowered.startsWith('javascript:') ||
+      lowered.startsWith('blob:') ||
+      lowered.startsWith('data:') ||
       lowered.contains('base64') ||
-      lowered.contains('<svg') ||
-      lowered.contains('<xml') ||
-      lowered.contains('<?xml') ||
-      lowered.contains('<html') ||
       lowered.startsWith(['ht', 'tp://'].join()) ||
       lowered.startsWith(['ht', 'tps://'].join())) {
     throw PedagogicalCardFactoryAdapterException('${field}_must_be_light_key');
