@@ -3,11 +3,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/game/pedagogical_card.dart';
+import 'package:sim_mobile/sim/game/pedagogical_card_integrity_verifier.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
 const _sourcePath = 'lib/sim/game/pedagogical_card.dart';
 
-PedagogicalCard validCard({PedagogicalCardMedia? media}) => PedagogicalCard(
+PedagogicalCard _unsignedCard({PedagogicalCardMedia? media}) => PedagogicalCard(
   cardId: 'card-1',
   deckId: 'deck-1',
   lessonLocalId: 'lesson-1',
@@ -37,11 +38,50 @@ PedagogicalCard validCard({PedagogicalCardMedia? media}) => PedagogicalCard(
     DecisionSignal.two: 'seguir_com_cuidado',
     DecisionSignal.three: 'nao_consolidar',
   },
-  contentHash: 'hash-123',
+  contentHash: 'unsigned',
   contractVersion: PedagogicalCard.supportedContractVersion,
   serverSignature: 'sig-123',
   media: media,
 );
+
+PedagogicalCard validCard({PedagogicalCardMedia? media}) {
+  final unsigned = _unsignedCard(media: media);
+  return PedagogicalCard(
+    cardId: 'card-1',
+    deckId: 'deck-1',
+    lessonLocalId: 'lesson-1',
+    marker: 'm1',
+    itemIdx: 0,
+    layer: LessonLayer.l1,
+    explanation: 'Explicacao curta.',
+    question: 'Qual alternativa representa a ideia?',
+    options: const {
+      AnswerLetter.A: 'Alternativa A',
+      AnswerLetter.B: 'Alternativa B',
+      AnswerLetter.C: 'Alternativa C',
+    },
+    correctAnswer: AnswerLetter.A,
+    feedback: const {
+      AnswerLetter.A: 'A preserva a ideia principal.',
+      AnswerLetter.B: 'B troca o conceito.',
+      AnswerLetter.C: 'C falta uma parte essencial.',
+    },
+    qualifiers: const {
+      DecisionSignal.one: 'Tenho certeza.',
+      DecisionSignal.two: 'Acho que sim.',
+      DecisionSignal.three: 'Estou inseguro.',
+    },
+    advancePolicy: const {
+      DecisionSignal.one: 'seguir_com_evidencia',
+      DecisionSignal.two: 'seguir_com_cuidado',
+      DecisionSignal.three: 'nao_consolidar',
+    },
+    contentHash: PedagogicalCardIntegrityVerifier.contentHashForCard(unsigned),
+    contractVersion: PedagogicalCard.supportedContractVersion,
+    serverSignature: 'sig-123',
+    media: media,
+  );
+}
 
 Map<String, dynamic> validJson({PedagogicalCardMedia? media}) =>
     validCard(media: media).toJson();

@@ -1,4 +1,5 @@
 import 'pedagogical_card.dart';
+import 'pedagogical_card_integrity_verifier.dart';
 
 class MicrodeckContractException implements Exception {
   const MicrodeckContractException(this.message);
@@ -93,7 +94,7 @@ class Microdeck {
     final lessonLocalId = cards.first.lessonLocalId;
 
     for (final card in cards) {
-      card.validate();
+      PedagogicalCardIntegrityVerifier.verifyForRuntime(card);
       if (!cardIds.add(card.cardId)) {
         throw const MicrodeckContractException('cardId_duplicated');
       }

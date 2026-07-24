@@ -1,5 +1,6 @@
 import '../state/student_learning_state.dart';
 import 'pedagogical_card.dart';
+import 'pedagogical_card_integrity_verifier.dart';
 
 class LocalGameRuntimeContractException implements Exception {
   const LocalGameRuntimeContractException(this.message);
@@ -14,7 +15,7 @@ enum _LocalGameRuntimePhase { ready, answerSelected, completed }
 
 class LocalGameRuntime {
   LocalGameRuntime(PedagogicalCard card) : _card = card {
-    _card.validate();
+    PedagogicalCardIntegrityVerifier.verifyForRuntime(_card);
   }
 
   PedagogicalCard _card;
@@ -85,7 +86,7 @@ class LocalGameRuntime {
   }
 
   void resetWithCard(PedagogicalCard card) {
-    card.validate();
+    PedagogicalCardIntegrityVerifier.verifyForRuntime(card);
     _card = card;
     _selectedAnswer = null;
     _selectedQualifier = null;

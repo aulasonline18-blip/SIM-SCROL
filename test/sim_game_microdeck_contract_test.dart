@@ -4,11 +4,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sim_mobile/sim/game/microdeck.dart';
 import 'package:sim_mobile/sim/game/pedagogical_card.dart';
+import 'package:sim_mobile/sim/game/pedagogical_card_integrity_verifier.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
 const _sourcePath = 'lib/sim/game/microdeck.dart';
 
-PedagogicalCard validCard({
+PedagogicalCard _unsignedCard({
   String cardId = 'card-1',
   String deckId = 'deck-1',
   String lessonLocalId = 'lesson-1',
@@ -43,10 +44,58 @@ PedagogicalCard validCard({
     DecisionSignal.two: 'seguir_com_cuidado',
     DecisionSignal.three: 'nao_consolidar',
   },
-  contentHash: 'hash-$cardId',
+  contentHash: 'unsigned',
   contractVersion: PedagogicalCard.supportedContractVersion,
   serverSignature: 'sig-$cardId',
 );
+
+PedagogicalCard validCard({
+  String cardId = 'card-1',
+  String deckId = 'deck-1',
+  String lessonLocalId = 'lesson-1',
+  int itemIdx = 0,
+}) {
+  final unsigned = _unsignedCard(
+    cardId: cardId,
+    deckId: deckId,
+    lessonLocalId: lessonLocalId,
+    itemIdx: itemIdx,
+  );
+  return PedagogicalCard(
+    cardId: cardId,
+    deckId: deckId,
+    lessonLocalId: lessonLocalId,
+    marker: 'm$itemIdx',
+    itemIdx: itemIdx,
+    layer: LessonLayer.l1,
+    explanation: 'Explicacao curta.',
+    question: 'Qual alternativa representa a ideia?',
+    options: const {
+      AnswerLetter.A: 'Alternativa A',
+      AnswerLetter.B: 'Alternativa B',
+      AnswerLetter.C: 'Alternativa C',
+    },
+    correctAnswer: AnswerLetter.A,
+    feedback: const {
+      AnswerLetter.A: 'A preserva a ideia principal.',
+      AnswerLetter.B: 'B troca o conceito.',
+      AnswerLetter.C: 'C falta uma parte essencial.',
+    },
+    qualifiers: const {
+      DecisionSignal.one: 'Tenho certeza.',
+      DecisionSignal.two: 'Acho que sim.',
+      DecisionSignal.three: 'Estou inseguro.',
+    },
+    advancePolicy: const {
+      DecisionSignal.one: 'seguir_com_evidencia',
+      DecisionSignal.two: 'seguir_com_cuidado',
+      DecisionSignal.three: 'nao_consolidar',
+    },
+    contentHash: PedagogicalCardIntegrityVerifier.contentHashForCard(unsigned),
+    contractVersion: PedagogicalCard.supportedContractVersion,
+    serverSignature: 'sig-$cardId',
+  );
+}
 
 Microdeck validDeck({int count = 3, int currentIndex = 0}) => Microdeck(
   microdeckId: 'microdeck-1',
@@ -446,13 +495,16 @@ void main() {
     expect(deck.cards.map((card) => card.cardId), ['card-2', 'card-1']);
   });
 
-  test('arquivo produtivo importa somente pedagogical_card', () {
+  test('arquivo produtivo importa somente dependencias permitidas', () {
     final imports = source()
         .split('\n')
         .where((line) => line.trimLeft().startsWith('import '))
         .toList();
 
-    expect(imports, ["import 'pedagogical_card.dart';"]);
+    expect(imports, [
+      "import 'pedagogical_card.dart';",
+      "import 'pedagogical_card_integrity_verifier.dart';",
+    ]);
   });
 
   test('Microdeck nao importa nem chama runtime', () {

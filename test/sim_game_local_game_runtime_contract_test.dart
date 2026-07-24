@@ -5,9 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:sim_mobile/sim/game/local_game_runtime.dart';
 import 'package:sim_mobile/sim/game/pedagogical_card.dart';
+import 'package:sim_mobile/sim/game/pedagogical_card_integrity_verifier.dart';
 import 'package:sim_mobile/sim/state/student_learning_state.dart';
 
-PedagogicalCard validCard({
+PedagogicalCard _unsignedCard({
   String cardId = 'card-1',
   AnswerLetter correctAnswer = AnswerLetter.A,
 }) => PedagogicalCard(
@@ -40,7 +41,7 @@ PedagogicalCard validCard({
     DecisionSignal.two: 'reforcar',
     DecisionSignal.three: 'avancar',
   },
-  contentHash: 'hash-123',
+  contentHash: 'unsigned',
   contractVersion: PedagogicalCard.supportedContractVersion,
   serverSignature: 'sig-123',
   media: const PedagogicalCardMedia(
@@ -48,6 +49,51 @@ PedagogicalCard validCard({
     audioKey: 'audio/card-1.wav',
   ),
 );
+
+PedagogicalCard validCard({
+  String cardId = 'card-1',
+  AnswerLetter correctAnswer = AnswerLetter.A,
+}) {
+  final unsigned = _unsignedCard(cardId: cardId, correctAnswer: correctAnswer);
+  return PedagogicalCard(
+    cardId: cardId,
+    deckId: 'deck-1',
+    lessonLocalId: 'lesson-1',
+    marker: 'item-1',
+    itemIdx: 0,
+    layer: LessonLayer.l1,
+    explanation: 'Texto pronto.',
+    question: 'Pergunta pronta?',
+    options: const {
+      AnswerLetter.A: 'Alternativa A',
+      AnswerLetter.B: 'Alternativa B',
+      AnswerLetter.C: 'Alternativa C',
+    },
+    correctAnswer: correctAnswer,
+    feedback: const {
+      AnswerLetter.A: 'Feedback da alternativa A',
+      AnswerLetter.B: 'Feedback da alternativa B',
+      AnswerLetter.C: 'Feedback da alternativa C',
+    },
+    qualifiers: const {
+      DecisionSignal.one: 'Preciso revisar',
+      DecisionSignal.two: 'Quase entendi',
+      DecisionSignal.three: 'Entendi',
+    },
+    advancePolicy: const {
+      DecisionSignal.one: 'manter',
+      DecisionSignal.two: 'reforcar',
+      DecisionSignal.three: 'avancar',
+    },
+    contentHash: PedagogicalCardIntegrityVerifier.contentHashForCard(unsigned),
+    contractVersion: PedagogicalCard.supportedContractVersion,
+    serverSignature: 'sig-123',
+    media: const PedagogicalCardMedia(
+      imageKey: 'image/card-1.png',
+      audioKey: 'audio/card-1.wav',
+    ),
+  );
+}
 
 Map<String, dynamic> validJson() => validCard().toJson();
 
@@ -260,6 +306,7 @@ void main() {
     expect(imports, [
       "import '../state/student_learning_state.dart';",
       "import 'pedagogical_card.dart';",
+      "import 'pedagogical_card_integrity_verifier.dart';",
     ]);
   });
 
