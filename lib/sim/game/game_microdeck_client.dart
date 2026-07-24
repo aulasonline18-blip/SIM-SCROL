@@ -56,7 +56,7 @@ final class GameMicrodeckRequest {
   final String sessionId;
   final String idempotencyKey;
   final int contractVersion;
-  final Object? item;
+  final String? item;
   final String? targetTopic;
   final String? mode;
   final String? learningLocale;
@@ -76,6 +76,11 @@ final class GameMicrodeckRequest {
     if (contractVersion != 1) {
       throw const GameMicrodeckClientException('contractVersion_unsupported');
     }
+    _validateOptionalRequestString(item, 'item', 1024);
+    _validateOptionalRequestString(targetTopic, 'targetTopic', 256);
+    _validateOptionalRequestString(mode, 'mode', 64);
+    _validateOptionalRequestString(learningLocale, 'learningLocale', 32);
+    _validateOptionalRequestString(interfaceLocale, 'interfaceLocale', 32);
   }
 
   Map<String, Object?> toJson() {
@@ -192,6 +197,17 @@ final class GameMicrodeckClient {
       body['resultHash'] ?? body['result_hash'],
       'resultHash_required',
     );
+    _requiredString(
+      body['serverSignature'] ?? body['server_signature'],
+      'serverSignature_required',
+    );
+    final contractVersion = _requiredPositiveInt(
+      body['contractVersion'] ?? body['contract_version'],
+      'contractVersion_required',
+    );
+    if (contractVersion != 1) {
+      throw const GameMicrodeckClientException('contractVersion_unsupported');
+    }
     if (body['deliveryAckRequired'] != true &&
         body['delivery_ack_required'] != true) {
       throw const GameMicrodeckClientException(
@@ -314,6 +330,96 @@ String _requiredString(Object? value, String message) {
   }
   return text;
 }
+
+int _requiredPositiveInt(Object? value, String message) {
+  final parsed = value is num ? value.toInt() : int.tryParse('$value');
+  if (parsed == null || parsed <= 0) {
+    throw GameMicrodeckClientException(message);
+  }
+  return parsed;
+}
+
+void _validateOptionalRequestString(
+  String? value,
+  String field,
+  int maxLength,
+) {
+  if (value == null) return;
+  final text = value.trim();
+  if (text.isEmpty) {
+    throw GameMicrodeckClientException('${field}_must_not_be_blank');
+  }
+  if (text.length > maxLength) {
+    throw GameMicrodeckClientException('${field}_too_large');
+  }
+  if (field == 'mode' && text == 'microdeck') {
+    return;
+  }
+  _rejectForbiddenRequestValue(text);
+}
+
+void _rejectForbiddenRequestValue(Object? value) {
+  if (value == null || value is num || value is bool) return;
+  if (value is String) {
+    if (_containsForbiddenRequestToken(value)) {
+      throw const GameMicrodeckClientException('request_forbidden_field');
+    }
+    return;
+  }
+  if (value is List) {
+    for (final item in value) {
+      _rejectForbiddenRequestValue(item);
+    }
+    return;
+  }
+  if (value is Map) {
+    for (final entry in value.entries) {
+      _rejectForbiddenRequestValue(entry.key);
+      _rejectForbiddenRequestValue(entry.value);
+    }
+    return;
+  }
+  throw const GameMicrodeckClientException('request_forbidden_field');
+}
+
+bool _containsForbiddenRequestToken(String value) {
+  final lowered = value.toLowerCase();
+  return _forbiddenRequestTokens.any(lowered.contains);
+}
+
+final List<String> _forbiddenRequestTokens = [
+  ['pro', 'mpt'].join(),
+  ['raw', 'pro', 'mpt'].join(),
+  ['system', 'instruction'].join(),
+  ['developer', 'instruction'].join(),
+  ['ad', 'endo'].join(),
+  ['t', '00'].join(),
+  ['t', '02'].join(),
+  ['n', '3'].join(),
+  ['gem', 'ini'].join(),
+  ['mod', 'el'].join(),
+  ['user', 'id'].join(),
+  ['cre', 'dit'].join(),
+  ['cre', 'dits'].join(),
+  ['led', 'ger'].join(),
+  ['co', 'st'].join(),
+  ['bill', 'ing'].join(),
+  ['cards'].join(),
+  ['micro', 'deck'].join(),
+  ['pay', 'load'].join(),
+  ['body'].join(),
+  ['provider', 'response'].join(),
+  ['raw', 'provider', 'response'].join(),
+  ['ser', 'ver'].join(),
+  ['ai'].join(),
+  ['embed', 'ding'].join(),
+  ['seman', 'tic'].join(),
+  ['vec', 'tor'].join(),
+  ['reuse', 'policy'].join(),
+  ['card', 'store'].join(),
+  ['question', 'bank'].join(),
+  ['ac', 'ervo'].join(),
+];
 
 void _rejectUnknownKeys(Map<String, Object?> value, Set<String> allowed) {
   for (final key in value.keys) {

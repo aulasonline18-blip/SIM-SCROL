@@ -20,6 +20,26 @@ GameMicrodeckRequest validRequest() => GameMicrodeckRequest(
   targetTopic: 'equacao',
 );
 
+GameMicrodeckRequest requestWith({
+  String? item,
+  String? targetTopic,
+  String? mode,
+  String? learningLocale,
+  String? interfaceLocale,
+}) => GameMicrodeckRequest(
+  lessonLocalId: 'lesson-t02-microdeck-1',
+  marker: 'M1',
+  itemIdx: 0,
+  layer: 1,
+  sessionId: 'session-1',
+  idempotencyKey: 'idem-1',
+  item: item,
+  targetTopic: targetTopic,
+  mode: mode,
+  learningLocale: learningLocale,
+  interfaceLocale: interfaceLocale,
+);
+
 GameMicrodeckTransportResponse response(Map<String, Object?> body) =>
     GameMicrodeckTransportResponse(body: jsonEncode(body));
 
@@ -110,6 +130,10 @@ Matcher throwsClientCode(String code) => throwsA(
   ),
 );
 
+void expectRequestForbidden(GameMicrodeckRequest Function() build) {
+  expect(build, throwsClientCode('request_forbidden_field'));
+}
+
 void main() {
   test('GameMicrodeckClient e final class', () {
     expect(source(), contains('final class GameMicrodeckClient'));
@@ -170,6 +194,106 @@ void main() {
     expect(validRequest().toJson().containsKey(token(['cre', 'dit'])), isFalse);
   });
 
+  test('Request usa item String, nao payload livre', () {
+    expect(source(), contains('final String? item;'));
+    expect(source(), isNot(contains('final Object? item;')));
+  });
+
+  test('Request rejeita item perigoso em comportamento real', () {
+    for (final value in [
+      '{"prompt":"x"}',
+      'T02',
+      'N3',
+      'Gemini',
+      'model: pro',
+      'credit',
+      'ledger',
+      'cards',
+      'microdeck',
+      'payload',
+    ]) {
+      expectRequestForbidden(() => requestWith(item: value));
+    }
+  });
+
+  test('Request rejeita strings opcionais perigosas', () {
+    expectRequestForbidden(() => requestWith(targetTopic: 'prompt'));
+    expectRequestForbidden(() => requestWith(mode: 'T02'));
+    expectRequestForbidden(() => requestWith(learningLocale: 'Gemini'));
+    expectRequestForbidden(() => requestWith(interfaceLocale: 'ledger'));
+  });
+
+  test('Request rejeita strings opcionais grandes', () {
+    expect(
+      () => requestWith(item: 'x' * 1025),
+      throwsClientCode('item_too_large'),
+    );
+    expect(
+      () => requestWith(targetTopic: 'x' * 257),
+      throwsClientCode('targetTopic_too_large'),
+    );
+    expect(
+      () => requestWith(mode: 'x' * 65),
+      throwsClientCode('mode_too_large'),
+    );
+    expect(
+      () => requestWith(learningLocale: 'x' * 33),
+      throwsClientCode('learningLocale_too_large'),
+    );
+    expect(
+      () => requestWith(interfaceLocale: 'x' * 33),
+      throwsClientCode('interfaceLocale_too_large'),
+    );
+  });
+
+  test('Request rejeita strings opcionais blank', () {
+    expect(
+      () => requestWith(item: ' '),
+      throwsClientCode('item_must_not_be_blank'),
+    );
+    expect(
+      () => requestWith(targetTopic: ' '),
+      throwsClientCode('targetTopic_must_not_be_blank'),
+    );
+    expect(
+      () => requestWith(mode: ' '),
+      throwsClientCode('mode_must_not_be_blank'),
+    );
+    expect(
+      () => requestWith(learningLocale: ' '),
+      throwsClientCode('learningLocale_must_not_be_blank'),
+    );
+    expect(
+      () => requestWith(interfaceLocale: ' '),
+      throwsClientCode('interfaceLocale_must_not_be_blank'),
+    );
+  });
+
+  test('Request valido com strings opcionais passa', () {
+    final request = requestWith(
+      item: 'equacao simples',
+      targetTopic: 'equacao',
+      mode: 'microdeck',
+      learningLocale: 'pt-BR',
+      interfaceLocale: 'pt-BR',
+    );
+
+    expect(request.toJson(), {
+      'lessonLocalId': 'lesson-t02-microdeck-1',
+      'marker': 'M1',
+      'itemIdx': 0,
+      'layer': 1,
+      'sessionId': 'session-1',
+      'idempotencyKey': 'idem-1',
+      'contractVersion': 1,
+      'item': 'equacao simples',
+      'target_topic': 'equacao',
+      'mode': 'microdeck',
+      'learningLocale': 'pt-BR',
+      'interfaceLocale': 'pt-BR',
+    });
+  });
+
   test(
     'ready estrutural com HMAC falha por assinatura nao verificavel',
     () async {
@@ -202,6 +326,46 @@ void main() {
     await expectLater(
       fetchWith({...readyBody()}..remove('microdeck')),
       throwsClientCode('microdeck_required'),
+    );
+  });
+
+  test('ready sem serverSignature falha e nao envia ACK', () async {
+    var ackCount = 0;
+
+    await expectLater(
+      fetchWith(
+        {...readyBody()}..remove('serverSignature'),
+        onAck: (_) => ackCount++,
+      ),
+      throwsClientCode('serverSignature_required'),
+    );
+    expect(ackCount, 0);
+  });
+
+  test('ready com serverSignature vazio falha', () async {
+    await expectLater(
+      fetchWith({...readyBody(), 'serverSignature': ' '}),
+      throwsClientCode('serverSignature_required'),
+    );
+  });
+
+  test('ready sem contractVersion falha e nao envia ACK', () async {
+    var ackCount = 0;
+
+    await expectLater(
+      fetchWith(
+        {...readyBody()}..remove('contractVersion'),
+        onAck: (_) => ackCount++,
+      ),
+      throwsClientCode('contractVersion_required'),
+    );
+    expect(ackCount, 0);
+  });
+
+  test('ready com contractVersion diferente de 1 falha', () async {
+    await expectLater(
+      fetchWith({...readyBody(), 'contractVersion': 2}),
+      throwsClientCode('contractVersion_unsupported'),
     );
   });
 
