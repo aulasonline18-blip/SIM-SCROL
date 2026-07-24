@@ -89,12 +89,15 @@ final class PedagogicalCardSource {
         'advancePolicy',
       ),
       media: _parseMedia(value['media']),
-      contentHash: _requiredToken(value['contentHash'], 'contentHash_required'),
-      serverSignature: _requiredToken(
+      contentHash: _requiredSha256Hex(
+        value['contentHash'],
+        'contentHash_required',
+      ),
+      serverSignature: _requiredSha256Hex(
         value['serverSignature'],
         'serverSignature_required',
       ),
-      generationOperationId: _requiredToken(
+      generationOperationId: _requiredIdentifierToken(
         value['generationOperationId'],
         'generationOperationId_required',
       ),
@@ -103,10 +106,10 @@ final class PedagogicalCardSource {
   }
 
   void validate() {
-    _requiredToken(lessonLocalId, 'lessonLocalId_required');
-    _requiredToken(deckId, 'deckId_required');
-    _requiredToken(cardId, 'cardId_required');
-    _requiredToken(marker, 'marker_required');
+    _requiredIdentifierToken(lessonLocalId, 'lessonLocalId_required');
+    _requiredIdentifierToken(deckId, 'deckId_required');
+    _requiredIdentifierToken(cardId, 'cardId_required');
+    _requiredIdentifierToken(marker, 'marker_required');
     if (itemIdx < 0) {
       throw const PedagogicalCardFactoryAdapterException(
         'itemIdx_must_be_nonnegative',
@@ -124,9 +127,12 @@ final class PedagogicalCardSource {
     _validateSignalTextMap(qualifiers, 'qualifiers');
     _validateSignalTextMap(advancePolicy, 'advancePolicy');
     _validateAdapterMedia(media);
-    _requiredToken(contentHash, 'contentHash_required');
-    _requiredToken(serverSignature, 'serverSignature_required');
-    _requiredToken(generationOperationId, 'generationOperationId_required');
+    _requiredSha256Hex(contentHash, 'contentHash_required');
+    _requiredSha256Hex(serverSignature, 'serverSignature_required');
+    _requiredIdentifierToken(
+      generationOperationId,
+      'generationOperationId_required',
+    );
     if (contractVersion != PedagogicalCard.supportedContractVersion) {
       throw const PedagogicalCardFactoryAdapterException(
         'contractVersion_unsupported',
@@ -201,7 +207,7 @@ String _requiredPedagogicalText(Object? value, String message) {
   if (value is! String) {
     throw PedagogicalCardFactoryAdapterException(message);
   }
-  if (value.trim().isEmpty) {
+  if (value.trim().isEmpty || !_hasVisiblePedagogicalContent(value)) {
     throw PedagogicalCardFactoryAdapterException(message);
   }
   return value;
@@ -215,6 +221,27 @@ String _requiredToken(Object? value, String message) {
     throw PedagogicalCardFactoryAdapterException(message);
   }
   return value;
+}
+
+String _requiredIdentifierToken(Object? value, String message) {
+  final token = _requiredToken(value, message);
+  if (token.length > 256 || !RegExp(r'^[A-Za-z0-9._:-]+$').hasMatch(token)) {
+    throw PedagogicalCardFactoryAdapterException(message);
+  }
+  return token;
+}
+
+String _requiredSha256Hex(Object? value, String message) {
+  final token = _requiredToken(value, message);
+  if (!RegExp(r'^[A-Fa-f0-9]{64}$').hasMatch(token)) {
+    throw PedagogicalCardFactoryAdapterException(message);
+  }
+  return token;
+}
+
+bool _hasVisiblePedagogicalContent(String value) {
+  final visible = value.replaceAll(RegExp(r'[\u200B-\u200D\uFEFF]'), '');
+  return visible.trim().isNotEmpty;
 }
 
 int _requiredNonNegativeInt(

@@ -49,14 +49,18 @@ Map<String, Object?> completeJson({Object? media = _defaultMedia}) => {
     'media': media == _defaultMedia
         ? {'imageKey': 'image/balance.png', 'audioKey': 'audio/equation.wav'}
         : media,
-  'contentHash': 'structural-hash',
-  'serverSignature': 'hmac-signature',
+  'contentHash': _structuralHash,
+  'serverSignature': _structuralSignature,
   'generationOperationId': 'operation-1',
   'contractVersion': 1,
 };
 
 const String _omit = '__omit_media__';
 const String _defaultMedia = '__default_media__';
+const String _structuralHash =
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const String _structuralSignature =
+    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
 PedagogicalCardSource completeSource({
   Map<AnswerLetter, String>? options,
@@ -77,8 +81,8 @@ PedagogicalCardSource completeSource({
       'Para resolver uma equacao, isole a incognita mantendo igualdade.',
   String question = 'Qual operacao mantem a igualdade em x + 2 = 5?',
   AnswerLetter correctAnswer = AnswerLetter.A,
-  String contentHash = 'structural-hash',
-  String serverSignature = 'hmac-signature',
+  String contentHash = _structuralHash,
+  String serverSignature = _structuralSignature,
   String generationOperationId = 'operation-1',
   int contractVersion = 1,
 }) {
@@ -255,6 +259,32 @@ void main() {
     expect(card.advancePolicy[DecisionSignal.one], ' politica 1 ');
   });
 
+  test('texto pedagogico invisivel falha', () {
+    for (final entry in {
+      'explanation': 'explanation_required',
+      'question': 'question_required',
+    }.entries) {
+      expectJsonPatchFails((json) => json[entry.key] = '\u200B', entry.value);
+      expectJsonPatchFails((json) => json[entry.key] = '\uFEFF', entry.value);
+    }
+    expectJsonPatchFails(
+      (json) => (json['options']! as Map)['A'] = '\u200B',
+      'options_A_required',
+    );
+    expectJsonPatchFails(
+      (json) => (json['feedback']! as Map)['A'] = '\u200B',
+      'feedback_A_required',
+    );
+    expectJsonPatchFails(
+      (json) => (json['qualifiers']! as Map)['1'] = '\u200B',
+      'qualifiers_1_required',
+    );
+    expectJsonPatchFails(
+      (json) => (json['advancePolicy']! as Map)['1'] = '\u200B',
+      'advancePolicy_1_required',
+    );
+  });
+
   test('token tecnico com espaco externo falha', () {
     for (final entry in {
       'lessonLocalId': 'lessonLocalId_required',
@@ -274,17 +304,42 @@ void main() {
 
   test('contentHash serverSignature e operationId com espaco falham', () {
     expectJsonPatchFails(
-      (json) => json['contentHash'] = ' structural-hash ',
+      (json) => json['contentHash'] = ' $_structuralHash ',
       'contentHash_required',
     );
     expectJsonPatchFails(
-      (json) => json['serverSignature'] = ' hmac-signature ',
+      (json) => json['serverSignature'] = ' $_structuralSignature ',
       'serverSignature_required',
     );
     expectJsonPatchFails(
       (json) => json['generationOperationId'] = ' operation-1 ',
       'generationOperationId_required',
     );
+  });
+
+  test('contentHash e serverSignature exigem sha256 hex de 64 caracteres', () {
+    for (final entry in {
+      'contentHash': 'contentHash_required',
+      'serverSignature': 'serverSignature_required',
+    }.entries) {
+      expectJsonPatchFails((json) => json[entry.key] = 'a' * 63, entry.value);
+      expectJsonPatchFails((json) => json[entry.key] = 'a' * 65, entry.value);
+      expectJsonPatchFails(
+        (json) => json[entry.key] = '${'a' * 63}g',
+        entry.value,
+      );
+      expectJsonPatchFails(
+        (json) => json[entry.key] = 'structural-hash',
+        entry.value,
+      );
+      expect(
+        () => PedagogicalCardSource.fromJson(
+          completeJson()..[entry.key] = 'A' * 64,
+        ),
+        returnsNormally,
+        reason: entry.key,
+      );
+    }
   });
 
   test('tokens tecnicos com espaco interno falham', () {
@@ -310,6 +365,37 @@ void main() {
         entry.value,
       );
     }
+  });
+
+  test('identificadores tecnicos aceitam somente token seguro', () {
+    for (final entry in {
+      'lessonLocalId': 'lessonLocalId_required',
+      'deckId': 'deckId_required',
+      'cardId': 'cardId_required',
+      'marker': 'marker_required',
+      'generationOperationId': 'generationOperationId_required',
+    }.entries) {
+      for (final value in [
+        '<script>',
+        '../secret',
+        'id/secret',
+        'id?x',
+        'id#x',
+        'id@x',
+        '\u200Bid',
+        'x' * 257,
+      ]) {
+        expectJsonPatchFails((json) => json[entry.key] = value, entry.value);
+      }
+    }
+    final accepted = PedagogicalCardSource.fromJson(
+      completeJson()
+        ..['lessonLocalId'] = 'lesson:tenant-1.abc_2'
+        ..['deckId'] = 'microdeck:lesson:M1:0:1'
+        ..['cardId'] = 'microdeck:lesson:M1:0:1:card:0'
+        ..['generationOperationId'] = 'T02:user:api.sim:explicit:abc_123',
+    );
+    expect(accepted.cardId, 'microdeck:lesson:M1:0:1:card:0');
   });
 
   test('lessonLocalId deckId cardId e marker com espaco externo falham', () {
@@ -680,7 +766,7 @@ void main() {
   test('adapter nao chama validacao de integridade jogavel', () {
     final card = structurallyAdaptedCard();
 
-    expect(card.contentHash, 'structural-hash');
+    expect(card.contentHash, _structuralHash);
     expect(
       () => PedagogicalCardIntegrityVerifier.verifyContentHash(card),
       throwsIntegrityCode('contentHash_mismatch'),
