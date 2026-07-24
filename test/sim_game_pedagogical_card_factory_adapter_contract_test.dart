@@ -197,20 +197,31 @@ void main() {
     ]);
   });
 
-  test('material completo vira PedagogicalCard estrutural', () {
-    final card = structurallyAdaptedCard();
+  test(
+    'material completo vira PedagogicalCard estrutural, nao integro nem jogavel',
+    () {
+      final card = structurallyAdaptedCard();
 
-    expect(card, isA<PedagogicalCard>());
-    expect(card.lessonLocalId, 'lesson-1');
-    expect(card.options[AnswerLetter.A], isNotEmpty);
-    expect(card.feedback[AnswerLetter.B], isNotEmpty);
-    expect(card.qualifiers[DecisionSignal.three], isNotEmpty);
-    expect(card.advancePolicy[DecisionSignal.one], isNotEmpty);
-    expect(card.layer, LessonLayer.l1);
-    expect(card.media?.imageKey, 'image/balance.png');
-    expect(card.media?.audioKey, 'audio/equation.wav');
-    expect(card.isValid, isTrue);
-  });
+      expect(card, isA<PedagogicalCard>());
+      expect(card.lessonLocalId, 'lesson-1');
+      expect(card.options[AnswerLetter.A], isNotEmpty);
+      expect(card.feedback[AnswerLetter.B], isNotEmpty);
+      expect(card.qualifiers[DecisionSignal.three], isNotEmpty);
+      expect(card.advancePolicy[DecisionSignal.one], isNotEmpty);
+      expect(card.layer, LessonLayer.l1);
+      expect(card.media?.imageKey, 'image/balance.png');
+      expect(card.media?.audioKey, 'audio/equation.wav');
+      expect(card.isValid, isTrue);
+      expect(
+        () => PedagogicalCardIntegrityVerifier.verifyContentHash(card),
+        throwsIntegrityCode('contentHash_mismatch'),
+      );
+      expect(
+        () => LocalGameRuntime(card),
+        throwsIntegrityCode('contentHash_mismatch'),
+      );
+    },
+  );
 
   test('usa tipos oficiais de resposta sinal e camada', () {
     final text = source();
@@ -223,7 +234,87 @@ void main() {
     expect(text, isNot(contains('LayerValue')));
   });
 
-  test('campos obrigatorios ausentes falham', () {
+  test('strings preservam valor original apos validar vazio por trim', () {
+    final json = completeJson()
+      ..['lessonLocalId'] = ' lesson-1 '
+      ..['deckId'] = ' deck-1 '
+      ..['cardId'] = ' card-1 '
+      ..['marker'] = ' M1 '
+      ..['explanation'] = ' explicacao com espaco '
+      ..['question'] = ' pergunta com espaco '
+      ..['contentHash'] = ' hash-com-espaco '
+      ..['serverSignature'] = ' assinatura-com-espaco '
+      ..['generationOperationId'] = ' operacao-com-espaco ';
+    (json['options']! as Map)['A'] = ' opcao A ';
+    (json['feedback']! as Map)['A'] = ' feedback A ';
+    (json['qualifiers']! as Map)['1'] = ' qualificador 1 ';
+    (json['advancePolicy']! as Map)['1'] = ' politica 1 ';
+    (json['media']! as Map)['imageKey'] = ' image/key.png ';
+    (json['media']! as Map)['audioKey'] = ' audio/key.wav ';
+
+    final card = const PedagogicalCardFactoryAdapter().adapt(
+      PedagogicalCardSource.fromJson(json),
+    );
+
+    expect(card.lessonLocalId, ' lesson-1 ');
+    expect(card.deckId, ' deck-1 ');
+    expect(card.cardId, ' card-1 ');
+    expect(card.marker, ' M1 ');
+    expect(card.explanation, ' explicacao com espaco ');
+    expect(card.question, ' pergunta com espaco ');
+    expect(card.options[AnswerLetter.A], ' opcao A ');
+    expect(card.feedback[AnswerLetter.A], ' feedback A ');
+    expect(card.qualifiers[DecisionSignal.one], ' qualificador 1 ');
+    expect(card.advancePolicy[DecisionSignal.one], ' politica 1 ');
+    expect(card.contentHash, ' hash-com-espaco ');
+    expect(card.serverSignature, ' assinatura-com-espaco ');
+    expect(card.media?.imageKey, ' image/key.png ');
+    expect(card.media?.audioKey, ' audio/key.wav ');
+  });
+
+  test('layer aceita somente inteiros estruturados 1 2 3', () {
+    expect(
+      PedagogicalCardSource.fromJson(completeJson()..['layer'] = 1).layer,
+      LessonLayer.l1,
+    );
+    expect(
+      PedagogicalCardSource.fromJson(completeJson()..['layer'] = 2).layer,
+      LessonLayer.l2,
+    );
+    expect(
+      PedagogicalCardSource.fromJson(completeJson()..['layer'] = 3).layer,
+      LessonLayer.l3,
+    );
+
+    for (final value in ['1', '2', '3', 'l1', 'l2', 'l3', 'L1']) {
+      expectJsonPatchFails(
+        (json) => json['layer'] = value,
+        'layer_must_be_1_2_or_3',
+      );
+    }
+  });
+
+  test('campos obrigatorios removidos falham', () {
+    for (final field in [
+      'lessonLocalId',
+      'deckId',
+      'cardId',
+      'marker',
+      'explanation',
+      'question',
+      'contentHash',
+      'serverSignature',
+      'generationOperationId',
+    ]) {
+      expectJsonPatchFails((json) => json.remove(field), '${field}_required');
+    }
+    expectJsonPatchFails(
+      (json) => json.remove('contractVersion'),
+      'contractVersion_unsupported',
+    );
+  });
+
+  test('campos obrigatorios blank falham', () {
     expectJsonPatchFails(
       (json) => json['lessonLocalId'] = ' ',
       'lessonLocalId_required',
@@ -361,7 +452,7 @@ void main() {
     expect(withMedia.media?.audioKey, 'audio/equation.wav');
   });
 
-  test('midia pesada ou inline falha', () {
+  test('midia pesada ou inline falha em imageKey e audioKey', () {
     for (final value in [
       'data:image/png;base64,abc',
       'base64,abc',
@@ -378,6 +469,12 @@ void main() {
         value.length > PedagogicalCardMedia.maxKeyLength
             ? 'imageKey_too_large'
             : 'imageKey_must_be_light_key',
+      );
+      expectJsonPatchFails(
+        (json) => json['media'] = {'audioKey': value},
+        value.length > PedagogicalCardMedia.maxKeyLength
+            ? 'audioKey_too_large'
+            : 'audioKey_must_be_light_key',
       );
     }
   });

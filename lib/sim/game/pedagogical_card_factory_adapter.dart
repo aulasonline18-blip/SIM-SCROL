@@ -205,7 +205,7 @@ String _requiredString(Object? value, String message) {
   if (text.isEmpty) {
     throw PedagogicalCardFactoryAdapterException(message);
   }
-  return text;
+  return value;
 }
 
 int _requiredNonNegativeInt(
@@ -233,9 +233,9 @@ int _requiredContractVersion(Object? value) {
 
 LessonLayer _parseLessonLayer(Object? value) {
   return switch (value) {
-    1 || '1' || 'l1' => LessonLayer.l1,
-    2 || '2' || 'l2' => LessonLayer.l2,
-    3 || '3' || 'l3' => LessonLayer.l3,
+    1 => LessonLayer.l1,
+    2 => LessonLayer.l2,
+    3 => LessonLayer.l3,
     _ => throw const PedagogicalCardFactoryAdapterException(
       'layer_must_be_1_2_or_3',
     ),
