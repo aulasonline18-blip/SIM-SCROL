@@ -59,24 +59,27 @@ final class PedagogicalCardSource {
   static PedagogicalCardSource fromJson(Map<String, Object?> value) {
     _rejectUnknownKeys(value, _sourceKeys);
     return PedagogicalCardSource(
-      lessonLocalId: _requiredString(
+      lessonLocalId: _requiredToken(
         value['lessonLocalId'],
         'lessonLocalId_required',
       ),
-      deckId: _requiredString(value['deckId'], 'deckId_required'),
-      cardId: _requiredString(value['cardId'], 'cardId_required'),
-      marker: _requiredString(value['marker'], 'marker_required'),
+      deckId: _requiredToken(value['deckId'], 'deckId_required'),
+      cardId: _requiredToken(value['cardId'], 'cardId_required'),
+      marker: _requiredToken(value['marker'], 'marker_required'),
       itemIdx: _requiredNonNegativeInt(
         value['itemIdx'],
         'itemIdx_required',
         'itemIdx_must_be_nonnegative',
       ),
       layer: _parseLessonLayer(value['layer']),
-      explanation: _requiredString(
+      explanation: _requiredPedagogicalText(
         value['explanation'],
         'explanation_required',
       ),
-      question: _requiredString(value['question'], 'question_required'),
+      question: _requiredPedagogicalText(
+        value['question'],
+        'question_required',
+      ),
       options: _parseAnswerTextMap(value['options'], 'options'),
       correctAnswer: _parseAnswerLetter(value['correctAnswer']),
       feedback: _parseAnswerTextMap(value['feedback'], 'feedback'),
@@ -86,15 +89,12 @@ final class PedagogicalCardSource {
         'advancePolicy',
       ),
       media: _parseMedia(value['media']),
-      contentHash: _requiredString(
-        value['contentHash'],
-        'contentHash_required',
-      ),
-      serverSignature: _requiredString(
+      contentHash: _requiredToken(value['contentHash'], 'contentHash_required'),
+      serverSignature: _requiredToken(
         value['serverSignature'],
         'serverSignature_required',
       ),
-      generationOperationId: _requiredString(
+      generationOperationId: _requiredToken(
         value['generationOperationId'],
         'generationOperationId_required',
       ),
@@ -103,17 +103,17 @@ final class PedagogicalCardSource {
   }
 
   void validate() {
-    _requiredString(lessonLocalId, 'lessonLocalId_required');
-    _requiredString(deckId, 'deckId_required');
-    _requiredString(cardId, 'cardId_required');
-    _requiredString(marker, 'marker_required');
+    _requiredToken(lessonLocalId, 'lessonLocalId_required');
+    _requiredToken(deckId, 'deckId_required');
+    _requiredToken(cardId, 'cardId_required');
+    _requiredToken(marker, 'marker_required');
     if (itemIdx < 0) {
       throw const PedagogicalCardFactoryAdapterException(
         'itemIdx_must_be_nonnegative',
       );
     }
-    _requiredString(explanation, 'explanation_required');
-    _requiredString(question, 'question_required');
+    _requiredPedagogicalText(explanation, 'explanation_required');
+    _requiredPedagogicalText(question, 'question_required');
     _validateAnswerTextMap(options, 'options');
     if (!options.containsKey(correctAnswer)) {
       throw const PedagogicalCardFactoryAdapterException(
@@ -124,9 +124,9 @@ final class PedagogicalCardSource {
     _validateSignalTextMap(qualifiers, 'qualifiers');
     _validateSignalTextMap(advancePolicy, 'advancePolicy');
     media?.validate();
-    _requiredString(contentHash, 'contentHash_required');
-    _requiredString(serverSignature, 'serverSignature_required');
-    _requiredString(generationOperationId, 'generationOperationId_required');
+    _requiredToken(contentHash, 'contentHash_required');
+    _requiredToken(serverSignature, 'serverSignature_required');
+    _requiredToken(generationOperationId, 'generationOperationId_required');
     if (contractVersion != PedagogicalCard.supportedContractVersion) {
       throw const PedagogicalCardFactoryAdapterException(
         'contractVersion_unsupported',
@@ -197,12 +197,21 @@ void _rejectUnknownKeys(Map<String, Object?> value, Set<String> allowed) {
   }
 }
 
-String _requiredString(Object? value, String message) {
+String _requiredPedagogicalText(Object? value, String message) {
   if (value is! String) {
     throw PedagogicalCardFactoryAdapterException(message);
   }
-  final text = value.trim();
-  if (text.isEmpty) {
+  if (value.trim().isEmpty) {
+    throw PedagogicalCardFactoryAdapterException(message);
+  }
+  return value;
+}
+
+String _requiredToken(Object? value, String message) {
+  if (value is! String) {
+    throw PedagogicalCardFactoryAdapterException(message);
+  }
+  if (value.trim().isEmpty || value != value.trim()) {
     throw PedagogicalCardFactoryAdapterException(message);
   }
   return value;
@@ -259,9 +268,9 @@ Map<AnswerLetter, String> _parseAnswerTextMap(Object? value, String field) {
   }
   _rejectUnknownKeys(value, _answerKeys);
   return {
-    AnswerLetter.A: _requiredString(value['A'], '${field}_A_required'),
-    AnswerLetter.B: _requiredString(value['B'], '${field}_B_required'),
-    AnswerLetter.C: _requiredString(value['C'], '${field}_C_required'),
+    AnswerLetter.A: _requiredPedagogicalText(value['A'], '${field}_A_required'),
+    AnswerLetter.B: _requiredPedagogicalText(value['B'], '${field}_B_required'),
+    AnswerLetter.C: _requiredPedagogicalText(value['C'], '${field}_C_required'),
   };
 }
 
@@ -271,9 +280,18 @@ Map<DecisionSignal, String> _parseSignalTextMap(Object? value, String field) {
   }
   _rejectUnknownKeys(value, _signalKeys);
   return {
-    DecisionSignal.one: _requiredString(value['1'], '${field}_1_required'),
-    DecisionSignal.two: _requiredString(value['2'], '${field}_2_required'),
-    DecisionSignal.three: _requiredString(value['3'], '${field}_3_required'),
+    DecisionSignal.one: _requiredPedagogicalText(
+      value['1'],
+      '${field}_1_required',
+    ),
+    DecisionSignal.two: _requiredPedagogicalText(
+      value['2'],
+      '${field}_2_required',
+    ),
+    DecisionSignal.three: _requiredPedagogicalText(
+      value['3'],
+      '${field}_3_required',
+    ),
   };
 }
 
@@ -282,7 +300,7 @@ void _validateAnswerTextMap(Map<AnswerLetter, String> value, String field) {
     throw PedagogicalCardFactoryAdapterException('${field}_must_have_A_B_C');
   }
   for (final letter in AnswerLetter.values) {
-    _requiredString(value[letter], '${field}_${letter.name}_required');
+    _requiredPedagogicalText(value[letter], '${field}_${letter.name}_required');
   }
 }
 
@@ -291,7 +309,10 @@ void _validateSignalTextMap(Map<DecisionSignal, String> value, String field) {
     throw PedagogicalCardFactoryAdapterException('${field}_must_have_1_2_3');
   }
   for (final signal in DecisionSignal.values) {
-    _requiredString(value[signal], '${field}_${signal.value}_required');
+    _requiredPedagogicalText(
+      value[signal],
+      '${field}_${signal.value}_required',
+    );
   }
 }
 
@@ -309,7 +330,7 @@ PedagogicalCardMedia? _parseMedia(Object? value) {
 
 String? _optionalMediaKey(Object? value, String field) {
   if (value == null) return null;
-  final key = _requiredString(value, '${field}_must_not_be_empty');
+  final key = _requiredToken(value, '${field}_must_be_light_key');
   if (key.length > PedagogicalCardMedia.maxKeyLength) {
     throw PedagogicalCardFactoryAdapterException('${field}_too_large');
   }

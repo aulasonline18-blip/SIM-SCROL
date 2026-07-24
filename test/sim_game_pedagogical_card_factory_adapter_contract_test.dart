@@ -234,42 +234,73 @@ void main() {
     expect(text, isNot(contains('LayerValue')));
   });
 
-  test('strings preservam valor original apos validar vazio por trim', () {
+  test('texto pedagogico com espaco externo e preservado', () {
     final json = completeJson()
-      ..['lessonLocalId'] = ' lesson-1 '
-      ..['deckId'] = ' deck-1 '
-      ..['cardId'] = ' card-1 '
-      ..['marker'] = ' M1 '
       ..['explanation'] = ' explicacao com espaco '
-      ..['question'] = ' pergunta com espaco '
-      ..['contentHash'] = ' hash-com-espaco '
-      ..['serverSignature'] = ' assinatura-com-espaco '
-      ..['generationOperationId'] = ' operacao-com-espaco ';
+      ..['question'] = ' pergunta com espaco ';
     (json['options']! as Map)['A'] = ' opcao A ';
     (json['feedback']! as Map)['A'] = ' feedback A ';
     (json['qualifiers']! as Map)['1'] = ' qualificador 1 ';
     (json['advancePolicy']! as Map)['1'] = ' politica 1 ';
-    (json['media']! as Map)['imageKey'] = ' image/key.png ';
-    (json['media']! as Map)['audioKey'] = ' audio/key.wav ';
 
     final card = const PedagogicalCardFactoryAdapter().adapt(
       PedagogicalCardSource.fromJson(json),
     );
 
-    expect(card.lessonLocalId, ' lesson-1 ');
-    expect(card.deckId, ' deck-1 ');
-    expect(card.cardId, ' card-1 ');
-    expect(card.marker, ' M1 ');
     expect(card.explanation, ' explicacao com espaco ');
     expect(card.question, ' pergunta com espaco ');
     expect(card.options[AnswerLetter.A], ' opcao A ');
     expect(card.feedback[AnswerLetter.A], ' feedback A ');
     expect(card.qualifiers[DecisionSignal.one], ' qualificador 1 ');
     expect(card.advancePolicy[DecisionSignal.one], ' politica 1 ');
-    expect(card.contentHash, ' hash-com-espaco ');
-    expect(card.serverSignature, ' assinatura-com-espaco ');
-    expect(card.media?.imageKey, ' image/key.png ');
-    expect(card.media?.audioKey, ' audio/key.wav ');
+  });
+
+  test('token tecnico com espaco externo falha', () {
+    for (final entry in {
+      'lessonLocalId': 'lessonLocalId_required',
+      'deckId': 'deckId_required',
+      'cardId': 'cardId_required',
+      'marker': 'marker_required',
+      'contentHash': 'contentHash_required',
+      'serverSignature': 'serverSignature_required',
+      'generationOperationId': 'generationOperationId_required',
+    }.entries) {
+      expectJsonPatchFails(
+        (json) => json[entry.key] = ' ${json[entry.key]} ',
+        entry.value,
+      );
+    }
+  });
+
+  test('contentHash serverSignature e operationId com espaco falham', () {
+    expectJsonPatchFails(
+      (json) => json['contentHash'] = ' structural-hash ',
+      'contentHash_required',
+    );
+    expectJsonPatchFails(
+      (json) => json['serverSignature'] = ' hmac-signature ',
+      'serverSignature_required',
+    );
+    expectJsonPatchFails(
+      (json) => json['generationOperationId'] = ' operation-1 ',
+      'generationOperationId_required',
+    );
+  });
+
+  test('lessonLocalId deckId cardId e marker com espaco falham', () {
+    expectJsonPatchFails(
+      (json) => json['lessonLocalId'] = ' lesson-1 ',
+      'lessonLocalId_required',
+    );
+    expectJsonPatchFails(
+      (json) => json['deckId'] = ' deck-1 ',
+      'deckId_required',
+    );
+    expectJsonPatchFails(
+      (json) => json['cardId'] = ' card-1 ',
+      'cardId_required',
+    );
+    expectJsonPatchFails((json) => json['marker'] = ' M1 ', 'marker_required');
   });
 
   test('layer aceita somente inteiros estruturados 1 2 3', () {
@@ -477,6 +508,28 @@ void main() {
             : 'audioKey_must_be_light_key',
       );
     }
+  });
+
+  test('imageKey e audioKey sao tokens tecnicos e rejeitam espaco', () {
+    expectJsonPatchFails(
+      (json) => json['media'] = {'imageKey': ' image/key.png '},
+      'imageKey_must_be_light_key',
+    );
+    expectJsonPatchFails(
+      (json) => json['media'] = {'audioKey': ' audio/key.wav '},
+      'audioKey_must_be_light_key',
+    );
+  });
+
+  test('midia com URL ou data precedidos por espaco falha', () {
+    expectJsonPatchFails(
+      (json) => json['media'] = {'imageKey': ' https://example.test/i.png'},
+      'imageKey_must_be_light_key',
+    );
+    expectJsonPatchFails(
+      (json) => json['media'] = {'audioKey': ' data:audio/mp3,abc'},
+      'audioKey_must_be_light_key',
+    );
   });
 
   test('campo extra no JSON falha', () {
