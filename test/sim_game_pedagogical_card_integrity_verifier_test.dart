@@ -22,7 +22,13 @@ void main() {
       );
       expect(
         () => PedagogicalCardIntegrityVerifier.verifyForRuntime(card),
-        returnsNormally,
+        throwsA(
+          isA<PedagogicalCardIntegrityException>().having(
+            (error) => error.message,
+            'message',
+            'signatureVerificationUnavailable',
+          ),
+        ),
       );
     });
 
@@ -186,6 +192,51 @@ void main() {
       );
     });
 
+    test(
+      'verifyForRuntime chama validacao de assinatura e bloqueia sig-123',
+      () {
+        final card = PedagogicalCard.fromJson(
+          _serverFixtureJson()..['serverSignature'] = 'sig-123',
+        );
+
+        expect(
+          () => PedagogicalCardIntegrityVerifier.verifyContentHash(card),
+          returnsNormally,
+        );
+        expect(
+          () => PedagogicalCardIntegrityVerifier.verifyForRuntime(card),
+          throwsA(
+            isA<PedagogicalCardIntegrityException>().having(
+              (error) => error.message,
+              'message',
+              'signatureVerificationUnavailable',
+            ),
+          ),
+        );
+      },
+    );
+
+    test('hash correto com assinatura arbitraria falha explicitamente', () {
+      final card = PedagogicalCard.fromJson(
+        _serverFixtureJson()..['serverSignature'] = 'signature-x',
+      );
+
+      expect(
+        () => PedagogicalCardIntegrityVerifier.verifyContentHash(card),
+        returnsNormally,
+      );
+      expect(
+        () => PedagogicalCardIntegrityVerifier.verifyForRuntime(card),
+        throwsA(
+          isA<PedagogicalCardIntegrityException>().having(
+            (error) => error.message,
+            'message',
+            'signatureVerificationUnavailable',
+          ),
+        ),
+      );
+    });
+
     test('LocalGameRuntime rejeita carta corrompida', () {
       final card = PedagogicalCard.fromJson(
         _serverFixtureJson()..['question'] = 'Pergunta adulterada?',
@@ -194,6 +245,23 @@ void main() {
       expect(
         () => LocalGameRuntime(card),
         throwsA(isA<PedagogicalCardIntegrityException>()),
+      );
+    });
+
+    test('LocalGameRuntime rejeita assinatura nao verificavel', () {
+      final card = PedagogicalCard.fromJson(
+        _serverFixtureJson()..['serverSignature'] = 'sig-123',
+      );
+
+      expect(
+        () => LocalGameRuntime(card),
+        throwsA(
+          isA<PedagogicalCardIntegrityException>().having(
+            (error) => error.message,
+            'message',
+            'signatureVerificationUnavailable',
+          ),
+        ),
       );
     });
 
@@ -212,6 +280,27 @@ void main() {
       );
     });
 
+    test('Microdeck rejeita assinatura nao verificavel', () {
+      final card = PedagogicalCard.fromJson(
+        _serverFixtureJson()..['serverSignature'] = 'signature-x',
+      );
+
+      expect(
+        () => Microdeck(
+          microdeckId: 'microdeck:lesson-t02-microdeck-1:M1:0:1',
+          cards: [card],
+          currentIndex: 0,
+        ),
+        throwsA(
+          isA<PedagogicalCardIntegrityException>().having(
+            (error) => error.message,
+            'message',
+            'signatureVerificationUnavailable',
+          ),
+        ),
+      );
+    });
+
     test('verificador produtivo nao contem segredo nem validacao falsa', () {
       final source = File(
         'lib/sim/game/pedagogical_card_integrity_verifier.dart',
@@ -221,9 +310,12 @@ void main() {
       expect(source, isNot(contains('privateKey')));
       expect(source, isNot(contains('private_key')));
       expect(source, isNot(contains('HMAC')));
+      expect(source, isNot(contains('hmac')));
       expect(source, isNot(contains('createHmac')));
       expect(source, isNot(contains('signature.length')));
+      expect(source, isNot(contains('serverSignature.isNotEmpty')));
       expect(source, contains('signatureVerificationUnavailable'));
+      expect(source, contains('verifyServerSignature(card);'));
     });
 
     test('verificador produtivo nao importa rede storage UI ou servidor', () {

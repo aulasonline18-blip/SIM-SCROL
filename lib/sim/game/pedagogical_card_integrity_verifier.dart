@@ -42,7 +42,7 @@ final class PedagogicalCardIntegrityVerifier {
 
   static void verifyForRuntime(PedagogicalCard card) {
     verifyContentHash(card);
-    requireServerSignature(card);
+    verifyServerSignature(card);
   }
 
   static void verifyServerSignature(PedagogicalCard card) {
