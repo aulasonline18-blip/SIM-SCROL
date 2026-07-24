@@ -123,7 +123,7 @@ final class PedagogicalCardSource {
     _validateAnswerTextMap(feedback, 'feedback');
     _validateSignalTextMap(qualifiers, 'qualifiers');
     _validateSignalTextMap(advancePolicy, 'advancePolicy');
-    media?.validate();
+    _validateAdapterMedia(media);
     _requiredToken(contentHash, 'contentHash_required');
     _requiredToken(serverSignature, 'serverSignature_required');
     _requiredToken(generationOperationId, 'generationOperationId_required');
@@ -350,4 +350,10 @@ String? _optionalMediaKey(Object? value, String field) {
     throw PedagogicalCardFactoryAdapterException('${field}_must_be_light_key');
   }
   return key;
+}
+
+void _validateAdapterMedia(PedagogicalCardMedia? media) {
+  if (media == null) return;
+  _optionalMediaKey(media.imageKey, 'imageKey');
+  _optionalMediaKey(media.audioKey, 'audioKey');
 }

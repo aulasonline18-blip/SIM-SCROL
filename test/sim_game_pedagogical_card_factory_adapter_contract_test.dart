@@ -590,6 +590,50 @@ void main() {
     );
   });
 
+  test('construtor direto rejeita midia proibida igual fromJson', () {
+    for (final value in [
+      'https://example.test/image.png',
+      'http://example.test/image.png',
+      'file:///tmp/a.png',
+      'javascript:alert(1)',
+      'blob:https://x',
+      '//cdn.example.test/image.png',
+      '../secret.png',
+      'a/../secret.png',
+      '<script></script>',
+      '<iframe></iframe>',
+      '<img src=x>',
+      'image com espaco.png',
+      ' image/key.png ',
+      'data:image/png;base64,abc',
+      'base64,abc',
+    ]) {
+      expect(
+        () => completeSource(media: PedagogicalCardMedia(imageKey: value)),
+        throwsAdapterCode('imageKey_must_be_light_key'),
+        reason: 'imageKey $value',
+      );
+      expect(
+        () => completeSource(media: PedagogicalCardMedia(audioKey: value)),
+        throwsAdapterCode('audioKey_must_be_light_key'),
+        reason: 'audioKey $value',
+      );
+    }
+  });
+
+  test('construtor direto aceita midia leve valida', () {
+    for (final imageKey in ['image/balance.png', 'media/cards/card_01.webp']) {
+      final source = completeSource(
+        media: PedagogicalCardMedia(
+          imageKey: imageKey,
+          audioKey: 'audio/equation.wav',
+        ),
+      );
+      expect(source.media?.imageKey, imageKey);
+      expect(source.media?.audioKey, 'audio/equation.wav');
+    }
+  });
+
   test('campo extra no JSON falha', () {
     expectJsonPatchFails((json) => json['extra'] = true, 'unknown_field');
     expectJsonPatchFails(
